@@ -71,7 +71,7 @@
 
 ### 纯小白安装（仅限 Windows x64）
 
-**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v1.9/DSH-Tavern-Desktop-2.0.5-x64-Setup.exe)**
+**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.5-x64-Setup.exe)**
 
 下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.5 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.5；已有安装和数据会保留，后续可在酒馆界面中更新。
 

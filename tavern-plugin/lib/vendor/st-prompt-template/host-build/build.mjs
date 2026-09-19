@@ -20,6 +20,7 @@ export async function buildTemplatePlugin({ dependencyRoot, outputPath }) {
     experiments: { outputModule: true },
     resolve: { extensions: ['.ts', '.js'], modules: [resolve(dependencyRoot, 'node_modules'), 'node_modules'] },
     module: { rules: [
+      { resourceQuery: /language-only/, enforce: 'pre', use: resolve(here, 'editor-language-loader.cjs') },
       { test: /\.ts$/, exclude: /node_modules/, use: { loader: require.resolve('babel-loader'), options: { configFile: false, babelrc: false, presets: [require.resolve('@babel/preset-typescript')] } } },
       { test: /\.css$/, use: [require.resolve('style-loader'), require.resolve('css-loader')] }
     ] },

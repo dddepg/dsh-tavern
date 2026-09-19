@@ -11,11 +11,20 @@ function phaseEntries(messages, phase) {
   })
 }
 
+function redactRequestMetadata(value) {
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value.map(redactRequestMetadata)
+  if (typeof value.entries === 'function' && typeof value.get === 'function') value = Object.fromEntries(value.entries())
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+    /^(authorization|proxy-authorization|cookie|set-cookie|.*api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password)$/i.test(key) ? '[REDACTED]' : redactRequestMetadata(item)]))
+}
+
 function serializableRequest(options) {
   const result = {}
   for (const [key, value] of Object.entries(options || {})) {
     if (key === 'signal') continue
-    result[key] = value
+    // Preserve prompt/tool evidence verbatim; redact transport/config metadata only.
+    result[key] = ['messages', 'tools', 'system'].includes(key) ? value : redactRequestMetadata({ [key]: value })[key]
   }
   return JSON.parse(JSON.stringify(result))
 }

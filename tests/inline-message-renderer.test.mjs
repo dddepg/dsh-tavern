@@ -83,10 +83,12 @@ test('脚本执行模块按 Helper Runtime 的真实检查结构报告 MVU 已�
   assert.equal(client.tavernScriptRuntimeReady(inspection), true)
 })
 
-test('长消息限制在 1200px 内并由 iframe 原生滚动', () => {
+test('长消息按内容展开，异常高度保留安全上限', () => {
   assert.equal(client.clampTavernFrameHeight(48), 48)
   assert.equal(client.clampTavernFrameHeight(1200), 1200)
-  assert.equal(client.clampTavernFrameHeight(5000), 1200)
+  assert.equal(client.clampTavernFrameHeight(5000), 5000)
+  assert.equal(client.clampTavernFrameHeight(90000), 32000)
+  assert.equal(client.clampTavernFrameHeight(Infinity), 48)
   const documentHtml = client.buildTavernFrameDocument({ content: '正文', token: 'native-scroll-token' })
   assert.doesNotMatch(documentHtml, /dsh-tavern-touch-bridge|dsh-tavern-frame-pan/)
 })
@@ -1750,7 +1752,7 @@ test('收起的 details 隐藏内容不撑高 iframe，展开后恢复测高', (
   })
   run(); assert.equal(height, 48); assert.equal(scrollEnabled, false)
   details.open = true
-  run(); assert.equal(height, 3656); assert.equal(scrollEnabled, true)
+  run(); assert.equal(height, 3656); assert.equal(scrollEnabled, false)
   assert.match(html, /html\[data-dsh-tavern-scroll\]\{overflow-y:auto!important\}/)
   assert.match(html, /html\[data-dsh-tavern-scroll\] body\{overflow-y:visible!important\}/)
 })

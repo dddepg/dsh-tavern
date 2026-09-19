@@ -1,12 +1,11 @@
 import { placementKey, promptOrder } from './worldbook-activation.js'
 import { hasWorldbookRandom } from './worldbook-random.js'
 
-// Message-state reads vary each turn; local/global configuration macros keep their prefix placement.
+// Every EJS body is executable and may change, even without a known state-read helper.
 export function hasWorldbookStateReads(content) {
   const text = String(content || '')
   if (/\{\{\s*(?:lastmessage|lastusermessage|lastcharmessage|lastmessageid)\b/i.test(text)) return true
-  return [...text.matchAll(/<%[=_-]?([\s\S]*?)%>/g)].some(match =>
-    /\b(?:getMessageVar|getChatMessages|variables|chat_messages|lastUserMessage|lastCharMessage)\b/.test(match[1]))
+  return /<%[\s\S]*?%>/.test(text)
 }
 
 // Separate fixed bodies from changing bodies while keeping both projections wrapped.

@@ -33,7 +33,7 @@ function harness({ checkpoint = false, mode = 'story', journal = false } = {}) {
     { seq: 0, type: 'user/message', data: { turn: 2, role: 'user', content: [{ type: 'text', text: '推门' }] } },
     { seq: 1, type: 'assistant/message', data: { turn: 2, step: 1, message: { role: 'assistant', source: model, content: [{ type: 'text', text: '旧正文' }] } } }
   ]
-  const session = { events, surface: { nodes: [0, 1] }, append(type, data, options = {}) {
+  const session = { id: 'session', events, surface: { nodes: [0, 1] }, append(type, data, options = {}) {
     calls.push('surface:' + type)
     const seq = events.length
     events.push({ seq, type, data, ...options })
@@ -65,7 +65,7 @@ function harness({ checkpoint = false, mode = 'story', journal = false } = {}) {
     read: async () => structuredClone(chat), forSession: async () => structuredClone(chat), readCard: async () => ({ name: '角色' }),
     readRevision: async (_id, revision) => { calls.push('readRevision'); return revisions.get(revision) },
     write: async (value, metadata) => { calls.push(metadata.source); chat = structuredClone(value); return structuredClone(chat) },
-    update: async (_id, mutate, metadata) => { calls.push(metadata.source); const revision = chat._storageRevision; if (journal) revisions.set(revision, structuredClone(chat)); chat = mutate(structuredClone(chat)); if (journal) chat._storageRevision = revision + 1; return structuredClone(chat) }
+    update: async (_id, mutate, metadata) => { calls.push(metadata.source); const revision = chat._storageRevision; if (journal) revisions.set(revision, structuredClone(chat)); chat = await mutate(structuredClone(chat)) ?? chat; if (journal) chat._storageRevision = revision + 1; return structuredClone(chat) }
   }
   const options = { chats, sessions: { get: () => agent }, timeline, scripts: {
     read: async () => ({ chunks: ['一', '二'] }), continuity: { transition: () => { calls.push('script.restore'); return { state: { cursor: 0 } } } },
@@ -947,4 +947,67 @@ test('历史恢复点丢失时不删除标志或伪造原正文', async () => {
   h.options.chats.readRevision = async () => undefined
   await assert.rejects(h.create().recover('chat'), /恢复点/)
   assert.deepEqual(h.chat, before)
+})
+
+test('native replacement failure after Chat commit must remain recoverable',async()=>{
+ const h=harness({checkpoint:true,journal:true});const append=h.session.append
+ h.session.append=function(type,data,intent){if(type==='assistant/message' && intent?.surfaceOp?.op==='replace')throw Error('disk/projection failure');return append.call(this,type,data,intent)}
+ await assert.rejects(h.create().regenerate('chat','','session'),/disk\/projection failure/)
+ h.session.append=append
+ await h.create().recover('chat')
+ const surface=h.session.surface.nodes.map(seq=>h.session.events[seq]).filter(e=>e.type==='assistant/message').map(e=>e.data.message.content[0]?.text)
+ assert.deepEqual(surface,[h.chat.messages.at(-1).text], 'Chat and native context must agree after recovery')
+})
+
+test('failed regeneration must preserve a Guide saved while model is running',async()=>{
+ const h=harness({checkpoint:true,journal:true});h.setGeneration('throw')
+ h.beforeGenerate(async()=>{await h.options.chats.update('chat',c=>({...c,guides:[{id:'guide-new',text:'newly saved guide',createdAt:1}]}),{source:'guide.add'})})
+ await assert.rejects(h.create().regenerate('chat','','session'),/fixture generation failed/)
+ assert.deepEqual(h.chat.guides,[{id:'guide-new',text:'newly saved guide',createdAt:1}])
+})
+
+test('ordinary active generation must reject regeneration before rolling back Chat',async()=>{
+ const h=harness({checkpoint:true,journal:true});h.agent.phase.kind='running'
+ await assert.rejects(h.create().regenerate('chat','','session'),/正在|生成|busy|running/)
+ assert.ok(!h.calls.includes('rollback.regen'))
+})
+
+test('committed projection flush failure retains intent and retry never appends a second replacement',async()=>{
+ const h=harness({checkpoint:true,journal:true});let fail=true
+ h.options.sessions.flush=async()=>{if(fail && h.chat.regenRecovery?.phase==='committed')throw Error('flush failed')}
+ await assert.rejects(h.create().regenerate('chat','','session'),/flush failed/)
+ assert.equal(h.chat.messages.at(-1).text,'新正文3')
+ assert.equal(h.chat.regenRecovery.phase,'committed')
+ const count=h.session.events.length
+ fail=false
+ await h.create().recover('chat')
+ assert.equal(h.session.events.length,count)
+ assert.equal(h.chat.regenInProgress,undefined)
+ assert.equal(h.chat.regenRecovery,undefined)
+})
+
+test('generation starting during diagnostics is rejected again before changing Chat',async()=>{
+ const h=harness({checkpoint:true,journal:true})
+ const before=structuredClone(h.chat)
+ h.options.diagnostics={record:async()=>{h.agent.phase.kind='running'}}
+ await assert.rejects(h.create().regenerate('chat','','session'),/正在生成/)
+ assert.deepEqual(h.chat,before)
+ assert.ok(!h.calls.includes('followup'))
+})
+
+test('rollback cannot cancel and consume an active regeneration',async()=>{
+ const {h,live}=await interruptedRegeneration()
+ const before=structuredClone(h.chat)
+ await assert.rejects(live.rollback('session','chat'),/重新生成/)
+ assert.deepEqual(h.chat,before)
+})
+
+test('rescued history blocks regeneration and rollback without modifying old text', async()=>{
+ const h=harness()
+ h.chat.importHistory={operationId:'rescue-1234',rescue:{sourceChatId:'broken'}}
+ h.chat.messages.at(-1).importSource={operationId:'rescue-1234'}
+ const before=structuredClone(h.chat)
+ await assert.rejects(h.create().regenerate('chat','','session'),/救援/)
+ await assert.rejects(h.create().rollback('session','chat'),/救援/)
+ assert.deepEqual(h.chat,before)
 })

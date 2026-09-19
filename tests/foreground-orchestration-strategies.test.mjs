@@ -548,3 +548,20 @@ test('native preset macros render across phases before projection without rewrit
   const followup = strategy.projectRequest({ sessionId: input.sessionId, messages: next.messages })
   assert.equal(followup.messages[0].content[0].text, request.messages[0].content[0].text)
 })
+
+for (const sessionId of ['native', 'compat']) test('regeneration gates ordinary and stale inputs before preparation: '+sessionId,async()=>{
+  const run=strategies();const chat=run.chats.get(sessionId)
+  chat.regenInProgress=true;chat.regenRecovery={id:'current'}
+  const input=message=>({chat,sessionId,payload:{turn:3,step:1,messages:[message]},decision:{kind:'enter',messages:[message]},requestId:'request'})
+  await assert.rejects(run.value.prepareStep(input(userMessage('normal'))),/重新生成尚未完成/)
+  const message=pluginMessage('user','retry','dsh-tavern-regen')
+  message.source.regenerationId='stale'
+  await assert.rejects(run.value.prepareStep(input(message)),/重新生成尚未完成/)
+  assert.equal(run.calls.length,0)
+  message.source.regenerationId='current'
+  chat.regenRecovery.phase='committed'
+  await assert.rejects(run.value.prepareStep(input(message)),/重新生成尚未完成/)
+  delete chat.regenRecovery.phase
+  await run.value.prepareStep(input(message))
+  assert.ok(run.calls.length>0)
+})

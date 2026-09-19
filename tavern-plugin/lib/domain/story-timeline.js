@@ -510,7 +510,14 @@ export function createStoryTimeline(options = {}) {
     else if (intent.kind === 'turn.rollback') value = rollback(chat, intent)
     else if (intent.kind === 'replacement.abort') {
       const currentRevision = chat.timeline.revision
-      chat = ensure(intent.restoreChat)
+      const original = ensure(intent.restoreChat)
+      // Roll back story-owned fields, not settings saved while the model ran.
+      restore(chat, snapshot(original))
+      chat.timeline = clone(original.timeline)
+      for (const key of ['nativeCommits', 'suppressedDshTurns', 'regeneratedDshTurns']) {
+        if (Object.hasOwn(original, key)) chat[key] = clone(original[key])
+        else delete chat[key]
+      }
       const branchId = makeId('branch')
       const participants = {}
       for (const role of Object.keys(chat.timeline.participants)) {

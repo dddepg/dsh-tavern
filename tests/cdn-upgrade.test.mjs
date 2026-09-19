@@ -8,6 +8,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import { parse } from 'yaml'
+import { adaptedDshVersion } from '../bin/dsh-compatibility.mjs'
 
 const execute = promisify(execFile)
 const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
@@ -85,7 +86,7 @@ test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：补丁落盘、
   await writeFile(verifyPatch, `const fs=require('node:fs'), path=require('node:path'); const app=process.argv[process.argv.indexOf('--dir')+1]; for(const file of ${JSON.stringify(patches)}) fs.readFileSync(path.join(app,file)); if(process.env.DSH_TEST_DEPENDENCY_EXIT) process.exit(Number(process.env.DSH_TEST_DEPENDENCY_EXIT));`)
   for (const [name, body] of [
     ['git', isWindows ? '@exit /b 1\r\n' : '#!/bin/sh\nexit 1\n'],
-    ['dsh', isWindows ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n'],
+    ['dsh', isWindows ? `@echo ${adaptedDshVersion}\r\n@exit /b 0\r\n` : `#!/bin/sh\necho '${adaptedDshVersion}'\nexit 0\n`],
     ['pnpm', isWindows ? `@"${process.execPath}" "${verifyPatch}" %*\r\n@exit /b %errorlevel%\r\n` : `#!/bin/sh\nexec "${process.execPath}" "${verifyPatch}" "$@"\n`],
   ]) await writeFile(path.join(mocks, name + (isWindows ? '.cmd' : '')), body, { mode: 0o755 })
   const env = { ...process.env, DSH_HOME: root, DSH_TAVERN_HOST: 'desktop', DSH_TAVERN_APP_DIR: app,

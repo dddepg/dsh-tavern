@@ -105,7 +105,7 @@ test('压缩失败原因进入持久警告，前后台结果保持独立', async
   assert.equal(state.operation.status, 'partial')
   assert.equal(state.operation.background.status, 'succeeded')
   assert.match(state.warning, /前台：压缩超时：连续 5 分钟/)
-  assert.match(state.warning, /更多 → 压缩上下文/)
+  assert.match(state.warning, /可稍后重试/)
   assert.doesNotMatch(state.warning, /后台：压缩超时/)
   h.restart()
   assert.equal(h.chat.contextCompaction.warning, state.warning)
@@ -116,4 +116,20 @@ test('压缩失败原因进入持久警告，前后台结果保持独立', async
   await h.run(); assert.match(h.chat.contextCompaction.warning, /容量/);
   h.pressure = 18; await h.run(); assert.equal(h.chat.contextCompaction.warning, ''); assert.deepEqual(h.calls, []);
   h.chat.contextCompaction.warning = 'other failure'; await h.run(); assert.equal(h.chat.contextCompaction.warning, 'other failure');
+})
+
+
+test('后台摘要变长时保留未完成状态并解释原因，不附加立即重试提示', async () => {
+  const h = fixture()
+  h.deps.compact = async (_id, side) => {
+    if (side === 'background') throw new Error('summary is not smaller than the shadowed content (1931 estimated framed tokens >= 1612)')
+    return { message: '前台压缩完成' }
+  }
+  await h.run({ manual: true })
+  const state = h.chat.contextCompaction
+  assert.equal(state.operation.status, 'partial')
+  assert.equal(state.operation.foreground.status, 'succeeded')
+  assert.match(state.warning, /后台：摘要未缩短内容，已保留原始记录/)
+  assert.match(state.warning, /无需立即重复压缩/)
+  assert.doesNotMatch(state.warning, /请在更多.*重试/)
 })

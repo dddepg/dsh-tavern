@@ -480,7 +480,7 @@ test('same template in another session gets a new page and rejects old writes; p
 test('runtime reports coalesce and cancel on stop; restart attaches once and read-only capture never mutates variables', async () => {
   const h = frames(), frame = h.attach()
   frame.message('dsh-tavern-frame-height', { height: 90000 })
-  assert.equal(h.lifecycle.snapshot().height, 1200)
+  assert.equal(h.lifecycle.snapshot().height, 32000)
   frame.message('dsh-tavern-frame-runtime', { runtime: { stage: 1 } })
   frame.message('dsh-tavern-frame-runtime', { runtime: { stage: 2 } })
   assert.equal(h.timers.size, 1)
@@ -882,11 +882,11 @@ test('trusted card direct iframe height survives document.write and updates oute
   observer.callback()
   assert.equal(h.lifecycle.snapshot().height, 640)
   frame.node.style.height = '9000px'; observer.callback()
-  assert.equal(h.lifecycle.snapshot().height, 1200)
+  assert.equal(h.lifecycle.snapshot().height, 9000)
   frame.document.ref(null)
   assert.equal(observer.disconnected, true)
   frame.node.style.height = '400px'; observer.callback()
-  assert.equal(h.lifecycle.snapshot().height, 1200, 'detached frames cannot resize the active slot')
+  assert.equal(h.lifecycle.snapshot().height, 9000, 'detached frames cannot resize the active slot')
   h.stop()
 })
 

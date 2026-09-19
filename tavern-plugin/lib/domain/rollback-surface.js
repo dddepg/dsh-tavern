@@ -1,3 +1,4 @@
+import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { restoredSurfaceSeqs } from './surface-restoration.js'
 import { sessionEvents, appendSessionEvent, surfaceReplacementRange } from './session-events.js'
@@ -23,7 +24,7 @@ function modelSourceOf(event) {
 function isForegroundContext(event) {
   const source = event?.type === 'user/message' && event.data?.source
   return source?.kind === 'plugin' && source.plugin === 'dsh-tavern' &&
-    ['foreground-frame', 'snapshot'].includes(source.form)
+    ['foreground-frame', 'worldbook-snapshot', 'snapshot'].includes(source.form)
 }
 
 function isRollbackUserTombstone(event) {
@@ -339,7 +340,22 @@ export function clearRegenerationAttemptSurface(input) {
   if (!session || typeof session.append !== 'function') return 0
   const nodes = session.surface && Array.isArray(session.surface.nodes) ? session.surface.nodes : []
   const eventStart = Math.max(0, Number(input && input.eventStart) || 0)
-  const temporary = nodes.filter(function (seq) { return Number(seq) >= eventStart }).map(Number)
+  const events = sessionEvents(session)
+  // A replacement has a new seq but keeps its historical position. Ownership
+  // follows displaced nodes; event time alone cannot identify temporary input.
+  const end = events.find(event => event.seq >= eventStart && (event.type === 'turn/end' ||
+    (event.type === 'user/message' && event.data?.source?.kind === 'user')))?.seq ?? Infinity
+  const owned = new Set()
+  for (const event of events) {
+    if (event.seq < eventStart) continue
+    if (event.surfaceOp?.op === 'replace') {
+      const refs = event.sourceEventSeqs
+      if (Array.isArray(refs) && refs.length > 0 && refs.every(seq => owned.has(seq))) owned.add(event.seq)
+    } else if (event.seq < end && event.surfaceOp === 'append') {
+      owned.add(event.seq)
+    }
+  }
+  const temporary = nodes.filter(seq => owned.has(Number(seq))).map(Number)
   if (temporary.length === 0) return 0
   const firstIndex = nodes.indexOf(temporary[0])
   const lastIndex = nodes.indexOf(temporary[temporary.length - 1])
@@ -413,6 +429,7 @@ export function rollbackAvailability(chat, { events = [], nodes = [] } = {}) {
   const target = locateRollbackSurface({ events, nodes })
   const messages = Array.isArray(chat.messages) ? chat.messages : []
   const latest = messages.findLast(message => message?.role === 'assistant' && message.greeting !== true)
+  if (isRescuedHistoryMessage(chat, latest)) return { canRollback: false, canClearIncompleteReply: false, failedTurns, target: null, reason: '存档救援导入的历史不可回退，请发送新消息继续' }
   const turn = Number(latest?.turn)
   const matches = target && (!(turn > 0) || target.turn === turn || target.turn === Number(chat.regeneratedDshTurns?.[String(turn)]))
   const hasMessages = hasRollbackMessages(messages)

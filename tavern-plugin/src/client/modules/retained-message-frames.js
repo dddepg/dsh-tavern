@@ -58,7 +58,7 @@ function createRetainedTavernFrames(options) {
             Object.assign(frame.style, { height: (hidden ? descriptor.height || state.height : state.height) + "px",
                 position: hidden ? "absolute" : "", left: hidden ? "0" : "", top: hidden ? "0" : "",
                 width: "100%", opacity: hidden ? "0" : "", pointerEvents: hidden ? "none" : "",
-                overflow: state.height >= 1200 ? "auto" : "hidden" });
+                overflow: state.height >= 32000 ? "auto" : "hidden" });
         }
     }
     function get(props) {
@@ -94,6 +94,7 @@ function createRetainedTavernFrames(options) {
             }
             let attached = true;
             return {
+                expand: function () { return expandTavernFrame(record.node); },
                 update: function (next) { if (attached && records.get(record.key) === record) record.lifecycle.update(next); },
                 detach: function () {
                     if (!attached) return;
@@ -145,5 +146,6 @@ function TavernRetainedMessageFrame(props) {
             try { tavernPanelRegistry.pin(panelId, !pinned); }
             catch (error) { tavernErrorHub.report("固定面板", error); }
         } }, pinned ? "返回原消息" : "固定到右侧") : null,
+        React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: !activated, title: "全屏查看人物卡界面，按 Esc 返回", onClick: () => lease.current?.expand() }, "展开大屏"),
         React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
 }

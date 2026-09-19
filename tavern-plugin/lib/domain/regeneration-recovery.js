@@ -1,4 +1,4 @@
-import { isDeepStrictEqual } from 'node:util'
+import { replaceSessionSurface } from './session-surface-mutations.js'
 import { sessionEvents } from './session-events.js'
 import { clearRegenerationAttemptSurface, regenerationAttemptTurns, locateRegenerationSurface } from './rollback-surface.js'
 
@@ -34,17 +34,20 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
   }
 
   async function abort({ chatId, originalChat, session, eventStart, operationId }) {
-    const expected = await chats.read(chatId)
-    if (!expected || expected.regenInProgress !== true ||
-        (operationId && expected.regenRecovery?.id !== operationId) ||
-        Number(expected.tavernHelperLifecycleRevision || 0) > Number(originalChat.tavernHelperLifecycleRevision || 0) + 1) return
-    const abortedTurns = regenerationAttemptTurns({ events: sessionEvents(session), eventStart })
-    // Keep the durable recovery point until the native projection is saved too.
-    // A crash or flush failure can then safely retry the entire abort.
-    clearRegenerationAttemptSurface({ session, eventStart })
-    if (typeof sessions.flush === 'function') await sessions.flush(session)
-    return await chats.update(chatId, current => {
-      if (!isDeepStrictEqual(current, expected)) throw new Error('恢复重新生成期间对话已变化，请重试')
+    // Hold the Chat store transaction across projection cleanup and flush. A
+    // concurrent observer must not invalidate restoration after cleanup succeeds.
+    return await chats.update(chatId, async current => {
+      if (!current || current.regenRecovery?.phase === 'committed' || current.regenInProgress !== true ||
+          (operationId && current.regenRecovery?.id !== operationId) ||
+          Number(current.tavernHelperLifecycleRevision || 0) > Number(originalChat.tavernHelperLifecycleRevision || 0) + 1) return
+      const events = sessionEvents(session)
+      if (events.some(event => event.seq >= eventStart && event.type === 'user/message' && event.data?.source?.kind === 'user')) {
+        throw new Error('重新生成后已有新的玩家输入，未清理或覆盖后续对话')
+      }
+      const abortedTurns = regenerationAttemptTurns({ events, eventStart })
+      // Retain the durable recovery point if the native flush fails.
+      clearRegenerationAttemptSurface({ session, eventStart })
+      if (typeof sessions.flush === 'function') await sessions.flush(session)
       const next = timeline.apply({ chat: current, intent: { kind: 'replacement.abort', restoreChat: originalChat } }).chat
       delete next.regenInProgress
       delete next.regenRecovery
@@ -52,6 +55,23 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
       next.suppressedDshTurns = [...new Set([...(next.suppressedDshTurns || []), ...abortedTurns])].sort((a, b) => a - b)
       return next
     }, { source: 'foreground.regen-abort' })
+  }
+
+  // Chat is already authoritative here. Never roll it back if projecting or
+  // flushing the native replacement fails; keep a durable, idempotent intent.
+  async function complete({ chatId, session, operationId }) {
+    return await chats.update(chatId, async current => {
+      const saved = current?.regenRecovery
+      if (!saved || saved.phase !== 'committed' || (operationId && saved.id !== operationId)) return
+      if (saved.sessionId !== session.id) throw new Error('重新生成恢复会话不匹配')
+      const projection = saved.projection
+      if (!projection) throw new Error('重新生成缺少已提交正文的投影记录')
+      replaceSessionSurface(session, 'assistant/message', projection.data, projection.range)
+      if (typeof sessions.flush === 'function') await sessions.flush(session)
+      delete current.regenRecovery
+      delete current.regenInProgress
+      return current
+    }, { source: 'foreground.regen-projected' })
   }
 
   async function recover(chatId) {
@@ -64,7 +84,6 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
       const sessionId = chat.regenRecovery?.sessionId || chat.sessionId
       let agent = sessions.get(sessionId)
       if (agent?.phase?.kind === 'running') return
-      const before = await originalState(chat)
       let session = agent?.session || sessions.getSession?.(sessionId)
       if (!session && typeof sessions.resume === 'function') {
         handle = await sessions.resume(sessionId)
@@ -73,6 +92,8 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
       }
       if (agent?.phase?.kind === 'running') return
       if (!session) throw new Error('无法加载重新生成的原生会话，恢复点已保留')
+      if (chat.regenRecovery?.phase === 'committed') return await complete({ chatId, session, operationId: chat.regenRecovery.id })
+      const before = await originalState(chat)
       const eventStart = chat.regenRecovery?.eventStart ?? legacyEventStart(before, session)
       if (!Number.isSafeInteger(eventStart) || eventStart < 0 || eventStart > sessionEvents(session).length) {
         throw new Error('重新生成的原生历史边界不匹配，恢复点已保留')
@@ -84,5 +105,5 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
     }
   }
 
-  return Object.freeze({ recover, abort })
+  return Object.freeze({ recover, abort, complete })
 }

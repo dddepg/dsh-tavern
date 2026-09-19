@@ -16,7 +16,7 @@ const VERSION_URL = 'https://raw.githubusercontent.com/flizzywine/dsh-tavern/mai
 const COMMIT_URL = 'https://api.github.com/repos/flizzywine/dsh-tavern/commits/main'
 const COMPARE_URL = 'https://api.github.com/repos/flizzywine/dsh-tavern/compare'
 const execFileAsync = promisify(execFile)
-const UPDATE_CHECK_POLICY = 3
+const UPDATE_CHECK_POLICY = 4
 const CDN_METADATA_URL = 'https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/dsh-tavern-runtime.json'
 const RUNTIME_FILES = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'cordis.patch.yml', 'install.ps1', 'install.sh'])
 const RUNTIME_DIRECTORIES = ['bin/', 'config/', 'presets/', 'tavern-plugin/', 'patches/']
@@ -301,44 +301,46 @@ export function createApplicationUpdater(options) {
     const { currentVersion, currentCommit, currentReleaseSequence } = identity
     if (currentVersion === 'unknown') throw new Error('无法确认当前构建，请手动重新安装')
     try {
-      const compared = await compareCdnRuntime(sourceRoot, await stage('cdn.fetch', fetchCdnMetadata))
-      record('cdn.comparison', { currentVersion, currentCommit, currentReleaseSequence, latestVersion: compared.version, latestCommit: compared.revision, latestReleaseSequence: compared.releaseSequence, matches: compared.matches })
-      let updateAvailable = false
-      if (!compared.matches && currentCommit.toLowerCase() !== String(compared.revision).toLowerCase()) {
-        if (currentReleaseSequence && compared.releaseSequence) {
-          updateAvailable = compared.releaseSequence > currentReleaseSequence
-        } else if (compared.version && compareVersions(compared.version, currentVersion) !== 0) {
-          updateAvailable = compareVersions(compared.version, currentVersion) > 0
-        } else {
-          throw new Error('jsDelivr 清单缺少可比较的发布序号，需使用 GitHub 确认提交先后')
-        }
-      }
+      const [remote, latestCommitResult] = await Promise.all([stage('github.version', fetchManifest), stage('github.commit', fetchLatestCommit)])
+      const { publishedCommit, runtimeCommit: latestCommit } = runtimeCommitIdentityOf(latestCommitResult)
+      const latestVersion = String(remote?.version || '')
+      if (currentVersion === '' || latestVersion === '') throw new Error('版本信息不完整')
+      if (!/^[0-9a-f]{40}$/i.test(latestCommit)) throw new Error('GitHub 返回的提交号无效')
+      const normalizedCurrentCommit = currentCommit.toLowerCase() === publishedCommit.toLowerCase()
+        ? latestCommit
+        : currentCommit
       return {
-        currentVersion,
-        latestVersion: compared.version || currentVersion,
-        currentCommit,
-        latestCommit: compared.revision,
-        checkSource: 'jsdelivr',
-        updateAvailable,
+        currentVersion, latestVersion, currentCommit: normalizedCurrentCommit, latestCommit, checkSource: 'github',
+        updateAvailable: compareVersions(latestVersion, currentVersion) >= 0 && await isNewerCommit(normalizedCurrentCommit, latestCommit),
+        checkWarning: undefined,
       }
-    } catch (cdnError) {
-      record('fallback.github', { reason: String(cdnError?.message || cdnError) })
+    } catch (githubError) {
+      record('fallback.cdn', { reason: sanitizeUpdateError(githubError?.message || githubError) })
       try {
-        const [remote, latestCommitResult] = await Promise.all([stage('github.version', fetchManifest), stage('github.commit', fetchLatestCommit)])
-        const { publishedCommit, runtimeCommit: latestCommit } = runtimeCommitIdentityOf(latestCommitResult)
-        const latestVersion = String(remote?.version || '')
-        if (currentVersion === '' || latestVersion === '') throw new Error('版本信息不完整')
-        if (!/^[0-9a-f]{40}$/i.test(latestCommit)) throw new Error('GitHub 返回的提交号无效')
-        const normalizedCurrentCommit = currentCommit.toLowerCase() === publishedCommit.toLowerCase()
-          ? latestCommit
-          : currentCommit
-        return {
-          currentVersion, latestVersion, currentCommit: normalizedCurrentCommit, latestCommit, checkSource: 'github',
-          updateAvailable: compareVersions(latestVersion, currentVersion) >= 0 && await isNewerCommit(normalizedCurrentCommit, latestCommit),
-          checkWarning: undefined,
+        const compared = await compareCdnRuntime(sourceRoot, await stage('cdn.fetch', fetchCdnMetadata))
+        record('cdn.comparison', { currentVersion, currentCommit, currentReleaseSequence, latestVersion: compared.version, latestCommit: compared.revision, latestReleaseSequence: compared.releaseSequence, matches: compared.matches })
+        let updateAvailable = false
+        if (!compared.matches && currentCommit.toLowerCase() !== String(compared.revision).toLowerCase()) {
+          if (currentReleaseSequence && compared.releaseSequence) {
+            updateAvailable = compared.releaseSequence > currentReleaseSequence
+          } else if (compared.version && compareVersions(compared.version, currentVersion) !== 0) {
+            updateAvailable = compareVersions(compared.version, currentVersion) > 0
+          } else {
+            throw new Error('jsDelivr 清单缺少可比较的发布序号，需使用 GitHub 确认提交先后')
+          }
         }
-      } catch (githubError) {
-        throw new Error(`jsDelivr 不可用（${sanitizeUpdateError(cdnError?.message || cdnError)}）；GitHub 备用源也不可用（${sanitizeUpdateError(githubError?.message || githubError)}）`)
+        if (!updateAvailable) throw new Error('CDN 清单未显示更高构建，无法确认是否为最新版本')
+        return {
+          currentVersion,
+          latestVersion: compared.version || currentVersion,
+          currentCommit,
+          latestCommit: compared.revision,
+          checkSource: 'jsdelivr',
+          checkWarning: 'GitHub 暂不可达；已发现 CDN 上的较新构建，但无法确认它是最新构建。',
+          updateAvailable,
+        }
+      } catch (cdnError) {
+        throw new Error(`暂时无法确认最新版本：GitHub 核实失败（${sanitizeUpdateError(githubError?.message || githubError)}）；CDN 备用检查（${sanitizeUpdateError(cdnError?.message || cdnError)}）`)
       }
     }
   }
@@ -357,7 +359,7 @@ export function createApplicationUpdater(options) {
     const saved = await store.readJson(STATUS_FILE)
     const current = saved === undefined ? undefined : { ...saved, host: await host() }
     if (current !== undefined) {
-      if (current.phase === 'update-available' && (current.checkPolicy !== UPDATE_CHECK_POLICY || current.checkedForCommit !== identity.currentCommit)) {
+      if (['update-available', 'up-to-date'].includes(current.phase) && (current.checkPolicy !== UPDATE_CHECK_POLICY || current.checkedForCommit !== identity.currentCommit)) {
         const invalidated = { phase: 'idle', host: await host(), ...identity }
         await writeStatus( invalidated)
         return invalidated

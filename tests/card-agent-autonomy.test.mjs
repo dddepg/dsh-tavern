@@ -24,10 +24,12 @@ test('任务提示继承用户已有授权，不强制重复确认或禁止适�
   }
 })
 
-test('MVU 转换优先采用无损的批量文件操作，禁止逐块转录大型 JSON', () => {
-  assert.match(mvuSkill, /大文件复制或批量变换优先使用 Shell 与脚本/)
-  assert.match(mvuSkill, /禁止通过分块读取和分块插入来手工转录整份 JSON/)
-  assert.match(mvuSkill, /为副本使用独立 ID/)
+test('MVU 转换创建保留封面的独立副本，并保护原卡和无关字段', () => {
+  assert.match(mvuSkill, /调用 `tavern_copy_card`/)
+  assert.match(mvuSkill, /完整保留无关字段/)
+  assert.match(mvuSkill, /重新解析并比较原卡与副本/)
+  assert.match(mvuSkill, /保留源卡 PNG.*`imageCopied`/)
+  assert.match(mvuSkill, /独立路径和资源 ID/)
   assert.match(mvuSkill, /不能向仍指向原卡的工具提交变更/)
 })
 

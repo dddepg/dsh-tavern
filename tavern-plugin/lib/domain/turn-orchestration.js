@@ -298,6 +298,7 @@ export function createTurnOrchestrator(options) {
     }
 
     const cardPath = cardPathOf(chat)
+    if ((mode === 'story' || mode === 'script') && cardPath === '') throw new Error('当前游玩缺少人物卡绑定，无法继续本轮。请先恢复人物卡或救援存档。')
     // Workbench tools must remain available when the file being repaired is invalid.
     const card = cardPath === '' ? null : mode === 'card' ? { name: chat.cardName } : await store.readCard(cardPath)
     if (cardPath !== '' && card === undefined) throw new Error('人物卡不存在: ' + cardPath)

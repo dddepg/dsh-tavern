@@ -255,7 +255,7 @@ export function createNativePlayOrchestrationStrategy(options) {
       if (prepared && prepared.duplicate) throw new Error('该消息已由酒馆处理，请勿重复发送')
       if (mode === 'story' || mode === 'script') {
         agentMessages = replaceTurnInput(agentMessages, prepared.frame.userInput.projectedText)
-        const adapted = options.appendFrame({ messages: agentMessages, frame: prepared.frame, step: payload.step })
+        const adapted = options.appendFrame({ messages: agentMessages, frame: prepared.frame, step: payload.step, session: payload.agent?.session })
         agentMessages = adapted.messages
         options.recordFrame(sessionId, prepared.frame, adapted.receipt)
       } else if (str(prepared.text).trim() !== '') {
@@ -343,6 +343,14 @@ export function createForegroundOrchestrationStrategies(options) {
   }
 
   async function prepareStep(input) {
+    if (input.chat?.regenInProgress && Number(input.payload.step) === 1) {
+      const inputs = (input.payload.messages || []).filter(isTurnInput)
+      const saved = input.chat.regenRecovery
+      if (saved?.phase === 'committed' || inputs.length !== 1 || !isRegenerationInput(inputs[0]) ||
+          (saved?.id && inputs[0].source.regenerationId !== saved.id)) {
+        throw new Error('正文重新生成尚未完成，请先完成或恢复后再发送消息')
+      }
+    }
     return await select(input.chat).prepareStep(input)
   }
 

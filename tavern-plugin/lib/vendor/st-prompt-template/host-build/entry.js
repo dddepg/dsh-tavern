@@ -86,3 +86,5 @@ export { createTemplateServices } from './services.js'
 export { createTemplatePanel } from './panel.js'
 
 export * as templateHost from './host.js'
+
+export { createEjsCodeEditor } from './code-editor.js'

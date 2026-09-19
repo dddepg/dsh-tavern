@@ -58,3 +58,29 @@ test('本局设置保存本局模型与开关，切换模型丢弃旧档位响�
   assert.equal(tree().find(n => n.props?.['aria-label'] === '联网搜索').props.checked, false)
 
 })
+
+test('全局默认模型保存成功才更新选择，失败保留原配置', async () => {
+  const states = [], effects = [], calls = []
+  let cursor = 0, fail = false
+  const render = vm.runInNewContext('(' + source.slice(source.indexOf('function TavernSettingsSection()'), source.indexOf('function UserPreferenceProfileTab(props)')).trim() + ')', {
+    React: { useState(initial) { const i = cursor++; if (!(i in states)) states[i] = initial; return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value }] }, useEffect(fn) { effects.push(fn) }, createElement: (type, props, ...children) => ({ type, props, children }) },
+    TavernConversationWritingSkills: 'writing-skills', TavernDefaultModelSetting: 'model-setting', TavernTextColorSettings: 'text-color', ContextCompactionSettings: 'compaction', SceneImageSettings: 'images',
+    rpc: async (method, args) => { calls.push({ method, args }); if (fail) throw Error('保存失败测试'); return { settings: { defaultForegroundModel: null, defaultBackgroundModel: null, ...args?.patch }, modelCatalog: [] } }
+  })
+  function tree() { cursor = 0; return render().children }
+  tree(); await effects[0](); await new Promise(resolve => setImmediate(resolve))
+  const control = label => tree().find(n => n?.props?.label === label)
+  const choice = { provider: 'p', model: 'm', reasoningEffort: 'low' }
+  await control('默认前台模型').props.onChange(choice)
+  assert.deepEqual(control('默认前台模型').props.selection, choice)
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1))), { method: 'updateTavernSettings', args: { patch: { defaultForegroundModel: choice } } })
+  fail = true
+  await control('默认前台模型').props.onChange(null)
+  assert.deepEqual(control('默认前台模型').props.selection, choice)
+  assert.ok(tree().some(n => n?.props?.role === 'alert'))
+  fail = false
+  await control('默认后台模型').props.onChange(choice)
+  await control('默认前台模型').props.onChange(null)
+  assert.equal(control('默认前台模型').props.selection, null)
+  assert.deepEqual(control('默认后台模型').props.selection, choice)
+})

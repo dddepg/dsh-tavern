@@ -639,7 +639,7 @@ test('左侧栏常驻显示版本与构建号，并把检查更新和进行更�
   assert.doesNotMatch(sidebar, /重新检查/)
   assert.match(sidebar, /进行更新/)
   assert.match(sidebar, /updateStatus\.phase !== "update-available"/)
-  assert.match(sidebar, /正在通过 jsDelivr 检查最新构建/)
+  assert.match(sidebar, /正在向 GitHub 核实最新构建/)
   assert.match(sidebar, /未发现更新构建/)
   assert.match(sidebar, /发现新构建/)
   assert.match(sidebar, /未发现更新构建/)

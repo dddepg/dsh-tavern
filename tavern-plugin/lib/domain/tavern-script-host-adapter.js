@@ -442,10 +442,19 @@ export function createTavernScriptHostAdapter(options = {}) {
     return { updated: true, variables: saved }
   }
 
+  async function readGlobalPromptTemplateSettings() {
+    if (!options.fullExtensionSettings) throw new Error('完整模板设置存储未连接')
+    return { settings: (await options.fullExtensionSettings.read()).EjsTemplate }
+  }
+
   async function saveFullPromptTemplateSettings(sessionId, settings, expectedSettings) {
+    assertTemplateChat(await resolveChat(sessionId))
+    return saveGlobalPromptTemplateSettings(settings, expectedSettings)
+  }
+
+  async function saveGlobalPromptTemplateSettings(settings, expectedSettings) {
     assertPluginJson(settings, '模板设置')
     if (expectedSettings !== undefined) assertPluginJson(expectedSettings, '模板设置读取版本')
-    assertTemplateChat(await resolveChat(sessionId))
     if (!options.fullExtensionSettings) throw new Error('完整模板设置存储未连接')
     const current = await options.fullExtensionSettings.read()
     const base = { ...current }
@@ -717,6 +726,8 @@ export function createTavernScriptHostAdapter(options = {}) {
     readFullPromptTemplateState,
     saveFullPromptTemplateState,
     saveFullPromptTemplateSettings,
+    readGlobalPromptTemplateSettings,
+    saveGlobalPromptTemplateSettings,
     saveFullPromptTemplateGlobals,
     saveExtensionSettings,
     saveChatData,

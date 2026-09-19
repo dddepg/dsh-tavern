@@ -895,3 +895,9 @@ test('玩家模板先于本轮召回，重试不重复执行；提交后只产�
     assert.equal(run.chat().promptTemplateInput,undefined)
   }
 })
+
+for (const mode of ['story', 'script']) test(mode + ' 缺少人物卡绑定时明确拒绝开始回合', async () => {
+  const run = harness(mode, { draft: true })
+  await assert.rejects(run.orchestrator.prepare({ sessionId: 'session-1', turn: 1, userText: '继续' }), /缺少人物卡绑定/)
+  assert.equal(run.plannerCalls.length, 0)
+})

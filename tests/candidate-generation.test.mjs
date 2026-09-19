@@ -370,6 +370,19 @@ test('自由故事过滤无效项后按类型顺序裁剪超额候选', async ()
   assert.match(run.warnings.join('\n'), /候选项.*裁剪/)
 })
 
+test('剧本模式允许通过工具提交单个场景候选并保存类型', async () => {
+  const text = '夜幕降临，钟楼外响起巡夜人的脚步声'
+  const run = harness({ mode: 'script', outputs: [async options => {
+    const tool = options.tools.find(item => item.name === 'candidate_submit_choices')
+    assert.equal(tool.parameters.properties.actions.minItems, 0)
+    await options.onToolCall({ name: 'candidate_submit_choices', arguments: { actions: [], scene: text } })
+    return ''
+  }] })
+  const result = await run.candidates.generate({ sessionId: 'session-1', messageId: 'script-scene' })
+  assert.deepEqual(result.choices, [{ type: 'scene', text }])
+  assert.deepEqual(run.chat().candidates.choices, result.choices)
+})
+
 test('剧本模式存在多个有效候选时只保留第一个', async () => {
   const run = harness({
     mode: 'script',

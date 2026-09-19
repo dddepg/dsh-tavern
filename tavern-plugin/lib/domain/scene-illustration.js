@@ -206,14 +206,17 @@ export function createSceneIllustrations(deps) {
     return written
   }
   function watchCancellation(path, record, controller) {
-    let checking = false
+    let checking = false, warned = false
     const timer = setInterval(async () => {
       if (checking) return
       checking = true
       try {
         const current = await deps.store.readJson(path)
         if (!current || current.requestId !== record.requestId || current.ownerId !== record.ownerId || current.cancelRequestedAt) controller.abort()
-      } catch { controller.abort() } finally { checking = false }
+      } catch {
+        // An unavailable store is not evidence of cancellation or lost ownership.
+        if (!warned) { warned = true; console.warn('dsh-tavern: 生图取消状态读取失败，将继续检查') }
+      } finally { checking = false }
     }, 250)
     return () => clearInterval(timer)
   }

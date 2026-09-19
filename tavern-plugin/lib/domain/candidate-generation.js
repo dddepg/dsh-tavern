@@ -165,12 +165,12 @@ export const CANDIDATE_SUBMIT_TOOL_NAME = 'candidate_submit_choices'
 
 export const CANDIDATE_SUBMIT_TOOL = Object.freeze({
   name: CANDIDATE_SUBMIT_TOOL_NAME,
-  description: '提交本轮候选项。自由故事必须提交 4 个行动候选和 1 个场景候选；剧本模式提交 1 个行动候选且 scene 留空。',
+  description: '提交本轮候选项。自由故事必须提交 4 个行动候选和 1 个场景候选；剧本模式只提交 1 项变化，填入 actions 或 scene，另一项留空。',
   parameters: Object.freeze({
     type: 'object',
     additionalProperties: false,
     properties: {
-      actions: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string', minLength: 1 } },
+      actions: { type: 'array', minItems: 0, maxItems: 4, items: { type: 'string', minLength: 1 } },
       scene: { type: 'string' }
     },
     required: ['actions', 'scene']

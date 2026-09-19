@@ -612,3 +612,20 @@ test('MVU 已预约执行器但还在准备上下文时，新生命周期事件�
   assert.equal(early.event, null)
   assert.equal(result.busy, true)
 })
+
+test('global template settings read and save without resolving any game', async () => {
+  const current = { EjsTemplate: { enabled: false }, otherPlugin: { enabled: true } }
+  let saved
+  const { adapter } = harness(chat(), {
+    resolveChat: async () => { throw new Error('must not read a game') },
+    fullExtensionSettings: {
+      read: async () => structuredClone(current),
+      save: async (next, base) => { saved = { next, base }; return next }
+    }
+  })
+  assert.deepEqual(await adapter.readGlobalPromptTemplateSettings(), { settings: { enabled: false } })
+  assert.deepEqual(await adapter.saveGlobalPromptTemplateSettings({ enabled: true }, { enabled: false }), { updated: true, settings: { enabled: true } })
+  assert.deepEqual(saved.base, current)
+  assert.deepEqual(saved.next.otherPlugin, current.otherPlugin)
+  await assert.rejects(adapter.saveGlobalPromptTemplateSettings([], {}), /模板设置/)
+})

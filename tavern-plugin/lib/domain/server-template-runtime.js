@@ -52,8 +52,10 @@ export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, id
     // is limited to executable dependencies and plugin code, never profile data.
     const modules = dirname(dirname(require.resolve('jsdom/package.json')))
     const plugin = fileURLToPath(new URL('../../', import.meta.url))
+    // Node 24 removed the experimental alias; older hosts still need it.
+    const permissionFlag = process.allowedNodeEnvironmentFlags.has('--permission') ? '--permission' : '--experimental-permission'
     const child = fork(worker, [], { env: { NODE_ENV: 'production', ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) },
-      execArgv: ['--experimental-permission', '--allow-fs-read=' + plugin, '--allow-fs-read=' + modules, '--max-old-space-size=256'],
+      execArgv: [permissionFlag, '--allow-fs-read=' + plugin, '--allow-fs-read=' + modules, '--max-old-space-size=256'],
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'], serialization: 'advanced' })
     const record = { child, sessionId, pending: new Map(), busy: true, ready: false, closed: false, usedAt: Date.now(), writes: Promise.resolve() }
     sessions.set(sessionId, record)
