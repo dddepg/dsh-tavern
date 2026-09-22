@@ -11,9 +11,9 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }
   tools.register(defineTool({
     name: 'tavern_convert_to_mvu',
-    description: '将人物卡转换为独立 MVU 副本。先 inspect 一次获取有预算的原文和版本，仅缺失长字段用 read.paths 批量补读。apply 已内置预检、原子保存和磁盘验收；仅有定位疑问时额外 preview。已有副本默认合并已保存方案，省略的定义与清理保留。工具从磁盘复制整卡后清理并追加 MVU；参数仅提交改动和变量定义，不回传原卡或保留内容。工具负责初值/后台规则、固定面板、每个开场入口、模型历史隔离与绑定，不需要手写 HTML 或正则。同一来源和名称可重复调用；更新现有副本须提供 inspect 返回的 targetRevision。',
+    description: '将人物卡转换为独立 MVU 副本。先 inspect 一次获取有预算的原文和版本，仅缺失长字段用 read.paths 批量补读。apply 已内置预检、原子保存和磁盘验收；仅有定位疑问时额外 preview。已有副本默认合并已保存方案，省略的定义与清理保留。工具从磁盘复制整卡后清理并追加 MVU；参数仅提交改动和变量定义，不回传原卡或保留内容。工具负责初值/后台规则、固化原美化、每个开场入口、模型历史隔离与绑定，有原美化时必须指定 appearance，先 freezeAppearance 核验；工具直接复制来源 HTML/CSS，只绑定变量，不接受模型重写外观。无原美化才使用默认模板。同一来源和名称可重复调用；更新现有副本须提供 inspect 返回的 targetRevision。',
     parameters: {
-      action: { type: 'string', required: true, enum: ['inspect', 'read', 'search', 'preview', 'apply'] },
+      action: { type: 'string', required: true, enum: ['inspect', 'read', 'search', 'freezeAppearance', 'preview', 'apply'] },
       sourcePath: { type: 'string', required: true, description: '原卡 cards/... 路径；始终保留原卡' },
       detail: { type: 'string', enum: ['reading','summary','full'], description: 'inspect 默认 reading 一次返回有预算的原文；summary 仅目录，full 为完整原卡及副本' },
       scope: { type: 'string', enum: ['source','target','plan','preservedWorldbook'], description: 'read/search 默认 source；target/plan 还需 targetRevision，路径均相对于该对象' },
@@ -33,6 +33,13 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
         path: { type: 'string', required: true, description: '相对于初值的 JSON Pointer，如 /玩家/位置；可选择整个集合' },
         label: { type: 'string', description: '显示名称' }
       } } },
+      appearance: { type: 'object', additionalProperties: false, description: '从原卡固化外观；只传来源和捕获字段映射，不传 HTML。已有方案省略则保留。', properties: {
+        sourcePath: { type:'string', required:true, description:'inspect.appearanceSources 返回的 replaceString 路径' },
+        bindings: { type:'array', required:true, items:{type:'object',additionalProperties:false,properties:{
+          capture:{type:'number',required:true,description:'原视图 $1/$2 的捕获编号'},
+          path:{type:'string',required:true,description:'MVU 初值的 JSON Pointer'}
+        }}}
+      } },
       cleanup: { type: 'array', description: '相对于 source 底稿的小改动；版本号校验整个底稿。整项删除只传路径，短改文只传片段，长区块只传首尾标记；同字段支持多处不重叠编辑。无需回传原卡。', items: { type: 'object', additionalProperties: false, properties: {
         op: { type: 'string', required: true, enum: ['replaceText', 'replaceBlock', 'replace', 'remove'] },
         path: { type: 'string', required: true, description: '如 /description 或 /character_book/entries/0；数组下标按 inspect 底稿' },
@@ -55,7 +62,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }))
   tools.register(defineTool({
     name: 'tavern_validate_mvu_conversion',
-    description: '只读验收专用工具生成的 MVU 副本：报告实际删除/保留条目、已识别旧渲染残留与方案外修改，从磁盘检查绑定、初值、后台分流、所有开场、面板唯一性与模型历史隔离，并在隔离 DOM 中模拟固定面板的变量更新/恢复。不会调用模型或执行原卡自定义脚本；报告明确列出未实测的真实结算和浏览器项目。',
+    description: '只读验收专用工具生成的 MVU 副本：报告实际删除/保留条目、已识别旧渲染残留与方案外修改，从磁盘检查绑定、初值、后台分流、所有开场、面板唯一性与模型历史隔离，并在隔离 DOM 中模拟托管视图的变量更新/恢复。不会调用模型或执行原卡自定义脚本；报告明确列出未实测的真实结算和浏览器项目。',
     parameters: { path: { type: 'string', required: true, description: '转换后的 cards/... 副本路径' } },
     output, isConcurrencySafe: () => true,
     async execute(args, exec) { await requireWorkbench(exec); return { report: await conversion.verify(args) } }

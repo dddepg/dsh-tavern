@@ -1,3 +1,4 @@
+import { appearanceSources, freezeMvuAppearance } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { normalizeResourcePath, safeResourceName } from './file-resources.js'
@@ -145,7 +146,8 @@ export function createMvuConversion({ resources }) {
       target: existing === undefined ? null : { catalog: existingTarget ? catalog(existingTarget) : [], error: targetError,
         hasSavedPlan: Array.isArray(metadata?.cleanup), externallyModified: existingTarget ? metadata?.outputDigest !== outputDigest(JSON.parse(existing)) : true },
       ...(args.detail === 'full' ? {card:source.data, existingTarget, preservedInactiveWorldbook:source.preservedBook ?? null} : {}),
-      capabilities: { customAppearance:false, sharedInitialState:true, openingCount:1+(source.data.alternate_greetings?.length || 0), preservedInactiveWorldbook:!!source.preservedBook },
+      appearanceSources: appearanceSources(source.data),
+      capabilities: { customAppearance:true, appearanceMode:"frozen-source-captures", sharedInitialState:true, openingCount:1+(source.data.alternate_greetings?.length || 0), preservedInactiveWorldbook:!!source.preservedBook },
       instruction: 'reading 已含原文，只续读未完整展示的必要字段，可用 paths 批量读取。source/target 均是规范化生效字段，不检查磁盘包装镜像。用 read/search 按 sourceRevision 读取来源字段；scope=plan 可读已保存方案。apply 默认合并方案：省略的定义及已有清理保留，新清理追加并去重；cleanupResetPaths 先清除指定路径的旧操作。planMode=replace 才整份替换。preview 不落盘。' }
   }
   async function read(args) {
@@ -158,7 +160,7 @@ export function createMvuConversion({ resources }) {
       if (text === undefined || !args.targetRevision || digest(text) !== args.targetRevision) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
       const data = cardData(JSON.parse(text))
       const meta = data.extensions?.[MVU_CONVERSION_KEY]
-      value = args.scope === 'target' ? data : meta ? Object.fromEntries(['initialState','updateRules','displayFields','cleanup'].filter(key=>Object.hasOwn(meta,key)).map(key=>[key,meta[key]])) : null
+      value = args.scope === 'target' ? data : meta ? Object.fromEntries(['initialState','updateRules','displayFields','cleanup','appearance'].filter(key=>Object.hasOwn(meta,key)).map(key=>[key,meta[key]])) : null
     } else if (args.scope && args.scope !== 'source') throw Error('未知读取 scope')
     return { sourceRevision:source.revision, ...(args.scope === 'target' || args.scope === 'plan' ? {targetRevision:args.targetRevision} : {}),
       ...(args.action === 'search' ? searchConversionValue(value,args) : args.paths ? readConversionBatch(value,args) : readConversionValue(value,args)) }
@@ -187,11 +189,14 @@ export function createMvuConversion({ resources }) {
         const cleanup = metadata.cleanup.filter(edit => !reset.includes(edit.path))
         if (args.cleanup !== undefined && !Array.isArray(args.cleanup)) throw Error('cleanup 必须是数组')
         for (const edit of args.cleanup || []) if (!cleanup.some(old => isDeepStrictEqual(old, edit))) cleanup.push(clone(edit))
-        for (const key of ['initialState','updateRules','displayFields']) if (!Object.hasOwn(args,key)) args[key] = clone(metadata[key])
+        for (const key of ['initialState','updateRules','displayFields','appearance']) if (!Object.hasOwn(args,key)) args[key] = clone(metadata[key])
         args.cleanup = cleanup
       }
     } else if (args.targetRevision) throw Error('目标副本已不存在，请重新 inspect')
-    const requestHash = digest({ sourceRevision:source.revision,name:target.name,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
+    const skins = appearanceSources(source.data)
+    if (!args.appearance && skins.some(skin => skin.enabled)) throw Error('必须先固化原有美化并提供 appearance 映射，不能降级为默认面板')
+    const frozenAppearance = args.appearance ? freezeMvuAppearance(source.data,args.appearance) : undefined
+    const requestHash = digest({ sourceRevision:source.revision,name:target.name,appearance:args.appearance,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
     if (existingText !== undefined) {
       if (metadata.requestHash === requestHash && metadata.outputDigest === outputDigest(existing)) {
         if (input.action === 'preview') return {path:target.path,saved:false,changed:false,validation:await verify({path:target.path}),nextAction:'自动验收已返回；无具体失败或用户要求实测时，直接报告结果与待实测项。'}
@@ -200,8 +205,14 @@ export function createMvuConversion({ resources }) {
       }
       if (!args.targetRevision || args.targetRevision !== digest(existingText)) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
     }
-    const artifacts = buildMvuArtifacts(args)
+    const artifacts = buildMvuArtifacts({...args,frozenAppearance})
     const data = applyMvuCleanup(clone(source.data), args.cleanup)
+    for (const skin of skins) {
+      const original = source.data.extensions.regex_scripts[Number(skin.path.split('/')[3])]
+      const retained = data.extensions?.regex_scripts?.some(rule => isDeepStrictEqual(rule,original))
+      if (skin.path === args.appearance?.sourcePath && (retained || !(args.cleanup || []).some(edit=>edit.op === 'remove' && edit.path === skin.path.replace(/\/replaceString$/,'')))) throw Error('固化后须清理对应旧显示正则，避免重复面板')
+      if (skin.path !== args.appearance?.sourcePath && !retained) throw Error('不能删除未固化的其他美化: '+skin.path)
+    }
     data.name = target.name
     data.extensions ??= {}
     const entries = data.character_book?.entries
@@ -227,6 +238,7 @@ export function createMvuConversion({ resources }) {
     // The storage layer supplies a fresh workspace ID on first creation.
     if (document.meta) document.meta = { ...document.meta, id: existingText ? JSON.parse(existingText).meta?.id : undefined }
     destination.extensions[MVU_CONVERSION_KEY] = { version: 1, sourcePath: source.sourcePath, sourceRevision: source.revision, requestHash,
+      ...(args.appearance ? {appearance:clone(args.appearance),frozenAppearance} : {}),
       initialState: clone(args.initialState), updateRules: args.updateRules, displayFields: clone(args.displayFields || []), cleanup: clone(args.cleanup || []),
       ...(source.preservedBook ? { preservedWorldbook: source.preservedBook } : {}) }
     const staticCheck = validateCardText(JSON.stringify(document))
@@ -234,7 +246,7 @@ export function createMvuConversion({ resources }) {
     const check = await validateMvuConversion(data)
     const audit = cleanupAudit(source.data,args.cleanup || [],data)
     check.checks.push(audit.check); check.changes = audit.changes; check.removedEntries = audit.removedEntries; check.preservedEntries = audit.preservedEntries; check.valid &&= audit.check.status === 'passed'
-    check.pending.push('原卡语义与未识别旧协议需按 changes 清单确认；多开场共享初值，自定义外观未迁移')
+    check.pending.push('原卡语义与未识别旧协议需按 changes 清单确认；多开场共享初值，原样式需浏览器对照验收')
     if (input.action === 'preview') return {path:target.path,saved:false,validation:check}
     if (!check.valid) throw Error('转换预检失败: ' + JSON.stringify(check.checks.filter(item => item.status === 'failed')))
     if ((await snapshot(source.sourcePath)).revision !== source.revision) throw Error('转换期间来源发生变化，请重新 inspect')
@@ -256,13 +268,23 @@ export function createMvuConversion({ resources }) {
       try {
         const source = await snapshot(meta.sourcePath)
         if (source.revision !== meta.sourceRevision) throw Error('来源已变化，无法核对原转换底稿')
+        if (!meta.appearance && appearanceSources(source.data).some(skin=>skin.enabled)) {
+          result.checks.push({name:'appearanceSource',status:'failed',detail:'原卡有美化但副本未固化，需从原卡重新转换'})
+          result.valid = false
+        }
+        if (meta.appearance) {
+          const frozen = freezeMvuAppearance(source.data,meta.appearance)
+          const intact = isDeepStrictEqual(frozen,meta.frozenAppearance)
+          result.checks.push({name:'appearanceSource',status:intact?'passed':'failed',detail:intact?'固化视图与原卡来源一致':'固化视图偏离来源'})
+          result.valid &&= intact
+        }
         const audit = cleanupAudit(source.data,meta.cleanup,data)
         result.changes = audit.changes; result.removedEntries = audit.removedEntries; result.preservedEntries = audit.preservedEntries; result.checks.push(audit.check); result.valid &&= audit.check.status === 'passed'
       } catch (error) {
         result.checks.push({name:'sourceAudit',status:'failed',detail:error.message}); result.valid = false
       }
     } else result.pending.push('旧副本未保存完整转换方案，无法核对清理清单与方案外修改')
-    result.pending.push('核对 changes 的删除条目及剧情语义；多开场共用初值，自定义外观未迁移')
+    result.pending.push('核对 changes 的删除条目及剧情语义；多开场共用初值，原样式需浏览器对照验收')
     const binding = await resources.worldBookBindingForCard(path)
     const bound = binding.kind === 'embedded' && binding.cardPath === path
     result.checks.unshift({ name: 'binding', status: bound ? 'passed' : 'failed', detail: bound ? '副本绑定自己的世界书' : '副本未绑定自己的世界书' })
@@ -271,8 +293,13 @@ export function createMvuConversion({ resources }) {
   }
   function convert(args) {
     if (args.action === 'inspect') return inspect(args)
+    if (args.action === 'freezeAppearance') return snapshot(args.sourcePath).then(source => {
+      if (!args.sourceRevision || args.sourceRevision !== source.revision) throw Error('来源已变化，请重新 inspect')
+      const frozen = freezeMvuAppearance(source.data,args.appearance)
+      return {sourceRevision:source.revision,appearance:args.appearance,sourceDigest:frozen.sourceDigest,htmlDigest:frozen.htmlDigest,bindings:frozen.bindings,mode:'frozen-source-captures',instruction:'原视图从来源直接固化。apply 传相同 appearance；不提交 HTML。'}
+    })
     if (args.action === 'read' || args.action === 'search') return read(args)
-    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/preview/apply')
+    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/preview/apply')
     const job = tail.then(() => apply(args)); tail = job.catch(() => {}); return job
   }
   return { convert, verify }

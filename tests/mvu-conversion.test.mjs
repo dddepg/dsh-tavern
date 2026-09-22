@@ -307,7 +307,7 @@ test('验收报告真实删除项目，检查旧渲染协议残留及手工修�
   data.extensions.regex_scripts.push({id:'legacy',findRegex:'<旧状态>(.*?)</旧状态>',replaceString:'<div>$1</div>',placement:[2]})
   data.character_book.entries.push({id:8,comment:'剧情选择点',content:'保留分支',enabled:false})
   await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
-  const plan={...definition(),cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]}
+  const plan={...definition(),appearance:{sourcePath:'/extensions/regex_scripts/1/replaceString',bindings:[{capture:1,path:'/玩家/位置'}]},cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]}
   const preview=await f.conversion.convert({action:'preview',sourcePath:f.sourcePath,...await f.inspect(),...plan})
   assert.equal(preview.validation.checks.find(x=>x.name==='legacyResidue').status,'failed')
   assert.equal((await f.resources.list('card')).length,1)
@@ -455,4 +455,32 @@ test('DSH 无损快照和输出 schema 校验覆盖已有、损坏副本与验�
   assert.notEqual(snapshotJsonValue(validation),undefined)
   await f.resources.writeWorking(result.path,'{')
   await check({action:'inspect',sourcePath:f.sourcePath,detail:'full'})
+})
+
+test('原卡有美化时禁止静默降级成默认面板', async t => {
+  const f = await fixture(t), doc = await f.resources.readCard(f.sourcePath)
+  cardData(doc).extensions.regex_scripts.push({id:'skin',findRegex:'/<state>(.*?)<\\/state>/g',replaceString:'```html\n<style>.skin{background:linear-gradient(pink,peachpuff)}</style><details class="skin"><summary>旅人行装</summary><span>$1</span></details>\n```',placement:[2],markdownOnly:true})
+  await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
+  await assert.rejects(f.apply({cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]}), /固化.*美化/)
+})
+
+test('工具固化原渐变、图标、details：映射变量，更新和回退不重建皮肤', async t => {
+  const f=await fixture(t),doc=await f.resources.readCard(f.sourcePath)
+  const skin='<style>.skin{background:linear-gradient(pink,peachpuff);border-radius:12px}</style><details class="skin"><summary>🧳 旅人行装</summary><p>📍 <span>$1</span></p></details>'
+  cardData(doc).extensions.regex_scripts.push({id:'skin',findRegex:'/<state>(.*?)<\\/state>/g',replaceString:'```html\n'+skin+'\n```',placement:[2],markdownOnly:true})
+  await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
+  const appearance={sourcePath:'/extensions/regex_scripts/1/replaceString',bindings:[{capture:1,path:'/玩家/位置'}]}
+  const input={sourcePath:f.sourcePath,...await f.inspect(),appearance}
+  const frozen=await f.conversion.convert({...input,action:'freezeAppearance'})
+  assert.match(frozen.sourceDigest,/^[a-f0-9]{64}$/)
+  const result=await f.apply({appearance,cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]})
+  assert.equal(result.validation.valid,true,JSON.stringify(result.validation))
+  const data=cardData(await f.resources.readCard(result.path)),meta=data.extensions[MVU_CONVERSION_KEY]
+  assert.equal(meta.frozenAppearance.html,skin)
+  assert.equal(result.validation.checks.find(c=>c.name==='appearanceSource').status,'passed')
+  const next=await f.conversion.convert({action:'apply',...await f.inspect(),sourcePath:f.sourcePath,updateRules:'根据已发生剧情更新玩家位置。'})
+  assert.equal(next.validation.valid,true)
+  assert.deepEqual(cardData(await f.resources.readCard(result.path)).extensions[MVU_CONVERSION_KEY].frozenAppearance,meta.frozenAppearance)
+  await assert.rejects(f.apply({appearance:{...appearance,html:'<div>改皮肤</div>'}}),/不接受模型重写/)
+  await assert.rejects(f.apply({appearance:{...appearance,bindings:[]}}),/每个捕获/)
 })
