@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "ef72869feb89ce9392e881082bae727045d40da8",
-  "releaseSequence": 327,
+  "revision": "2996b958e5821a0ccca09d0ec69d1b828e93ea59",
+  "releaseSequence": 328,
   "version": "2.1.0",
   "files": [
     {
@@ -336,8 +336,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/body-editor.js",
-      "sha256": "4094c78304280429cfbde83b0536d5340bfea8d842e27878f1d79a46a57a8b0d",
-      "size": 6500
+      "sha256": "d4c480090db1dcf5f874fe488c939566af30d97b6614150bff4267ebf434ad02",
+      "size": 7865
     },
     {
       "path": "tavern-plugin/lib/domain/bypass-plans.js",
@@ -661,8 +661,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/legacy-session-migration.js",
-      "sha256": "f2469068b302623fe53aee960174a7a396b36fbcbb6b4af20b8321dd6b84ae84",
-      "size": 34775
+      "sha256": "c6c7797ed0f879cc9a5fc890f8fb9738e1d4f363cab60b5cc3023b1cf6b0b54d",
+      "size": 36083
     },
     {
       "path": "tavern-plugin/lib/domain/manual-character-design.js",
@@ -1391,8 +1391,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "02c569fb1043aac1212be4a6ed237ffd955ed63e1fe07e27aab5d7296c446edd",
-      "size": 296092
+      "sha256": "4eb617d29803230fda8bed85e34e9719755fb95297a261612f01cecc569292e1",
+      "size": 296636
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
