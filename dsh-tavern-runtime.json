@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "81d5250eb0e98691ac890d5b6265b938fd1654ba",
-  "releaseSequence": 325,
+  "revision": "b19d6dd830f797c7512643378c04363d935d6f5c",
+  "releaseSequence": 326,
   "version": "2.1.0",
   "files": [
     {
@@ -3181,8 +3181,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/lib/client.js.map",
-      "sha256": "b3c4d95a3a7c6c471aebbeb3329d47f39f1b82d1691894b0881e94d1af4b5695",
-      "size": 404321
+      "sha256": "aa2279957bc2a7cbcc9387d1be7fb23d5e553868de36f74a0469d2eacf2d5aeb",
+      "size": 404322
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/lib/index.js",
