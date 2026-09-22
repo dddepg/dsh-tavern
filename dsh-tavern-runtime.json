@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "e9f01d46ecb336a5fc042e5c40dae7133cf6d133",
-  "releaseSequence": 323,
+  "revision": "12902495368772028775cfbc133933858ceb5856",
+  "releaseSequence": 324,
   "version": "2.0.0",
   "files": [
     {
@@ -181,13 +181,13 @@
     },
     {
       "path": "presets/tavern/skills/card-to-mvu/references/mvu-recipe.md",
-      "sha256": "6bed69dc3052e2f842f8b446d257d4609a36aac68cb6adc6c4392ff0b09977d6",
-      "size": 6383
+      "sha256": "2a064a2839fbb2cdcfd6c0823a7bea28b5ab6a1c2a69f3a429aa42133eb9c6d9",
+      "size": 7044
     },
     {
       "path": "presets/tavern/skills/card-to-mvu/SKILL.md",
-      "sha256": "de5f0880bfd764c37cd71557633962de70edd903c05285af67428d4f9985493b",
-      "size": 7795
+      "sha256": "ff55ebeae72c2a2bc7d8035e8f91b160eed60614420f12a1846b56400263773b",
+      "size": 8806
     },
     {
       "path": "presets/tavern/skills/create-skill/SKILL.md",
@@ -665,9 +665,14 @@
       "size": 31371
     },
     {
+      "path": "tavern-plugin/lib/domain/mvu-conversion-appearance.js",
+      "sha256": "6d0abecf65e07688637386a2eaccf9768e30ade85c6c2f1a6bf2a4a9fbe0be41",
+      "size": 6252
+    },
+    {
       "path": "tavern-plugin/lib/domain/mvu-conversion-artifacts.js",
-      "sha256": "e89cab154a62647d996f05c5c8dc44ecba8124ac5623cc99a3766d0d287c3ee3",
-      "size": 3318
+      "sha256": "843988e6344ddf03826d6ccc2fcfbf0aa3aa7c8784d482e97ff4a80be5a4c3fd",
+      "size": 3497
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion-inspection.js",
@@ -676,18 +681,18 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion-tools.js",
-      "sha256": "0425bc06f755eb87fcba6e5bf7dc03b7df912768df6ada58d5aefd7a3836bbb6",
-      "size": 6847
+      "sha256": "78d5f517affb6a1b52a5fb391f8611592c1333038c152c0eb0bb49152e7cd0dc",
+      "size": 7668
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion-validation.js",
-      "sha256": "e3662216c83274f0296057c3492e8e37928905f8825a855ce47684a3ee5a9211",
-      "size": 6811
+      "sha256": "02c4a226bce636ff427c202fc57fd9ca3c27c67665ae12ab8c6df22b2249ba6c",
+      "size": 7503
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion.js",
-      "sha256": "7f053bd3dcd2b82819bc2339b043b6b3989dbeac2455c43a9de324da164f62f8",
-      "size": 22663
+      "sha256": "271ae74e7fbf22c686c83e1dc50a78dcc4cbf1ea22bf697adb479e1a9dda4ab5",
+      "size": 25229
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-diagnostics.js",
