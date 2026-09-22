@@ -15,12 +15,12 @@ function installTavernSessionHistoryPatch(require, rpc) {
 	let live
 	try { live = require("@deepseek-ai/dsh-api-session-controller/client") }
 	catch (error) {
-		void rpc("confirmSessionPatch", { protocol: 1, installed: false, reason: "客户端没有拿到会话历史模块：" + (error && error.message || error) }).catch(function () {})
+		void Promise.resolve().then(function () { return rpc("confirmSessionPatch", { protocol: 1, installed: false, reason: "客户端没有拿到会话历史模块：" + (error && error.message || error) }); }).catch(function () {})
 		return
 	}
 	const proto = live && live.SessionEventStream && live.SessionEventStream.prototype
 	if (!proto || typeof proto.readPage !== "function" || typeof proto.follow !== "function") {
-		void rpc("confirmSessionPatch", { protocol: 1, installed: false, reason: "客户端会话历史模块没有可安装的读取方法" }).catch(function () {})
+		void Promise.resolve().then(function () { return rpc("confirmSessionPatch", { protocol: 1, installed: false, reason: "客户端会话历史模块没有可安装的读取方法" }); }).catch(function () {})
 		return
 	}
 	if (proto.__dshTavernSessionPatch) return

@@ -224,9 +224,6 @@ window.__ModuleLoader__.load({
 			});
 		}
 
-		// @include modules/host-session-patch.js
-		installTavernSessionHistoryPatch(require, rpc);
-
 		function recordImageInteraction(sessionId, turn, requestId, stage, reason) {
 			void rpc("recordSceneImageInteraction", { turn: turn, requestId: requestId, stage: stage, reason: reason }, sessionId).catch(function () {});
 		}
@@ -8675,7 +8672,7 @@ window.__ModuleLoader__.load({
 					turn: Math.max(1, Number(statusView.targetTurn) || 1), partIndex: Math.max(0, Number(statusView.sourcePartIndex) || 0),
 					panelId: statusView.viewId, helperContext: view.tavernHelper,
 					trustedCardMode: Boolean(view.tavernRuntimePolicy && view.tavernRuntimePolicy.trustedCardMode),
-					eager: true, persistent: true, followContentFont: true, executeSlash: props.executeSlash,
+					eager: true, persistent: true, followContentFont: false, executeSlash: props.executeSlash,
 					observeMvuView: false, runtimeReporting: true
 				})); }),
 				manual.map(function (entry) { return h("div", { key: entry.id, role: "tabpanel", hidden: active !== entry.id },
@@ -10643,6 +10640,8 @@ window.__ModuleLoader__.load({
 		exports.createTavernAssistantRendererFeatureModule = createTavernAssistantRendererFeatureModule;
 		exports.createTavernShellFeatureModule = createTavernShellFeatureModule;
 		exports.createTavernRuntimeGenerationMonitor = createTavernRuntimeGenerationMonitor;
+		// @include modules/host-session-patch.js
+		installTavernSessionHistoryPatch(require, rpc);
 		return module.exports;
 	}
 });
