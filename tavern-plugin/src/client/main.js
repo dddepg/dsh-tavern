@@ -1,3 +1,4 @@
+// @include android-web-polyfills.js
 window.__ModuleLoader__.load({
 	id: "dsh-tavern-plugin",
 	factory: (require) => {
@@ -222,6 +223,9 @@ window.__ModuleLoader__.load({
                 if (elapsed >= 1000) { pagePerformance.slowRpcCount++; pagePerformance.slowRpcMaxMs = Math.max(pagePerformance.slowRpcMaxMs, elapsed); }
 			});
 		}
+
+		// @include modules/host-session-patch.js
+		installTavernSessionHistoryPatch(require, rpc);
 
 		function recordImageInteraction(sessionId, turn, requestId, stage, reason) {
 			void rpc("recordSceneImageInteraction", { turn: turn, requestId: requestId, stage: stage, reason: reason }, sessionId).catch(function () {});

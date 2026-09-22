@@ -2,8 +2,10 @@
 .dsh-tavern-btn {
   background: #2a2a36; color: #e8e6e3; border: 1px solid #3f3f4d;
   border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .dsh-tavern-btn:hover { background: #34343f; }
+.dsh-tavern-btn:active:not(:disabled) { transform: scale(0.97); }
 .dsh-tavern-btn:disabled { opacity: .45; cursor: default; }
 .dsh-tavern-btn.danger { border-color: rgba(196,79,79,.55); color: #d96b6b; }
 .dsh-tavern-btn.danger:hover { background: rgba(196,79,79,.14); }
@@ -117,7 +119,7 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-side-row-more { width: 28px; height: 28px; flex: none; margin-right: 3px; border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; opacity: 0; }
 .dsh-tavern-side-row:hover .dsh-tavern-side-row-more, .dsh-tavern-side-row-more[aria-expanded="true"] { opacity: 1; }
 .dsh-tavern-side-row-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: inherit; }
-.dsh-tavern-side-row-menu { position: absolute; z-index: 30; top: 32px; right: 4px; min-width: 96px; padding: 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+.dsh-tavern-side-row-menu { position: absolute; z-index: 30; top: 32px; right: 4px; min-width: 96px; padding: 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.14); transform-origin: top right; animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-side-row-menu button { display: block; width: 100%; border: 0; border-radius: 6px; padding: 7px 10px; text-align: left; background: transparent; color: inherit; cursor: pointer; }
 .dsh-tavern-side-row-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-tavern-side-row-menu button.danger { color: #c34f4f; }
@@ -144,8 +146,8 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-settings-desc { display: block; margin-top: 5px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.55; }
 .dsh-tavern-settings-switch { position: relative; width: 42px; height: 24px; flex: none; }
 .dsh-tavern-settings-switch input { position: absolute; opacity: 0; pointer-events: none; }
-.dsh-tavern-settings-track { position: absolute; inset: 0; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); transition: background .18s ease; }
-.dsh-tavern-settings-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dsw-alias-label-secondary); transition: transform .18s ease, background .18s ease; }
+.dsh-tavern-settings-track { position: absolute; inset: 0; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); transition: background .18s cubic-bezier(0.23, 1, 0.32, 1); }
+.dsh-tavern-settings-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dsw-alias-label-secondary); transition: transform .18s cubic-bezier(0.23, 1, 0.32, 1), background .18s cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track { background: #9a622f; }
 .dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track::after { transform: translateX(18px); background: #fff; }
 .dsh-tavern-settings-switch input:focus-visible + .dsh-tavern-settings-track { outline: 2px solid #a66b35; outline-offset: 2px; }
@@ -217,7 +219,8 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-choice-trigger:hover { background: rgba(166,107,53,.20); color: #8e5728; }
 .dsh-tavern-dock-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px 0; flex-wrap: wrap; }
 .dsh-tavern-more-actions { position: relative; }
-.dsh-tavern-more-menu { position: absolute; z-index: 40; right: 0; bottom: calc(100% + 6px); display: grid; min-width: 150px; padding: 5px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.dsh-tavern-more-menu { position: absolute; z-index: 40; right: 0; bottom: calc(100% + 6px); display: grid; min-width: 150px; padding: 5px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.2); transform-origin: bottom right; }
+.dsh-tavern-more-menu:not([hidden]) { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-more-menu[hidden] { display: none; }
 .dsh-tavern-more-menu button { width: 100%; border: 0; border-radius: 6px; padding: 8px 10px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; text-align: left; white-space: nowrap; }
 .dsh-tavern-more-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -345,14 +348,13 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-prompt-state.is-toggle { position: relative; flex-shrink: 0; min-height: 32px; gap: 7px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
 .dsh-tavern-prompt-state.is-toggle.on { color: #16766b; }
 .dsh-tavern-prompt-state.is-toggle.off { color: var(--dsw-alias-label-secondary); }
-.dsh-tavern-prompt-state.is-toggle::before { flex-shrink: 0; width: 36px; height: 20px; border: 0; background: #64748b; transition: background .15s ease; }
+.dsh-tavern-prompt-state.is-toggle::before { flex-shrink: 0; width: 36px; height: 20px; border: 0; background: #64748b; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-prompt-state.is-toggle.on::before { background: #16766b; }
-.dsh-tavern-prompt-state.is-toggle::after { position: absolute; top: 50%; left: 7px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ""; transform: translateY(-50%); transition: transform .15s ease; }
+.dsh-tavern-prompt-state.is-toggle::after { position: absolute; top: 50%; left: 7px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ""; transform: translateY(-50%); transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-prompt-state.is-toggle.on::after { transform: translate(16px, -50%); }
 .dsh-tavern-prompt-state.is-toggle:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-tavern-prompt-state.is-toggle:focus-visible { outline: 2px solid #16766b; outline-offset: 2px; }
 .dsh-tavern-prompt-state.is-toggle:disabled { opacity: .6; cursor: wait; }
-@media (prefers-reduced-motion: reduce) { .dsh-tavern-prompt-state.is-toggle::before, .dsh-tavern-prompt-state.is-toggle::after { transition: none; } }
 .dsh-tavern-extract-state { gap: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 650; }
 .dsh-tavern-extract-state::before { width: 11px; height: 11px; }
 .dsh-tavern-extract-state input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: #23bd63; }
@@ -836,13 +838,12 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-background-config-body select { width: 100%; min-width: 0; }
 .dsh-tavern-background-config-body > .dsh-tavern-background-task { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .dsh-tavern-background-task .dsh-tavern-settings-desc { display: block; margin-top: 5px; }
-.dsh-tavern-background-task input[role="switch"] { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 36px; width: 36px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #64748b; cursor: pointer; transition: background .15s ease; }
-.dsh-tavern-background-task input[role="switch"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
+.dsh-tavern-background-task input[role="switch"] { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 36px; width: 36px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #64748b; cursor: pointer; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }
+.dsh-tavern-background-task input[role="switch"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }
 .dsh-tavern-background-task input[role="switch"]:checked { background: #16766b; }
 .dsh-tavern-background-task input[role="switch"]:checked::after { transform: translateX(16px); }
 .dsh-tavern-background-task input[role="switch"]:focus-visible { outline: 2px solid #16766b; outline-offset: 3px; }
 .dsh-tavern-background-task input[role="switch"]:disabled { opacity: .6; cursor: not-allowed; }
-@media (prefers-reduced-motion: reduce) { .dsh-tavern-background-task input[role="switch"], .dsh-tavern-background-task input[role="switch"]::after { transition: none; } }
 .dsh-tavern-conversation-basics { display: grid; gap: 16px; margin-bottom: 24px; }
 .dsh-tavern-conversation-basics h3 { margin: 0; }
 .dsh-tavern-conversation-basics label { display: grid; gap: 8px; }
@@ -902,7 +903,9 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-group-picker > summary > span:last-child { opacity: .6; transition: transform .15s; }
 .dsh-tavern-group-picker[open] > summary > span:last-child { transform: rotate(180deg); }
 .dsh-tavern-group-picker > summary:focus-visible { outline: 2px solid rgba(166,107,53,.6); outline-offset: 2px; }
-.dsh-tavern-group-menu { position: absolute; top: calc(100% + 6px); left: 0; width: min(220px, 75vw); z-index: 50; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 12px; padding: 5px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 8px 24px #0003; animation: tavern-group-menu-in .12s ease-out; }
+.dsh-tavern-group-menu { position: absolute; top: calc(100% + 6px); left: 0; width: min(220px, 75vw); z-index: 50; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 12px; padding: 5px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 8px 24px #0003; transform-origin: top left; }
+.dsh-tavern-group-menu:popover-open { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes dsh-tavern-menu-in { from { opacity: 0; transform: scale(0.97); } }
 .dsh-tavern-group-options { max-height: 280px; overflow-y: auto; }
 .dsh-tavern-group-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 7px 11px; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 13px; line-height: 1.4; cursor: pointer; border-radius: 7px; overflow-wrap: anywhere; transition: background .12s, color .12s; }
 .dsh-tavern-group-menu button:hover, .dsh-tavern-group-menu button:focus-visible { background: var(--dsw-specific-input-major, #ffffff12); }
@@ -910,8 +913,19 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-group-options button > span { width: 16px; flex-shrink: 0; order: 1; margin-left: auto; text-align: center; }
 .dsh-tavern-group-menu-footer { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); margin: 5px 5px 0; padding-top: 5px; }
 .dsh-tavern-group-menu-footer button { font-size: 12px; color: var(--dsw-alias-label-secondary); min-height: 32px; padding-left: 6px; }
-@keyframes tavern-group-menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .dsh-tavern-group-menu { animation: none; } .dsh-tavern-group-menu button, .dsh-tavern-group-picker > summary, .dsh-tavern-group-picker > summary > span:last-child { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .dsh-tavern-btn { transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .dsh-tavern-side-row-menu,
+  .dsh-tavern-more-menu:not([hidden]),
+  .dsh-tavern-group-menu:popover-open { animation: none; }
+  .dsh-tavern-group-picker > summary > span:last-child,
+  .dsh-tavern-prompt-state.is-toggle::after,
+  .dsh-tavern-background-task input[role="switch"]::after { transition: none; }
+  .dsh-tavern-settings-track,
+  .dsh-tavern-prompt-state.is-toggle::before,
+  .dsh-tavern-background-task input[role="switch"] { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .dsh-tavern-settings-track::after { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }
+}
 .dsh-tavern-group-manager { width: min(440px, calc(100vw - 32px)); max-height: 80vh; border: 1px solid var(--dsw-alias-border-l2, #454750); border-radius: 12px; background: var(--dsw-specific-sidebar-fill, #202124); color: var(--dsw-alias-label-primary, #eee); padding: 0; }
 .dsh-tavern-group-manager::backdrop { background: #0008; }
 .dsh-tavern-group-manager-content { padding: 20px; }

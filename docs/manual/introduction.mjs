@@ -89,17 +89,17 @@ export const installation = `
 
 ## 纯小白一键安装（仅 Windows x64）
 
-[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v1.9/DSH-Tavern-Desktop-2.0.5-x64-Portable.exe)
+[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)
 
 1. 下载后双击运行，首次启动保持联网。
-2. 安装器自动准备 Desktop 2.0.5 和当前兼容的最新版酒馆，无需另装 Node.js 或 DSH Desktop。
+2. 安装器自动准备 Desktop 2.0.13 和当前兼容的最新版酒馆，无需另装 Node.js 或 DSH Desktop。
 3. 打开酒馆后，在“设置 → 模型”配置模型，再导入人物卡。
 
 已有安装和数据会保留，之后可在酒馆界面检查更新。这是在线安装程序，不是无需网络的离线整包。
 
 ## DSH Desktop 安装（Windows / macOS）
 
-1. 安装适配版本 **DSH Desktop 2.0.5**（内置 DSH {{dshVersion}}）。打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.5**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。内置 DSH 版本不匹配时会停止安装，请使用适配版本。
+1. 安装适配版本 **DSH Desktop 2.0.13**（内置 DSH {{dshVersion}}）。打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.13**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。内置 DSH 版本不匹配时会停止安装，请使用适配版本。
 2. 启动后，打开 **设置 → 通用设置**，点击窗口顶部的 **打开 DSH 终端**。
 3. 在这个终端里，运行你所用平台的命令。
 
@@ -158,7 +158,7 @@ export const installation = `
 
 ## Android：通过 DSHA 安装
 
-适配版本：**DSHA 1.2.0-rc1.4**（预览版，内置 DSH {{dshVersion}}）。内置 DSH 版本必须匹配，否则停止安装。请自行打开 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)，找到 **v1.2.0-rc1.4**，展开 **Assets**，下载适合手机系统的 APK；不要下载 Source code。
+v2.1 要求宿主 DSH {{dshVersion}}。请安装 **[DSHA v0.1.5-rc2](https://github.com/DSH-APP/DSHA/releases/tag/v0.1.5-rc2)**（内置这个版本）。Android 11 及以上用标准包，更早的系统用兼容包。旧的 DSHA 1.2.0-rc1.4 内置的不是这个版本，安装会停止。历史包见 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)。
 
 **Android 属于实验性支持，不保证一定可用。** 不同手机系统、DSHA 版本、网络和后台限制都可能导致安装或运行失败。
 

@@ -72,9 +72,9 @@
 
 ### 纯小白安装（仅限 Windows x64）
 
-**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.5-x64-Setup-UpdateFix.exe)**
+**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)**
 
-下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.5 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.5；已有安装和数据会保留，后续可在酒馆界面中更新。
+下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13；已有安装和数据会保留，后续可在酒馆界面中更新。
 
 首次安装可选择文件夹，例如 `D:\Apps\DSH-Tavern`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 `如何启动.txt` 会列出程序及数据位置。
 
@@ -86,11 +86,11 @@
 
 **为什么锁定 DSH 版本？** DSH 经常进行破坏性更新，DSH Desktop 和 DSHA 也会随之更新内置 DSH，可能导致原本能用的插件在宿主升级后无法运行。为避免用户更新后酒馆失效，本项目必须锁定已适配的 DSH 版本：安装器只接受适配版本，检测到非适配版本会停止安装。请使用下方列出的适配版本，等待本项目完成新版本适配后再升级宿主。
 
-首次安装、更新或重新安装使用同一条命令，保留人物卡、对话和配置。所有平台都要求实际运行的 DSH 为 **`0.1.2-rc.1`**；版本不匹配时停止安装，请使用下方适配版本。
+首次安装、更新或重新安装使用同一条命令，保留人物卡、对话和配置。所有平台都要求实际运行的 DSH 为 **`0.1.5-rc.2`**；版本不匹配时停止安装，请使用下方适配版本。
 
 ### DSH Desktop（Windows / macOS）
 
-适配版本：**[DSH Desktop 2.0.5](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.5)**（[历史 Release 下载](https://github.com/anywhere-labs/dsh-desktop/releases)）。必须使用适配版本；检测到非适配 DSH 版本时将停止安装。
+适配版本：**[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**（内置 DSH `0.1.5-rc.2`，[历史 Release 下载](https://github.com/anywhere-labs/dsh-desktop/releases)）。必须使用适配版本；检测到非适配 DSH 版本时将停止安装。
 
 安装并打开 DSH Desktop 后，进入 **设置 → 通用设置**，点击页面顶部的 **打开 DSH 终端**（如下图）。
 
@@ -116,7 +116,7 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 ### 命令行（Windows / macOS / Linux）
 
-需要 **Node.js 22.19 或更高版本**，无需预装 DSH。安装器使用独立的 DSH `0.1.2-rc.1`。
+需要 **Node.js 22.19 或更高版本**，无需预装 DSH。安装器使用独立的 DSH `0.1.5-rc.2`。
 
 **命令行版与电脑上已经安装的 DSH（包括全局 DSH 和 DSH Desktop）相互独立，互不影响。** 运行时、配置和游戏数据分别存放；安装或更新命令行版不会修改已有 DSH，已有 DSH 的升级也不会更换命令行版的独立运行时。
 
@@ -146,9 +146,9 @@ dsh-tavern update    # 更新
 
 ### Android（实验性）
 
-通过 [DSHA](https://github.com/DSH-APP/DSHA) 安装，适配版本：**[1.2.0-rc1.4](https://github.com/DSH-APP/DSHA/releases/tag/v1.2.0-rc1.4)**（[历史 Release 下载](https://github.com/DSH-APP/DSHA/releases)）。必须使用适配版本；检测到非适配 DSH 版本时将停止安装。Android 属于实验性支持，不保证一定可用。
+通过 [DSHA](https://github.com/DSH-APP/DSHA) 安装。v2.1 要求宿主 DSH 为 `0.1.5-rc.2`。请安装 **[DSHA v0.1.5-rc2](https://github.com/DSH-APP/DSHA/releases/tag/v0.1.5-rc2)**（内置 DSH `0.1.5-rc.2`，[历史 Release 下载](https://github.com/DSH-APP/DSHA/releases)）。Android 11 及以上用标准包 `dsha-0.1.5-rc2.apk`，更早的系统用兼容包 `dsha-0.1.5-rc2low.apk`。旧的 **DSHA 1.2.0-rc1.4** 内置的不是这个版本，安装会停止。Android 仍属实验性支持，不保证一定可用。
 
-1. **安装 DSHA**：点击上面的适配版本，展开 **Assets**，下载适合手机的 **APK** 并安装（不要下载 Source code）。
+1. **安装 DSHA**：打开上面的 v0.1.5-rc2，展开 **Assets**，按系统下载对应 **APK** 并安装（不要下载 Source code）。
 2. **先启动一次**：打开 DSHA，配置模型和 API 密钥，确认 DSHA 可以正常启动。
 3. **安装酒馆**：打开 DSHA 底部的 **终端**，完整复制下面这一条命令，粘贴后回车，保持 DSHA 打开并等待执行结束。
 
@@ -167,7 +167,7 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 ### 手机远程访问（可选插件）
 
-**版本提醒：酒馆当前适配 DSH `0.1.2-rc.1`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
+**版本提醒：酒馆当前适配 DSH `0.1.5-rc.2`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
 
 酒馆运行在电脑或服务器上，手机通过浏览器访问，可按场景选择：
 

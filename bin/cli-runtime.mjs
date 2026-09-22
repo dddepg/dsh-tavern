@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, symlinkSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { adaptedDshVersion } from './dsh-compatibility.mjs'
@@ -32,11 +32,29 @@ export function installCliRuntime({ root, run, platform = process.platform, forc
   let backedUp = false
   let settled = false
   try {
-    run('npm', ['install', '--global', '--prefix', staging, '--registry', process.env.DSH_TAVERN_NPM_REGISTRY || 'https://registry.npmmirror.com', `@deepseek-ai/dsh@${adaptedDshVersion}`])
+    // npm's global install ignores a project's lock and resolves prerelease ranges
+    // again. Install the reviewed dependency graph locally inside the private root.
+    const installRoot = platform === 'win32' ? staging : path.join(staging, 'lib')
+    mkdirSync(installRoot, { recursive: true })
+    const manifest = JSON.parse(readFileSync(new URL('../config/cli-runtime/package.json', import.meta.url), 'utf8'))
+    if (manifest.dependencies['@deepseek-ai/dsh'] !== adaptedDshVersion) throw new Error('独立 DSH 依赖锁与适配版本不一致。')
+    for (const name of ['package.json', 'package-lock.json']) copyFileSync(new URL('../config/cli-runtime/' + name, import.meta.url), path.join(installRoot, name))
+    run('npm', ['ci', '--prefix', installRoot, '--no-audit', '--no-fund', '--registry', process.env.DSH_TAVERN_NPM_REGISTRY || 'https://registry.npmmirror.com'])
+    const installedPackage = path.join(installRoot, 'node_modules/@deepseek-ai/dsh/package.json')
+    const pkg = JSON.parse(readFileSync(installedPackage, 'utf8'))
+    const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.dsh
+    if (!bin) throw new Error('下载的独立 DSH 缺少命令入口。')
+    const entry = path.resolve(path.dirname(installedPackage), bin)
+    const command = cliRuntimeCommand(staging, platform)
+    mkdirSync(path.dirname(command), { recursive: true })
+    if (platform === 'win32') {
+      const relative = path.relative(staging, entry).split(path.sep).join('\\')
+      writeFileSync(command, '@echo off\r\nnode "%~dp0' + relative + '" %*\r\n')
+    } else symlinkSync(path.relative(path.dirname(command), entry), command)
     const packageFile = platform === 'win32'
       ? path.join(staging, 'node_modules/@deepseek-ai/dsh/package.json')
       : path.join(staging, 'lib/node_modules/@deepseek-ai/dsh/package.json')
-    if (JSON.parse(readFileSync(packageFile, 'utf8')).version !== adaptedDshVersion || !existsSync(cliRuntimeCommand(staging, platform))) {
+    if (JSON.parse(readFileSync(packageFile, 'utf8')).version !== adaptedDshVersion || !healthyCliRuntime(staging, platform)) {
       throw new Error('下载的独立 DSH 版本或入口不正确。')
     }
     if (existsSync(root)) { renameSync(root, backup); backedUp = true }

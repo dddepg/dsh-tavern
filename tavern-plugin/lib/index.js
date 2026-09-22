@@ -2,6 +2,8 @@ import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
 import { isRescuedHistoryMessage, rescueHistoryNotice } from './domain/chat-history-rescue.js'
 import { readHostCompatibility } from './domain/host-compatibility.js'
+import { installHostSessionPatch } from './domain/host-session-patch.js'
+import { migrateInstalledLegacySessions } from './domain/legacy-session-migration.js'
 import { measureForegroundPressure } from './domain/foreground-context-pressure.js'
 import { replaceSessionSurface } from './domain/session-surface-mutations.js'
 import { installWorkspaceInstructionPresentation } from './domain/workspace-instruction-presentation.js'
@@ -173,6 +175,17 @@ import { prompt, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt
 // RPC：同源 HTTP 路由 /api/dsh-tavern/<method>（客户端 fetch 调用）
 // DSH 生命周期负责回合状态；模型工具只处理按需读取和明确修改。
 export async function apply(ctx) {
+  const persistence = ctx.get('sessionPersistence')
+  const sessionPatch = await installHostSessionPatch({
+    persistence,
+    query: ctx.get('sessionQuery'),
+  })
+  // 更新到 0.1.5-rc.2 后，每次启动都在对话被打开之前准备旧档。已经能打开的不改文件。补丁没装上也要做。
+  if (sessionPatch.view().hostVersion === '0.1.5-rc.2') {
+    const open = (persistence?.tracker?.openHandles?.size || 0) + (persistence?.tracker?.writers?.size || 0)
+    if (open) console.warn('dsh-tavern: 会话已经打开，旧档留到下次启动再迁移')
+    else await migrateInstalledLegacySessions(resolveTavernDataRoot(), sessionPatch.loadSessionCatalog)
+  }
   await clearLegacyTavernDefault(ctx.get('settings'))
   const llm = ctx.get('llm')
   const agentRegistry = ctx.get('agents')
@@ -2760,7 +2773,8 @@ export async function apply(ctx) {
     timeline: storyTimeline,
     queueSettlement,
     cancelSettlement,
-    present: view
+    present: view,
+    sessionPatch,
   })
 
   const bodyEditor = createBodyEditor({
@@ -2773,7 +2787,8 @@ export async function apply(ctx) {
       return projectRuntimeReply(text, { charName: chat.cardName, macroState: chat.macroState,
         regexScripts: composeTavernRegexScripts(extensions, chat.runtimePresetSnapshot?.regexScripts), placement: 2, isEdit: false, depth: 0 })
     },
-    present: async chat => view(chat, await readChatCard(chat))
+    present: async chat => view(chat, await readChatCard(chat)),
+    sessionPatch,
   })
 
   // ---------- HTTP RPC（客户端同源 fetch） ----------
@@ -2810,6 +2825,14 @@ export async function apply(ctx) {
       case 'organizeCards': return { groups: (await cardOrganization.update(args || {}, await fileResources.list('card'))).groups }
       case 'listCards': return { cards: await listCards() }
       case 'getHostCompatibility': return { compatibility: hostCompatibility }
+      case 'getSessionPatchStatus': return { patch: sessionPatch.view() }
+      case 'getSessionPatchClient': return sessionPatch.serverReady
+        ? { source: sessionPatch.clientSource }
+        : { source: '', skipped: sessionPatch.status === 'skipped', reason: sessionPatch.reason }
+      case 'confirmSessionPatch': {
+        sessionPatch.confirmClient(args || {})
+        return { patch: sessionPatch.view() }
+      }
       case 'getUpdateStatus': return { status: await applicationUpdater.status() }
       case 'checkUpdate': return { status: await applicationUpdater.check() }
       case 'startUpdate': return { status: await applicationUpdater.start() }

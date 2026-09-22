@@ -15,7 +15,7 @@ using System.Runtime.InteropServices;
 
 class Launcher : Form {
  // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
- const string Version="5e2e365397638d61-setup2";
+ const string Version="a272f20b3f1f5b15-setup1";
  Label label=new Label(); ProgressBar bar=new ProgressBar();
  string root, runtime, data; string[] args;
  string installedLauncher; bool showCompletion, installationSelected;
@@ -138,7 +138,7 @@ class Launcher : Form {
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
-      if(h!="5e2e365397638d61f202753b5dbcee1d9dbd377a5a9d17c160535891f187decd")throw new Exception("运行包校验失败");
+      if(h!="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4")throw new Exception("运行包校验失败");
      }
      var pi=new ProcessStartInfo(seven,"x "+Quote(archive)+" -o"+Quote(app)+" -y -bsp1 -bso0");
      pi.UseShellExecute=false;pi.CreateNoWindow=true;pi.RedirectStandardOutput=true;
