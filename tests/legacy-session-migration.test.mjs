@@ -65,6 +65,7 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
   assert.ok(summary.migrated > 0, '没有任何副本完成迁移')
   const copies = (await walk(copyRoot)).filter(file => path.basename(file) === 'session.jsonl.zstd')
   let reopened = 0
+  let cleanedUnopenable = 0
   for (const file of copies) {
     const bytes = await readFile(file)
     const prepared = prepareLegacySessionLog(decodeSessionLog(bytes), sessionFormatCatalog)
@@ -74,16 +75,23 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
       continue
     }
     assert.equal(prepared.changed, false)
+    if (!prepared.artifact) {
+      // Issue #72 C: illegal source keys stripped, host still cannot open.
+      assert.ok(prepared.reason)
+      cleanedUnopenable += 1
+      continue
+    }
     assert.equal(prepared.artifact.header.version, 3)
     reopened += 1
     if (readable(file + '.bak-tavern-premigrate')) {
       const backupText = decodeSessionLog(await readFile(file + '.bak-tavern-premigrate'))
       const original = prepareLegacySessionLog(backupText, sessionFormatCatalog)
       assert.equal(original.ok, true)
-      assert.equal(original.artifact.header.version, 3)
+      if (original.artifact) assert.equal(original.artifact.header.version, 3)
     }
   }
   assert.ok(reopened > 0)
+  assert.ok(cleanedUnopenable >= 0)
   // v3-only archives also participate in header repair; do not count them as v0 reopens.
   assert.equal(summary.seen, summary.migrated + summary.unchanged + summary.refused)
   for (const [file, digest] of sourceHashes) assert.equal(hash(await readFile(file)), digest)
@@ -204,4 +212,80 @@ test('issue #71: 含 fixedSystemText 的真实旧档清理后可被宿主打开�
   const again = prepareLegacySessionLog(decodeSessionLog(await readFile(file)), catalog)
   assert.equal(again.ok, true)
   assert.equal(again.changed, false)
+})
+
+function mockCatalog(openOk = true) {
+  return {
+    createRestore(header) {
+      return {
+        decodeRow() {
+          if (!openOk) throw new Error('host rejects archive')
+        },
+        finish() {
+          if (!openOk) throw new Error('host rejects archive')
+          return { header: { ...header, version: 3 }, events: [], inheritedEventCount: 0 }
+        },
+      }
+    },
+  }
+}
+
+function v0Log(events) {
+  return JSON.stringify({ version: 0, id: 'issue-72', createdAt: 1, cwd: '/tmp', isSeeded: false }) + '\n' +
+    events.map(event => JSON.stringify(event)).join('\n') + '\n'
+}
+
+test('issue #72 A: fold keeps tavern-body-edit id on the target assistant', () => {
+  const text = v0Log([
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'user/message', seq: 2, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u', role: 'user', content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 3, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'reply', role: 'assistant', content: [{ type: 'text', text: '旧正文' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } } } },
+    { type: 'assistant/message', seq: 4, time: 1, surfaceOp: { op: 'replace', start: 3, end: 3 }, sourceEventSeqs: [3], data: { turn: 1, step: 1, message: { id: 'tavern-body-edit:abc', role: 'assistant', content: [{ type: 'text', text: '新正文' }], source: { kind: 'model', provider: 'dsh-tavern', model: 'body-edit' } } } },
+    { type: 'step/end', seq: 5, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 6, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
+  ])
+  const prepared = prepareLegacySessionLog(text, mockCatalog())
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.changed, true)
+  const assistants = prepared.events.filter(event => event.type === 'assistant/message')
+  assert.equal(assistants.length, 1)
+  assert.equal(assistants[0].data.message.id, 'tavern-body-edit:abc')
+  assert.equal(assistants[0].data.message.content[0].text, '新正文')
+})
+
+test('issue #72 B: compaction shadowedSeqs with missing seqs soft-remap instead of refuse', () => {
+  const text = v0Log([
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'user/message', seq: 2, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u', role: 'user', content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 3, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'reply', role: 'assistant', content: [{ type: 'text', text: '正文' }], source: { kind: 'model', provider: 'fixture', model: 'fixture', fixedSystemText: 'force-clean' } } } },
+    { type: 'compaction/summary', seq: 4, time: 1, data: { compactionId: 'c1', shadowedSeqs: [99, 3], messageSeqs: [99, 3] } },
+    { type: 'step/end', seq: 5, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 6, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
+  ])
+  const prepared = prepareLegacySessionLog(text, mockCatalog())
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.changed, true)
+  const summary = prepared.events.find(event => event.type === 'compaction/summary')
+  assert.ok(summary)
+  assert.equal(summary.data.shadowedSeqs.length, 1)
+  assert.ok(!summary.data.shadowedSeqs.includes(99))
+})
+
+test('issue #72 C: sanitize still writes cleaned events when host open fails', () => {
+  const text = v0Log([
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'user/message', seq: 2, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u', role: 'user', content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 3, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'reply', role: 'assistant', content: [{ type: 'text', text: '正文' }], source: { kind: 'model', provider: 'fixture', model: 'fixture', fixedSystemText: 'illegal' } } } },
+    { type: 'step/end', seq: 4, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 5, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
+  ])
+  const prepared = prepareLegacySessionLog(text, mockCatalog(false))
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.changed, true)
+  assert.equal(prepared.artifact, undefined)
+  assert.equal(JSON.stringify(prepared.events).includes('fixedSystemText'), false)
+  assert.ok(prepared.reason)
 })

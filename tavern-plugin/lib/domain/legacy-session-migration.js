@@ -55,10 +55,17 @@ export function prepareLegacySessionLog(text, catalog) {
   }
   if (!changed) {
     const opened = openSession(catalog, header, events)
-    return opened.ok ? { ok: true, changed: false, artifact: opened.artifact } : (sanitize() || opened)
+    if (opened.ok) return { ok: true, changed: false, artifact: opened.artifact }
+    // Source already clean but host still rejects: leave bytes alone (#72 C follow-up).
+    return sanitize() || { ok: true, changed: false, reason: opened.reason }
   }
   const opened = openSession(catalog, header, next)
-  if (!opened.ok) return sanitize() || opened
+  if (!opened.ok) {
+    // Prefer source-only cleanup over leaving illegal keys on disk (#71 / #72 C).
+    // Do not publish a host-rejected structural rewrite — that thrash-rewrites
+    // on every boot when placeOpening keeps reshuffling unopenable logs.
+    return sanitize() || { ok: true, changed: false, reason: opened.reason }
+  }
   const migratedStory = storyTexts(opened.artifact.events)
   // Prefer a host-readable rewrite over leaving illegal source keys on disk
   // (issue #71). Story/prefix checks stay as soft warnings via result.reason.
@@ -78,7 +85,18 @@ export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
   for (const event of only) if (cleanEvent(event)) changed = true
   if (!changed) return null
   const opened = openSession(catalog, header, only)
-  if (!opened.ok) return null
+  // Issue #72 C: even when the host still cannot open the archive, write the
+  // cleaned source so illegal fields do not remain on disk forever.
+  if (!opened.ok) {
+    return {
+      ok: true,
+      changed: true,
+      headerLine: headerLine || JSON.stringify(header),
+      events: only,
+      reason: opened.reason || '已清理非法字段，但宿主仍无法打开',
+      sanitizedOnly: true,
+    }
+  }
   return {
     ok: true,
     changed: true,
@@ -492,6 +510,12 @@ function foldTavernReplacements(events) {
     const target = assistantTarget(sources, bySeq, alias, drop)
     if (target?.data?.message && keepsAdvertisedTools(target.data.message, event.data?.message)) {
       target.data.message.content = structuredClone(event.data.message.content)
+      // Issue #72: Chat.bodyEdit points at the replacement message id. Keep that
+      // id on the folded target so synchronizeBodyEdits sees it as already recorded.
+      const replacementId = event.data?.message?.id
+      if (typeof replacementId === 'string' && replacementId.startsWith('tavern-body-edit:')) {
+        target.data.message.id = replacementId
+      }
       changed = true
     }
     if (typeof event.seq === 'number') {
@@ -592,8 +616,11 @@ function renumber(events) {
 function remapPointers(event, map) {
   if (Array.isArray(event.sourceEventSeqs)) event.sourceEventSeqs = remapSourceEventSeqs(event.sourceEventSeqs, map)
   if (event.surfaceOp && typeof event.surfaceOp === 'object') {
-    if (typeof event.surfaceOp.start === 'number') event.surfaceOp.start = takeSeq(map, event.surfaceOp.start, 'surfaceOp.start')
-    if (typeof event.surfaceOp.end === 'number') event.surfaceOp.end = takeSeq(map, event.surfaceOp.end, 'surfaceOp.end')
+    // Issue #72: soft-drop unmappable surface spans instead of refusing the whole log.
+    if (typeof event.surfaceOp.start === 'number' && !map.has(event.surfaceOp.start)) delete event.surfaceOp.start
+    else if (typeof event.surfaceOp.start === 'number') event.surfaceOp.start = map.get(event.surfaceOp.start)
+    if (typeof event.surfaceOp.end === 'number' && !map.has(event.surfaceOp.end)) delete event.surfaceOp.end
+    else if (typeof event.surfaceOp.end === 'number') event.surfaceOp.end = map.get(event.surfaceOp.end)
   }
   const data = event.data
   if (!data || typeof data !== 'object') return
@@ -606,19 +633,23 @@ function remapPointers(event, map) {
     data[key] = map.get(data[key])
   }
   if (data.shadowedRange && typeof data.shadowedRange === 'object') {
-    if (typeof data.shadowedRange.start === 'number') data.shadowedRange.start = takeSeq(map, data.shadowedRange.start, 'shadowedRange.start')
-    if (typeof data.shadowedRange.end === 'number') data.shadowedRange.end = takeSeq(map, data.shadowedRange.end, 'shadowedRange.end')
+    const start = typeof data.shadowedRange.start === 'number' ? map.get(data.shadowedRange.start) : undefined
+    const end = typeof data.shadowedRange.end === 'number' ? map.get(data.shadowedRange.end) : undefined
+    if (typeof start !== 'number' || typeof end !== 'number') delete data.shadowedRange
+    else {
+      data.shadowedRange.start = start
+      data.shadowedRange.end = end
+    }
   }
   for (const key of ['shadowedSeqs', 'messageSeqs']) {
-    if (Array.isArray(data[key])) data[key] = remapSeqList(data[key], map, key)
+    if (Array.isArray(data[key])) data[key] = remapSeqList(data[key], map)
   }
 }
 
-function remapSeqList(values, map, label) {
+function remapSeqList(values, map) {
   const next = []
   for (const seq of values) {
-    if (typeof seq !== 'number' || !map.has(seq)) throw new Error('旧序号无法对应到迁移后的事件：' + label)
-    next.push(map.get(seq))
+    if (typeof seq === 'number' && map.has(seq)) next.push(map.get(seq))
   }
   return next
 }
@@ -629,16 +660,12 @@ function remapSourceEventSeqs(values, map) {
     if (typeof entry === 'number') flat.push(entry)
     else if (Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'number' && typeof entry[1] === 'number' && entry[1] >= entry[0]) {
       for (let seq = entry[0]; seq <= entry[1]; seq += 1) flat.push(seq)
-    } else throw new Error('旧序号无法对应到迁移后的事件：sourceEventSeqs')
+    }
+    // Soft-skip malformed entries (issue #72) instead of refusing the archive.
   }
   const next = []
   for (const seq of flat) if (map.has(seq)) next.push(map.get(seq))
   return next
-}
-
-function takeSeq(map, seq, label) {
-  if (typeof seq !== 'number' || !map.has(seq)) throw new Error('旧序号无法对应到迁移后的事件：' + label)
-  return map.get(seq)
 }
 
 function cleanEvent(event) {

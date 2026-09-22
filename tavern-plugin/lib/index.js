@@ -728,6 +728,20 @@ export async function apply(ctx) {
     }
     return saved
   }
+  async function persistClearedBodyEdits(chat, cleared) {
+    const drop = new Set(cleared || [])
+    if (!chat?.id || !drop.size) return
+    await updateChat(chat.id, current => {
+      let changed = false
+      for (const message of current.messages || []) {
+        if (message.bodyEdit && drop.has(message.bodyEdit.id)) {
+          delete message.bodyEdit
+          changed = true
+        }
+      }
+      return changed ? current : undefined
+    }, { source: 'body-edit.stale-clear' })
+  }
   conversationRegistry = createTavernConversationRegistry({
     store: {
       readLinks: async function () { return await readJson('sessions.json') },
@@ -3955,7 +3969,7 @@ export async function apply(ctx) {
     if (decision.kind === 'reject') return decision
     const chat = await chatForSession(sessionId)
     if (chat) await synchronizeTemplateHistory(payload.agent.session, chat, session => sessionStore.flush(session))
-    if (chat) await synchronizeBodyEdits(payload.agent.session, chat, session => sessionStore.flush(session))
+    if (chat) await synchronizeBodyEdits(payload.agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
     return await foregroundStrategies.prepareStep({
       sessionId,
       payload,
@@ -4120,7 +4134,7 @@ export async function apply(ctx) {
     if (backgroundAgentRunner.owns(agent.session.id)) return assembly
     const chat = await chatForSession(agent.session.id)
     if (chat) await synchronizeTemplateHistory(agent.session, chat, session => sessionStore.flush(session))
-    if (chat) await synchronizeBodyEdits(agent.session, chat, session => sessionStore.flush(session))
+    if (chat) await synchronizeBodyEdits(agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
     if (chat && chat.requestMode !== 'sillytavern' && ['story', 'script'].includes(await turnOrchestrator.modeFor(agent.session.id))) {
       await ensureNativeSystemPrefix(agent.session, chat)
     }
