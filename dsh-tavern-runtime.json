@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "2996b958e5821a0ccca09d0ec69d1b828e93ea59",
-  "releaseSequence": 328,
+  "revision": "67cb2b505d0a748760b0d26bcf667fbbdc798bad",
+  "releaseSequence": 329,
   "version": "2.1.0",
   "files": [
     {
@@ -661,8 +661,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/legacy-session-migration.js",
-      "sha256": "c6c7797ed0f879cc9a5fc890f8fb9738e1d4f363cab60b5cc3023b1cf6b0b54d",
-      "size": 36083
+      "sha256": "701214cb168a9ede0382bacf69d8f667bf586b02a0150ec57fe82803a8789cfa",
+      "size": 43282
     },
     {
       "path": "tavern-plugin/lib/domain/manual-character-design.js",
