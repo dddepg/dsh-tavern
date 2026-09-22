@@ -3,7 +3,59 @@
 日期：2026-09-22。分支：`experiment/plugin-session-patch`。
 基线：`e9f01d46`，宿主发布包：`0.1.6-alpha.2`。
 
-## 问题与结论
+## 第二阶段结论（扩大补丁后）
+
+**已打通隔离实验中的编辑、持久化、重启、模型请求和回退后重生成链路。宿主安装文件未修改。** 下面第一阶段的失败结论仅针对最小 Surface 补丁。
+
+第二阶段在官方模块已经加载后安装内存补丁，覆盖 Session Surface、存储事件校验、V3 编解码、JSONL/Zstd 后端、服务器 SessionQuery 和客户端历史读取。克隆模块的导入经过定向重绑定；Session、服务和公开错误类型保留原有身份。服务器补丁在打开存档及查询缓存建立前安装；尚未实现正常 Tavern 启动集成或客户端资源装载。
+
+| 已执行验证 | 结果 |
+| --- | --- |
+| 实际 `createBodyEditor.read/save`，Chat 文件保存、变量保留 | 通过 |
+| 原生 JSONL 后端，无压缩与 Zstd，独立进程重新读取 | 通过 |
+| 原生 Agent 在新进程恢复，下一次请求包含编辑正文、不包含旧正文 | 通过 |
+| 生产 `locateRollbackSurface` + `replaceSessionSurface` 回退后重新调用原生 Agent | 通过；重新生成请求的 role/content 与被回退请求完全一致 |
+| 再次回退，第三个进程恢复 | 通过 |
+| SessionQuery 的 live/cold `readSession`、`readSurface`、`observeSession`、`listEvents` | 通过 |
+| 客户端发布包既有 stream 的 `readPage` / `follow`，VM 模拟传输 | 通过 |
+| 缺少来源覆盖、失效范围、覆盖 system 首节点、append 携带来源 | 继续拒绝 |
+| 宿主公开存储错误的 instanceof 身份 | 保持 |
+| 被读取的八份官方源文件逐字节比较 | 全部未改动 |
+
+模型使用脚本化 LlmAdapter；Agent、Session、查询和存储服务是真实官方实现。Chat 存储是小型测试替身。**未验收完整回退事务、MVU/后台 Agent 协调、压缩、旧存档迁移 worker、实际 HTTP 模型服务、Desktop/DSHA UI 与升级。** 回退保留原 provider，因此扩大补丁允许该进程所有 provider 的 assistant replacement 携带来源，不能宣称仅影响 Tavern 消息。
+
+### 存档保护与维护代价
+
+第一次 assistant replacement 前追加必需事件 `dsh-tavern/required-session-patch-v1`。如果没有这条记录，原版读取器可能把修改当损坏尾部而丢弃。实验确认未加载补丁的独立进程以读/写方式打开存档都会拒绝，且文件字节未改变。无压缩报未知必需事件，Zstd 报完整帧含破损 JSONL，后者尚无友好提示。
+
+用过补丁的存档必须继续加载补丁；不是官方格式兼容方案。首次无效替换也可能先留下必需标记，尚未优化这一保守行为。卸载内存补丁只还原方法，不会还原已经写出的存档。补丁固定 `0.1.6-alpha.2` 并检查修改锚点唯一；报告记录源文件 SHA256，但未实现完整包版本/哈希准入。未来宿主升级必须重新验证。
+
+第二阶段代码：`expanded-session-patch.mjs`、`expanded-session-probe.mjs`、`expanded-agent-probe.mjs`；[固定实验记录](../../scripts/experiments/expanded-session-result.json)。未接入生产、未修改兼容版本声明、未发布。
+
+### 第二阶段复现
+
+先按下文第一阶段命令创建临时 runtime，再安装以下依赖（所有宿主包保持相同版本）：
+
+```sh
+npm install --prefix "$experiment_runtime" --ignore-scripts --no-audit --no-fund --save-exact \
+  @deepseek-ai/dsh-session-persistence-jsonl@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-agent-loop@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-system-prompt@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-tools@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-app-boot@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-token-meter@0.1.6-alpha.2 \
+  @deepseek-ai/dsh-session-query@0.1.6-alpha.2 marked@16.3.0
+# 仅在隔离 worktree 缺少 marked 时提供依赖；不要覆盖已有目录。
+mkdir -p node_modules
+test -e node_modules/marked || ln -s "$experiment_runtime/node_modules/marked" node_modules/marked
+node scripts/experiments/expanded-session-probe.mjs "$experiment_runtime"
+EXPERIMENT_COMPRESSION=zstd node scripts/experiments/expanded-session-probe.mjs "$experiment_runtime"
+node scripts/experiments/expanded-agent-probe.mjs "$experiment_runtime"
+```
+
+已在 Node 22.22.0 上执行。三个命令退出码均为 0；报告写在各自临时目录。测试不连接用户 Profile、不发送模型网络请求。
+
+## 第一阶段：问题与结论
 
 能否只在 Tavern 插件进程内打补丁，复用官方 DSH Desktop / DSHA，保留助手正文编辑、回退和重生成，而不修改宿主安装文件？
 
@@ -64,7 +116,7 @@ node scripts/experiments/session-patch.mjs "$experiment_runtime"
 
 脚本固定 Session 版本并检查待替换代码只出现一次。输出每条实验的 accepted/rejected，最终打印临时证据目录中的 `report.json`。退出码 0 表示观察结果符合断言，**不表示兼容成功**。固定记录见 [实验结果](../../scripts/experiments/session-patch-result.json)。
 
-## 后续边界
+## 第一阶段后续边界（第二阶段已继续研究）
 
 暂不合并、不发布、不修改安装器、不升级用户运行时。原问题尚未解决。若继续研究，应明确选择是否接受多处运行时拦截，或由插件负责完整的持久消息解释；不能以吞掉异常、删除来源字段或把必需编辑静默忽略来宣称支持。
 
