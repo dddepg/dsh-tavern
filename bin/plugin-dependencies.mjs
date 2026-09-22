@@ -58,7 +58,7 @@ function resolveHostAnchor({ dsh, host = 'cli', env = process.env, execPath = pr
         path.join(resources, 'app', 'package.json'),
         path.join(resources, 'app.asar.unpacked', 'package.json'),
         path.join(resources, 'app.asar.unpacked', 'host-dependencies.cjs'),
-      ].find(existsSync)
+      ].find(candidate => existsSync(candidate) || existsSync(path.join(path.dirname(candidate), 'node_modules')))
       anchor = unpacked || path.join(resources, 'app', 'package.json')
     }
   } else {
