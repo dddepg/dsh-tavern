@@ -165,13 +165,13 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 **老用户更新：**点击酒馆左侧栏底部的 **更新到最新版**；酒馆打不开时，回到 DSHA 主界面，在 **酒馆工作台**旁点 **更新/修复**。更新完成后，在 DSHA 底部 **启动** 页点 **重启**，再按上述路径进入，即可使用新窗口。安装报错或找不到入口时，见 [Android 安装与排错说明](docs/android-install.md)。
 
-### 手机远程访问（可选插件）
+### 手机远程访问
 
 **版本提醒：酒馆当前适配 DSH `0.1.5-rc.2`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
 
 酒馆运行在电脑或服务器上，手机通过浏览器访问，可按场景选择：
 
-- **自己电脑运行，手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。安装并重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码即可。
+- **自己电脑运行，手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。Desktop 安装和更新会自动配置 Pocket，不再同时安装 `dsh-web-mobile`；DSHA 继续使用 `dsh-web-mobile`。重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码即可。
 - **服务器部署，手机远程登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)。为远程 WebUI 添加账号密码认证；服务器地址、监听与端口需先配置为可访问，插件本身不提供内网穿透。首次账号设置及配置方法见插件 README。
 
 ## 开始游玩

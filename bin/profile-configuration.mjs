@@ -47,11 +47,18 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
   const sourceProfile = object(sourceDsh.profile)
   const currentProfile = object(currentDsh.profile)
   const currentTavern = object(currentDocument.dshTavern)
+  // Pocket includes mobile-nav itself. Select one layout owner per host,
+  // including old/manual installs, so upgrades cannot reintroduce both.
+  const excludedMobileBundles = host === 'desktop'
+    ? ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav']
+    : host === 'android' ? ['dsh-pocket', '@dsh-external/dsh-mobile-nav'] : ['@dsh-external/dsh-mobile-nav']
   const sourceBundles = uniqueStrings(sourceProfile.bundles)
+    .map(name => host === 'desktop' && name === 'dsh-web-mobile' ? 'dsh-pocket' : name)
+    .filter(name => !excludedMobileBundles.includes(name))
   const previousManagedBundles = uniqueStrings(currentTavern.managedBundles).length > 0
     ? uniqueStrings(currentTavern.managedBundles)
     : LEGACY_MANAGED_BUNDLES
-  const previousManagedBundleSet = new Set(previousManagedBundles)
+  const previousManagedBundleSet = new Set([...previousManagedBundles, ...excludedMobileBundles])
   const userBundles = uniqueStrings(currentProfile.bundles).filter((name) => !previousManagedBundleSet.has(name))
   const bundles = uniqueStrings(sourceBundles.concat(userBundles))
 
@@ -62,7 +69,7 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
     ? uniqueStrings(currentTavern.managedDependencies)
     : LEGACY_MANAGED_DEPENDENCIES
   const dependencies = { ...currentDependencies }
-  for (const name of previousManagedDependencies) delete dependencies[name]
+  for (const name of [...previousManagedDependencies, ...excludedMobileBundles]) delete dependencies[name]
   for (const name of managedDependencies) {
     const sourceValue = sourceDependencies[name]
     if (typeof sourceValue === 'string' && sourceValue.startsWith('link:./tavern-plugin')) {
