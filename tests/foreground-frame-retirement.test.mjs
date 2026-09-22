@@ -38,7 +38,7 @@ test('生产 pre-step 在自动压缩及生成之前清理旧指引，多步工�
   const session = frames(), calls = []
   let hook
   const context = {
-    ctx: { on: (_name, fn) => { hook = fn } },
+    checkedCompactionPressure: new WeakSet(), ctx: { on: (_name, fn) => { hook = fn } },
     retireForegroundFrames, sessionStore: { flush: async () => calls.push('flush') },
     backgroundAgentRunner: { requestContext: () => null },
     chatForSession: async () => ({ mode: 'story' }), pendingCompactionMessages: new WeakMap(),

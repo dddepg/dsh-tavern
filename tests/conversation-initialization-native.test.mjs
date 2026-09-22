@@ -25,7 +25,7 @@ for (const phase of ['front', 'back']) test(`native Agent preserves fixed system
   await h.continueWithAgent()
   assert.equal(h.requests.length, 1)
   const request = h.requests[0]
-  const systems = [request.system || '', ...request.messages.filter(m => m.role === 'system').map(m => m.content.map(b => b.text || '').join(''))].join('\n')
+  const systems = request.system
   assert.match(systems, /不可丢失的固定背景/)
   assert.equal(request.messages.filter(m => m.role !== 'system').some(m => JSON.stringify(m.content).includes('不可丢失的固定背景')), false)
   assert.equal(systems.split('不可丢失的固定背景').length - 1, 1)

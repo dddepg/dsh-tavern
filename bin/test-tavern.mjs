@@ -25,7 +25,7 @@ const tests = ['tests', 'testsets/tests'].flatMap(directory =>
     .filter(name => name.endsWith('.test.mjs'))
     .sort()
     .map(name => path.join(SOURCE_ROOT, directory, name)))
-const result = spawnSync(process.execPath, ['--test', ...tests], {
+const result = spawnSync(process.execPath, ['--import', path.join(SOURCE_ROOT, 'tests/fixtures/host-session-patch-preload.mjs'), '--test', ...tests], {
   cwd: SOURCE_ROOT,
   env: { ...process.env, DSH_BOOT_MODULE: boot },
   stdio: 'inherit',

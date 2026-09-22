@@ -16,6 +16,7 @@ const instruction = await readFile(new URL('../tavern-plugin/prompts/story-compa
 // about any provider's tokenizer. The 2k window keeps fixtures and tests small.
 async function fixture(t, { rounds = 8, text = '旧剧情与人物关系。'.repeat(40), system = '', thresholdOffset = 0, auto = false, summaryMaxTokens = 128 } = {}) {
   const h = await createInitializationNative(process.env.DSH_BOOT_MODULE)
+  if (system) h.ctx.systemPrompt.section({ name: 'fixture-fixed-system', text: system, complete: true, order: 999 })
   t.after(() => h.dispose())
   const { BasicCompactionEngine } = await import(new URL('../../dsh-compaction-basic/lib/index.js', pathToFileURL(process.env.DSH_BOOT_MODULE)))
   const state = { limit: Infinity, output: '人物关系和重要事件已归纳。', summaries: [], rejectOrdinary: false, ordinary: 0 }
@@ -43,7 +44,7 @@ async function fixture(t, { rounds = 8, text = '旧剧情与人物关系。'.rep
     agent.followup({ id: 'synthetic-' + i, role: 'user', content: [{ type: 'text', text }], source: { kind: 'human' } })
     await agent.whenIdle()
   }
-  if (system) session.append('request/header', { header: { ...session.requestHeader(), system }, reason: 'synthetic fixed background' })
+  if (system) session.append('system/message', { message: { id: 'synthetic-system', role: 'system', content: [{ type: 'text', text: system }], source: { kind: 'plugin', plugin: 'fixture' } } }, { surfaceOp: 'append' })
   const before = h.ctx.tokenMeter.measure(session).totalTokens
   const engine = new BasicCompactionEngine(h.ctx, { auto, maxTokens: summaryMaxTokens, thresholdRatio: (Math.min(before, 1600) - thresholdOffset + 0.1) / 2000 })
   async function compact(kind, selected = engine) {
@@ -116,7 +117,7 @@ test('fixed system background alone exceeds the summary window and cannot be rem
   const f = await fixture(t, { system }), nodes = [...f.session.surface.nodes]
   f.state.limit = 2000
   await assert.rejects(f.compact('manual')); f.intact(nodes)
-  assert.equal(f.session.requestHeader().system, system)
+  assert.equal(f.session.deriveMessages().find(m => m.id === 'synthetic-system').content[0].text, system)
   t.diagnostic(JSON.stringify({ fixedTokens: Math.ceil(system.length / 4) + 4, capacity: 2000 }))
 })
 

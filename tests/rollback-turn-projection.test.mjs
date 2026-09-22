@@ -88,7 +88,7 @@ for (const alpha of [false, true]) test(`${alpha ? 'alpha' : 'main'} 中断残�
   for (const turn of [1, 2, 3]) {
     session.append('turn/start', { turn })
     session.append('user/message', { id: 'u' + turn, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'input' + turn }] }, { surfaceOp: 'append' })
-    session.append('assistant/message', { turn, step: 1, message: { id: 'a' + turn, role: 'assistant', source: model, content: [{ type: 'text', text: turn === 3 ? '中断时已流出的半截正文' : 'reply' + turn }] } }, { surfaceOp: 'append' })
+    session.append('assistant/message', { turn, step: 1, stream: [], message: { id: 'a' + turn, role: 'assistant', source: model, content: [{ type: 'text', text: turn === 3 ? '中断时已流出的半截正文' : 'reply' + turn }] } }, { surfaceOp: 'append' })
     session.append('turn/end', { turn, reason: { kind: turn === 3 ? 'aborted' : 'completed' } })
   }
   // Same event sequence as the report: aborted reply -> failed-turn cleanup -> rollback.
@@ -96,8 +96,8 @@ for (const alpha of [false, true]) test(`${alpha ? 'alpha' : 'main'} 中断残�
   assert.deepEqual(foregroundSuppressedTurns({}, sessionEvents(session)), [], "停止本身保留半截正文，只有回退才隐藏")
   const rollback = locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes })
   assert.equal(rollback.turn, 2)
-  session.append('assistant/message', { turn: 2, step: 1, message: { id: 'rollback', role: 'assistant', source: model, content: [] } }, {
-    surfaceOp: { op: 'replace', start: rollback.userSeq, end: rollback.endSeq }, sourceEventSeqs: rollback.shadowedSeqs
+  session.append('assistant/message', { turn: 2, step: 1, stream: [], message: { id: 'rollback', role: 'assistant', source: model, content: [] } }, {
+    surfaceOp: { op: 'replace', startSeq: rollback.userSeq, endSeq: rollback.endSeq }, sourceEventSeqs: rollback.shadowedSeqs
   })
   for (const reload of [false, true]) {
     if (reload) session = Session.create(session.id, sessionEvents(session), session.header)

@@ -83,5 +83,5 @@ test('product client forbids native dialogs and awaits every confirmation result
   }
   for(const value of Object.values(node)){if(Array.isArray(value))value.forEach(child=>walk(child,node));else if(value?.type)walk(value,node)}
  }
- walk(ast);assert.equal(confirmations,25);
+ walk(ast);assert.equal(confirmations,26);
 })

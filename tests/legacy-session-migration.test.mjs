@@ -42,7 +42,7 @@ const archiveRoot = path.join(process.env.HOME, '.dsh-tavern/profile-data/tavern
 const hostReady = readable(path.join(hostRoot, 'dsh-session/package.json'))
 const archiveReady = readable(archiveRoot)
 
-test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !hostReady || !archiveReady, timeout: 180000 }, async () => {
+test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !hostReady || !archiveReady, timeout: 180000 }, async t => {
   const require = createRequire(path.join(hostRoot, 'dsh-session/package.json'))
   const version = JSON.parse(readFileSync(require.resolve('@deepseek-ai/dsh-session/package.json'), 'utf8')).version
   assert.equal(version, '0.1.5-rc.2')
@@ -53,7 +53,14 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
   assert.ok(sources.length > 0)
   const sourceHashes = new Map(await Promise.all(sources.map(async file => [file, hash(await readFile(file))])))
   const copyRoot = await mkdtemp(path.join(tmpdir(), 'tavern-legacy-sessions-'))
+  t.after(() => rm(copyRoot, { recursive: true, force: true }))
   await cp(archiveRoot, copyRoot, { recursive: true })
+  // Re-exercise migration even when the live profile has already migrated.
+  for (const source of sources) {
+    const copied = path.join(copyRoot, path.relative(archiveRoot, source))
+    if (readable(copied + '.bak-tavern-premigrate')) await cp(copied + '.bak-tavern-premigrate', copied)
+    await rm(path.join(path.dirname(copied), 'session.v3.jsonl.zstd'), { force: true })
+  }
   const summary = await migrateLegacySessionDirectory(copyRoot, sessionFormatCatalog)
   assert.ok(summary.migrated > 0, '没有任何副本完成迁移')
   const copies = (await walk(copyRoot)).filter(file => path.basename(file) === 'session.jsonl.zstd')

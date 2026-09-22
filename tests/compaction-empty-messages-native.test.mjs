@@ -42,6 +42,6 @@ for (const side of ['foreground', 'background']) {
     assert.ok(sessionEvents(agent.session).some(e => e.type === 'compaction/summary'))
     assert.equal(readSessionStablePrefix(agent.session).text, prefix)
     assert.deepEqual(sessionEvents(agent.session).slice(0, before.length), before, 'original events stay immutable')
-    assert.match(requests[0].system, /不可丢失的固定背景/)
+    assert.match(requests[0].messages.filter(m => m.role === 'system').flatMap(m => m.content).map(b => b.text || '').join('\n'), /不可丢失的固定背景/)
   })
 }

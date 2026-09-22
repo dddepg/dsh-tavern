@@ -36,7 +36,7 @@ test('initial history is limited to 20, explicit loads append 20 and preserve lo
 
 const dsh = process.env.DSH_BROWSER_ROOT || path.join(homedir(), '.dsh-tavern/runtime/lib/node_modules/@deepseek-ai/dsh')
 test('real React keeps 20 rounds while scrolling and appends history only after manual clicks', { skip: !existsSync(dsh) && 'Set DSH_BROWSER_ROOT for the browser integration test' }, async () => {
-  const require = createRequire(path.join(dsh, 'node_modules/@deepseek-ai/dsh-client-ui-trajectory/package.json'))
+  const require = createRequire(new URL('../package.json', import.meta.url))
   const names = ['react', 'scheduler', 'react-dom', 'react-dom/client']
   const files = ['react.production.js', 'scheduler.production.js', 'react-dom.production.js', 'react-dom-client.production.js']
   let bundle = 'const modules={};\n'

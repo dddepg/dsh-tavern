@@ -1,3 +1,4 @@
+import './host-session-patch-preload.mjs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Session } from './dsh-session-host.mjs'

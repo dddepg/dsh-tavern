@@ -532,9 +532,9 @@ test('后台 Runner 执行候选任务，查询超限后提示开始推理而不
         assert.equal(runner.owns('candidate-session-1'), true)
         assert.match(message.content[0].text, /最近剧情/)
         assert.match(message.content[0].text, /雨水敲窗/)
-        const preStep = listeners.find(function (entry) { return entry.name === 'agent/pre-step' })
+        const preStep = listeners.findLast(function (entry) { return entry.name === 'agent/pre-step' })
         assert.ok(preStep)
-        const decision = await preStep.listener({ agent: child, turn: 1, step: 1 }, async function () { return { kind: 'enter', messages: [message] } })
+        const decision = await preStep.listener({ signal: new AbortController().signal, agent: child, turn: 1, step: 1 }, async function () { return { kind: 'enter', messages: [message] } })
         requestMessages = decision.messages
         pointResult = await registered[1].execute({ position: 3 })
         for (let index = 1; index <= 7; index++) {
@@ -962,8 +962,8 @@ test('状态结算与候选生成复用同一个常驻后台 Agent，并且每�
       followup(message) {
         prompts.push(message.content[0].text)
         const response = responses[prompts.length - 1]
-        const preStep = listeners.find(function (entry) { return entry.name === 'agent/pre-step' })
-        work = Promise.resolve(preStep.listener({ agent: child }, async function () { return { kind: 'enter' } })).then(function () {
+        const preStep = listeners.findLast(function (entry) { return entry.name === 'agent/pre-step' })
+        work = Promise.resolve(preStep.listener({ signal: new AbortController().signal, agent: child }, async function () { return { kind: 'enter' } })).then(function () {
           events.push({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: response }] } } })
         })
       },

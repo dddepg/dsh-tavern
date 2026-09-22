@@ -55,11 +55,12 @@ test('连续回退经过真实 DSH 消息面替换与恢复，直到只剩开场
   appendSessionEvent(session, 'assistant/message', { turn: latest.turn, step: latest.step, message: { id: 'rollback-2', role: 'assistant', content: [], source: latest.source } }, {
     surfaceOp: { op: 'replace', start: latest.userSeq, end: latest.endSeq }, sourceEventSeqs: latest.shadowedSeqs
   })
+  const replacementSeq = sessionEvents(session).findLast(event => event.data?.message?.id === 'rollback-2').seq
   session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
 
   const previous = locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes })
   assert.equal(previous.turn, 2)
-  assert.deepEqual(previous.shadowedSeqs, [1, 2, 5])
+  assert.deepEqual(previous.shadowedSeqs, [1, 2, replacementSeq])
   appendSessionEvent(session, 'assistant/message', { turn: previous.turn, step: previous.step, message: { id: 'rollback-1', role: 'assistant', content: [], source: previous.source } }, {
     surfaceOp: { op: 'replace', start: previous.userSeq, end: previous.endSeq }, sourceEventSeqs: previous.shadowedSeqs
   })

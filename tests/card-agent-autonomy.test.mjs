@@ -27,9 +27,9 @@ test('任务提示继承用户已有授权，不强制重复确认或禁止适�
 test('MVU 转换创建保留封面的独立副本，并保护原卡和无关字段', () => {
   assert.match(mvuSkill, /`tavern_convert_to_mvu`/)
   assert.match(mvuSkill, /默认保留无关字段/)
-  assert.match(mvuSkill, /工具保存封面、世界书和绑定/)
-  assert.match(mvuSkill, /原卡及共享资源保持不变/)
-  assert.match(mvuSkill, /原文不匹配重新定位/)
+  assert.match(mvuSkill, /工具从磁盘复制原卡/)
+  assert.match(mvuSkill, /在副本上删除旧实现/)
+  assert.match(mvuSkill, /定位错误按返回的/)
 
 })
 
