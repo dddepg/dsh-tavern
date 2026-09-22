@@ -1,3 +1,4 @@
+import { conversionInputError } from './mvu-conversion-guidance.js'
 import { createHash } from 'node:crypto'
 import { JSDOM } from 'jsdom'
 
@@ -30,7 +31,11 @@ export function freezeMvuAppearance(data, plan) {
   const source = data.extensions.regex_scripts[Number(plan.sourcePath.split('/')[3])].replaceString
   const fenced = source.trim().match(/^```html\s*\n([\s\S]*?)\n```$/i)
   const html = fenced ? fenced[1] : source
-  if (/```|<%|&lt;%|\{\{|\$[&`']|\$<|\$\$/.test(html)) throw Error('美化包含动态模板或特殊替换语法，需专门适配；不能降级为默认面板')
+  const unsupported = /```|<%|&lt;%|\{\{[^}]*\}\}|\{\{|\$[&`']|\$<|\$\$/.exec(html)
+  if (unsupported) throw conversionInputError('MVU_APPEARANCE_UNSUPPORTED_SYNTAX', '美化包含动态模板或特殊替换语法: ' + unsupported[0], {
+    field:'html',token:unsupported[0],offset:unsupported.index,
+    hint:'HTML 动态值只支持文本节点的 $1、$2 等 bindings 占位；标签中的 {{user}}/{{char}} 改为“玩家”/“角色”等静态文字，状态值通过字段绑定读取。移除 EJS 或特殊替换语法后重新提交设计。原卡复杂模板须专门适配，不用默认面板覆盖原美化。'
+  })
   const dom = new JSDOM(html)
   try {
     const doc = dom.window.document

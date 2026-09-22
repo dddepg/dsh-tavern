@@ -1,3 +1,4 @@
+import { appearanceCoverageError } from './mvu-conversion-guidance.js'
 import { appearanceSources } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -91,6 +92,7 @@ export function createDefinition(source,args) {
     if(!visible) throw Error('原状态字段没有展示映射: '+mapping.path)
   }
   if (args.appearance?.html !== undefined) {
+    const missingPaths = new Set()
     for (const state of states) for (const field of leaves(state)) {
       const keys=pointerKeys(field.path)
       const prefix=args.appearance.collectionPath ? pointerKeys(args.appearance.collectionPath) : null
@@ -100,8 +102,9 @@ export function createDefinition(source,args) {
       if(!relative || !args.appearance.bindings.some(binding=>{
         const bound=pointerKeys(binding.path)
         return bound.length<=relative.length && bound.every((key,i)=>relative[i]===key)
-      })) throw Error('生成美化遗漏已定义字段: '+field.path)
+      })) missingPaths.add(field.path)
     }
+    if (missingPaths.size) throw appearanceCoverageError([...missingPaths],args.appearance.collectionPath)
   }
   if (mappings.some(m=>!inventory.some(i=>i.id===m.sourceId))) throw Error('fieldMappings 包含未知来源字段')
   return {version:1,sourcePath:source.sourcePath,sourceRevision:source.revision,

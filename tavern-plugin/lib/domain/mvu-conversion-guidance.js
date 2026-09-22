@@ -1,0 +1,29 @@
+export function conversionInputError(code, message, details) {
+  const error = new Error(message)
+  error.code = code
+  error.details = details
+  return error
+}
+
+export function appearanceCoverageError(missingPaths, collectionPath) {
+  const outside = collectionPath && missingPaths.find(path => path !== collectionPath && !path.startsWith(collectionPath + '/'))
+  return conversionInputError(outside ? 'MVU_APPEARANCE_SCOPE_MISMATCH' : 'MVU_APPEARANCE_MISSING_FIELDS',
+    '生成美化遗漏已定义字段: ' + (outside || missingPaths[0]), {
+      field: 'bindings', path: outside || missingPaths[0], missingPaths, collectionPath: collectionPath || null,
+      hint: outside
+        ? 'collectionPath 模式的所有 bindings.path 都相对于一个集合成员，不能同时绑定全局字段。需要全局字段时，省略 collectionPath，改用根路径（如 /时间、/人物/角色名/姓名）；整个集合可绑定为 JSON 文本。需要自动重复人物卡片时，当前接口需专门适配混合作用域。不要删除原字段或改变其归属来通过校验。'
+        : '保留完整变量定义，为 missingPaths 补齐 bindings 和 HTML 文本中的 $1/$2 占位。集合模式使用成员相对路径，根模式使用完整路径；不要删除字段来通过校验。'
+    })
+}
+
+export const mvuStructureGuide = Object.freeze({
+  responsibility: '模型只定义状态语义、来源映射、美化和清理；工具负责成品 MVU 结构。标准转换只读目标卡及 Skill 配方，无需扫描其他卡、磁盘 raw/data 包装或工具源码。',
+  definition: '完整提取后调用 saveDefinition；无原美化时调用 tavern_design_mvu_appearance。返回 definitionRevision 后，apply 只提交版本号、来源版本、名称和 cleanup。',
+  bindings: {
+    root: '省略 collectionPath：所有路径相对于 initialState，可同时绑定 /时间 与 /人物/角色名/姓名；绑定整个集合显示 JSON 文本。',
+    collection: '指定 collectionPath=/人物：所有路径相对于每个成员，如 /姓名；自动重复面板，但不能混入 /时间 等集合外字段。'
+  },
+  html: '动态值只用 $1/$2 文本占位。不支持 {{user}}/{{char}}、EJS、自定义脚本或动态属性。标签用“玩家”等静态文字；状态值通过 bindings 读取。'
+})
+
+export const mvuDeliveryGuide = '工具有意保留每个开场的 <initvar>…</initvar>（供官方 MVU 初始化，展示时隐藏）和 <mvu-status/>（由显示正则替换为状态面板），并生成初值条目、后台规则及显示/历史隔离正则。它们不是旧内容残留；不要因搜索命中而删除或调查其他卡。validation.valid=true 且无具体异常时，直接报告成品路径、实际差异和 pending。'

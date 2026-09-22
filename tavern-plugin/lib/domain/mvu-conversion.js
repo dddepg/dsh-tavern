@@ -1,3 +1,4 @@
+import { mvuStructureGuide, mvuDeliveryGuide } from './mvu-conversion-guidance.js'
 import { stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
 import { appearanceSources, freezeMvuAppearance } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
@@ -141,6 +142,7 @@ export function createMvuConversion({ resources }) {
     const metadata = existingTarget?.extensions?.[MVU_CONVERSION_KEY]
     return { sourcePath: source.sourcePath, sourceRevision: source.revision, targetPath: target.path,
       targetRevision: existing === undefined ? null : digest(existing),
+      structureGuide: mvuStructureGuide,
       catalog: catalog(source.data),
       ...(args.detail === undefined || args.detail === 'reading' ? {reading:conversionReading(source.data)} : {}),
       destination: await resources.inspectMvuDestination(target.path),
@@ -220,9 +222,9 @@ export function createMvuConversion({ resources }) {
     const requestHash = digest({ sourceRevision:source.revision,name:target.name,definitionRevision,appearance:args.appearance,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
     if (existingText !== undefined) {
       if (metadata.requestHash === requestHash && metadata.outputDigest === outputDigest(existing)) {
-        if (input.action === 'preview') return {path:target.path,saved:false,changed:false,validation:await verify({path:target.path}),nextAction:'自动验收已返回；无具体失败或用户要求实测时，直接报告结果与待实测项。'}
+        if (input.action === 'preview') return {path:target.path,saved:false,changed:false,validation:await verify({path:target.path}),nextAction:mvuDeliveryGuide}
         const saved = await resources.saveMvuCard({sourcePath:source.sourcePath,targetPath:target.path,document:existing,expectedSourceText:source.text,expectedTargetText:existingText})
-        return {path:target.path,changed:saved.changed,imageCopied:saved.imageCopied,validation:await verify({path:target.path}),nextAction:'自动验收已返回；无具体失败或用户要求实测时，直接报告结果与待实测项。'}
+        return {path:target.path,changed:saved.changed,imageCopied:saved.imageCopied,validation:await verify({path:target.path}),nextAction:mvuDeliveryGuide}
       }
       if (!args.targetRevision || args.targetRevision !== digest(existingText)) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
     }
@@ -273,7 +275,7 @@ export function createMvuConversion({ resources }) {
     if (!check.valid) throw Error('转换预检失败: ' + JSON.stringify(check.checks.filter(item => item.status === 'failed')))
     if ((await snapshot(source.sourcePath)).revision !== source.revision) throw Error('转换期间来源发生变化，请重新 inspect')
     const saved = await resources.saveMvuCard({ sourcePath: source.sourcePath, targetPath: target.path, document, expectedSourceText: source.text, expectedTargetText: existingText, finalize: output => { cardData(output).extensions[MVU_CONVERSION_KEY].outputDigest = outputDigest(output) } })
-    return { path: target.path, changed: saved.changed, imageCopied: saved.imageCopied, validation: await verify({ path: target.path }), nextAction: '已保存并从磁盘自动验收；无具体失败时直接报告差异与待实测项，无需再次 validate 或检查包装镜像、全局预设。' }
+    return { path: target.path, changed: saved.changed, imageCopied: saved.imageCopied, validation: await verify({ path: target.path }), nextAction: mvuDeliveryGuide }
   }
   async function verify({ path }) {
     const text = await resources.readText(normalizeResourcePath(path, 'card'))

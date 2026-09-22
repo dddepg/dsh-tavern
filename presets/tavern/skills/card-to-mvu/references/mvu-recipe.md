@@ -69,6 +69,30 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 
 展示路径使用 JSON Pointer，键中的 `~` 和 `/` 分别写作 `~0`、`~1`。省略 displayFields 展示全部非内部字段；选择集合时，新成员会自动展示。原美化通过 appearance 固化，保留原生 details 交互；脚本按钮、动态属性和嵌入文档需专门适配。
 
+## 绑定模式与常见错误
+
+根绑定（省略 collectionPath）：
+
+```json
+{"html":"<section><p>时间：$1</p><p>姓名：$2</p></section>","bindings":[{"capture":1,"path":"/时间"},{"capture":2,"path":"/人物/甲/姓名"}]}
+```
+
+集合绑定（只展示集合成员）：
+
+```json
+{"collectionPath":"/人物","html":"<article><h3>$1</h3><p>位置：$2</p></article>","bindings":[{"capture":1,"path":"/姓名"},{"capture":2,"path":"/位置"}]}
+```
+
+这两段是美化参数片段，完整初值和来源参数仍按工具定义提交。集合模式不会回退到根对象取值：`/时间` 指的是每个人物的时间，不是全局时间。目前一套模板不能同时拥有全局区和重复人物区。保留完整字段，选择根模式或报告需要专门适配；不通过删字段绕过覆盖检查。
+
+- `MVU_APPEARANCE_SCOPE_MISMATCH`：path 位于 collectionPath 外；按 hint 调整绑定模式，保留原字段归属。
+- `MVU_APPEARANCE_MISSING_FIELDS`：一次补齐 missingPaths 对应的 bindings 和 HTML 占位。
+- `MVU_APPEARANCE_UNSUPPORTED_SYNTAX`：field、token、offset 指出语法位置。例如 `<small>对{{user}}</small>` 改为 `<small>对玩家</small>`；动态状态另设 $1/$2 字段绑定。不用其他卡或源码推测格式。
+
+## 工具生成的成品结构
+
+工具安装世界书 `[initvar]` 初值条目、`[mvu_update]` 后台规则、各开场完整 `<initvar>` 数据，以及 `<mvu-status/>` 的显示和历史隔离正则。原始开场末尾存在这两个标记是正常结果；初始化数据在展示中隐藏，入口由正则变成面板。以 apply.validation 为准，不把对成品搜索命中标记当作清理失败。
+
 ## 需要额外判断的卡
 
 - **已有 MVU**：先识别原有初值、Schema、脚本和面板。转换工具遇到残留初值、后台规则或旧状态声明会停止，要求明确合并/清理；它不是通用的已有 MVU 卡升级器。已有复杂 MVU 正常工作时可保留现状，不必强行重装。
