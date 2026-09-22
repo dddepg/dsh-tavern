@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "38a2115d595bbee4fc94e5ff2bccc5bdf53c8240",
-  "releaseSequence": 337,
+  "revision": "fe9fe290251c3c01b6d8f7e6a4b624d3dc840f07",
+  "releaseSequence": 338,
   "version": "2.1.0",
   "files": [
     {
@@ -71,8 +71,8 @@
     },
     {
       "path": "bin/profile-configuration.mjs",
-      "sha256": "d36355c5e18f0964ed68594050a97c5729ded621d0ad91d0e2355069da2e6112",
-      "size": 10028
+      "sha256": "ff5b4d0b79dd77a73064e0611fbf9172c72c8cf282ad1e50d46a9c35bc476971",
+      "size": 10601
     },
     {
       "path": "bin/profile-installation.mjs",
@@ -146,8 +146,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "d817617f6fe3a1fbf521a1813e26c8bb4d16d8d9cc431070693c25e3032a0ff7",
-      "size": 1793
+      "sha256": "0c92eee5375a4dd2aed7cdf8b39b79c60863b8c2046b4a14bc5c08f67927d8d1",
+      "size": 1821
     },
     {
       "path": "patches/dsh-better-sidebar@0.17.1.patch",
@@ -156,8 +156,8 @@
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "807344808a7092c366c78102b73eb819aade3b357e32ba964897d9c629ee3f58",
-      "size": 62726
+      "sha256": "2671108799dcb0d62eb4d9f311cad799397f0f73b67cbd41239890c65befe416",
+      "size": 69923
     },
     {
       "path": "pnpm-workspace.yaml",
@@ -3136,8 +3136,8 @@
     },
     {
       "path": "tavern-plugin/package.json",
-      "sha256": "64493cc96c8eb755bdcb182d10c6d7cefe1d3d75c6ba0c4ee4537bfe95e754ce",
-      "size": 1526
+      "sha256": "812ab2f48b0eeca41a589e8dd36b4be6c86ae9a0dd92b4dce3493d5fcc8ad237",
+      "size": 1524
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/.github/workflows/ci.yml",
