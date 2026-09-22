@@ -61,9 +61,21 @@ export function prepareLegacySessionLog(text, catalog) {
   }
   const opened = openSession(catalog, header, next)
   if (!opened.ok) {
-    // Prefer source-only cleanup over leaving illegal keys on disk (#71 / #72 C).
-    // Do not publish a host-rejected structural rewrite — that thrash-rewrites
-    // on every boot when placeOpening keeps reshuffling unopenable logs.
+    // Issue #73: structural rewrite (incl. placeOpening) is what fixes
+    // surface-before-step, but openSession may still reject for compaction /
+    // tool-result drift. Soften those conflicts until the host accepts, rather
+    // than discarding the rewrite and leaving the chronology broken.
+    const repaired = repairUntilOpenable(header, next, catalog)
+    if (repaired.ok) {
+      const migratedStory = storyTexts(repaired.artifact.events)
+      let reason = repaired.reason
+      if (!reason && !sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) {
+        reason = '可见正文不完全一致，已写出可打开版本'
+      } else if (!reason && prefix && !systemText(repaired.artifact.events).includes(prefix)) {
+        reason = '固定背景未完全进入 system 头，已写出可打开版本'
+      }
+      return { ok: true, changed: true, headerLine: lines[0], events: repaired.events, artifact: repaired.artifact, reason }
+    }
     return sanitize() || { ok: true, changed: false, reason: opened.reason }
   }
   const migratedStory = storyTexts(opened.artifact.events)
@@ -83,16 +95,42 @@ export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
   const only = structuredClone(events)
   let changed = false
   for (const event of only) if (cleanEvent(event)) changed = true
+  let next = only
+  // Issue #73: source-only cleanup still leaves surface events before the first
+  // step, which the host rejects at v2→v3. Apply placeOpening here too.
+  try {
+    const placed = placeOpening(next, prefixTexts(next).join('\n\n'))
+    if (placed.changed) {
+      next = dropDanglingPointers(placed.events).events
+      next = renumber(next)
+      changed = true
+    }
+  } catch {
+    // Keep source-cleaned events when chronology cannot be repaired here.
+  }
   if (!changed) return null
-  const opened = openSession(catalog, header, only)
-  // Issue #72 C: even when the host still cannot open the archive, write the
-  // cleaned source so illegal fields do not remain on disk forever.
+  let opened = openSession(catalog, header, next)
   if (!opened.ok) {
+    const repaired = repairUntilOpenable(header, next, catalog)
+    if (repaired.ok) {
+      return {
+        ok: true,
+        changed: true,
+        headerLine: headerLine || JSON.stringify(header),
+        events: repaired.events,
+        artifact: repaired.artifact,
+        reason: repaired.reason,
+        sanitizedOnly: true,
+      }
+    }
+    // Issue #72 C / #73: even when the host still cannot open, write the cleaned
+    // (and chronology-fixed when possible) source so illegal fields and
+    // surface-before-step do not remain on disk forever.
     return {
       ok: true,
       changed: true,
       headerLine: headerLine || JSON.stringify(header),
-      events: only,
+      events: next,
       reason: opened.reason || '已清理非法字段，但宿主仍无法打开',
       sanitizedOnly: true,
     }
@@ -101,10 +139,160 @@ export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
     ok: true,
     changed: true,
     headerLine: headerLine || JSON.stringify(header),
-    events: only,
+    events: next,
     artifact: opened.artifact,
     sanitizedOnly: true,
   }
+}
+
+/** Progressively drop conflicting rows until the host catalog accepts the log. */
+function repairUntilOpenable(header, events, catalog) {
+  let current = structuredClone(events)
+  const notes = []
+  let cursor = 0
+  while (cursor < 8) {
+    const opened = openSession(catalog, header, current)
+    if (opened.ok) {
+      return {
+        ok: true,
+        events: current,
+        artifact: opened.artifact,
+        reason: notes.length ? '已丢弃冲突记录以完成迁移：' + notes.join('；') : undefined,
+      }
+    }
+    const step = softenForOpenFailure(current, cursor, opened.reason)
+    if (!step.changed) return { ok: false, reason: opened.reason }
+    notes.push(step.note)
+    cursor = step.nextAttempt
+    current = dropDanglingPointers(step.events).events
+    try { current = renumber(current) }
+    catch (error) { return { ok: false, reason: error.message || String(error) } }
+  }
+  const opened = openSession(catalog, header, current)
+  if (!opened.ok) return { ok: false, reason: opened.reason }
+  return {
+    ok: true,
+    events: current,
+    artifact: opened.artifact,
+    reason: notes.length ? '已丢弃冲突记录以完成迁移：' + notes.join('；') : undefined,
+  }
+}
+
+function softenForOpenFailure(events, startAttempt, reason) {
+  const preferred = preferredRepairAttempt(reason)
+  const order = []
+  if (preferred != null && preferred >= startAttempt) order.push(preferred)
+  for (let attempt = startAttempt; attempt < 8; attempt += 1) {
+    if (!order.includes(attempt)) order.push(attempt)
+  }
+  for (const attempt of order) {
+    const next = structuredClone(events)
+    const applied = applyOpenRepair(next, attempt)
+    if (applied) return { events: next, changed: true, note: applied, nextAttempt: Math.max(startAttempt, attempt) + 1 }
+  }
+  return { events, changed: false, nextAttempt: startAttempt }
+}
+
+function preferredRepairAttempt(reason) {
+  const text = String(reason || '')
+  if (/chunk provenance|complete ordered attempt/i.test(text)) return 4
+  if (/tool\/result/i.test(text)) return 2
+  if (/compaction/i.test(text)) return 0
+  if (/shadowedRange|shadowedSeqs|surface span|earlier event/i.test(text)) return 1
+  return null
+}
+
+function applyOpenRepair(events, attempt) {
+  if (attempt === 0) {
+    const before = events.length
+    const kept = events.filter(event => !String(event.type).startsWith('compaction/'))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'compaction'
+  }
+  if (attempt === 1) {
+    let changed = false
+    for (const event of events) {
+      if (!event.data || typeof event.data !== 'object') continue
+      for (const key of ['shadowedRange', 'shadowedSeqs', 'messageSeqs']) {
+        if (!Object.hasOwn(event.data, key)) continue
+        delete event.data[key]
+        changed = true
+      }
+    }
+    return changed ? 'shadowed 指针' : null
+  }
+  if (attempt === 2) {
+    const before = events.length
+    const kept = dropMismatchedToolResults(events)
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return '错位 tool/result'
+  }
+  if (attempt === 3) {
+    const before = events.length
+    const kept = events.filter(event => event.type !== 'assistant/chunk' && event.type !== 'reasoning/chunk' && !PACKED_ROWS.has(event.type))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'chunk 行'
+  }
+  if (attempt === 4) {
+    // Fold keeps chunk-swarm assistant replacements; those fail host provenance
+    // checks ("chunk provenance is not one complete ordered attempt").
+    const before = events.length
+    const kept = events.filter(event => !(event.type === 'assistant/message' && event.surfaceOp?.op === 'replace'))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'assistant replace'
+  }
+  if (attempt === 5) {
+    // Host: "assistant/message N chunk provenance is not one complete ordered attempt"
+    let changed = false
+    for (const event of events) {
+      if (event.type !== 'assistant/message' || !event.data || typeof event.data !== 'object') continue
+      if (Array.isArray(event.data.stream) && event.data.stream.length) {
+        event.data.stream = []
+        changed = true
+      }
+      if (Array.isArray(event.sourceEventSeqs) && event.sourceEventSeqs.length) {
+        delete event.sourceEventSeqs
+        changed = true
+      }
+    }
+    return changed ? 'assistant stream/provenance' : null
+  }
+  if (attempt === 6) {
+    const before = events.length
+    const kept = events.filter(event => event.type !== 'tool/result')
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return '全部 tool/result'
+  }
+  if (attempt === 7) {
+    const before = events.length
+    const kept = events.filter(event => !String(event.type).startsWith('tool/') && event.type !== 'agent/inbox/spliced')
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'tool/inbox 辅助事件'
+  }
+  return null
+}
+
+function dropMismatchedToolResults(events) {
+  let open = null
+  return events.filter(event => {
+    if (event.type === 'step/start') open = { turn: event.data?.turn, step: event.data?.step }
+    else if (event.type === 'step/end' || event.type === 'turn/end') open = null
+    if (event.type !== 'tool/result') return true
+    if (!open) return false
+    return open.turn === event.data?.turn && open.step === event.data?.step
+  })
 }
 
 export async function commitLegacySessionFile(file, catalog) {

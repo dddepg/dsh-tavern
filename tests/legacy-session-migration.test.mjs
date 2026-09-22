@@ -289,3 +289,92 @@ test('issue #72 C: sanitize still writes cleaned events when host open fails', (
   assert.equal(JSON.stringify(prepared.events).includes('fixedSystemText'), false)
   assert.ok(prepared.reason)
 })
+
+function chronologyCatalog() {
+  const surface = new Set(['system/message', 'user/message', 'assistant/message', 'tool/result'])
+  return {
+    createRestore(header) {
+      const rows = []
+      return {
+        decodeRow(event) { rows.push(event) },
+        finish() {
+          const step = rows.findIndex(event => event.type === 'step/start')
+          if (step >= 0 && rows.slice(0, step).some(event => surface.has(event.type))) {
+            throw new Error('format v2 surface before first step cannot acquire a system head without changing chronology')
+          }
+          if (rows.some(event => String(event.type).startsWith('compaction/'))) {
+            throw new Error('compaction/summary shadowedRange start must identify an earlier event')
+          }
+          if (rows.some(event => event.type === 'assistant/message' && event.surfaceOp?.op === 'replace')) {
+            throw new Error('assistant/message chunk provenance is not one complete ordered attempt')
+          }
+          return { header: { ...header, version: 3 }, events: rows, inheritedEventCount: 0 }
+        },
+      }
+    },
+  }
+}
+
+test('issue #73: surface-before-step rewrite survives by dropping compaction conflicts', () => {
+  const text = v0Log([
+    { type: 'permission/preset', seq: 0, time: 1, data: {} },
+    { type: 'user/message', seq: 1, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u0', role: 'user', content: [{ type: 'text', text: '开场' }], source: { kind: 'user', fixedSystemText: 'illegal' } } },
+    { type: 'assistant/message', seq: 2, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'a0', role: 'assistant', content: [{ type: 'text', text: '开场答' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } } } },
+    { type: 'turn/start', seq: 3, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 4, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'user/message', seq: 5, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u1', role: 'user', content: [{ type: 'text', text: '继续' }], source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 6, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: '正文' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } } } },
+    { type: 'compaction/summary', seq: 7, time: 1, data: { compactionId: 'c1', shadowedRange: { start: 99, end: 99 }, shadowedSeqs: [99] } },
+    { type: 'step/end', seq: 8, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 9, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
+  ])
+  const prepared = prepareLegacySessionLog(text, chronologyCatalog())
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.changed, true)
+  assert.equal(prepared.artifact?.header?.version, 3)
+  const step = prepared.events.findIndex(event => event.type === 'step/start')
+  assert.ok(step >= 0)
+  assert.equal(prepared.events.slice(0, step).some(event => ['user/message', 'assistant/message'].includes(event.type)), false)
+  assert.equal(prepared.events.some(event => String(event.type).startsWith('compaction/')), false)
+  assert.equal(JSON.stringify(prepared.events).includes('fixedSystemText'), false)
+})
+
+test('issue #73: chunk-swarm assistant replaces are dropped so open can finish', () => {
+  const text = v0Log([
+    { type: 'user/message', seq: 0, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u0', role: 'user', content: [{ type: 'text', text: '开场' }], source: { kind: 'user' } } },
+    { type: 'turn/start', seq: 1, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 2, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'assistant/message', seq: 3, time: 1, surfaceOp: { op: 'append' }, data: { turn: 1, step: 1, message: { id: 'a0', role: 'assistant', content: [{ type: 'text', text: '旧' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } } } },
+    { type: 'assistant/chunk', seq: 4, time: 1, data: { text: 'x' } },
+    { type: 'assistant/message', seq: 5, time: 1, surfaceOp: { op: 'replace', start: 3, end: 4 }, sourceEventSeqs: [3, 4], data: { turn: 1, step: 1, message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: '新' }], source: { kind: 'model', provider: 'fixture', model: 'fixture' } } } },
+    { type: 'step/end', seq: 6, time: 1, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 7, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
+  ])
+  const prepared = prepareLegacySessionLog(text, chronologyCatalog())
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.artifact?.header?.version, 3)
+  assert.equal(prepared.events.some(event => event.type === 'assistant/message' && event.surfaceOp?.op === 'replace'), false)
+})
+
+test('issue #73: local surface-before-step archives open to v3', { skip: !hostReady || !archiveReady, timeout: 120000 }, async () => {
+  const require = createRequire(path.join(hostRoot, 'dsh-session/package.json'))
+  const { sessionFormatCatalog: catalog } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
+  const surface = new Set(['system/message', 'user/message', 'assistant/message', 'tool/result'])
+  const sources = (await walk(archiveRoot)).filter(file => path.basename(file) === 'session.jsonl.zstd')
+  let seen = 0, opened = 0
+  for (const file of sources) {
+    const candidate = readable(file + '.bak-tavern-premigrate') ? file + '.bak-tavern-premigrate' : file
+    let text
+    try { text = decodeSessionLog(await readFile(candidate)) } catch { continue }
+    const rows = text.split('\n').filter(Boolean).slice(1).map(line => {
+      try { return JSON.parse(line) } catch { return null }
+    }).filter(Boolean)
+    const step = rows.findIndex(event => event.type === 'step/start')
+    if (step < 0 || !rows.slice(0, step).some(event => surface.has(event.type))) continue
+    seen += 1
+    const prepared = prepareLegacySessionLog(text, catalog)
+    if (prepared.artifact?.header?.version === 3) opened += 1
+  }
+  assert.ok(seen > 0, '本地没有 surface-before-step 旧档样本')
+  assert.equal(opened, seen)
+})
