@@ -7346,6 +7346,7 @@ window.__ModuleLoader__.load({
 				const [openedScript, setOpenedScript] = React.useState(null);
 				const [error, setError] = usePersistentError("剧本与素材库");
 			const [busy, setBusy] = React.useState(false);
+			const [bindingPath, setBindingPath] = React.useState("");
 			const sourceInput = React.useRef(null);
 			function refresh() {
 					return Promise.all([rpc("listResources", {}, props.sessionId), rpc("getSession", { sessionId: props.sessionId }, props.sessionId)]).then(function (all) {
@@ -7402,7 +7403,12 @@ window.__ModuleLoader__.load({
 					const cardPath = selectedCardPaths[item.path] || "";
 					if (!cardPath) return;
 					setBusy(true); setError("");
-					try { await rpc("bindScript", { cardPath: cardPath, path: item.path }, props.sessionId); await refresh(); notifyTavernDataChanged(["scripts", "cards"], "resources"); }
+					try {
+						await rpc("bindScript", { cardPath: cardPath, path: item.path }, props.sessionId);
+						setBindingPath("");
+						await refresh();
+						notifyTavernDataChanged(["scripts", "cards"], "resources");
+					}
 					catch (err) { setError(String(err && err.message || err)); }
 					finally { setBusy(false); }
 				}
@@ -7421,19 +7427,56 @@ window.__ModuleLoader__.load({
 					const meta = (item.chunkCount ? item.chunkCount + " 块 · " : "") + (boundCard ? "已绑定：" + boundCard.name : "未绑定");
 					const on = isMounted(kind, path);
 					const name = h("button", { className: "dsh-tavern-resource-name dsh-tavern-resource-open", title: "查看工作版：" + label, onClick: function () { openScript(item); } }, label);
-					if (readOnly) return h("div", { key: path, className: "dsh-tavern-resource-row" }, name, h("span", { className: "dsh-tavern-resource-meta" }, meta));
-					const binding = boundCard
-						? h("div", { className: "dsh-tavern-resource-binding" }, h("span", { className: "dsh-tavern-resource-meta" }, "专属人物卡：" + boundCard.name), h("button", { className: "dsh-tavern-resource-at", disabled: busy, onClick: function () { unbindScriptFromCard(item, boundCard); } }, "解绑"))
-						: h("div", { className: "dsh-tavern-resource-binding" }, h("select", { value: selectedCardPaths[item.path] || "", disabled: busy || !availableCards.length, onChange: function (event) { const cardPath = event.target.value; setSelectedCardPaths(function (current) { return Object.assign({}, current, { [item.path]: cardPath }); }); } }, h("option", { value: "" }, availableCards.length ? "选择未绑定人物卡" : "暂无未绑定人物卡"), availableCards.map(function (card) { return h("option", { key: card.path, value: card.path }, card.name); })), h("button", { className: "dsh-tavern-resource-at", disabled: busy || !selectedCardPaths[item.path], onClick: function () { bindScriptToCard(item); } }, "绑定人物卡"));
-					return h("div", { key: path, className: "dsh-tavern-resource-row" },
-					name,
-					meta ? h("span", { className: "dsh-tavern-resource-meta" }, meta) : null,
-					h("button", { className: "dsh-tavern-resource-at", disabled: busy, title: "重命名真实文件", onClick: function () { renameResource(item, label); } }, "重命名"),
-						h("button", { className: "dsh-tavern-resource-at", disabled: busy, title: "删除剧本或素材", onClick: function () { deleteResource(item); } }, "删除"),
-						h("button", { className: "dsh-tavern-resource-at" + (on ? " mounted" : ""), title: on ? "再次在对话中引用" : "在对话中引用", onClick: function () { props.appendMention(kind, path, label); } }, "在对话中引用"),
+					if (readOnly) return h("div", { key: path, className: "dsh-tavern-resource-row" }, h("div", { className: "dsh-tavern-resource-row-main" }, name, h("span", { className: "dsh-tavern-resource-meta" }, meta)));
+					const bindingOpen = bindingPath === path && !boundCard;
+					const menu = h("details", {
+						className: "dsh-tavern-resource-menu",
+						onBlur: function (event) { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; },
+						onKeyDown: function (event) { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary").focus(); } }
+					},
+						h("summary", { "aria-label": "更多操作：" + label, title: "更多操作" }, "⋯"),
+						h("div", { className: "dsh-tavern-resource-menu-popup", role: "menu" },
+							boundCard
+								? h("button", { type: "button", disabled: busy, onClick: function (event) { event.currentTarget.closest("details").open = false; unbindScriptFromCard(item, boundCard); } }, "解绑人物卡")
+								: h("button", { type: "button", disabled: busy, onClick: function (event) { event.currentTarget.closest("details").open = false; setBindingPath(path); } }, "绑定人物卡"),
+							h("button", { type: "button", disabled: busy, onClick: function (event) { event.currentTarget.closest("details").open = false; renameResource(item, label); } }, "重命名"),
+							h("button", { type: "button", className: "danger", disabled: busy, onClick: function (event) { event.currentTarget.closest("details").open = false; deleteResource(item); } }, "删除")
+						)
+					);
+					const mention = h("button", {
+						type: "button",
+						className: "dsh-tavern-resource-mention" + (on ? " mounted" : ""),
+						title: on ? "再次在对话中引用" : "在对话中引用",
+						"aria-label": (on ? "再次在对话中引用：" : "在对话中引用：") + label,
+						disabled: busy,
+						onClick: function () { props.appendMention(kind, path, label); }
+					}, "@");
+					const binding = bindingOpen ? h("div", { className: "dsh-tavern-resource-binding" },
+						h("select", {
+							value: selectedCardPaths[item.path] || "",
+							disabled: busy || !availableCards.length,
+							"aria-label": "选择要绑定的人物卡",
+							onChange: function (event) {
+								const cardPath = event.target.value;
+								setSelectedCardPaths(function (current) { return Object.assign({}, current, { [item.path]: cardPath }); });
+							}
+						},
+							h("option", { value: "" }, availableCards.length ? "选择未绑定人物卡" : "暂无未绑定人物卡"),
+							availableCards.map(function (card) { return h("option", { key: card.path, value: card.path }, card.name); })
+						),
+						h("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || !selectedCardPaths[item.path], onClick: function () { bindScriptToCard(item); } }, "确认绑定"),
+						h("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: function () { setBindingPath(""); } }, "取消")
+					) : null;
+					return h("div", { key: path, className: "dsh-tavern-resource-row" + (bindingOpen ? " is-binding" : "") },
+						h("div", { className: "dsh-tavern-resource-row-main" },
+							name,
+							h("span", { className: "dsh-tavern-resource-meta" }, meta),
+							mention,
+							menu
+						),
 						binding
-				);
-			}
+					);
+				}
 			function group(title, kind, items, actions) {
 				return h("section", { className: "dsh-tavern-resource-group" },
 					h("div", { className: "dsh-tavern-resource-group-title" }, h("span", null, title + " · " + items.length), actions || null),
