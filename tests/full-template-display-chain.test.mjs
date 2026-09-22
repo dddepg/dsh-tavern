@@ -98,3 +98,20 @@ test('实际 MVU 配方在恢复与修改模板后仍只保留一个状态面板
  assert.doesNotMatch(JSON.stringify(b.projections), /Mvu.getMvuData|mvu-status|新版模板|<script|<style/)
  assert.deepEqual(restored.first.chat[0].template_display,initial.first.chat[0].template_display)
 })
+
+test('转换卡开场 initvar 经真实模板渲染后不进入正文，源初值与侧栏保留',async()=>{
+ const built=buildMvuArtifacts({initialState:{人物:{位置:'INITIAL_VALUE'}},updateRules:'依据正文更新。'})
+ const regexScripts=built.regexScripts.map(rule=>({...rule,enabled:!rule.disabled}))
+ const source='正文\n<initvar>{"人物":{"位置":"INITIAL_VALUE"}}</initvar>\n<mvu-status/>'
+ const result=await runtime.lifecycle({settings,charName:'初始化隔离',regexScripts,transcript:[{role:'assistant',content:source}]})
+ assert.equal(result.first.chat[0].mes,source)
+ assert.ok(result.first.chat[0].template_display)
+ const saved=structuredClone(result.first.chat[0].template_display)
+ const view=display(result.first,regexScripts)
+ assert.equal(view.statusViews.length,1)
+ assert.match(view.statusView.content,/Mvu.getMvuData/)
+ assert.doesNotMatch(JSON.stringify(view.projections),/INITIAL_VALUE|<initvar>/)
+ assert.match(JSON.stringify(view.projections),/正文/)
+ assert.deepEqual(result.first.chat[0].template_display,saved)
+ assert.deepEqual(display(result.second,regexScripts).projections,view.projections)
+})
