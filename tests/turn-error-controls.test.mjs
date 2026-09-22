@@ -95,3 +95,47 @@ test('同一会话容器重复挂载只保留一个错误控件，旧实例不�
   next.dispose()
   assert.equal(first.row.style.display, '')
 })
+
+test('失败尾部错误行提供一键重放，按轮次匹配而不是所有错误行', async () => {
+  const turns = []
+  const tail = setup('Provider finish_reason: content_filter', new Map(), 'a', {
+    replayTurn: 8, onReplay: async turn => { turns.push(turn) }
+  })
+  tail.controls.apply()
+  const replay = tail.row.panel.children[3]
+  assert.equal(replay.textContent, '重新生成本轮')
+  assert.match(replay.title, /原样重发本轮请求/)
+  assert.equal(replay.hidden, false)
+  await replay.onclick()
+  assert.deepEqual(turns, [8])
+
+  const other = setup('Provider finish_reason: content_filter', new Map(), 'a', {
+    replayTurn: 7, onReplay: async () => { throw new Error('不应被调用') }
+  })
+  other.controls.apply()
+  assert.equal(other.row.panel.children[3].hidden, true, '只有仍拥有尾部的失败回合提供重放')
+
+  const missing = setup('Provider finish_reason: content_filter')
+  missing.controls.apply()
+  assert.equal(missing.row.panel.children[3].hidden, true, '没有重放回调时不显示按钮')
+})
+
+test('重放进行中禁用按钮，失败经 onError 上报后仍可重试', async () => {
+  let failing = true
+  const errors = []
+  const { row, controls } = setup('Provider finish_reason: content_filter', new Map(), 'a', {
+    replayTurn: 8, onError: error => errors.push(error.message),
+    onReplay: async () => { if (failing) throw new Error('正在生成，请先停止后再重新生成') }
+  })
+  controls.apply()
+  const replay = row.panel.children[3]
+  const pending = replay.onclick()
+  assert.equal(replay.disabled, true)
+  await pending
+  assert.equal(replay.disabled, false)
+  assert.deepEqual(errors, ['正在生成，请先停止后再重新生成'])
+  failing = false
+  await replay.onclick()
+  assert.deepEqual(errors, ['正在生成，请先停止后再重新生成'])
+  assert.equal(replay.disabled, false)
+})

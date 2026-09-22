@@ -1,5 +1,11 @@
 // Presentation only: keep host-owned error nodes and append-only history intact.
 const turnErrorControlOwners = new WeakMap();
+function turnErrorRowTurn(row) {
+    const direct = row.getAttribute('data-chat-turn');
+    if (direct && /^\d+$/.test(direct)) return Number(direct);
+    const match = /(\d+)$/.exec(row.getAttribute('data-chat-flow-key') || '');
+    return match ? Number(match[1]) : NaN;
+}
 function createTurnErrorControls(root, options) {
     turnErrorControlOwners.get(root)?.dispose();
     let disposed = false;
@@ -31,13 +37,26 @@ function createTurnErrorControls(root, options) {
                 const panel = root.ownerDocument.createElement('div');
                 panel.className = 'dsh-tavern-error-controls';
                 const label = root.ownerDocument.createElement('span');
+                const replay = root.ownerDocument.createElement('button');
                 const details = root.ownerDocument.createElement('button');
                 const toggle = root.ownerDocument.createElement('button');
-                details.type = toggle.type = 'button';
-                panel.append(label, details, toggle);
-                entry = { panel, label, details, toggle, display: row.style.display, expanded: false };
+                replay.className = 'dsh-tavern-error-replay';
+                replay.type = details.type = toggle.type = 'button';
+                // Appended last: hosts and smoke checks address the first two
+                // controls positionally, and the replay action is tail-only.
+                panel.append(label, details, toggle, replay);
+                entry = { panel, label, replay, details, toggle, display: row.style.display, expanded: false };
                 owned.set(row, entry);
                 details.onclick = function () { entry.expanded = !entry.expanded; apply(); };
+                // One click removes the interrupted reply and replays the same
+                // request, so the provider reuses the cached prompt prefix.
+                replay.onclick = function () {
+                    if (disposed || replay.disabled || typeof options.onReplay !== 'function') return;
+                    replay.disabled = true;
+                    return Promise.resolve().then(function () { return options.onReplay(turnErrorRowTurn(row)); })
+                        .catch(function (error) { if (options.onError) options.onError(error); })
+                        .finally(function () { replay.disabled = false; });
+                };
                 toggle.onclick = function () {
                     const dismiss = !hidden.has(id);
                     function commit() {
@@ -70,6 +89,15 @@ function createTurnErrorControls(root, options) {
             if (entry.details.textContent !== detailText) entry.details.textContent = detailText;
             const toggleText = dismissed ? '恢复错误提示' : '隐藏此错误';
             if (entry.toggle.textContent !== toggleText) entry.toggle.textContent = toggleText;
+            // Replaying is only meaningful for the failure still owning the tail.
+            const replayable = typeof options.onReplay === 'function' &&
+                Number.isSafeInteger(Number(options.replayTurn)) &&
+                turnErrorRowTurn(row) === Number(options.replayTurn);
+            if (entry.replay.hidden !== !replayable) entry.replay.hidden = !replayable;
+            const replayText = '重新生成本轮';
+            if (entry.replay.textContent !== replayText) entry.replay.textContent = replayText;
+            const replayTitle = '移除被中断的回复，并原样重发本轮请求（复用模型缓存）';
+            if (entry.replay.title !== replayTitle) entry.replay.title = replayTitle;
         }
     }
     const controls = { apply, dispose() {

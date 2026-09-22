@@ -322,7 +322,9 @@ test('后台结算期间禁用候选项按钮，完成后自动恢复', () => {
   assert.match(action, /useTavernCoordination\(props\.sessionId/)
   assert.match(action, /disabled:.*activity\.busy/s)
 	assert.match(action, /settlementActive = activity\.role === "settlement"/)
-	assert.match(action, /disabled: frontRunning \|\| \(activity\.busy && !settlementActive\) \|\| regenBusy/)
+	assert.match(action, /disabled: frontRunning \|\| \(!canReplayFailed && activity\.busy && !settlementActive\) \|\| regenBusy \|\| replayBusy/)
+	// 失败尾部占用同一个入口做一键重放，不再打开意见面板。
+	assert.match(action, /canReplayFailed \? "重新生成本轮" : "重新生成正文"/)
   // Rollback busy/retry behavior is exercised by the real component in rollback-action.test.mjs.
   assert.match(clientSource, /"后台结算中…"/)
   assert.match(action, /props\.refreshSessions\(\)/)
@@ -368,7 +370,7 @@ test('正文重新生成合并为一个入口，空意见和有意见复用同�
 
 	assert.match(action, /"重新生成正文"/)
 	assert.doesNotMatch(action, /"一键重新生成正文"|"带意见重新生成正文"/)
-	assert.match(action, /onClick: openRegeneration/)
+	assert.match(action, /onClick: canReplayFailed \? replayFailed : openRegeneration/)
 	assert.match(panel, /submitBodyRegeneration\(props\.sessionId, panel, guide\)/)
 	assert.match(shared, /rpc\("regenBody", \{ guidance:/)
 	assert.match(shared, /applyBodyRegenerationResult\(\{ liveTavernView:/)
