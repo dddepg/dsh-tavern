@@ -175,6 +175,26 @@ test('初始化失败后重试复用已创建 Session', async () => {
   assert.equal(calls.filter(item => item.startsWith('connect:')).length, 1)
 })
 
+test('列表同步超时后丢弃未完成 attempt，下次新建 Session', async () => {
+  let connects = 0
+  const { calls, module } = harness({
+    connectWorkspace: async function () {
+      connects += 1
+      return 'session-' + connects
+    },
+    waitForSession: async function (sessionId) {
+      calls.push('wait:' + sessionId)
+      if (sessionId === 'session-1') throw Object.assign(new Error('DSH Session 列表同步超时，请刷新页面后重试：' + sessionId), { phase: '等待 DSH Session 就绪' })
+    }
+  })
+  const request = { kind: 'play', targetMode: 'story' }
+  await assert.rejects(module.start(request), /列表同步超时/)
+  await module.start(request)
+  assert.equal(connects, 2)
+  assert.ok(calls.includes('wait:session-2'))
+  assert.equal(calls.filter(item => item.startsWith('wait:session-1')).length, 1)
+})
+
 
 test('刷新页面后可复用失败 Session，打开失败不重复初始化，成功后下次新建', async () => {
   const values = new Map()
