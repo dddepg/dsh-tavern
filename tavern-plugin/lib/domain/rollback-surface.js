@@ -28,12 +28,27 @@ function contentText(value) {
 }
 
 // The inputs a turn may legitimately start from: a native user message or the
-// plugin-injected input of a replay/regeneration attempt.
+// plugin-injected input of a replay/regeneration attempt. The plugin branch only
+// has to recognise inputs already recorded by older builds.
 function isTurnInputSource(source) {
   const value = object(source)
   if (!value) return false
   if (value.kind === 'user') return true
   return value.kind === 'plugin' && (value.plugin === 'dsh-tavern-regen' || value.plugin === 'dsh-tavern-replay')
+}
+
+// The host chat UI turns a user/message into an input row only when its source
+// kind is 'user'; every other kind is classified as a context node. A replay
+// therefore has to resend the input as the player's own message, otherwise the
+// text disappears from the transcript while the suppressed failure keeps it
+// hidden. The original request identity is kept so provider prefix reuse and
+// failure diagnostics stay continuous.
+function replayInputSource(source) {
+  const value = object(source) || {}
+  const next = { kind: 'user' }
+  if (typeof value.rpcId === 'string' && value.rpcId.trim() !== '') next.rpcId = value.rpcId.trim()
+  if (typeof value.clientTimeZone === 'string' && value.clientTimeZone.trim() !== '') next.clientTimeZone = value.clientTimeZone
+  return next
 }
 
 function modelSourceOf(event) {
@@ -251,7 +266,7 @@ export function replayableFailedTurn(input) {
     if (!isTurnInputSource(event.data && event.data.source)) continue
     const userText = contentText(event.data)
     if (userText === '') continue
-    return Object.freeze({ turn, startSeq, endSeq, userText })
+    return Object.freeze({ turn, startSeq, endSeq, userText, source: replayInputSource(event.data && event.data.source) })
   }
   return null
 }

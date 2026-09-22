@@ -43,9 +43,12 @@ DSH Agent 的 Session 是只追加轨迹，不采用 SillyTavern 的多 Swipe �
 2. 从只追加事件历史里取回该轮的原始玩家输入。失败清理墓碑会替换原生节点，但原始 `user/message` 仍在历史中，`sourceEventSeqs` 只用于定位，不承担输入事实。
 3. 复用失败清理：清理钩子已在失败时执行过，重复调用对已清理回合是无操作；钩子缺失时在这里补清。无论哪种情况，模型可见上下文都不再包含被中断的内容。
 4. 把该轮计入 `suppressedDshTurns`，客户端据此隐藏残留正文与错误行。
-5. 以 `dsh-tavern-replay` 的回合输入重发同一文本，走正常前台 prepare/finalize，提交一条新的 Round 并正常排队状态结算。
+5. 以该轮原始输入的**用户身份**重发同一文本（沿用原 `rpcId` / `clientTimeZone`），走正常前台 prepare/finalize，提交一条新的 Round 并正常排队状态结算。
+6. 重发必须保持 `source.kind === 'user'`。宿主 chat UI 只把 `kind` 为 `user` 的 `user/message` 渲染成输入行，其余一律归类为 context 节点（`dsh-client-ui-chat` 的 `messageDefinition.start`）。早期实现用 `{kind:'plugin', plugin:'dsh-tavern-replay'}` 标记来源，结果是：失败轮次的输入被 `suppressedDshTurns` 隐藏、重发的副本又只渲染成不可见的上下文节点——玩家文字在对话里彻底消失（实际 bug）。
 
 因为失败时被中断的节点已经离开模型消息面，重放请求的前缀与失败前完全一致；只有末尾“本轮注入”需要按当前状态重新渲染，因此绝大部分 prompt 仍可命中供应商缓存。重放不需要意见输入：它恢复的是同一个请求，不是一次改写。
+
+宿主在 v2.1 起把 `regenerate` / `regenBody` / `rollbackTurn` / `rollbackChat` 四个入口都置于会话补丁握手之后；重放同样会改动消息面，因此入口也检查 `sessionPatch.replacementAllowed()`，未握手时直接拒绝。
 
 ### 失败尾部重放验收
 
