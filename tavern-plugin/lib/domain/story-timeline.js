@@ -503,6 +503,27 @@ export function createStoryTimeline(options = {}) {
       chat.timeline.revision++
       chat.timeline.updatedAt = now()
       chat.candidates = null
+      // Prose is authoritative. The previous settlement must not overrule the
+      // edited scene in foreground requests or in the resident background Agent.
+      chat.posture = ''
+      chat.lastSettle = null
+      chat.settleStatus = 'idle'
+      chat.settleError = null
+      const checkpoint = chat.timeline.checkpoints.at(-1)
+      for (const [role, participant] of Object.entries(chat.timeline.participants)) {
+        if (!persistentParticipant(participant.lifetime)) continue
+        const previous = object(checkpoint?.participants?.[role])
+        const source = participantCheckpointSource(previous)
+        const needsSession = participant.requiresNewSessionOnRewind === true || !str(participant.sessionId)
+        const boundary = source?.sessionId === participant.sessionId ? source.boundary : -1
+        chat.timeline.participants[role] = {
+          ...participant, status: needsSession ? 'needs-session' : 'needs-rewind',
+          sessionId: needsSession ? '' : participant.sessionId,
+          boundary: needsSession ? null : boundary, rewindTo: needsSession ? null : boundary,
+          syncedRevision: null, updatedAt: now()
+        }
+      }
+      chat.candidateAgent = null
       value = { status: 'edited', revision: chat.timeline.revision }
     }
     else if (intent.kind === 'body.begin') value = beginBody(chat, intent)
