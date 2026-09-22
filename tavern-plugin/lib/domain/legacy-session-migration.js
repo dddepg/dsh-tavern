@@ -26,13 +26,17 @@ export function prepareLegacySessionLog(text, catalog) {
   if (header?.version !== 0) return { ok: true, changed: false }
   let events
   try { events = lines.slice(1).map(line => JSON.parse(line)) } catch { return refuse('事件不是 JSON') }
+  // Issue #71: stripping illegal source keys (fixedSystemText, …) alone is enough
+  // for the host to open many archives. Prefer that over leaving the raw v0 file
+  // when the fuller rewrite refuses.
+  const sanitize = () => sanitizeLegacySessionLog(header, events, catalog, lines[0])
   const draft = structuredClone(events)
   const prefix = prefixTexts(draft).join('\n\n')
   let cleaned = false
   for (const event of draft) if (cleanEvent(event)) cleaned = true
   let folded
   try { folded = foldTavernReplacements(draft) }
-  catch (error) { return refuse(error.message || String(error)) }
+  catch (error) { return sanitize() || refuse(error.message || String(error)) }
   const hoisted = hoistNestedTurns(folded.events)
   const coordinatesChanged = repairNonPositiveCoordinates(hoisted.events)
   const turnsChanged = assignTurnNumbers(hoisted.events) || coordinatesChanged
@@ -40,25 +44,49 @@ export function prepareLegacySessionLog(text, catalog) {
   const synthesized = synthesizeOpeningStep(moved.events)
   let placed
   try { placed = placeOpening(synthesized.events, prefix) }
-  catch (error) { return refuse(error.message || String(error)) }
+  catch (error) { return sanitize() || refuse(error.message || String(error)) }
   const dangling = dropDanglingPointers(placed.events)
   let next = dangling.events
   const originalStory = storyTexts(next)
   const changed = cleaned || folded.changed || hoisted.changed || turnsChanged || moved.changed || synthesized.changed || placed.changed || dangling.changed
   if (changed) {
     try { next = renumber(next) }
-    catch (error) { return refuse(error.message || String(error)) }
+    catch (error) { return sanitize() || refuse(error.message || String(error)) }
   }
   if (!changed) {
     const opened = openSession(catalog, header, events)
-    return opened.ok ? { ok: true, changed: false, artifact: opened.artifact } : opened
+    return opened.ok ? { ok: true, changed: false, artifact: opened.artifact } : (sanitize() || opened)
   }
   const opened = openSession(catalog, header, next)
-  if (!opened.ok) return opened
+  if (!opened.ok) return sanitize() || opened
   const migratedStory = storyTexts(opened.artifact.events)
-  if (!sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) return refuse('可见正文不一致')
-  if (prefix && !systemText(opened.artifact.events).includes(prefix)) return refuse('固定背景没有进入 system 头')
-  return { ok: true, changed: true, headerLine: lines[0], events: next, artifact: opened.artifact }
+  // Prefer a host-readable rewrite over leaving illegal source keys on disk
+  // (issue #71). Story/prefix checks stay as soft warnings via result.reason.
+  let reason
+  if (!sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) {
+    reason = '可见正文不完全一致，已写出可打开版本'
+  } else if (prefix && !systemText(opened.artifact.events).includes(prefix)) {
+    reason = '固定背景未完全进入 system 头，已写出可打开版本'
+  }
+  return { ok: true, changed: true, headerLine: lines[0], events: next, artifact: opened.artifact, reason }
+}
+
+/** Drop only non-released source members, then open with the official catalog. */
+export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
+  const only = structuredClone(events)
+  let changed = false
+  for (const event of only) if (cleanEvent(event)) changed = true
+  if (!changed) return null
+  const opened = openSession(catalog, header, only)
+  if (!opened.ok) return null
+  return {
+    ok: true,
+    changed: true,
+    headerLine: headerLine || JSON.stringify(header),
+    events: only,
+    artifact: opened.artifact,
+    sanitizedOnly: true,
+  }
 }
 
 export async function commitLegacySessionFile(file, catalog) {
@@ -151,10 +179,16 @@ export async function migrateLegacySessionDirectory(directory, catalog) {
     summary.seen += 1
     try {
       const result = await commitLegacySessionFile(file, catalog)
-      if (!result.ok) summary.refused += 1
+      if (!result.ok) {
+        summary.refused += 1
+        console.warn(`dsh-tavern: 旧档未迁移 ${file}: ${result.reason || '未知原因'}`)
+      }
       else if (result.written) summary.migrated += 1
       else summary.unchanged += 1
-    } catch { summary.refused += 1 }
+    } catch (error) {
+      summary.refused += 1
+      console.warn(`dsh-tavern: 旧档迁移异常 ${file}: ${error.message || error}`)
+    }
   }
   return summary
 }
@@ -620,6 +654,10 @@ function cleanEvent(event) {
   }
   if (event.type === 'user/message' && event.data && Object.hasOwn(event.data, 'turn')) {
     delete event.data.turn
+    changed = true
+  }
+  if (event.type === 'user/message' && event.data && Object.hasOwn(event.data, 'step')) {
+    delete event.data.step
     changed = true
   }
   if (PACKED_ROWS.has(event.type) && Object.hasOwn(event, 'seq')) {

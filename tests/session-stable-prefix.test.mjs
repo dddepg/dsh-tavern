@@ -19,6 +19,8 @@ test('固定背景快照只写一次，正文不进入可压缩历史，恢复�
   let session = Session.create('prefix-test')
   const prefix = await ensureSessionStablePrefix(session, text, storage)
   assert.equal(prefix.message.source.form, 'snapshot')
+  assert.equal(Object.hasOwn(prefix.message.source, 'fixedSystemText'), false)
+  assert.equal(Object.hasOwn(prefix.message.source, 'cardContextRevision'), false)
   assert.deepEqual(prefix.message.source.sections.map(section => section.name), ['tavern:character-card', 'tavern:constant-worldbook'])
   assert.equal(sessionEvents(session).find(e => e.data?.id === prefix.id).type, 'user/message')
   assert.equal(sessionEvents(session)[0].surfaceOp, 'append')
@@ -107,6 +109,9 @@ test('手动更新固定背景保留 200 轮历史，恢复及再次请求使用
   assert.deepEqual(sessionEvents(session).slice(0, history.length), history)
   assert.equal(readSessionStablePrefix(session).text, updated)
   assert.deepEqual(sessionEvents(session).at(-1).data.content, [])
+  assert.equal(Object.hasOwn(sessionEvents(session).at(-1).data.source, 'fixedSystemText'), false)
+  assert.equal(Object.hasOwn(sessionEvents(session).at(-1).data.source, 'cardContextRevision'), false)
+  assert.match(sessionEvents(session).at(-1).data.id, /:revision-1$/)
   const count = sessionEvents(session).length
   await ensureSessionStablePrefix(session, '未经确认的其他修改', undefined, 1)
   assert.equal(sessionEvents(session).length, count)

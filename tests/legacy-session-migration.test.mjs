@@ -161,3 +161,47 @@ test('修复已存在的错误 v3 头，保留备份并可重复执行', {skip:!
  assert.deepEqual(await readFile(file+'.bak-tavern-header'),original)
  assert.equal(await repairMigratedCurrentHeader(file,catalog),false)
 })
+
+test('issue #71: 含 fixedSystemText 的真实旧档清理后可被宿主打开并落盘', { skip: !hostReady || !archiveReady }, async t => {
+  const require = createRequire(path.join(hostRoot, 'dsh-session/package.json'))
+  const { sessionFormatCatalog: catalog } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
+  const sources = (await walk(archiveRoot)).filter(file => path.basename(file).includes('session.jsonl.zstd'))
+  let sample
+  for (const file of sources) {
+    const candidate = readable(file + '.bak-tavern-premigrate') ? file + '.bak-tavern-premigrate' : file
+    let text
+    try { text = decodeSessionLog(await readFile(candidate)) } catch { continue }
+    if (!text.includes('"fixedSystemText"')) continue
+    sample = { file: candidate, text }
+    break
+  }
+  assert.ok(sample, '本地没有含 fixedSystemText 的旧档样本')
+  const lines = sample.text.split('\n').filter(Boolean)
+  const header = JSON.parse(lines[0])
+  const events = lines.slice(1).map(line => JSON.parse(line))
+  assert.throws(() => {
+    const dirty = catalog.createRestore(header, { recovery: 'recoverable', validation: 'current' })
+    for (const event of structuredClone(events)) dirty.decodeRow(event)
+    dirty.finish()
+  }, /fixedSystemText/)
+
+  const prepared = prepareLegacySessionLog(sample.text, catalog)
+  assert.equal(prepared.ok, true)
+  assert.equal(prepared.changed, true)
+  assert.equal(prepared.artifact.header.version, 3)
+  assert.equal(JSON.stringify(prepared.events).includes('fixedSystemText'), false)
+
+  const root = await mkdtemp(path.join(tmpdir(), 'tavern-fixed-system-text-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const dir = path.join(root, 'session-fixed-system-text')
+  await mkdir(dir, { recursive: true })
+  const file = path.join(dir, 'session.jsonl.zstd')
+  await writeFile(file, await readFile(sample.file))
+  const summary = await migrateLegacySessionDirectory(root, catalog)
+  assert.equal(summary.migrated, 1)
+  assert.equal(readable(path.join(dir, 'session.v3.jsonl.zstd')), true)
+  assert.equal(JSON.stringify(decodeSessionLog(await readFile(file))).includes('fixedSystemText'), false)
+  const again = prepareLegacySessionLog(decodeSessionLog(await readFile(file)), catalog)
+  assert.equal(again.ok, true)
+  assert.equal(again.changed, false)
+})
