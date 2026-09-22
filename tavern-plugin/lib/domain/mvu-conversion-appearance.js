@@ -15,6 +15,15 @@ export function appearanceSources(data) {
 // Read source bytes ourselves. Model input is a source pointer plus data bindings,
 // never a rewritten template. Unknown executable views must not silently lose skin.
 export function freezeMvuAppearance(data, plan) {
+  if (plan && Object.hasOwn(plan,'html')) {
+    if (appearanceSources(data).length) throw Error('原卡已有美化，不能用生成样式覆盖；请固化原视图，不接受模型重写 HTML')
+    if (Object.keys(plan).some(key=>!['html','bindings','collectionPath'].includes(key)) || typeof plan.html!=='string' || !plan.html.trim()) throw Error('生成美化只接受 html、bindings 和 collectionPath')
+    const frozen = freezeMvuAppearance({extensions:{regex_scripts:[{replaceString:plan.html}]}}, {
+      sourcePath:'/extensions/regex_scripts/0/replaceString',bindings:plan.bindings,...(plan.collectionPath?{collectionPath:plan.collectionPath}:{})
+    })
+    return {...frozen,sourcePath:null,generated:true}
+  }
+
   if (!plan || typeof plan !== 'object' || Object.keys(plan).some(k => !['sourcePath','bindings','collectionPath'].includes(k))) throw Error('美化方案只接受 sourcePath 和 bindings，不接受模型重写 HTML')
   const entry = appearanceSources(data).find(x => x.path === plan.sourcePath)
   if (!entry) throw Error('美化来源不存在，请从 inspect.appearanceSources 选择')

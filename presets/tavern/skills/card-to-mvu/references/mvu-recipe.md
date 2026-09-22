@@ -24,7 +24,7 @@
 {"action":"freezeAppearance","sourcePath":"cards/原卡.json","sourceRevision":"inspect 返回的版本号","appearance":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
 ```
 
-saveDefinition 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。下面是无原美化的默认面板例子。
+saveDefinition 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。无原美化时优先使用下文的设计工具；默认面板作为设计失败后的回退。
 
 apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 preview。下面的版本号、路径和短片段仅为示例，必须来自 inspect 底稿。复制整卡、清理和安装 MVU 都由工具完成：
 
@@ -84,3 +84,21 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 保持一套清晰的变量约束。可扩展集合需要完整模板；已有 Zod 脚本的约束仍需单独核对。后台操作路径相对于 stat_data，例如 `/玩家/位置`，不是 `/stat_data/玩家/位置`。原卡不存在的数值、公式和状态机制不新增。
 
 收尾以 apply.validation 为准，成功后直接报告实际差异和 pending；不重复 validate，不为未授权的真实游玩扩查全局资源。source/target 是生效字段，磁盘包装里的旧镜像不作为转换失败依据。
+
+
+## 无原美化：设计并保存
+
+调用 `tavern_design_mvu_appearance`（独立工具，不是 convert 的 action）：
+
+```json
+{
+  "sourcePath": "cards/原卡.json",
+  "sourceRevision": "inspect 返回的版本号",
+  "initialState": {"玩家": {"位置": "门口", "体力": 80}},
+  "updateRules": "位置随实际移动更新；体力变化沿用原卡规则。",
+  "html": "<style>.status{padding:16px;background:#142338;color:#f4f7fb;border-radius:12px;overflow-wrap:anywhere}.status h3{margin:0 0 12px}</style><section class=\"status\"><h3>航行日志</h3><p>位置：$1</p><p>体力：$2</p></section>",
+  "bindings": [{"capture":1,"path":"/玩家/位置"},{"capture":2,"path":"/玩家/体力"}]
+}
+```
+
+字段和值仅作参数示例，实际必须来自原卡定义。多人重复面板使用 collectionPath，bindings.path 改为成员相对路径。整集合也可绑定为一个值，但工具会以 JSON 文本展示；正式设计优先逐字段排版。工具返回 definitionRevision 后，按前述 apply 示例装配，不重复传 HTML。新增或修改样式仍调用此工具，保留完整字段定义。

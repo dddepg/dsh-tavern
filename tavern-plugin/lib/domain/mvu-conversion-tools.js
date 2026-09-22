@@ -73,6 +73,25 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
     }
   }))
   tools.register(defineTool({
+    name: 'tavern_design_mvu_appearance',
+    description: '原卡没有美化时，为完整 MVU 定义设计人物卡风格的 HTML/CSS 面板并持久化。html 使用 $1/$2 文本占位，bindings 映射字段；多人指定 collectionPath 并使用相对成员路径。工具校验全部定义字段的展示覆盖，注入统一更新/新增/回退逻辑，返回 definitionRevision 供转换 apply 直接使用。有原美化时拒绝覆盖；不接受自定义 JavaScript、事件属性或嵌入文档。失败可修改设计重试，或用 saveDefinition 保存默认面板并报告原因。',
+    parameters: {
+      sourcePath:{type:'string',required:true},sourceRevision:{type:'string',required:true},
+      initialState:{type:'json',required:true},openingStates:{type:'json'},updateRules:{type:'string',required:true},
+      html:{type:'string',required:true,description:'与人物卡风格相符的 HTML/CSS，动态值仅放在文本节点的 $1、$2 等占位中；使用原生 details 折叠。'},
+      collectionPath:{type:'string',description:'重复渲染的集合路径；省略则绑定相对于整个初值。'},
+      bindings:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{capture:{type:'number',required:true},path:{type:'string',required:true}}}},
+      sourceFields:{type:'array',items:{type:'object',additionalProperties:false,properties:{path:{type:'string',required:true},offset:{type:'number',required:true},length:{type:'number',required:true},label:{type:'string'}}}},
+      fieldMappings:{type:'array',items:{type:'object',additionalProperties:false,properties:{sourceId:{type:'string',required:true},path:{type:'string',required:true}}}}
+    },
+    output,isConcurrencySafe:()=>false,
+    async execute(args,exec) {
+      await requireWorkbench(exec)
+      const {html,bindings,collectionPath,...definition}=args
+      return {report:await conversion.convert({...definition,action:'saveDefinition',appearance:{html,bindings,...(collectionPath?{collectionPath}:{})}})}
+    }
+  }))
+  tools.register(defineTool({
     name: 'tavern_validate_mvu_conversion',
     description: '只读验收专用工具生成的 MVU 副本：报告实际删除/保留条目、已识别旧渲染残留与方案外修改，从磁盘检查绑定、初值、后台分流、所有开场、面板唯一性与模型历史隔离，并在隔离 DOM 中模拟托管视图的变量更新/恢复。不会调用模型或执行原卡自定义脚本；报告明确列出未实测的真实结算和浏览器项目。',
     parameters: { path: { type: 'string', required: true, description: '转换后的 cards/... 副本路径' } },

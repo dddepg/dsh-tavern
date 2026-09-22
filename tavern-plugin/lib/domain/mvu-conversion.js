@@ -297,7 +297,7 @@ export function createMvuConversion({ resources }) {
         if (meta.appearance) {
           const frozen = freezeMvuAppearance(source.data,meta.appearance)
           const intact = isDeepStrictEqual(frozen,meta.frozenAppearance)
-          result.checks.push({name:'appearanceSource',status:intact?'passed':'failed',detail:intact?'固化视图与原卡来源一致':'固化视图偏离来源'})
+          result.checks.push({name:'appearanceSource',status:intact?'passed':'failed',detail:intact?(frozen.generated?'生成视图与保存设计一致，原卡无美化':'固化视图与原卡来源一致'):'固化视图偏离来源'})
           result.valid &&= intact
         }
         if (meta.definition) {

@@ -5,7 +5,7 @@ description: "把正文内输出状态栏的 SillyTavern 人物卡转换为 DSH 
 
 # 人物卡转 MVU
 
-目标：前台写剧情，后台根据正文事实更新变量，右侧保留原美化的面板读取最新状态。工具从磁盘复制原卡，在副本上删除旧实现、增加 MVU，核验后整体保存。模型先完整提取字段并用 saveDefinition 保存，再提交定义版本和清理操作。工具负责从已保存定义装配成品。使用 `tavern_convert_to_mvu` 装配，使用 `tavern_validate_mvu_conversion` 验收；无需手写初值条目、正则、HTML、订阅代码或世界书绑定。
+目标：前台写剧情，后台根据正文事实更新变量，右侧保留原美化的面板读取最新状态。工具从磁盘复制原卡，在副本上删除旧实现、增加 MVU，核验后整体保存。模型先完整提取字段并用 saveDefinition 保存，再提交定义版本和清理操作。工具负责从已保存定义装配成品。无原美化时使用 `tavern_design_mvu_appearance` 设计并保存样式；使用 `tavern_convert_to_mvu` 装配，使用 `tavern_validate_mvu_conversion` 验收；无需手写初值条目、正则、HTML、订阅代码或世界书绑定。
 
 ## 1. 读取转换底稿
 
@@ -25,9 +25,13 @@ source/target 都是工具解析后的规范化生效字段；世界书为实际
 
 inspect.stateInventory 自动列出原美化标签协议在所有开场中的字段、原值、来源范围和 ID。每项都须映射到独立的变量路径，工具直接复制原值；同一个开场的不同人物不能映射到同一位置。完整读取所有状态规则，自动清单未覆盖的文本字段，用 sourceFields 指定来源 path/offset/length，再 inspect 同参数取得 ID，纳入 fieldMappings。规则中的类型、更新条件与公式写入 updateRules；完整字段结构体现在 initialState 中。自动识别仅覆盖显式标签，不能据此声称所有自定义格式已经提取完整。
 
-openingStates 可提交按开场顺序排列的完整对象；省略时工具复制 initialState 作为各开场底稿，再按来源映射填入各自已有值。全部开场保留已定义结构。工具将各自完整初值写入开场的 initvar，官方 MVU 按所选开场初始化。多人物 appearance 必须指定 collectionPath，绑定相对成员字段，使后续新增人物自动显示；无原美化时才用默认面板。
+openingStates 可提交按开场顺序排列的完整对象；省略时工具复制 initialState 作为各开场底稿，再按来源映射填入各自已有值。全部开场保留已定义结构。工具将各自完整初值写入开场的 initvar，官方 MVU 按所选开场初始化。多人物 appearance 必须指定 collectionPath，绑定相对成员字段，使后续新增人物自动显示；无原美化时，按下一段设计适合人物卡的面板；默认面板作为失败后的回退。
 
-完成条件：逐项对照原卡确认无遗漏，saveDefinition 成功返回 definitionRevision。定义已经持久化，包含结构、类型、来源值、各开场初值、更新规则和展示配置；生成时只传版本号，不再转录。需要查看时用 read 的 scope=definition 和 definitionRevision。需要参数例子或已有 MVU 边界时，读取 [转换参数与边界](references/mvu-recipe.md)。原卡自定义脚本交互、Zod Schema 需分别适配。
+原卡没有美化时，调用 `tavern_design_mvu_appearance`，一次提交完整初值、各开场定义、更新规则、来源映射，以及 `html`、`bindings` 和可选 `collectionPath`。根据人物卡的时代、题材、氛围设计配色、字体层级、图标、分组和原生 details 折叠；兼顾窄屏、长文本和对比度。HTML/CSS 使用 `$1`、`$2` 文本占位，动态值和多人增删由工具绑定。所有已定义业务字段及集合模板字段都应有展示映射，排版不能成为删字段的理由。工具不接受自定义 JavaScript、事件属性或嵌入文档。
+
+设计工具会保存完整定义并返回 definitionRevision，后续 apply 直接引用，无需再抄写 HTML 或调用 saveDefinition。已有原美化时工具拒绝覆盖，继续走原视图固化。设计校验失败先按错误修正；确实无法完成时，用 saveDefinition 保存无 appearance 的默认面板，交付时说明回退原因。无论设计或回退，字段完整性验收相同。
+
+完成条件：逐项对照原卡确认无遗漏，saveDefinition 或设计工具成功返回 definitionRevision。定义已经持久化，包含结构、类型、来源值、各开场初值、更新规则和展示配置；生成时只传版本号，不再转录。需要查看时用 read 的 scope=definition 和 definitionRevision。需要参数例子或已有 MVU 边界时，读取 [转换参数与边界](references/mvu-recipe.md)。原卡自定义脚本交互、Zod Schema 需分别适配。
 
 ## 3. 精确清理原卡内容
 

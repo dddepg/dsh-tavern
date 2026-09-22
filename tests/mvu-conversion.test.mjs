@@ -156,7 +156,7 @@ test('展示配置按 JSON Pointer 处理转义，文本不能注入 HTML 或脚
 test('两个原生工具只允许卡片工作台调用',async()=>{
   const registered=new Map(),calls=[];let mode='story'
   registerMvuConversionTools({tools:{register:tool=>registered.set(tool.name,tool)},defineTool:tool=>tool,chatForSession:async()=>({mode}),conversion:{convert:async args=>{calls.push(args);return {ok:true}},verify:async()=>({valid:true})}})
-  assert.equal(registered.size,2)
+  assert.equal(registered.size,3)
   const cleanupSchema = registered.get('tavern_convert_to_mvu').parameters.cleanup.items.properties
   assert.notEqual(cleanupSchema.expected.required, true)
   assert.ok(cleanupSchema.op.enum.includes('replaceBlock'))

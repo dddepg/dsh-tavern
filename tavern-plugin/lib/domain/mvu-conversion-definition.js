@@ -90,6 +90,19 @@ export function createDefinition(source,args) {
     } else visible=!args.displayFields?.length || args.displayFields.some(field=>mapping.path===field.path || mapping.path.startsWith(field.path+'/'))
     if(!visible) throw Error('原状态字段没有展示映射: '+mapping.path)
   }
+  if (args.appearance?.html !== undefined) {
+    for (const state of states) for (const field of leaves(state)) {
+      const keys=pointerKeys(field.path)
+      const prefix=args.appearance.collectionPath ? pointerKeys(args.appearance.collectionPath) : null
+      const template=prefix && prefix.every((key,i)=>keys[i]===key) && keys[prefix.length]==='$meta' && keys[prefix.length+1]==='template'
+      if(!template && keys.some(key=>key.startsWith('$') || key.startsWith('__'))) continue
+      const relative=template ? keys.slice(prefix.length+2) : prefix && prefix.every((key,i)=>keys[i]===key) && keys.length>prefix.length ? keys.slice(prefix.length+1) : prefix ? null : keys
+      if(!relative || !args.appearance.bindings.some(binding=>{
+        const bound=pointerKeys(binding.path)
+        return bound.length<=relative.length && bound.every((key,i)=>relative[i]===key)
+      })) throw Error('生成美化遗漏已定义字段: '+field.path)
+    }
+  }
   if (mappings.some(m=>!inventory.some(i=>i.id===m.sourceId))) throw Error('fieldMappings 包含未知来源字段')
   return {version:1,sourcePath:source.sourcePath,sourceRevision:source.revision,
     initialState:states[0],openingStates:states,updateRules:args.updateRules,displayFields:args.displayFields || [],
