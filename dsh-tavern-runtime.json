@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "410866e5985cf74b5eba1a3db28990769dbba102",
-  "releaseSequence": 330,
+  "revision": "b1d3a7263be86d009eca3408b8ec062cecc373fc",
+  "releaseSequence": 331,
   "version": "2.1.0",
   "files": [
     {
@@ -836,8 +836,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/reply-presentation.js",
-      "sha256": "214455e2ef1ac53e20459e3d1c32529c06a3f387a5710df94b652361671f1854",
-      "size": 18298
+      "sha256": "bcc4e9d8f88f647565f5245ed4b4cb570da671f17dbc38bfb54dd9dddb11a0c2",
+      "size": 18402
     },
     {
       "path": "tavern-plugin/lib/domain/request-performance.js",
@@ -1278,6 +1278,11 @@
       "path": "tavern-plugin/lib/domain/template-state-patch.js",
       "sha256": "cdab99cd4d95a6d659e201968bd847336d26553acb5cdacb74cee21b24231a87",
       "size": 2343
+    },
+    {
+      "path": "tavern-plugin/lib/domain/template-variable-display.js",
+      "sha256": "44ab5aedca199b636e2e6dbf34fc69e57edb953d6326d18414d13ccb73dd7b33",
+      "size": 1940
     },
     {
       "path": "tavern-plugin/lib/domain/turn-orchestration.js",
