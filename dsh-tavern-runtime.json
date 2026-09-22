@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "b19d6dd830f797c7512643378c04363d935d6f5c",
-  "releaseSequence": 326,
+  "revision": "ef72869feb89ce9392e881082bae727045d40da8",
+  "releaseSequence": 327,
   "version": "2.1.0",
   "files": [
     {
@@ -661,8 +661,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/legacy-session-migration.js",
-      "sha256": "b8fd7194f7055f039489186fe250b31d845f89a24467213a73bddad4b007f30c",
-      "size": 33223
+      "sha256": "f2469068b302623fe53aee960174a7a396b36fbcbb6b4af20b8321dd6b84ae84",
+      "size": 34775
     },
     {
       "path": "tavern-plugin/lib/domain/manual-character-design.js",
@@ -1066,8 +1066,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/session-stable-prefix.js",
-      "sha256": "e7a22749946f83f2146f181b7d851c0175c78f749ad52cc0f0cae8da665f8d2c",
-      "size": 7622
+      "sha256": "5cf0ac0130fe4e34ef172c40a38c4309a9c8c21f1f16576190b6406cb2aa070e",
+      "size": 8581
     },
     {
       "path": "tavern-plugin/lib/domain/session-surface-mutations.js",
