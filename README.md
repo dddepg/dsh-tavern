@@ -72,9 +72,9 @@
 
 ### 纯小白安装（仅限 Windows x64）
 
-v2.1 的 Windows 安装请使用 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**（内置 DSH `0.1.5-rc.2`），再按下方「DSH Desktop」一节安装酒馆。
+**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)**
 
-已发布的 **[Windows 一键安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.5-x64-Setup-UpdateFix.exe)** 绑定 Desktop 2.0.5，不能用来安装本版。旧安装的修复、重装仍可用这个包；首次启动需要联网，已有数据会保留。
+下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13；已有安装和数据会保留，后续可在酒馆界面中更新。
 
 首次安装可选择文件夹，例如 `D:\Apps\DSH-Tavern`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 `如何启动.txt` 会列出程序及数据位置。
 
@@ -167,7 +167,7 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 ### 手机远程访问（可选插件）
 
-**版本提醒：酒馆 v2.1 适配 DSH `0.1.5-rc.2`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
+**版本提醒：酒馆当前适配 DSH `0.1.5-rc.2`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
 
 酒馆运行在电脑或服务器上，手机通过浏览器访问，可按场景选择：
 

@@ -8,8 +8,8 @@ $ErrorActionPreference = 'Stop'
 $Payload = (Resolve-Path -LiteralPath $Payload).Path
 $SevenZip = (Resolve-Path -LiteralPath $SevenZip).Path
 $Output = [IO.Path]::GetFullPath($Output)
-# This launcher deliberately reuses the tested Desktop 2.0.5 online payload.
-$expected = '5e2e365397638d61f202753b5dbcee1d9dbd377a5a9d17c160535891f187decd'
+# This launcher embeds the Desktop 2.0.13 online payload built by build-payload.ps1.
+$expected = 'a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4'
 if ((Get-FileHash -LiteralPath $Payload -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
     throw 'Unexpected payload. Review and update the launcher runtime version before changing the payload.'
 }

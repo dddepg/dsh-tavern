@@ -89,10 +89,10 @@ export const installation = `
 
 ## 纯小白一键安装（仅 Windows x64）
 
-[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v1.9/DSH-Tavern-Desktop-2.0.5-x64-Portable.exe)
+[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)
 
 1. 下载后双击运行，首次启动保持联网。
-2. v2.1 的桌面宿主是 **DSH Desktop 2.0.13**（内置 DSH {{dshVersion}}）。上面这个已发布安装包绑定 Desktop 2.0.5，不能用来安装本版。请改用下方的 DSH Desktop 安装。首次启动保持联网，无需另装 Node.js。
+2. 安装器自动准备 Desktop 2.0.13 和当前兼容的最新版酒馆，无需另装 Node.js 或 DSH Desktop。
 3. 打开酒馆后，在“设置 → 模型”配置模型，再导入人物卡。
 
 已有安装和数据会保留，之后可在酒馆界面检查更新。这是在线安装程序，不是无需网络的离线整包。

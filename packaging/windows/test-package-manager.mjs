@@ -9,7 +9,9 @@ const runtime = path.resolve(runtimeInput), root = path.resolve(testInput)
 assert.equal(fs.existsSync(root), false, 'Use a new test directory')
 fs.mkdirSync(root, {recursive:true})
 fs.writeFileSync(path.join(root,'package.json'),'{"name":"desktop-update-probe","private":true}')
-const entry=path.join(runtime,'resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs')
+const entry=['resources/app/node_modules/pnpm/bin/pnpm.mjs','resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs']
+  .map(item=>path.join(runtime,item)).find(fs.existsSync)
+if(!entry)throw Error('Desktop pnpm entry not found')
 for(const invalid of [false,true]) {
  const args=[entry,'install','--dir',root,'--lockfile=false',...(invalid?['--invalid-update-probe']:[])]
  const result=spawnSync(path.join(runtime,'DSH Desktop.exe'),args,{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',DSH_HOME:path.join(root,'home'),CI:'true',TEMP:root,TMP:root},windowsHide:true,encoding:'utf8',timeout:180000})

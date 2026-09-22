@@ -19,6 +19,7 @@ export async function prepareDesktopPackageManager(options = {}) {
   if (!home || !path.isAbsolute(home)) throw new Error('Desktop 包管理需要明确的 DSH_HOME')
   const executable = env.DSH_DESKTOP_APP_EXECUTABLE || process.execPath
   const candidates = [
+    path.join(path.dirname(executable), 'resources/app/node_modules/pnpm/bin/pnpm.mjs'),
     path.join(path.dirname(executable), 'resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs'),
     ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [path.resolve(path.dirname(env.DSH_DESKTOP_DSH_BOOTSTRAP), '../node_modules/pnpm/bin/pnpm.mjs')] : []),
   ]

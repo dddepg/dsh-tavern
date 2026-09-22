@@ -54,7 +54,12 @@ function resolveHostAnchor({ dsh, host = 'cli', env = process.env, execPath = pr
       const resources = platform === 'darwin'
         ? path.resolve(path.dirname(executable), '../Resources')
         : path.join(path.dirname(executable), 'resources')
-      anchor = path.join(resources, 'app.asar.unpacked', 'host-dependencies.cjs')
+      const unpacked = [
+        path.join(resources, 'app', 'package.json'),
+        path.join(resources, 'app.asar.unpacked', 'package.json'),
+        path.join(resources, 'app.asar.unpacked', 'host-dependencies.cjs'),
+      ].find(existsSync)
+      anchor = unpacked || path.join(resources, 'app', 'package.json')
     }
   } else {
     const commandFile = resolveCommandFile(dsh, env, platform)

@@ -4,9 +4,7 @@
 
 ### Windows 一键安装版
 
-v2.1 的 Windows 桌面宿主是 **Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`）。请先安装这个 Desktop，再按下文「DSH Desktop 桌面版」安装酒馆。
-
-旧的一键包 `DSH-Tavern-Desktop-2.0.5-x64-Setup-UpdateFix.exe` 绑定 Desktop 2.0.5，不能用来安装本版。已有旧安装需要修复入口或重装时，仍可下载首页这个包：双击后选择安装文件夹，再点击「安装并启动」。首次需要联网；无需另外安装 Node.js。
+下载首页提供的 `DSH-Tavern-Desktop-2.0.13-x64-Setup.exe`，双击后选择安装文件夹，再点击「安装并启动」。首次需要联网下载兼容的最新版酒馆；无需另外安装 Node.js 或 DSH Desktop。
 
 - **以后启动：** 双击桌面或开始菜单中的「DSH Tavern」。也可以在安装目录双击 `DSH Tavern.exe`；不要直接运行 `runtime-…` 里的 `DSH Desktop.exe`，内部程序需要外层启动器提供正确的数据路径。
 - **安装位置：** 首次可自选，默认 `%LOCALAPPDATA%\DSH-Tavern`。新安装的程序、运行文件和数据放在所选目录下；数据位于 `data` 子目录。完成提示和目录中的 `如何启动.txt` 列出实际位置。
@@ -17,7 +15,7 @@ v2.1 的 Windows 桌面宿主是 **Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`）
 
 Windows Desktop 更新会在数据根目录的 `harness/tools/desktop-package-manager`（普通 Desktop 为 `DSH_HOME/tools/desktop-package-manager`）准备经过 SHA-256 校验的 Node 22.22.3，仅用于包管理。首次需要联网下载，之后复用；不依赖电脑上其他软件附带的 Node，不更换 DSH。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
 
-v2.1 适配的桌面宿主是 **Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`）。上面的一键包是 Desktop 2.0.5，只用于旧安装的修复和重装。切换到下面的 CLI 安装方式不会自动同步这份数据。
+Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。切换到下面的 CLI 安装方式不会自动同步这份数据。
 
 ### 命令行及宿主内安装
 
