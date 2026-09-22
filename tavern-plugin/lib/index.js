@@ -3,6 +3,7 @@ import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
 import { isRescuedHistoryMessage, rescueHistoryNotice } from './domain/chat-history-rescue.js'
 import { readHostCompatibility } from './domain/host-compatibility.js'
 import { installHostSessionPatch } from './domain/host-session-patch.js'
+import { installHostSubprocessPatch } from './domain/host-subprocess-patch.js'
 import { migrateInstalledLegacySessions } from './domain/legacy-session-migration.js'
 import { measureForegroundPressure } from './domain/foreground-context-pressure.js'
 import { replaceSessionSurface } from './domain/session-surface-mutations.js'
@@ -176,6 +177,12 @@ import { prompt, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt
 // DSH 生命周期负责回合状态；模型工具只处理按需读取和明确修改。
 export async function apply(ctx) {
   const persistence = ctx.get('sessionPersistence')
+  try {
+    const restoreSubprocess = await installHostSubprocessPatch({ persistence })
+    ctx.effect(() => restoreSubprocess)
+  } catch (error) {
+    console.warn('dsh-tavern: Windows 后台窗口补丁未安装：' + error.message)
+  }
   const sessionPatch = await installHostSessionPatch({
     persistence,
     query: ctx.get('sessionQuery'),

@@ -201,7 +201,7 @@ function hostRequireFrom(anchor) {
 
 // The plugin file lives in this repo. The running host packages live next to
 // the dsh launcher. Pick the copy that actually constructed the live store.
-async function defaultHostRequire(persistence) {
+export async function defaultHostRequire(persistence) {
   const anchors = [fileURLToPath(new URL('../../package.json', import.meta.url))]
   if (process.argv[1]) anchors.push(process.argv[1])
   const found = []
