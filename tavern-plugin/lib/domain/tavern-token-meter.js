@@ -20,6 +20,22 @@ export function installTavernTokenMeter(meter) {
     const originalSync = meter._sync
     const hadOwnSync = Object.hasOwn(meter, '_sync')
     if (compactSignature && typeof originalSync !== 'function') throw new Error('当前 DSH Token Meter 缺少同步入口')
+    const presetCursors = new WeakMap()
+    function presetBefore(session, state, seq) {
+      let cursor = presetCursors.get(state)
+      if (!cursor || cursor.session !== session || seq < cursor.nextSeq) {
+        cursor = { session, nextSeq: 0, selected: undefined }
+        presetCursors.set(state, cursor)
+      }
+      // Read only the unseen prefix, excluding the event being classified.
+      // Reset with the host fold state, or when a replay moves backwards.
+      while (cursor.nextSeq < seq) {
+        const previous = session.eventAt(cursor.nextSeq)
+        if (previous?.type === 'agent-preset/selected') cursor.selected = previous.data?.agentPreset
+        cursor.nextSeq++
+      }
+      return cursor.selected ?? session.header?.agentPreset
+    }
     let activeSession
     function sync(session, ...args) {
       const previous = activeSession
@@ -29,7 +45,7 @@ export function installTavernTokenMeter(meter) {
     }
     function fold(...args) {
       const [session, state, event] = compactSignature ? [activeSession, ...args] : args
-      const accountingEvent = session && isTavernSurfaceEdit(session, event, state.surface)
+      const accountingEvent = session && isTavernSurfaceEdit(session, event, state.surface, () => presetBefore(session, state, event.seq))
         ? { ...event, type: 'user/message', data: event.data.message }
         : event
       return compactSignature ? original.call(this, state, accountingEvent) : original.call(this, session, state, accountingEvent)

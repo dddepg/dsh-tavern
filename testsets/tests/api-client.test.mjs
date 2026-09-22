@@ -25,37 +25,13 @@ async function fixture(t, startBrowser) {
   return { api, calls }
 }
 
-test('create waits for the session template runtime before exposing a playable result', async t => {
-  let release, entered, closed = 0
-  const started = new Promise(resolve => { entered = resolve })
-  const gate = new Promise(resolve => { release = resolve })
-  const { api } = await fixture(t, async options => {
-    assert.equal(options.sessionId, 'session-1')
-    assert.equal(options.chatId, 'chat-1')
-    assert.equal(options.cookie, 'test-auth=value')
-    entered()
-    await gate
-    return { close: async () => { closed++ } }
-  })
-  let completed = false
-  const pending = api.create({ action: 'play', sourceCard: 'public.json' }, {}).then(result => { completed = true; return result })
-  await started
-  assert.equal(completed, false)
-  release()
-  assert.equal((await pending).templateRuntime, 'ready')
-  await api.close()
-  await api.close()
-  assert.equal(closed, 1)
-})
-
-test('browser initialization failure preserves ownership for cancellation without sending input', async t => {
-  const { api, calls } = await fixture(t, async () => { throw new Error('initialization failed') })
+test('API creation works without launching or waiting for a browser', async t => {
+  const { api, calls } = await fixture(t, async () => assert.fail('template browser must not start'))
   const result = await api.create({ action: 'play', sourceCard: 'public.json' }, {})
-  assert.match(result.error, /初始化|启动失败/)
   assert.equal(result.sessionId, 'session-1')
+  assert.equal(result.error, undefined)
   await api.cancel()
   assert.deepEqual(calls.filter(call => call.method === 'cancel').map(call => call.args.sessionId), ['session-1'])
-  assert.equal(calls.some(call => call.method === 'send'), false)
   await api.close()
 })
 

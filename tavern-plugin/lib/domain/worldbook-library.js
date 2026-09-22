@@ -83,11 +83,16 @@ export function createWorldBookLibrary(options = {}) {
   async function catalog() {
     const standaloneResults = await Promise.all((await resources.list('worldbook')).map(async function (path) {
       try {
-        const record = await readRecord({ kind: 'standalone', path })
+        const [record, metadata] = await Promise.all([
+          readRecord({ kind: 'standalone', path }),
+          typeof resources.metadata === 'function' ? resources.metadata(path) : null
+        ])
         return { row: {
           kind: 'standalone', path: record.source.path, name: record.view.displayName,
           entryCount: record.view.entryCount, enabledCount: record.view.enabledCount,
-          diagnostics: record.view.diagnostics.length
+          diagnostics: record.view.diagnostics.length,
+          importedAt: Math.max(0, Number(metadata && metadata.importedAt) || 0),
+          updatedAt: Math.max(0, Number(metadata && metadata.updatedAt) || 0)
         } }
       } catch (error) {
         return { diagnostic: { kind: 'standalone', path, message: str(error && error.message || error) } }
@@ -95,13 +100,18 @@ export function createWorldBookLibrary(options = {}) {
     }))
     const embeddedResults = await Promise.all((await cards.listPaths()).map(async function (cardPath) {
       try {
-        const card = await cards.read(cardPath)
+        const [card, metadata] = await Promise.all([
+          cards.read(cardPath),
+          typeof cards.metadata === 'function' ? cards.metadata(cardPath) : null
+        ])
         if (!card || !card.character_book || typeof card.character_book !== 'object') return {}
         const view = inspectWorldBookDocument(card.character_book, { filename: card.name })
         return { row: {
           kind: 'card', cardPath, cardName: card.name, name: view.displayName,
           entryCount: view.entryCount, enabledCount: view.enabledCount,
-          diagnostics: view.diagnostics.length
+          diagnostics: view.diagnostics.length,
+          importedAt: Math.max(0, Number(metadata && metadata.importedAt) || 0),
+          updatedAt: Math.max(0, Number(metadata && metadata.updatedAt) || 0)
         } }
       } catch (error) {
         return { diagnostic: { kind: 'card', path: cardPath, message: str(error && error.message || error) } }

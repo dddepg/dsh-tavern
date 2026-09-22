@@ -460,3 +460,45 @@ test('new games use the configured default even while browsing an unfinished pro
   await profile.manage({ action: 'default', profileId: '' })
   assert.equal((await h.make().start({ ...h.input, sessionId: 'without-default' })).userProfileEnabled, false)
 })
+
+
+test('新局采用全局默认模型，重入和卡片工作台不覆盖本局选择', async () => {
+  const h = initializationFixture()
+  const foreground = { provider: 'p', model: 'story', reasoningEffort: 'low' }
+  const background = { provider: 'p', model: 'fast', reasoningEffort: 'high' }
+  h.state.settings.defaultForegroundModel = foreground
+  h.state.settings.defaultBackgroundModel = background
+  const first = await h.make().start(h.input)
+  assert.deepEqual(h.session().selectedModel, foreground)
+  assert.deepEqual(first.backgroundModelSelection, background)
+  h.session().selectedModel = { provider: 'p', model: 'manual' }
+  h.state.settings.defaultForegroundModel = { provider: 'p', model: 'new' }
+  h.state.settings.defaultBackgroundModel = null
+  const existing = await h.make().start(h.input)
+  assert.equal(h.session().selectedModel.model, 'manual')
+  assert.deepEqual(existing.backgroundModelSelection, background)
+  const next = await h.make().start({ ...h.input, sessionId: 'next-default' })
+  assert.equal(h.session('next-default').selectedModel.model, 'new')
+  assert.equal(next.backgroundModelSelection, null)
+  const workbench = await h.make().start({ ...h.input, sessionId: 'workbench-default', mode: 'card', cardPath: '' })
+  assert.equal(workbench.backgroundModelSelection, null)
+  assert.equal(h.session('workbench-default').selectedModel, undefined)
+  assert.equal(h.trace.filter(x => x === 'model.select').length, 2)
+})
+
+
+test('新游戏复制全局 Skill 开关，本局调整和后续全局修改互不覆盖', async () => {
+  const h = initializationFixture()
+  h.state.settings.defaultDisabledWritingSkills = ['writing-a']
+  const first = await h.make().start(h.input)
+  assert.deepEqual(first.disabledWritingSkills, ['writing-a'])
+  h.state.settings.defaultDisabledWritingSkills.push('writing-b')
+  assert.deepEqual((await h.make().start(h.input)).disabledWritingSkills, ['writing-a'])
+  const local = h.saved.get(first.id)
+  local.disabledWritingSkills = []
+  assert.deepEqual((await h.make().start(h.input)).disabledWritingSkills, [])
+  const next = await h.make().start({ ...h.input, sessionId: 'next-skills' })
+  assert.deepEqual(next.disabledWritingSkills, ['writing-a', 'writing-b'])
+  const card = await h.make().start({ ...h.input, sessionId: 'card-skills', mode: 'card', cardPath: '' })
+  assert.deepEqual(card.disabledWritingSkills, [])
+})

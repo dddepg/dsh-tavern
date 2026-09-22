@@ -1,6 +1,6 @@
 # 卡片工作台真实模型验证
 
-日期：2026-09-11。模型：DeepSeek-V4-Flash，High。宿主：独立临时 DSH_HOME 中的 DSH 0.1.2-rc.1，通过浏览器实际操作。使用仓库 `demo/cards/avra-before.json` 的导入副本，不修改原始 demo 或用户存档。
+日期：2026-09-11。模型：DeepSeek-V4-Flash，High。宿主：独立临时 DSH_HOME 中的 DSH 0.1.2-rc.1，通过浏览器实际操作。使用仓库 `examples/avra/cards/avra-before.json` 的导入副本，不修改原始 demo 或用户存档。
 
 ## 实测结果
 

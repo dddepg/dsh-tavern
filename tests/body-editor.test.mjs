@@ -41,7 +41,7 @@ test('edit replaces native Surface and display, preserving events, variables, st
   const view = await h.editor.save(h.session.id, { token: edit.token, texts: ['新文本\n', '新结尾'] })
   assert.equal(view.messages.at(-1).text, '新文本\n' + html.trimStart() + '新结尾')
   assert.deepEqual(view.messages.at(-1).variables, [{ hp: 9 }])
-  assert.equal(view.posture, '原状态'); assert.deepEqual(view.scriptState, { cursor: 5 }); assert.deepEqual(view.variables, { hp: 9 }); assert.equal(view.settleStatus, 'done')
+  assert.equal(view.posture, ''); assert.deepEqual(view.scriptState, { cursor: 5 }); assert.deepEqual(view.variables, { hp: 9 }); assert.equal(view.settleStatus, 'idle')
   assert.deepEqual(sessionEvents(h.session).slice(0, events.length), events)
   assert.equal(h.session.deriveMessages().at(-1).content[0].text, view.messages.at(-1).text)
   assert.equal(h.session.deriveMessages().filter(m => m.role === 'assistant').length, 1)

@@ -236,3 +236,15 @@ test('session ownership writes once under concurrent requests and reuses disk ow
   assert.equal(files.get('model-request-sessions/agent.json').chatId, 'new-owner')
   assert.equal(ownerWrites.length, 3)
 })
+
+test('请求凭据脱敏不修改原请求或提示词内容', async () => {
+  let stored
+  const log = createModelRequestLog({ readJson: async () => undefined, writeJson: async (path, value) => { if (value.request) stored = value }, updateJson: async (_path, fn) => fn(undefined) })
+  const options = { sessionId: 's', apiKey: 'secret-a', headers: new Headers({ Authorization: 'Bearer secret-b', 'X-Api-Key': 'secret-c', Accept: 'application/json' }), config: { access_token: 'secret-d' }, messages: [{ role: 'user', content: '不要改写 apiKey 这段文字' }] }
+  await log.record({ chat: { id: 'chat' }, options })
+  for (const secret of ['secret-a', 'secret-b', 'secret-c', 'secret-d']) assert.equal(JSON.stringify(stored).includes(secret), false)
+  assert.equal(stored.request.headers.accept, 'application/json')
+  assert.deepEqual(stored.request.messages, options.messages)
+  assert.equal(options.apiKey, 'secret-a')
+  assert.equal(options.headers.get('Authorization'), 'Bearer secret-b')
+})

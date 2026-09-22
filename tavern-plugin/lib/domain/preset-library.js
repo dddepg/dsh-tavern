@@ -185,6 +185,7 @@ export function createPresetLibrary({ resources: fileResources, state: profileDa
     for (const record of inspectedPresets) {
       const presetPath = record.path
       const inspected = record.inspected
+      if (!inspected) continue // A listed file may disappear before it is read.
       const preset = inspected
       const extractableRegexScripts = runtimeRegexScriptsOf(preset, await readPresetDocument(preset.path))
       const phaseCounts = Object.fromEntries(['front', 'middle', 'back'].map(function (phase) {

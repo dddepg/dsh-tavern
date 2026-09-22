@@ -34,6 +34,7 @@ function harness() {
     resources: {
       async list() { return Array.from(files.keys()) },
       async readText(path) { return files.get(path) },
+      async metadata() { return { importedAt: 100, updatedAt: 200 } },
       async import(prepared, working) {
         const path = 'worldbooks/' + prepared.name
         files.set(path, JSON.stringify(working))
@@ -59,6 +60,7 @@ function harness() {
     cards: {
       async listPaths() { return Array.from(cards.keys()) },
       async read(path) { return cards.has(path) ? clone(cards.get(path)) : undefined },
+      async metadata() { return { importedAt: 300, updatedAt: 400 } },
       async update(path, patch) { cards.set(path, Object.assign({}, cards.get(path), clone(patch))) }
     },
     async removeStandalone(path) { files.delete(path); removed.push(path); return { removed: path } }
@@ -72,6 +74,8 @@ test('World Book Library 用同一 interface 投影独立与人物卡内嵌世�
 
   assert.deepEqual(catalog.standalone.map(function (book) { return book.name }), ['王都'])
   assert.deepEqual(catalog.embedded.map(function (book) { return book.name }), ['命运世界书'])
+  assert.deepEqual([catalog.standalone[0].importedAt, catalog.standalone[0].updatedAt], [100, 200])
+  assert.deepEqual([catalog.embedded[0].importedAt, catalog.embedded[0].updatedAt], [300, 400])
   assert.equal((await run.library.get({ kind: 'standalone', path: 'worldbooks/王都.json' })).view.entries[0].ref, 'entry:7')
   assert.equal((await run.library.get({ kind: 'card', cardPath: 'cards/命运.json' })).view.entries[0].ref, 'entry:0')
 })

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { replaceSessionSurface } from '../tavern-plugin/lib/domain/session-surface-mutations.js'
+import { replaceSessionSurface, createSessionSurfaceMutator } from '../tavern-plugin/lib/domain/session-surface-mutations.js'
 import { readdir, readFile } from 'node:fs/promises'
 function fixture() {
   const events = [{seq: 0, type: 'assistant/message', data: {message: {id: 'old'}}}]
@@ -62,4 +62,16 @@ test('计量归属按压缩回放位置检查，拒绝冒用区间外引用和�
   assert.equal(isTavernSurfaceEdit(session,{...event,sourceEventSeqs:[2,9,6,4]},[2,9,6]),false)
   assert.equal(isTavernSurfaceEdit(session,event,[6,9,2]),false)
   assert.equal(isTavernSurfaceEdit(session,event),false)
+})
+
+test('同一恢复批次索引及时记录新事件，保留重试幂等与冲突校验', () => {
+  const session = fixture()
+  const mutations = createSessionSurfaceMutator(session)
+  const placeholder = mutations.append('user/message', { id: 'placeholder', content: [] }, { surfaceOp: 'append' })
+  const range = { start: placeholder.seq, end: placeholder.seq, sourceEventSeqs: [placeholder.seq, 0] }
+  const first = mutations.replace('assistant/message', data, range)
+  assert.equal(mutations.replace('assistant/message', structuredClone(data), range), first)
+  assert.throws(() => mutations.replace('assistant/message', { ...data, turn: 9 }, range), /不同内容/)
+  assert.throws(() => mutations.replace('assistant/message', { ...data, message: { ...data.message, id: 'other' } }, { start: first.seq, end: first.seq, sourceEventSeqs: [first.seq, 9999] }), /来源引用/)
+  assert.equal(session.events.length, 3)
 })

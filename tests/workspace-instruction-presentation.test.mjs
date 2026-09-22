@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
+import vm from 'node:vm'
 import { presentWorkspaceInstructions, installWorkspaceInstructionPresentation } from '../tavern-plugin/lib/domain/workspace-instruction-presentation.js'
 
 const intro = 'The following workspace instructions may be relevant to your work. Use them as guidance when applicable. More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.'
@@ -55,15 +57,24 @@ test('does not touch user quotes, Skill output, assistant messages, or unknown f
   }
 })
 
-test('middleware covers play, workbench and background, skips other sessions, and terminates recursion', async () => {
+test('production middleware filters play and background but preserves card agents and unrelated sessions', async () => {
   let middleware
   const delivered = []
   const ctx = { on: (_name, fn) => { middleware = fn }, llm: { stream: request => middleware(request, async function * () { delivered.push(request); yield { type: 'finish' } }) } }
-  installWorkspaceInstructionPresentation(ctx, async id => ['story', 'card', 'background'].includes(id))
-  for (const sessionId of ['story', 'card', 'background', 'unrelated']) {
+  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const start = source.indexOf('  installWorkspaceInstructionPresentation(ctx,')
+  const end = source.indexOf('  installCompactionRequestProjection', start)
+  const chats = { story: { mode: 'story' }, script: { mode: 'script' }, legacy: {}, card: { mode: 'card' }, edit: { mode: 'card', cardEditContext: { version: 1 } } }
+  vm.runInNewContext(source.slice(start, end), {
+    ctx, installWorkspaceInstructionPresentation,
+    backgroundAgentRunner: { owns: id => id === 'background' },
+    chatForSession: async id => chats[id]
+  })
+  const sessions = ['story', 'script', 'legacy', 'card', 'edit', 'background', 'unrelated']
+  for (const sessionId of sessions) {
     const request = { sessionId, messages: [message(wrap(intro + '\n\nInstructions from: AGENTS.md\n\n正文'))] }
     for await (const chunk of ctx.llm.stream(request)) assert.equal(chunk.type, 'finish')
-    assert.equal(delivered.length, ['story', 'card', 'background', 'unrelated'].indexOf(sessionId) + 1)
-    assert.equal(textOf(delivered.at(-1)).includes(intro), sessionId === 'unrelated')
+    assert.equal(delivered.length, sessions.indexOf(sessionId) + 1)
+    assert.equal(textOf(delivered.at(-1)).includes(intro), ['card', 'edit', 'unrelated'].includes(sessionId))
   }
 })

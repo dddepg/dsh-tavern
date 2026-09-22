@@ -187,7 +187,7 @@ test('新开游玩在创建 Session 前完成游戏准备，创建后不提供�
   assert.match(sidebar, /dsh-tavern-picker-overlay/)
   assert.match(sidebar, /role: "dialog"/)
 	assert.match(sidebar, /renderTavernProjection\(selectedOpening\.projection/)
-	assert.match(openingChoice, /!busy && selectedOpening \? h\("div"/,
+	assert.match(openingChoice, /selectedOpening \? h\("div"/,
 		'只有一个开场白时也必须在点击开始游戏前持续显示预览')
 	assert.doesNotMatch(openingChoice, /!busy && selectedOpening && openingPicker\.openings\.length > 1/)
 	assert.match(sidebar, /key: selectedOpening\.id/)
@@ -241,7 +241,7 @@ test('Tavern 错误面板只保留最新错误，左侧栏连接恢复后撤销�
   assert.match(clientSource, /const lastReported = React\.useRef\(""\)/)
   assert.match(clientSource, /visible !== lastReported\.current/)
   assert.match(clientSource, /if \(!visible\) tavernErrorHub\.resolve\(source\)/)
-  assert.match(sidebar, /if \(collapsed\) return h\(React\.Fragment, null,\s*h\(TavernErrorCenter\)/)
+  assert.doesNotMatch(sidebar, /if \(collapsed\) return/)
   assert.match(sidebar, /return h\(React\.Fragment, null, h\(TavernErrorCenter\)/)
   assert.match(clientSource, /usePersistentError\("左侧栏操作"\)/)
   assert.match(sidebar, /latest\.message === "DSH Session 列表同步超时，请刷新页面后重试：" \+ current/)
@@ -641,7 +641,7 @@ test('左侧栏常驻显示版本与构建号，并把检查更新和进行更�
   assert.doesNotMatch(sidebar, /重新检查/)
   assert.match(sidebar, /进行更新/)
   assert.match(sidebar, /updateStatus\.phase !== "update-available"/)
-  assert.match(sidebar, /正在通过 jsDelivr 检查最新构建/)
+  assert.match(sidebar, /正在向 GitHub 核实最新构建/)
   assert.match(sidebar, /未发现更新构建/)
   assert.match(sidebar, /发现新构建/)
   assert.match(sidebar, /未发现更新构建/)
@@ -1001,7 +1001,7 @@ test('人物卡绑定目录超时后可在原位置重新读取', () => {
   assert.match(panel, /onClick: function \(\) \{ loadWorldBookCatalog\(true\); \}/)
 })
 
-test('人物卡全部字段合并在默认展开的基本信息中，并位于世界书上方', () => {
+test('人物卡世界书优先展示，基本信息保留全部字段，两者默认展开', () => {
   const panel = between(clientSource, 'function CardFieldsPanel', 'function TavernStatusPanel')
   const basic = panel.indexOf('h("summary", null, "基本信息")')
   const alternateGreetings = panel.indexOf('F("alternate_greetings"')
@@ -1011,7 +1011,9 @@ test('人物卡全部字段合并在默认展开的基本信息中，并位于�
   assert.ok(basic >= 0)
   assert.ok(alternateGreetings > basic)
   assert.ok(creatorNotes > alternateGreetings)
-  assert.ok(worldBook > creatorNotes)
+  assert.ok(worldBook >= 0 && worldBook < basic)
+  assert.match(panel, /h\("details", \{ ref: worldBookDetailsRef, open: true,/)
+  assert.match(panel, /h\("details", \{ className: "dsh-tavern-card-advanced", open: true \}, h\("summary", null, "基本信息"\)/)
   assert.doesNotMatch(panel, /h\("summary", null, "高级字段"\)/)
 })
 
@@ -1036,6 +1038,12 @@ test('世界书库统一编辑独立世界书与人物卡内置世界书', () =>
   assert.match(library, /function WorldBookLibraryTab/)
   assert.match(library, /group\("独立世界书"/)
   assert.match(library, /group\("人物卡内置世界书"/)
+  assert.match(library, /"最新"/)
+  assert.match(library, /"最旧"/)
+  assert.match(library, /"最近"/)
+  assert.match(library, /"A-Z"/)
+  assert.match(library, /"Z-A"/)
+  assert.match(library, /orderWorldBookCatalogItems/)
   assert.match(library, /rpc\("importWorldBook"/)
   assert.match(library, /rpc\("updateWorldBook"/)
   assert.match(library, /const \[catalog, setCatalog\] = React\.useState\(null\)/)

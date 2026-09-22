@@ -30,8 +30,7 @@ afterEach(() => {
 
 function createApplicationUpdater(options) {
   return createUpdater({
-    // GitHub-specific tests opt out of the CDN-first route. CDN tests below
-    // override this with their own metadata rather than fetching live data.
+    // CDN fallback is explicit in each fixture; never fetch live metadata.
     fetchCdnMetadata: async () => { throw new Error('CDN unavailable in GitHub fixture') },
     ...options,
   })
@@ -236,7 +235,7 @@ test('检查更新只返回最新提交状态，不启动安装进程', async ()
       phase: 'idle', host: 'cli', currentVersion: '0.9.0', currentCommit: 'a'.repeat(40),
     })
     assert.deepEqual(await updater.check(), {
-      checkPolicy: 3, checkedForCommit: 'a'.repeat(40),
+      checkPolicy: 4, checkedForCommit: 'a'.repeat(40),
       phase: 'update-available', host: 'cli', checkedAt: 234,
       currentVersion: '0.9.0', latestVersion: '0.9.0',
       currentCommit: 'a'.repeat(40), latestCommit: 'b'.repeat(40),
@@ -294,7 +293,7 @@ test('GitHub 最新提交仅发布运行清单时，以父提交作为最新运�
     })
 
     assert.deepEqual(await updater.check(), {
-      checkPolicy: 3, checkedForCommit: runtimeCommit,
+      checkPolicy: 4, checkedForCommit: runtimeCommit,
       phase: 'up-to-date', host: 'cli', checkedAt: 250,
       currentVersion: '0.9.0', latestVersion: '0.9.0',
       currentCommit: runtimeCommit, latestCommit: runtimeCommit,
@@ -467,13 +466,13 @@ test('jsDelivr 发布序号阻止缓存倒退，并允许无 GitHub 更新', asy
       compareCommits: async () => { throw new Error('GitHub 不应参与 CDN 发布序号判断') },
       now: () => 321,
     }
-    const current = await createApplicationUpdater(common).start()
-    assert.equal(current.phase, 'up-to-date')
-    assert.equal(current.checkSource, 'jsdelivr')
+    const current = await createApplicationUpdater(common).check()
+    assert.equal(current.phase, 'check-failed')
+    assert.match(current.error, /无法确认最新版本/)
 
     metadata.files[0].sha256 = createHash('sha256').update('new package').digest('hex')
     metadata.releaseSequence = 41
-    assert.equal((await createApplicationUpdater(common).start()).phase, 'up-to-date')
+    assert.equal((await createApplicationUpdater(common).check()).phase, 'check-failed')
 
     metadata.releaseSequence = 43
     const child = { pid: 4321, once(event, listener) { if (event === 'spawn') queueMicrotask(listener); return this }, unref() {} }
@@ -807,7 +806,7 @@ test('更新诊断跨检查保留回退和网络原因，并可在重启后读�
     assert.equal((await recovered.check()).phase, 'update-available')
     const records = recovered.diagnostics().records
     assert.equal(new Set(records.filter(r => r.event === 'check.started').map(r => r.attemptId)).size, 2)
-    assert.ok(records.some(r => r.event === 'fallback.github' && r.reason.includes('发布序号')))
+    assert.ok(records.some(r => r.event === 'fallback.cdn'))
     assert.ok(records.some(r => r.event === 'github.version.failed' && r.cause.code === 'ETIMEDOUT' && r.durationMs >= 0))
     assert.ok(records.some(r => r.event === 'status' && r.phase === 'check-failed'))
     assert.ok(records.some(r => r.event === 'status' && r.phase === 'update-available'))
@@ -867,6 +866,23 @@ test('历史更新记录的宿主不覆盖当前运行环境', async t => {
     const updater = createApplicationUpdater({ dataRoot: root, sourceRoot: root, runtimeHost })
     const status = await updater.status()
     assert.equal(status.host, runtimeHost)
-    assert.equal(status.phase, 'up-to-date')
+    assert.equal(status.phase, 'idle')
   }
+})
+
+
+test('CDN 命中旧清单时仍以 GitHub 新提交判断更新', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-stale-cdn-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const packageText = JSON.stringify({ version: '1.1.0' })
+  await writeFile(path.join(root, 'package.json'), packageText)
+  let cdnCalls = 0
+  const updater = createApplicationUpdater({ ...verifiedUpdate, dataRoot: root, sourceRoot: root,
+    fetchCdnMetadata: async () => { cdnCalls++; return { revision: knownIdentity.currentCommit, version: '1.1.0', releaseSequence: 1, files: [{ path: 'package.json', sha256: createHash('sha256').update(packageText).digest('hex') }] } }
+  })
+  const result = await updater.check()
+  assert.equal(result.phase, 'update-available')
+  assert.equal(result.latestCommit, 'b'.repeat(40))
+  assert.equal(result.checkSource, 'github')
+  assert.equal(cdnCalls, 0)
 })

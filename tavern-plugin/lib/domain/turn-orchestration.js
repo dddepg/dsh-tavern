@@ -298,6 +298,7 @@ export function createTurnOrchestrator(options) {
     }
 
     const cardPath = cardPathOf(chat)
+    if ((mode === 'story' || mode === 'script') && cardPath === '') throw new Error('当前游玩缺少人物卡绑定，无法继续本轮。请先恢复人物卡或救援存档。')
     // Workbench tools must remain available when the file being repaired is invalid.
     const card = cardPath === '' ? null : mode === 'card' ? { name: chat.cardName } : await store.readCard(cardPath)
     if (cardPath !== '' && card === undefined) throw new Error('人物卡不存在: ' + cardPath)
@@ -742,7 +743,7 @@ export function createTurnOrchestrator(options) {
     const mode = chat.mode || 'story'
     const webTools = chat.webSearchEnabled === true ? ['web_search'] : []
     if (mode === 'script') return ['skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', ...webTools]
-    if (mode === 'card') return ['web_search', shellToolName, ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response']
+    if (mode === 'card') return ['web_search', shellToolName, ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_convert_to_mvu', 'tavern_validate_mvu_conversion', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response']
     return ['skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search', ...webTools]
   }
 

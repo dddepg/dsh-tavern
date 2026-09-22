@@ -1,3 +1,4 @@
+import { createServerTemplateFixture } from './server-template-runtime.mjs'
 import { createServer } from 'node:http'
 import { after } from 'node:test'
 import { chromium } from 'playwright'
@@ -7,7 +8,10 @@ import { readTavernRuntimeAsset, TAVERN_RUNTIME_ASSET_PREFIX } from '../../taver
 let shared, cleanup
 after(async () => { if (cleanup) await cleanup() })
 export class UpstreamTemplateRuntime {
-  static async create() { return shared ||= createRuntime() }
+  static async create() {
+    if (!shared && process.env.TEMPLATE_EXECUTOR === 'server') { shared = createServerTemplateFixture(); cleanup = () => shared.dispose() }
+    return shared ||= createRuntime()
+  }
 }
 async function createRuntime() {
   const server = createServer(async (req, res) => {
@@ -43,6 +47,7 @@ async function createRuntime() {
     history: (context,steps) => run('history',{context,steps}),
     command: (text, context={}) => run('command', { text, context }),
     render: (template, context = {}, environmentEntries) => run('render', { template, context, environmentEntries }),
+    renderProjections: (items, context = {}, environmentEntries) => run('renderMany', { items, context, environmentEntries }),
     renderMessages: (messages, context = {}) => run('messages', { messages, context }),
     projectRequest: request => run('request', { request }),
     initializeVariables: (entries, context = {}) => run('initialize', { context: { ...context, worldBookEntries: entries } })

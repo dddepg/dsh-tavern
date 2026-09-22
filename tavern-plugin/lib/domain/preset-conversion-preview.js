@@ -175,7 +175,7 @@ export function previewPresetConversion(text, filename = '', options = {}) {
   }
 
   const selectedItems = selectedGroup === undefined
-    ? records.map(function (record) { return { identifier: record.identifier, enabled: promptDefinitions[record.sourceIndex].enabled !== false } })
+    ? records.map(function (record) { return { identifier: record.identifier, enabled: object.prompts[record.sourceIndex].enabled !== false } })
     : selectedGroup.order
   const used = new Set()
   const sourceRows = []

@@ -43,3 +43,31 @@ test('系统装配替换旧常驻区块，关闭全部后清空，原始快照�
   assert.deepEqual(withCurrentWorldbook(snapshot, '').map(s => s.text), ['固定人物'])
   assert.equal(snapshot[1].text, '旧DLC')
 })
+
+test('世界书版本提示只比较源内容：EJS 动态求值仍逐轮变化，应用新源后继续动态执行', async () => {
+  const { createPlayCardSnapshots } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
+  const { createWorldBookLibrary } = await import('../tavern-plugin/lib/domain/worldbook-library.js')
+  const card = { name: '动态人物', character_book: { entries: [
+    { id: 0, comment: '天气', enabled: true, constant: true, content: '天气：<%= getvar("weather") %>', keys: [] }
+  ] } }
+  const worldBooks = createWorldBookLibrary({ normalizePath: p => p, removeStandalone: async () => {}, cards: { read: async () => card }, resources: { bindingForCard: async () => ({ kind: 'default' }) } })
+  const snapshots = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }) })
+  const chat = { id: 'dynamic-update', mode: 'story', cardPath: 'card.json', variables: { weather: '晴' }, messages: [] }
+  Object.assign(chat, await snapshots.replacement(chat, card))
+  async function render() { return projectWorldBookTemplates({ runtime, includeConstants: true, worldBook: await worldBooks.bound(chat.cardPath, card, chat), chat, card }) }
+  assert.match((await render()).foregroundContext, /天气：晴/)
+  const before = await snapshots.updateStatus(chat, card)
+  assert.equal(before.available, false)
+  chat.variables.weather = '雨'
+  assert.match((await render()).foregroundContext, /天气：雨/)
+  assert.deepEqual(await snapshots.updateStatus(chat, card), before)
+  card.character_book.entries[0].content = '新版天气：<%= getvar("weather") %>'
+  const update = await snapshots.updateStatus(chat, card)
+  assert.equal(update.worldbookChanged, true)
+  assert.doesNotMatch((await render()).foregroundContext, /新版/)
+  Object.assign(chat, await snapshots.replacement(chat, card, update.digest))
+  assert.match((await render()).foregroundContext, /新版天气：雨/)
+  chat.variables.weather = '雪'
+  assert.match((await render()).foregroundContext, /新版天气：雪/)
+  assert.equal((await snapshots.updateStatus(chat, card)).available, false)
+})

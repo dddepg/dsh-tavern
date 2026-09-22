@@ -85,7 +85,7 @@ export function renderSite(inventory) {
     const pageSource = screenshots[(pageScreenshots[page.id] || [])[0]]?.source || screenshotSource
     const sourceNote = figures ? `<p class="screenshot-source">实际应用截图 · ${escapeHTML(pageSource.runtime)}。<a href="${screenshotSource.url}" target="_blank" rel="noopener noreferrer">样例说明 ↗</a> · <a href="examples/manual-demo/lighthouse-card.json" download>下载样例人物卡</a>${page.id === 'a01' ? ' · <a href="examples/manual-demo/lighthouse-worldbook.json" download>世界书</a> · <a href="examples/manual-demo/warm-narrative.json" download>预设</a> · <a href="examples/manual-demo/lighthouse-outline.md" download>剧本大纲</a>' : ''}</p>` : ''
     let body = markdown(page.content, page.id)
-    if (page.id === 'a01') body = body.replace(/(<h2[^>]*>宣传视频<\/h2>)/, '$1<div class="promo-video"><iframe src="https://player.bilibili.com/player.html?isOutside=true&amp;aid=117225059125991&amp;bvid=BV1Bibx61EAC&amp;cid=41645311436&amp;p=1&amp;autoplay=0" title="DSH Tavern B站宣传视频" loading="lazy" allow="fullscreen" allowfullscreen></iframe></div>')
+    if (page.id === 'a01') body = body.replace(/(<h2[^>]*>宣传视频<\/h2>)/, '$1<div class="promo-video"><iframe src="https://player.bilibili.com/player.html?isOutside=true&amp;aid=117302938962167&amp;bvid=BV1NAeq6iELC&amp;cid=42054781871&amp;p=1&amp;autoplay=0" title="DSH Tavern B站宣传视频" loading="lazy" allow="fullscreen" allowfullscreen></iframe></div>')
     if (page.id === 'a01') body = body.replace(/(<h2[^>]*>界面截图<\/h2>)/, `$1${figures}${sourceNote}`)
     else if (page.id === 'a02') {
       body = body.replace('<p>截图：打开终端</p>', figureList[0] || '')

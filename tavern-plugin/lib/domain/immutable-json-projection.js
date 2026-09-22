@@ -51,3 +51,44 @@ export function createJsonProjectionCache({ capacity = 16, maxBytes = 32 * 1024 
     return value
   }
 }
+
+// Unlike unordered object equality, preserve JSON property order: templates may
+// stringify a character. Compare freshly read JSON with an owned, normalized
+// source; never retain a caller's mutable object as evidence of freshness.
+function sameOrderedJson(a, b) {
+  if (Object.is(a, b)) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a) && a.length !== b.length) return false
+  if (!Array.isArray(a) && ![Object.prototype, null].includes(Object.getPrototypeOf(a))) return false
+  const keys = Object.keys(a), other = Object.keys(b)
+  return keys.length === other.length && keys.every((key, i) => key === other[i] && sameOrderedJson(a[key], b[key]))
+}
+
+/** For already parsed JSON resources. Every call still requires a fresh read.
+ * Avoid serializing unchanged large objects; normalize on misses just as the
+ * text cache does. Source and projection are both owned and budgeted.
+ */
+export function createJsonValueProjectionCache({ capacity = 16, maxBytes = 32 * 1024 * 1024 } = {}) {
+  const entries = new Map()
+  let bytes = 0
+  return (key, input, project) => {
+    const previous = entries.get(key)
+    if (previous && sameOrderedJson(input, previous.source)) {
+      entries.delete(key); entries.set(key, previous)
+      return previous.value
+    }
+    if (previous) { bytes -= previous.bytes; entries.delete(key) }
+    const text = JSON.stringify(input)
+    const source = freezeJsonProjection(JSON.parse(text))
+    const value = freezeJsonProjection(project(source))
+    const weight = 2 * (text.length + JSON.stringify(value).length)
+    if (weight <= maxBytes) {
+      entries.set(key, { source, value, bytes: weight }); bytes += weight
+      while (entries.size > capacity || bytes > maxBytes) {
+        const oldest = entries.keys().next().value
+        bytes -= entries.get(oldest).bytes; entries.delete(oldest)
+      }
+    }
+    return value
+  }
+}

@@ -7,7 +7,7 @@ import { projectReplyLayers } from '../tavern-plugin/lib/domain/reply-presentati
 test('正式消息 renderer 使用原生 Markdown、完整标签参数，并只为 HTML 创建 iframe', async () => {
   let descriptor, currentView
   const React = { Fragment: 'fragment', createElement: (tag, props, ...children) => ({ tag, props, children }),
-    useRef: value => ({ current: value }), useState: value => [typeof value === 'function' ? { phase: 'ready', view: currentView } : value, () => {}], useEffect() {}, useMemo: run => run(),
+    useRef: value => ({ current: value }), useState: value => [typeof value === 'function' ? { phase: 'ready', view: currentView } : value, () => {}], useEffect() {}, useCallback: callback => callback, useMemo: run => run(),
     useSyncExternalStore(_subscribe, get) { const value = get(); return value && typeof value === 'object' && 'phase' in value ? { phase: 'ready', view: currentView } : value } }
   vm.runInNewContext(await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8'), {
     window: { __ModuleLoader__: { load: value => { descriptor = value } } }, console

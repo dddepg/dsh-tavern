@@ -5,6 +5,9 @@ export function compactionFailureMessage(error) {
   for (let depth = 0; cause && depth < 12 && !seen.has(cause); depth++) {
     seen.add(cause)
     const message = String(cause.message || cause || '')
+    if (/summary is not smaller than the shadowed content/i.test(message)) {
+      return '摘要未缩短内容，已保留原始记录。本次未节省上下文，无需立即重复压缩；可继续对话，积累更多内容后再压缩。'
+    }
     const idleTimeout = message.match(/stream idle timeout after (\d+)ms/i)
     if (idleTimeout) {
       const milliseconds = Number(idleTimeout[1])

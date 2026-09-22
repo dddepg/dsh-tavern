@@ -19,7 +19,7 @@ function importedRounds(session, operationId) {
     const imported = message?.source?.importSource?.operationId === operationId
     if (event.type === 'user/message' && imported) pending = { seqs: [], ids: [] }
     if (!pending) continue
-    if (!imported && message?.source?.form !== 'foreground-frame') { pending = null; continue }
+    if (!imported && !['foreground-frame', 'worldbook-snapshot'].includes(message?.source?.form)) { pending = null; continue }
     pending.seqs.push(seq)
     pending.ids.push(message.id)
     if (event.type === 'assistant/message' && imported) {

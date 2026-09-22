@@ -15,7 +15,7 @@ using System.Runtime.InteropServices;
 
 class Launcher : Form {
  // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
- const string Version="5e2e365397638d61-setup1";
+ const string Version="a272f20b3f1f5b15-setup1";
  Label label=new Label(); ProgressBar bar=new ProgressBar();
  string root, runtime, data; string[] args;
  string installedLauncher; bool showCompletion, installationSelected;
@@ -51,14 +51,18 @@ class Launcher : Form {
  }
  bool SelectInstallation() {
   string beside=Path.GetDirectoryName(Application.ExecutablePath);
-  string selected=null;
+  string selected=null; bool freshInstallation=false;
   if(File.Exists(Path.Combine(beside,SettingsName)))selected=beside;
   else if(TestRoot!=null)selected=Path.GetFullPath(TestRoot);
   else {
    string registered=ReadRegisteredRoot();
    if(!string.IsNullOrEmpty(registered)) {
-    if(!HasInstallation(registered))throw new Exception("已记录的安装目录暂时不可用："+registered+"。请先连接原磁盘或恢复原目录，避免误建一份空白数据。");
-    selected=registered;
+    if(HasInstallation(registered))selected=registered;
+    else using(var recovery=new MissingInstallationDialog(registered,HasInstallation)) {
+     if(recovery.ShowDialog(this)!=DialogResult.OK)return false;
+     selected=recovery.ExistingRoot;
+     freshInstallation=selected==null;
+    }
    }
    else foreach(string old in new[]{@"D:\Workspace\.DSH-Tavern",Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DSH-Tavern-Portable"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DSH-Tavern")}) {
     if(HasInstallation(old)){selected=old;break;}
@@ -84,7 +88,7 @@ class Launcher : Form {
   } else {
    data=Path.Combine(root,"data");
    var legacy=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DSH-Tavern");
-   if(TestRoot==null&&!Directory.Exists(data)&&Directory.Exists(Path.Combine(legacy,"harness")))data=legacy;
+   if(!freshInstallation&&TestRoot==null&&!Directory.Exists(data)&&Directory.Exists(Path.Combine(legacy,"harness")))data=legacy;
   }
   return true;
  }
@@ -134,7 +138,7 @@ class Launcher : Form {
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
-      if(h!="5e2e365397638d61f202753b5dbcee1d9dbd377a5a9d17c160535891f187decd")throw new Exception("运行包校验失败");
+      if(h!="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4")throw new Exception("运行包校验失败");
      }
      var pi=new ProcessStartInfo(seven,"x "+Quote(archive)+" -o"+Quote(app)+" -y -bsp1 -bso0");
      pi.UseShellExecute=false;pi.CreateNoWindow=true;pi.RedirectStandardOutput=true;
@@ -142,7 +146,8 @@ class Launcher : Form {
      using(var p=Process.Start(pi)) {char[] buf=new char[256];int n;while((n=p.StandardOutput.Read(buf,0,buf.Length))>0){var m=Regex.Match(new string(buf,0,n),@"(\d{1,3})%");if(m.Success)Status("首次准备运行环境："+m.Value,int.Parse(m.Groups[1].Value));}p.WaitForExit();if(p.ExitCode!=0)throw new Exception("解压失败，代码 "+p.ExitCode);}
      if(!File.Exists(Path.Combine(app,"DSH Desktop.exe")))throw new Exception("运行环境不完整");
      var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
-     var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app));
+     var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
+     var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app)+" "+Quote(packageHelper));
      patchStart.UseShellExecute=false;patchStart.CreateNoWindow=true;patchStart.RedirectStandardError=true;
      patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
      patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;

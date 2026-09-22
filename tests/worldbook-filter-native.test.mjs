@@ -35,7 +35,7 @@ test('原生 DSH 筛选工具、结算与重启恢复使用同一后台 Session 
   class Model extends LlmAdapter {
     async resolveModel(provider, model) { return { provider, id: model, name: model } }
     async *stream(input) {
-      requests.push(structuredClone({ system: input.system, messages: input.messages, tools: input.tools }))
+      requests.push(structuredClone({ system: input.messages.filter(message => message.role === 'system').flatMap(message => message.content).map(block => block.text || '').join('\n\n'), messages: input.messages, tools: input.tools }))
       const current = input.messages.filter(message => message.role === 'user').at(-1)
       const filtering = JSON.stringify(current).includes('任务类型：世界书筛选')
       const lookup = searchPhase === null ? null : searchPhase++

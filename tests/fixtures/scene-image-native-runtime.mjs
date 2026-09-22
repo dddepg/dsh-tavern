@@ -41,7 +41,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
     }
     async *stream(input) {
       await beforeModelRequest?.(input)
-      requests.push(structuredClone({ model: input.model, reasoningEffort: input.reasoningEffort, maxTokens: input.maxTokens, system: input.system, messages: input.messages, tools: input.tools }))
+      requests.push(structuredClone({ model: input.model, reasoningEffort: input.reasoningEffort, maxTokens: input.maxTokens, system: input.messages.filter(message => message.role === 'system').flatMap(message => message.content).map(block => block.text || '').join('\n\n'), messages: input.messages, tools: input.tools }))
       for (const tool of input.tools || []) assertImageToolSchema(tool)
       const currentMessages = input.messages.slice(Math.max(0, input.messages.findLastIndex(message => message.source?.kind === 'plugin')))
       const referenceResult = currentMessages.flatMap(message => message.content || []).find(block => block.type === 'tool-result' && block.toolCallId === 'reference-call')

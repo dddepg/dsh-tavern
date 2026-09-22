@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
+import { createBackgroundTaskCoordinator } from '../tavern-plugin/lib/domain/background-task-coordinator.js'
 import { createBackgroundAgentRunner } from '../tavern-plugin/lib/background-agent-runner.js'
 
 function deferred() {
@@ -11,12 +13,13 @@ async function until(condition) {
   for (let n = 0; n < 100; n++) { if (condition()) return; await new Promise(resolve => setImmediate(resolve)) }
   throw new Error('Agent 未到达预期阶段')
 }
-function harness({ work = async () => {}, flush = async () => {}, dispose = async () => {}, compactWork = async () => {}, needsNewBackgroundSession } = {}) {
+function harness({ work = async () => {}, flush = async () => {}, dispose = async () => {}, compactWork = async () => {}, needsNewBackgroundSession, resume } = {}) {
   const children = new Map(), starts = [], calls = [], disposals = [], tools = new Map()
   let seq = 0
   const runner = createBackgroundAgentRunner({ id: () => 'child-' + ++seq, flushSession: flush, needsNewBackgroundSession,
     compactAgent: async agent => { calls.push(['compact', agent.session.id]); await compactWork(); return { message: 'compacted' } },
     agents: {
+      ...(resume ? { resume } : {}),
       get(id) { if (id.startsWith('game-')) return { id, session: { header: {} } } },
       async create(options) {
         calls.push(['create', options.sessionId])
@@ -185,4 +188,43 @@ test('替代后台任务失败也释放旧实例，新实例仍可继续使用',
   const latest = h.starts.at(-1).id
   fresh = false; fail = false
   assert.equal((await h.runner.run(h.input())).traceSessionId, latest)
+})
+
+
+test('missing background replacement is created only once across failed settlement retries', async t => {
+  const timeline = createStoryTimeline()
+  let chat = { id: 'chat', mode: 'story', messages: [], settleStatus: 'idle' }
+  const coordinator = createBackgroundTaskCoordinator({ timeline, store: {
+    readChat: async () => chat,
+    writeChat: async next => { chat = next },
+    updateChat: async (_id, mutate) => { chat = await mutate(chat); return chat }
+  } })
+  const seed = await coordinator.begin(chat, 'settlement')
+  await seed.commit({ participant: seed.participant({ sessionId: 'missing-old', boundary: 42 }) })
+  const resumed = []
+  let failModel = true
+  const h = harness({
+    resume: async ({ resumeSessionId }) => {
+      resumed.push(resumeSessionId)
+      throw Object.assign(new Error('session missing'), { code: 'SESSION_NOT_FOUND' })
+    },
+    work: async () => { if (failModel) throw new Error('synthetic model timeout') }
+  })
+  t.after(() => h.runner.dispose())
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const task = await coordinator.begin(chat, 'settlement')
+    const requested = task.participantRequest.sessionId
+    await assert.rejects(h.runner.run(h.input({ task: 'settlement', persistentSessionId: requested,
+      onPersistentSessionReady: id => task.bindSession(id)
+    })), error => error.traceSessionId === 'child-1')
+    // Even a stale caller receipt cannot undo the identity published by the runner.
+    await task.fail({ sessionId: requested, boundary: 42 })
+    assert.equal(chat.timeline.participants.background.sessionId, 'child-1')
+  }
+  assert.deepEqual(resumed, ['missing-old'])
+  assert.deepEqual(h.calls.filter(call => call[0] === 'create'), [['create', 'child-1']])
+  failModel = false
+  await h.runner.run(h.input({ task: 'settlement', persistentSessionId: chat.timeline.participants.background.sessionId }))
+  await h.runner.compact({ sessionId: chat.timeline.participants.background.sessionId })
+  assert.deepEqual(h.calls.filter(call => call[0] === 'compact'), [['compact', 'child-1']])
 })

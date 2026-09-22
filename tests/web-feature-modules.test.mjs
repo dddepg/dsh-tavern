@@ -177,6 +177,7 @@ test('游玩控制 Feature module 统一注册状态栏与对话控制面板', f
   assert.deepEqual(injectedSlots, [
     'conversation.session.header.utilities',
     'conversation.session.header.utilities',
+    'conversation.session.header.utilities',
     'conversation.input.dock',
     'conversation.input.dock',
     'conversation.input.dock',

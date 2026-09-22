@@ -1,4 +1,4 @@
-import { createFullTemplateRuntime } from '../../tavern-plugin/lib/domain/full-template-runtime.js'
+import { createFullTemplateRuntime } from './browser-template-transport.mjs'
 import { createPromptTemplateGlobalVariables } from '../../tavern-plugin/lib/domain/prompt-template-global-variables.js'
 import { createServer } from 'node:http'
 import { mkdtemp } from 'node:fs/promises'

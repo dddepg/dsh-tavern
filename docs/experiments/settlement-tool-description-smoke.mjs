@@ -3,7 +3,7 @@
 // Raw requests/responses contain public demo material only; credentials are not saved.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const card=JSON.parse(await readFile(new URL('../../demo/cards/avra-complete.json', import.meta.url),'utf8'));
+const card=JSON.parse(await readFile(new URL('../../examples/avra/cards/avra-complete.json', import.meta.url),'utf8'));
 import {createMvuSettlementModule} from '../../tavern-plugin/lib/domain/mvu-background-settlement.js';
 const dir=process.argv[2];
 assert.ok(dir && process.env.DEEPSEEK_API_KEY, 'Usage: DEEPSEEK_API_KEY=... node docs/experiments/settlement-tool-description-smoke.mjs OUTPUT_DIR');

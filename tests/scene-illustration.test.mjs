@@ -1348,3 +1348,14 @@ test('deleting the last image permits a fresh generation without replaying the d
   assert.equal(next.versions.length, 1); assert.notEqual(next.versions[0].id, first.versions[0].id)
   assert.equal(fx.imageCalls(), 2); assert.deepEqual(fx.chat(), before)
 })
+
+test('关闭姿势结算后生图忽略当前及历史快照中的姿势', () => {
+  const chat = chatFixture(), target = sceneTarget(chat, 2)
+  chat.backgroundTasks = { posture: false }
+  assert.equal(sceneInput(chat, target).posture, '')
+  assert.equal(sceneInput(chat, target, { posture: '历史姿态' }).posture, '')
+  chat.backgroundTasks.posture = true
+  assert.equal(sceneInput(chat, target, { posture: '历史姿态', backgroundTasks: { posture: false } }).posture, '')
+  assert.equal(sceneInput(chat, target, { posture: '历史姿态' }).posture, '历史姿态')
+  assert.equal(chat.posture, '站在窗边，左手扶窗')
+})

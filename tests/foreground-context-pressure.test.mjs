@@ -26,3 +26,9 @@ test('unknown capacity on selected model is not replaced by another model capaci
  h.deps.llm.resolveModelInfo=async()=>({context:{}});h.deps.defaultModel.currentSelection=()=>{throw Error('must not use default')};
  assert.equal(await measureForegroundPressure(h.deps),null);
 });
+
+test('foreground budget includes pending input and reserves the current output limit', async () => {
+  const h = fixture({ capacity: 200000, pending: { provider: 'current', model: 'current', maxTokens: 30000 } })
+  assert.equal((await measureForegroundPressure(h.deps)).budgetPercent, 105.5)
+  assert.equal((await measureForegroundPressure(h.deps)).percent, 90.5)
+})

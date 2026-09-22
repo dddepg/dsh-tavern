@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createFullTemplateRuntime } from '../tavern-plugin/lib/domain/full-template-runtime.js'
+import { createFullTemplateRuntime } from './fixtures/browser-template-transport.mjs'
 
 test('前后台模板任务按会话串行，返回浏览器结果并支持释放后重连', async () => {
   const runtime = createFullTemplateRuntime({ publishSignal(sessionId) {
@@ -352,4 +352,25 @@ test('慢任务持续确认后正常完成；普通页面心跳不能给任务�
       assert.equal(await verdict, confirmWork ? 'done' : undefined)
     } finally { clearInterval(pulse); runtime.dispose() }
   }
+})
+
+
+test('批量临时任务单次派发、零持久日志，超时后不逐条回退', async () => {
+  let offers=0, reads=0
+  const runtime=createFullTemplateRuntime({executionTimeoutMs:100,publishSignal(){offers++},store:{
+    readJson:async()=>{reads++;return null},writeJson:async()=>assert.fail('transient write')
+  }})
+  runtime.heartbeat('s','page','ready')
+  const items=[{template:'first',randomRef:'a'},{template:'second',randomRef:'b'}]
+  const output=runtime.forSession('s').renderProjections(items,{randomSeed:'seed',scopes:{local:{n:1}}})
+  const rejected=assert.rejects(output,/执行超时/)
+  const work=await claimWork(runtime)
+  assert.equal(work.event.name,'renderMany')
+  assert.deepEqual(work.event.args[0].items,items)
+  await runtime.start('s',work.event.id,work.leaseToken,'page')
+  await rejected
+  assert.equal(offers,1)
+  assert.equal(reads,0)
+  assert.equal(await runtime.complete('s',work.event.id,[[]],'page',work.leaseToken),false)
+  runtime.dispose()
 })

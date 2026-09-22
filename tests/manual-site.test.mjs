@@ -118,7 +118,7 @@ test('文档只采用独立样例截图，不复用旧图片或加载远程脚�
   const frames = [...html.matchAll(/<iframe\b[^>]*>/g)].map(match => match[0])
   assert.equal(frames.length, 1)
   assert.match(frames[0], /src="https:\/\/player\.bilibili\.com\/player\.html\?/)
-  assert.match(frames[0], /bvid=BV1Bibx61EAC/)
+  assert.match(frames[0], /bvid=BV1NAeq6iELC/)
   assert.match(frames[0], /autoplay=0/)
   assert.match(frames[0], /title="[^"]+"/)
   assert.doesNotMatch(html, /<script[^>]+src="https?:/)

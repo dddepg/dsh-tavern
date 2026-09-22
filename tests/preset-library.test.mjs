@@ -171,3 +171,8 @@ test('移动拒绝系统占位及无效分段，同名标识条目不会丢失',
   assert.deepEqual(preset.dshPreset.front.map(e => e.content), ['第一项'])
   assert.deepEqual(preset.dshPreset.back.map(e => e.content), ['第二项'])
 })
+
+test('列出后文件消失时跳过缺失预设', async () => {
+  const library = createPresetLibrary({ resources: { list: async () => ['presets/gone.json'], readText: async () => undefined }, state: { readJson: async () => undefined } })
+  assert.deepEqual((await library.catalog()).presets, [])
+})

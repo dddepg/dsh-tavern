@@ -110,7 +110,7 @@ test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill �
   assert.match(orchestrationStrategiesSource, /name: 'tavern:resource-workspace'/)
   assert.match(advancedSkillSource, /Cordis 动态插件/)
   assert.match(advancedSkillSource, /tools\.cordis\.yml/)
-  assert.match(orchestratorSource, /if \(mode === 'card'\) return \['web_search', shellToolName, \.\.\.dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', \.\.\.cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save_draft', 'tavern_user_profile_confirm', 'tavern_read_card'/)
+  assert.match(orchestratorSource, /if \(mode === 'card'\) return \['web_search', shellToolName, \.\.\.dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', \.\.\.cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card'/)
   assert.doesNotMatch(orchestratorSource, /mode === 'revision'|mode === 'extract'/)
   assert.doesNotMatch(orchestratorSource, /if \(mode === 'script'\) return \[[^\]]*'bash'/)
 	assert.match(serverSource, /controlledToolNames = new Set\(\['bash', 'pwsh', \.\.\.dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', \.\.\.cordisToolNames, 'tavern_user_profile_read'/)

@@ -14,7 +14,7 @@ function harness() {
   const context = vm.createContext({
     window: { localStorage: { getItem: () => " 你 " }, setTimeout: fn => { state.timers.push(fn); return 1; }, clearTimeout() {} },
     initializeFullOpeningTemplate: async response => response,
-    compatibilityAvailable: false, requestMode: "dsh",
+    compatibilityAvailable: true, requestMode: "dsh",
     playPrewarmRef: { current: { begin() {}, cancel() {} } },
     setBusy: value => { state.busy = value; },
     setError: value => { state.error = value; },
@@ -23,7 +23,7 @@ function harness() {
     React: { useEffect: fn => fn() },
   });
   vm.runInContext(prepare, context);
-  return { state, resolve, reject, run: () => context.preparePlayConversation({ path: "fixture.json", name: "Fixture" }),
+  return { state, resolve, reject, navigateMode: value => { context.requestMode = value; }, run: () => context.preparePlayConversation({ path: "fixture.json", name: "Fixture" }),
     effect: () => { context.openingPicker = state.openingPicker; vm.runInContext(effect, context); } };
 }
 test("shows pending picker before RPC completes and does not request initial openings twice", async () => {
@@ -40,6 +40,9 @@ test("shows pending picker before RPC completes and does not request initial ope
   h.effect();
   assert.equal(h.state.timers.length, 0);
   assert.equal(h.state.calls, 1);
+  h.navigateMode("sillytavern");
+  h.effect();
+  assert.equal(h.state.timers.length, 0, "navigation cannot reinitialize a retained draft in another mode");
   h.state.openingPicker.userName = "New name";
   h.effect();
   assert.equal(h.state.timers.length, 1);

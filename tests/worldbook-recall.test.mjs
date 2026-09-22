@@ -219,3 +219,66 @@ test('大世界书 render 仅传激活引用，模板正文与顺序作用域保
   const originalBytes = Buffer.byteLength(JSON.stringify(entries))
   assert.ok(referenceBytes < originalBytes * 0.03, `${referenceBytes} / ${originalBytes}`)
 })
+
+
+test('批量与逐条投影逐字一致：准备事件、随机、失败隔离、激活来源和宏顺序', {skip:process.env.TEMPLATE_EXECUTOR === 'server'}, async () => {
+  const engine = await UpstreamTemplateRuntime.create()
+  const entries = [
+    entry('entry:0', '<% setLocalVar("n", 1); setGlobalVar("g", 5); setMessageVar("m", 7); await activateWorldInfo("资料", true) %><%= Math.random() %>{{setvar::label::旅店}}', {constant:true, order:0}),
+    entry('entry:1', '普通 {{getvar::label}}', {constant:true, order:1}),
+    entry('entry:2', '<% setLocalVar("n", 999); setGlobalVar("g", 999); setMessageVar("m", 999); throw new Error("isolated") %>', {constant:true, order:2}),
+    entry('entry:3', '<%= getLocalVar("n") %>|<%= preparedMarker %>|<%= Math.random() %>|{{getvar::label}}', {constant:true, order:3}),
+    entry('entry:4', '<% if ( %>', {constant:true, order:4}),
+    entry('entry:5', '<%= getLocalVar("n") %>|<%= getGlobalVar("g") %>|<%= getMessageVar("m") %>', {constant:true, order:5}),
+    entry('entry:6', '资料内容', {title:'资料', enabled:false, order:6})
+  ]
+  entries.forEach((entry,index)=>{entry.sourceUid=5600+index})
+  const worldBook = {view:{displayName:'issue56-batch-book',entries}}
+  const environment = entries.map(e=>({...e,uid:e.sourceUid,world:worldBook.view.displayName}))
+  const input = {worldBook, chat:{...chat(),variables:{payload:'v'.repeat(200000)}}, card:card(), includeConstants:true, randomSeed:'issue56-seed'}
+  await engine.page.evaluate(()=>{
+    window.prepareCalls=0
+    window.prepareHook=context=>{window.prepareCalls++;context.preparedMarker='prepared'}
+    window.testHost.eventSource.on('prompt_template_prepare',window.prepareHook)
+  })
+  let batchCalls=0
+  const sequential = {render:(text,context)=>engine.render(text,context,environment)}
+  try {
+    const before = await projectWorldBookTemplates({...input,runtime:sequential})
+    const beforeCalls = await engine.page.evaluate(()=>window.prepareCalls)
+    await engine.page.evaluate(()=>{window.prepareCalls=0})
+    const after = await projectWorldBookTemplates({...input,runtime:{...sequential,renderProjections:async(items,context)=>{
+      batchCalls++;const receipts=await engine.renderProjections(items,context,environment)
+      assert.ok(receipts.every(result=>!Object.hasOwn(result,'scopes')))
+      assert.ok(JSON.stringify(receipts).length<5000)
+      return receipts
+    }}})
+    assert.deepEqual(after,before)
+    assert.equal(batchCalls,1)
+    assert.equal(await engine.page.evaluate(()=>window.prepareCalls),beforeCalls)
+    assert.equal(beforeCalls,5)
+    assert.match(after.context,/1\|prepared\|/)
+    assert.match(after.context,/1\|5\|7/)
+    assert.equal(input.chat.variables.payload.length,200000)
+    assert.equal(after.diagnostics.length,2)
+    assert.deepEqual(after.activationRequests,[{ref:'entry:6',force:true,sourceRef:'entry:0'}])
+  } finally {
+    await engine.page.evaluate(()=>window.testHost.eventSource.removeListener('prompt_template_prepare',window.prepareHook))
+  }
+})
+
+test('批量结果缺失或执行失败不回退重跑，纯文本不派发模板作业', async () => {
+  const input = {worldBook:{view:{entries:[entry('entry:0','<%= 1 %>',{constant:true})]}},chat:chat(),card:card()}
+  for(const result of [undefined,null,[],[null]]) {
+    await assert.rejects(projectWorldBookTemplates({...input,runtime:{
+      render:()=>assert.fail('must not replay'),renderProjections:async()=>result
+    }}), /批量结果不完整/)
+  }
+  await assert.rejects(projectWorldBookTemplates({...input,runtime:{
+    render:()=>assert.fail('must not replay'),renderProjections:async()=>{throw Error('receipt lost')}
+  }}),/receipt lost/)
+  const plain=await projectWorldBookTemplates({...input,includeConstants:true,worldBook:{view:{entries:[entry('entry:0','纯文本',{constant:true})]}},runtime:{
+    render:()=>assert.fail('no template'),renderProjections:()=>assert.fail('no template')
+  }})
+  assert.equal(plain.context,'纯文本')
+})

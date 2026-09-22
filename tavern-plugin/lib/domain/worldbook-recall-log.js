@@ -37,7 +37,7 @@ export function createWorldbookRecallLog({ store, now = Date.now }) {
     const saved = Object.values(chat.foregroundFrames || {}).find(value => value.frameId === frameId)
     const path = saved?.source?.worldBook?.recallLog
     if (!path || path !== base(chat.id) + segment(saved.operationId) + '.json') return
-    const requestText = (frame.content || []).filter(part => part.type === 'text').map(part => part.text).join('\n')
+    const requestText = messages.flatMap(message => message.content || []).filter(part => part.type === 'text').map(part => part.text).join('\n')
     await store.updateJson(path, log => log ? { ...log, status: 'requested', requestedAt: now(), requestIds: [...new Set([...(log.requestIds || []), requestId])],
       outputs: log.outputs.map(output => ({ ...output, requestContainsText: output.location === 'foreground' ? requestText.includes(output.text) : null })) } : log)
   }

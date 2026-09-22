@@ -39,7 +39,13 @@ export async function executeBackgroundCompaction(agent, signal) {
     throw new Error('dsh-tavern: 后台 Agent 没有提供 /compact 命令')
   }
   const result = execution.result
-  if (result.kind !== 'success') throw new Error(str(result.text) || '后台压缩失败')
+  if (result.kind !== 'success') {
+    // The command result is intentionally generic; recover only this command's
+    // persisted failure, never an earlier compaction attempt's diagnostic.
+    const failure = execution.commandId && sessionEvents(agent.session).findLast(event =>
+      event.type === 'compaction/end' && event.data?.sourceCommandId === execution.commandId && event.data?.error)
+    throw new Error(str(result.text) || '后台压缩失败', failure ? { cause: new Error(str(failure.data.error)) } : undefined)
+  }
   return { message: str(result.text) || '后台压缩完成' }
 }
 

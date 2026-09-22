@@ -1,5 +1,7 @@
 # CLI 独立运行时与宿主版本策略
 
+> 后续交付方向以 [ADR 0007：内置固定 DSH、独立发行](../adr/0007-bundle-and-pin-dsh-runtime.md) 为准。本文记录既有 CLI 实现及历史验证，不代表桌面、安卓仍长期依附官方宿主。
+
 本版 CLI 固定安装 DSH 0.1.2-rc.1。Desktop 推荐 2.0.5（发布说明对应 DSH 0.1.2-rc.1），DSHA 推荐 1.2.0-rc1.4（预览版，发布说明对应相同 DSH 版本）；两个宿主均只提示、不阻止其他版本，也不自动更换宿主。
 
 Desktop 下载：https://github.com/anywhere-labs/dsh-desktop/releases 。找到 v2.0.5，展开 Assets，选择平台安装包。

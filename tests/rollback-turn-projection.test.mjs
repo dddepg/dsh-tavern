@@ -27,7 +27,8 @@ function row(kind, turn, alpha) {
 function harness(rows) {
   rows.forEach((row, index) => { row.previousElementSibling = rows[index - 1] ?? null })
   const document = { querySelectorAll(selector) {
-    assert.ok(['[data-chat-flow-kind="turn-tail"]', '[data-chat-flow-kind="context"]'].includes(selector))
+    assert.ok(['[data-chat-flow-kind="turn-tail"]', '[data-chat-flow-kind="context"]', '[data-chat-turn]'].includes(selector))
+    if (selector === '[data-chat-turn]') return rows.filter(row => row.getAttribute('data-chat-turn'))
     return rows.filter(row => selector === '[data-chat-flow-kind="' + row.getAttribute('data-chat-flow-kind') + '"]')
   } }
   const projection = client.createTurnHistoryProjection({ root: () => document, storage: () => ({ getItem: () => '{}' }) })
@@ -102,7 +103,7 @@ for (const alpha of [false, true]) test(`${alpha ? 'alpha' : 'main'} 中断残�
   for (const turn of [1, 2, 3]) {
     session.append('turn/start', { turn })
     session.append('user/message', { id: 'u' + turn, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'input' + turn }] }, { surfaceOp: 'append' })
-    session.append('assistant/message', { turn, step: 1, message: { id: 'a' + turn, role: 'assistant', source: model, content: [{ type: 'text', text: turn === 3 ? '中断时已流出的半截正文' : 'reply' + turn }] } }, { surfaceOp: 'append' })
+    session.append('assistant/message', { turn, step: 1, stream: [], message: { id: 'a' + turn, role: 'assistant', source: model, content: [{ type: 'text', text: turn === 3 ? '中断时已流出的半截正文' : 'reply' + turn }] } }, { surfaceOp: 'append' })
     session.append('turn/end', { turn, reason: { kind: turn === 3 ? 'aborted' : 'completed' } })
   }
   // Same event sequence as the report: aborted reply -> failed-turn cleanup -> rollback.
@@ -110,8 +111,8 @@ for (const alpha of [false, true]) test(`${alpha ? 'alpha' : 'main'} 中断残�
   assert.deepEqual(foregroundSuppressedTurns({}, sessionEvents(session)), [], "停止本身保留半截正文，只有回退才隐藏")
   const rollback = locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes })
   assert.equal(rollback.turn, 2)
-  session.append('assistant/message', { turn: 2, step: 1, message: { id: 'rollback', role: 'assistant', source: model, content: [] } }, {
-    surfaceOp: { op: 'replace', start: rollback.userSeq, end: rollback.endSeq }, sourceEventSeqs: rollback.shadowedSeqs
+  session.append('assistant/message', { turn: 2, step: 1, stream: [], message: { id: 'rollback', role: 'assistant', source: model, content: [] } }, {
+    surfaceOp: { op: 'replace', startSeq: rollback.userSeq, endSeq: rollback.endSeq }, sourceEventSeqs: rollback.shadowedSeqs
   })
   for (const reload of [false, true]) {
     if (reload) session = Session.create(session.id, sessionEvents(session), session.header)
@@ -174,4 +175,27 @@ test('撤销隐藏保留宿主原有显示样式和其他隐藏行', () => {
     assert.equal(normal.style.display, '')
     assert.equal(body.style.display, '')
   }
+})
+
+test('重生成尾部先挂载时，不能隐藏相邻轮次的玩家输入或正文', () => {
+  const previous = ['user', 'assistant-step'].map(kind => row(kind, 2, true))
+  const current = ['assistant-step', 'turn-tail'].map(kind => row(kind, 6, true))
+  const projection = harness([...previous, ...current])
+  projection.applyRegeneration([4, 5, 6], { '3': 6 })
+  assert.ok(previous.every(item => item.style.display === ''), '缺少本轮 user 和前轮 tail 时不能越过明确轮次边界')
+})
+
+test('隐藏旧正文不能越过明确轮次边界，重生成正文尚未挂载也保留前轮', () => {
+  const previous = row('assistant-step', 2, true)
+  const tail = row('turn-tail', 3, true)
+  harness([previous, tail]).applyRegeneration([6], { '3': 6 })
+  assert.equal(previous.style.display, '')
+})
+
+ test('被替换的合成轮即使没有尾部，也按明确轮次隐藏', () => {
+  const oldAttempt = row('assistant-step', 4, true)
+  const newest = row('assistant-step', 6, true)
+  harness([oldAttempt, newest]).applyRegeneration([4, 5, 6], { '3': 6 })
+  assert.equal(oldAttempt.style.display, 'none')
+  assert.equal(newest.style.display, '')
 })

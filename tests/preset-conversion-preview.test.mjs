@@ -168,3 +168,11 @@ test('没有 prompt_order 时按 prompts 原始顺序生成只读草稿', () => 
   assert.deepEqual(result.phases.front.map(function (entry) { return entry.entryKey }), ['one#1'])
   assert.deepEqual(result.phases.back.map(function (entry) { return entry.entryKey }), ['two#1'])
 })
+
+test('无顺序表且 prompts 含空槽时保留原始索引和启用状态', () => {
+  const result = previewPresetConversion(JSON.stringify({ prompts: [null, 'invalid', { identifier: 'a', content: 'A', enabled: false }, { identifier: 'b', content: 'B' }] }))
+  assert.equal(result.valid, true)
+  assert.equal(result.sourceRows.find(row => row.identifier === 'a').sourceIndex, 2)
+  assert.equal(result.sourceRows.find(row => row.identifier === 'b').sourceIndex, 3)
+  assert.equal(result.sourceRows.find(row => row.identifier === 'a').enabled, false)
+})

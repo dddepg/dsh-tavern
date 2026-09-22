@@ -183,10 +183,23 @@ export async function projectWorldBookTemplates(input = {}) {
         ref: entry.ref, world: str(input.worldBook?.view?.displayName) }
     })
   }
+  const templates = controllers.filter(isWorldBookTemplateEntry)
+  // Plain entries only affect the host macro state below, not template scopes.
+  // Keep their output interleaved in the original order after the batch returns.
+  const useBatch = templates.length > 0 && typeof runtime.renderProjections === 'function'
+  const batch = useBatch
+    ? await runtime.renderProjections(templates.map(entry => ({ template: templateBody(entry.content), randomRef: entry.ref })),
+      { ...templateContext, scopes, randomSeed: input.randomSeed }) : null
+  if (useBatch && (!Array.isArray(batch) || batch.length !== templates.length || batch.some(result => typeof result?.ok !== 'boolean'))) {
+    const error = new Error('世界书模板批量结果不完整，请刷新酒馆页面后重试')
+    error.code = 'FULL_TEMPLATE_UNAVAILABLE'
+    throw error
+  }
+  let templateIndex = 0
   for (const entry of controllers) {
     const random = input.randomSeed ? entryRandom(input.randomSeed, entry.ref) : (input.random || Math.random)
     const result = isWorldBookTemplateEntry(entry)
-      ? await (runtime.renderProjection || runtime.render).call(runtime, templateBody(entry.content), Object.assign({}, templateContext, { scopes, randomSeed: input.randomSeed, randomRef: entry.ref }))
+      ? batch ? batch[templateIndex++] : await (runtime.renderProjection || runtime.render).call(runtime, templateBody(entry.content), Object.assign({}, templateContext, { scopes, randomSeed: input.randomSeed, randomRef: entry.ref }))
       : { ok: true, text: entry.content, scopes }
     if (!result.ok) {
       diagnostics.push({ kind: 'worldbook-template', code: result.kind, ref: str(entry.ref) })
@@ -194,7 +207,7 @@ export async function projectWorldBookTemplates(input = {}) {
     }
     for (let count = 0; count < (result.randomCalls || 0); count++) random()
     activationRequests.push(...(result.activationRequests || []).map(request => ({ ...request, sourceRef: entry.ref })))
-    scopes = clone(result.scopes)
+    if (!useBatch) scopes = clone(result.scopes)
     const projected = input.includeConstants === true
       ? projectAgentContent(renderWorldbookRandom(result.text, random), { charName: str(input.card?.name), macroState }) : null
     if (projected) macroState = projected.macroState

@@ -303,3 +303,17 @@ test('普通写入后直接复用最新状态，失败或放弃的编辑不污�
   unchanged.counter=999
   assert.equal((await store.read('write-cache')).counter,1)
 })
+
+test('压缩快照膨胀超过上限时明确失败，保留原文件', async t => {
+  const { gzipSync } = await import('node:zlib')
+  const root = await temporary()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const dir = path.join(root, 'chats/chat/snapshots')
+  await mkdir(dir, { recursive: true })
+  const file = path.join(dir, '000000000001.json.gz')
+  const bytes = gzipSync(JSON.stringify({ id: 'chat', _storageRevision: 1, text: 'x'.repeat(5000) }))
+  await writeFile(file, bytes)
+  const store = createChatJournalStore({ dataRoot: root, maxSnapshotBytes: 1024 })
+  await assert.rejects(store.read('chat'), { code: 'ERR_BUFFER_TOO_LARGE' })
+  assert.deepEqual(await readFile(file), bytes)
+})

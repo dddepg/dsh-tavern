@@ -9,11 +9,35 @@ const textOf = message => (message?.content || []).filter(block => block.type ==
 export function prepareTemplateHistory(session, before, after) {
   const events = sessionEvents(session), bySeq = new Map(events.map(event => [event.seq, event]))
   const nodes = (session.surface?.nodes || []).map(seq => bySeq.get(seq)).filter(Boolean)
+  // Index each active message once. Archived/unmatched chat rows must not
+  // repeatedly rescan the entire remaining surface either.
+  const positions = new Map()
+  const messageTypes = new Set(before.messages.map(message => message.role + '/message'))
+  nodes.forEach((event, offset) => {
+    if (!messageTypes.has(event.type)) return
+    const key = event.type + '\0' + textOf(event.type === 'assistant/message' ? event.data.message : event.data)
+    if (!positions.has(key)) positions.set(key, [])
+    positions.get(key).push(offset)
+  })
+  function firstAtOrAfter(offsets, cursor) {
+    if (!offsets) return -1
+    let lo = 0, hi = offsets.length
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (offsets[mid] < cursor) lo = mid + 1
+      else hi = mid
+    }
+    return offsets[lo] ?? -1
+  }
   let cursor = 0
   for (let index = 0; index < before.messages.length; index++) {
     const old = before.messages[index], next = after.messages[index]
     const texts = new Set([body(old), old.sourceText, old.sessionText, old.templateInputSource].filter(value => typeof value === 'string'))
-    const at = nodes.findIndex((event, offset) => offset >= cursor && event.type === old.role + '/message' && texts.has(textOf(event.type === 'assistant/message' ? event.data.message : event.data)))
+    let at = -1
+    for (const text of texts) {
+      const candidate = firstAtOrAfter(positions.get(old.role + '/message\0' + text), cursor)
+      if (candidate >= 0 && (at < 0 || candidate < at)) at = candidate
+    }
     if (at >= 0) cursor = at + 1
     const inputRewrite = old.templateInputSource && at >= 0 && textOf(nodes[at].data) !== body(next)
     if (body(old) === body(next) && !inputRewrite) continue

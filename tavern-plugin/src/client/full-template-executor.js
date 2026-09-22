@@ -1,180 +1,109 @@
-// Back off only empty queue checks; notifications wake the executor immediately.
-function createTemplateIdleWait({ schedule = setTimeout, cancel = clearTimeout } = {}) {
-  let delay = 100, pending = false, finish = null;
-  return {
-    reset() { delay = 100; },
-    wake() {
-      delay = 100;
-      if (finish) finish();
-      else pending = true;
-    },
-    wait() {
-      if (pending) { pending = false; return Promise.resolve(); }
-      return new Promise(resolve => {
-        const timer = schedule(() => { finish = null; resolve(); }, delay);
-        finish = () => { cancel(timer); finish = null; resolve(); };
-        delay = Math.min(2000, delay * 2);
-      });
+// UI only: commands and template evaluation stay in the service.
+function createServerTemplatePanel({ window: hostWindow, rpc: invoke, isActive = () => true, globalSettings = false }) {
+  let sessionId = '', panel = null, cleanup = null;
+  const fields = [
+    ['enabled', '启用提示词模板', true],
+    ['generate_enabled', '生成时执行模板', true],
+    ['generate_loader_enabled', '生成时加载 GENERATE 世界书条目', true],
+    ['inject_loader_enabled', '启用 @INJECT 注入', false],
+    ['render_enabled', '显示时执行模板', true],
+    ['render_loader_enabled', '显示时加载 RENDER 世界书条目', true],
+    ['preload_worldinfo_enabled', '预加载世界书', true],
+    ['preload_only', '仅预加载 PRELOAD 条目', true],
+    ['code_blocks_enabled', '处理消息中的代码块', false],
+    ['raw_message_evaluation_enabled', '将模板结果写入原始消息', true],
+    ['filter_message_enabled', '生成时过滤消息中的模板代码', true],
+    ['depth_limit', '消息处理深度（-1 表示不限）', -1],
+    ['autosave_enabled', '自动保存变量更新', false],
+    ['with_context_disabled', '禁用 with 上下文', false],
+    ['invert_enabled', '旧设定兼容模式', true],
+    ['sandbox', '模板兼容沙箱', false],
+    ['compile_workers', '异步编译', false],
+    ['cache_enabled', '编译缓存', 0, [[0, '关闭'], [1, '开启'], [2, '仅世界书']]],
+    ['cache_size', '缓存数量（0 表示不限）', 64],
+    ['cache_hasher', '缓存哈希函数', 'h32ToString', [['h32ToString','h32ToString'], ['h64ToString','h64ToString']]],
+    ['debug_enabled', '调试日志', false]
+  ];
+  function close() { const done = cleanup; cleanup = null; panel?.close(); panel?.remove(); panel = null; done?.(); }
+  async function open(event) {
+    if ((!globalSettings && (!sessionId || !isActive() || (event?.detail?.sessionId && event.detail.sessionId !== sessionId))) || event?.detail?.handled) return;
+    if (event?.detail) event.detail.handled = true;
+    close();
+    const document = hostWindow.document, owner = sessionId, previous = document.activeElement;
+    const dialog = document.createElement('dialog'); panel = dialog;
+    const alive = () => panel === dialog && (globalSettings || (sessionId === owner && isActive()));
+    cleanup = () => { event?.detail?.onClose?.(); if (previous?.isConnected) previous.focus(); };
+    if (event?.detail) event.detail.close = () => { if (panel === dialog) close(); };
+    function el(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
+    function button(text, action) { const node = el('button', text, 'dsh-tavern-btn'); node.type = 'button'; node.onclick = action; return node; }
+    function section(title, help) { const node = el('section', '', 'dsh-template-section'); node.append(el('h3', title), el('p', help, 'dsh-template-help')); body.append(node); return node; }
+    function status(parent) { const node = el('p', '', 'dsh-template-feedback'); node.setAttribute('role', 'status'); parent.append(node); return node; }
+    function report(node, error) { if (alive()) node.textContent = String(error.message || error); }
+    dialog.className = 'dsh-ejs-editor dsh-template-panel'; dialog.setAttribute('aria-label', globalSettings ? '提示词模板设置' : '本局模板命令');
+    const header = el('div', '', 'dsh-ejs-editor-head'), heading = el('div');
+    heading.append(el('h2', globalSettings ? '提示词模板设置' : '本局模板命令'), el('p', globalSettings ? '模板运行、兼容性与性能设置，对所有游戏生效。' : '命令只在打开面板时的游戏中执行。'));
+    header.append(heading, button('关闭', close));
+    const body = el('div', '', 'dsh-template-panel-body'); dialog.append(header, body); document.body.append(dialog);
+    dialog.addEventListener('cancel', e => { e.preventDefault(); close(); }); dialog.showModal();
+    if (!globalSettings) {
+    const commandSection = section('模板命令', '在当前游戏中执行，例如 /ejs <%= 1 + 1 %>。命令可修改变量或游戏数据。');
+    const command = el('textarea'); command.setAttribute('aria-label', '模板命令'); command.placeholder = '/ejs <%= 1 + 1 %>';
+    const commandStatus = status(commandSection);
+    const run = button('执行模板命令', async () => {
+      if (!alive() || run.disabled || !command.value.trim()) return;
+      run.disabled = true; commandStatus.textContent = '正在执行…';
+      try { const result = await invoke('executeFullTemplateCommand', { text: command.value }, owner); if (alive()) commandStatus.textContent = String(result.pipe ?? '已执行'); }
+      catch (error) { report(commandStatus, error); }
+      finally { if (alive()) run.disabled = false; }
+    });
+    commandSection.insertBefore(command, commandStatus); commandSection.insertBefore(run, commandStatus);
+      return;
     }
-  };
-}
-
-// Independent liveness: a blocked template operation must not stop presence renewal.
-function createTemplateHeartbeat({ rpc, runtimeId, schedule = setTimeout, cancel = clearTimeout }) {
-  let stopped = false, timer = null, phase = 'initializing', error = '';
-  async function tick() {
-    try { await rpc('heartbeatFullTemplateRuntime', { runtimeId, phase, initializationError: error }); }
-    catch (_) { /* Transport failures are retried; execution is never replayed here. */ }
-    finally { if (!stopped) timer = schedule(tick, 10000); }
-  }
-  void tick();
-  return { phase(value, message = '') { phase = value; error = message; },
-    dispose() { stopped = true; if (timer !== null) cancel(timer); } };
-}
-
-// Compatibility transport for template builds predating the session task queue.
-// The official plugin still owns projection and persistence; never retry started work.
-function createLegacyTemplateWorkProcessor(plugin, rpc, runtimeId) {
-  let pendingReceipt = null;
-  return async function processNext() {
-    if (pendingReceipt) {
-      await rpc('completeFullTemplateWork', pendingReceipt);
-      pendingReceipt = null;
-      return true;
-    }
-    const work = await rpc('claimFullTemplateWork', { runtimeId, ready: true });
-    if (!work.event) return false;
-    const identity = { runtimeId, eventId: work.event.id, leaseToken: work.leaseToken };
-    const started = await rpc('startFullTemplateWork', identity);
-    if (!started.started) return true;
-    let receipt;
+    const settingsSection = section('模板运行设置', '关闭模板可能影响依赖 EJS 的人物卡或状态栏。修改后点击保存设置。');
+    const settingsStatus = status(settingsSection); settingsStatus.textContent = '正在读取设置…';
     try {
-      let result;
-      try { result = await plugin.project(work.event.name, work.event.args[0]); }
-      finally { await plugin.flush(); }
-      receipt = { args: [result] };
-    } catch (error) { receipt = { error: String(error.stack || error) }; }
-    pendingReceipt = { ...identity, ...receipt };
-    await rpc('completeFullTemplateWork', pendingReceipt);
-    pendingReceipt = null;
-    return true;
-  };
-}
-
-// A production instance of the complete upstream plugin, owned by the selected play session.
-function createFullTemplateExecutor({ window: hostWindow, rpc: invoke, executeSlash }) {
-  let owner = null;
-  function dispose() {
-    if (!owner) return;
-    const old = owner; owner = null;
-    hostWindow.removeEventListener('message', old.receive);
-    hostWindow.removeEventListener('dsh-template-settings', old.open);
-    for (const pending of old.pending.values()) { hostWindow.clearTimeout(pending.timer); pending.controller.abort(); }
-    old.pending.clear();
-    old.frame.remove();
-    void invoke('releaseFullTemplateRuntime', { runtimeId: old.token }, old.sessionId).catch(() => {});
+          const state = await invoke('getGlobalPromptTemplateSettings', {}); if (!alive()) return;
+          let settings = state.settings;
+          const form = el('form', '', 'dsh-template-settings-form'), inputs = [];
+          const basic = el('div', '', 'dsh-template-settings-grid'), advanced = el('details'); advanced.append(el('summary', '高级兼容与性能选项'));
+          const advancedGrid = el('div', '', 'dsh-template-settings-grid'); advanced.append(advancedGrid); form.append(basic, advanced);
+          fields.forEach(([key, label, fallback, choices], index) => {
+            const value = settings?.[key] ?? fallback, row = el('label', '', 'dsh-template-setting');
+            const input = el(choices ? 'select' : 'input'); input.setAttribute('aria-label', label);
+            if (choices) {
+              const values = choices.some(([v]) => String(v) === String(value)) ? choices : [...choices, [value, String(value)]];
+              values.forEach(([v, text]) => { const option = el('option', text); option.value = String(v); input.append(option); }); input.value = String(value);
+            } else {
+              input.type = typeof fallback === 'boolean' ? 'checkbox' : 'number';
+              if (input.type === 'checkbox') input.checked = Boolean(value);
+              else { input.value = String(value); input.step = '1'; input.min = key === 'depth_limit' ? '-1' : '0'; }
+            }
+            row.append(el('span', label), input); (index < 8 ? basic : advancedGrid).append(row); inputs.push({ key, input, fallback });
+          });
+          const save = button('保存设置'); save.type = 'submit'; form.append(save);
+          form.onsubmit = async e => {
+            e.preventDefault(); if (!alive() || save.disabled) return;
+            save.disabled = true; settingsStatus.textContent = '正在保存…';
+            try {
+              const next = { ...settings };
+              for (const { key, input, fallback } of inputs) next[key] = typeof fallback === 'boolean' ? input.checked : typeof fallback === 'number' ? Number(input.value) : input.value;
+              const result = await invoke('saveGlobalPromptTemplateSettings', { settings: next, expectedSettings: settings });
+              if (!alive()) return; if (!result.updated) throw new Error('设置未保存，请重新打开面板后重试');
+              settings = result.settings; settingsStatus.textContent = '已保存';
+            } catch (error) { report(settingsStatus, error); }
+            finally { if (alive()) save.disabled = false; }
+          };
+          settingsSection.insertBefore(form, settingsStatus); settingsStatus.textContent = '';
+    } catch (error) { report(settingsStatus, error); }
   }
-  function sync(sessionId, view) {
-    if (!hostWindow.document || !view || !view.chatId || !isPlayMode(view.mode || 'story')) { dispose(); return; }
-    if (owner && owner.sessionId === sessionId) { owner.frame.contentWindow?.postMessage({token:owner.token,type:'template-dirty'},'*'); return; }
-    dispose();
-    const frame = hostWindow.document.createElement('iframe');
-    const token = hostWindow.crypto && typeof hostWindow.crypto.randomUUID === "function"
-      ? hostWindow.crypto.randomUUID() : String(Date.now()) + ":" + String(Math.random());
-    frame.hidden = true;
-    frame.title = '完整提示词模板';
-    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-    const record = { frame, token, sessionId, pending: new Map() };
-    record.receive = async event => {
-      const data = event.data;
-      if (owner !== record || event.source !== frame.contentWindow || data?.token !== token || !['full-template-rpc','full-template-cancel','template-close'].includes(data.type)) return;
-      if(data.type === 'template-close') { frame.hidden=true; return; }
-      if (data.type === 'full-template-cancel') { record.pending.get(data.requestId)?.controller.abort(); return; }
-      const controller = new hostWindow.AbortController();
-      let expired = false;
-      // The iframe deadline alone only rejects its Promise. Abort the real fetch
-      // too, or retries can consume every HTTP connection and starve heartbeats.
-      const timer = hostWindow.setTimeout(() => { expired = true; controller.abort(); }, 15000);
-      record.pending.set(data.requestId, { controller, timer });
-      try {
-        if (!['getFullTemplateRuntimeInfo','getFullPromptTemplateState','saveFullPromptTemplateState','saveFullPromptTemplateSettings','saveFullPromptTemplateGlobals','countFullTemplateTokens','heartbeatFullTemplateRuntime','claimFullTemplateWork','startFullTemplateWork','completeFullTemplateWork','getFullTemplateWorldbook','replaceFullTemplateWorldbook','executeTemplateHostCommand'].includes(data.method)) throw new Error('Unsupported template RPC');
-        const result = data.method === 'executeTemplateHostCommand' ? {pipe: await executeSlash(data.args.text, sessionId, {waitForCompletion:false}).then(value => typeof value === 'string' ? value : '')} : await invoke(data.method, data.args || {}, sessionId, { signal: controller.signal });
-        if (result?.ok === false) throw new Error(result.error || 'Template RPC failed');
-        if (owner === record) frame.contentWindow.postMessage({ token, requestId: data.requestId, result }, '*');
-      } catch (error) {
-        if (owner === record) frame.contentWindow.postMessage({ token, requestId: data.requestId, error: expired ? '模板 RPC 超时：' + data.method : String(error.message || error) }, '*');
-      } finally {
-        hostWindow.clearTimeout(timer);
-        record.pending.delete(data.requestId);
-      }
-    };
-    record.open = event => { if(event?.detail)event.detail.handled=true; frame.hidden=false; Object.assign(frame.style,{position:'fixed',inset:'3vh 3vw',width:'94vw',height:'94vh',zIndex:'2147483000',border:'1px solid #777',borderRadius:'12px'});frame.contentWindow.postMessage({token,type:'template-open'},'*'); };
-    hostWindow.addEventListener('dsh-template-settings',record.open);
-    owner = record;
-    hostWindow.addEventListener('message', record.receive);
-    frame.srcdoc = `<!doctype html><meta charset="utf-8"><div id="extensions_settings"></div>
-<script src="/api/dsh-tavern/vendor/runtime-assets/jquery/jquery.min.js"></script>
-<script src="/api/dsh-tavern/vendor/runtime-assets/lodash/lodash.min.js"></script>
-<script type="module">
-import * as YAML from '/api/dsh-tavern/vendor/runtime-assets/yaml/index.mjs';
-
-const token=${JSON.stringify(token)},sessionId=${JSON.stringify(sessionId)},runtimeId=token;
-let sequence=0,context,plugin,panel,templateHost,dirty=true,panelRequested=false,lastSync=0;const pending=new Map();
-const idleWait=(${createTemplateIdleWait.toString()})();
-let activeWork=null;
-const transport=(method,args={})=>new Promise((resolve,reject)=>{const requestId=++sequence;const timer=setTimeout(()=>{pending.delete(requestId);parent.postMessage({type:'full-template-cancel',token,requestId},'*');reject(new Error('模板 RPC 超时：'+method))},15000);pending.set(requestId,{resolve,reject,timer});parent.postMessage({type:'full-template-rpc',token,requestId,method,args},'*')});
-const rpc=async(method,args={})=>{
- const result=await transport(method,method==='heartbeatFullTemplateRuntime'?{...args,work:activeWork}:args);
- if(method==='startFullTemplateWork'&&result.started)activeWork={eventId:args.eventId,leaseToken:args.leaseToken};
- if(method==='completeFullTemplateWork'&&result.completed)activeWork=null;
- return result;
-};
-addEventListener('message',event=>{if(event.source!==parent||event.data?.token!==token)return;const data=event.data;if(data.type==='template-dirty'){dirty=true;idleWait.wake();return}if(data.type==='template-open'){panelRequested=true;idleWait.wake();return}const item=pending.get(data.requestId);if(!item)return;pending.delete(data.requestId);clearTimeout(item.timer);data.error?item.reject(new Error(data.error)):item.resolve(data.result)});
-const heartbeat=(${createTemplateHeartbeat.toString()})({rpc,runtimeId});
-addEventListener('pagehide',()=>heartbeat.dispose(),{once:true});
-window.toastr=Object.fromEntries(['info','success','warning','error'].map(key=>[key,message=>console[key==='error'?'error':'log'](message)]));
-window.YAML=YAML;
-window.SillyTavern={getContext:()=>Object.assign({},context,templateHost)};
-async function run(){
- try {
-  const {entryUrl}=await rpc('getFullTemplateRuntimeInfo');
-  const templateModule=await import(new URL(entryUrl,document.baseURI).href);
-  const {connectTemplateSession,createTemplateServices,createTemplatePanel}=templateModule;templateHost=templateModule.templateHost;
-  const settingsHtml=await fetch('/api/dsh-tavern/vendor/st-prompt-template/settings.html').then(r=>r.text());
-  plugin=await connectTemplateSession({sessionId,runtimeId,rpc,settingsHtml,libraries:{yaml:YAML},services:createTemplateServices(()=>context,rpc)});
-  const methods=Object.keys(plugin || {}).sort();
-  for(const method of ['project','flush','synchronize']) if(typeof plugin?.[method]!=='function') throw new Error('完整提示词模板版本不匹配：缺少 '+method+'；入口 '+entryUrl+'；接口 '+methods.join(',')+'，请更新酒馆并刷新页面');
-  const processNext=typeof plugin.processNext==='function' ? ()=>plugin.processNext() : (${createLegacyTemplateWorkProcessor.toString()})(plugin,rpc,runtimeId);
-  if(typeof plugin.processNext!=='function')console.warn('完整模板使用旧版任务接口', {entryUrl,methods});
-  heartbeat.phase('ready');
-  context=plugin.context;
-  panel=createTemplatePanel({rpc,plugin,close:()=>parent.postMessage({token,type:'template-close'},'*')});
-  while(true){
-   try {
-   if(!await processNext()) {
-    if(panelRequested){panelRequested=false;await panel.open()}
-    if(!sessionId.startsWith('opening:') && dirty && Date.now()-lastSync>1000){dirty=false;lastSync=Date.now();heartbeat.phase('synchronizing');try{const result=await plugin.synchronize();if(result.deferred)dirty=true;}catch(error){console.error('模板消息同步失败',error);dirty=true;}finally{heartbeat.phase('ready');}}
-    await idleWait.wait();
-   } else idleWait.reset();
-   }catch(error){console.error('完整模板连接中断，正在重连',error);await new Promise(resolve=>setTimeout(resolve,1000));}
-  }
- }catch(error){heartbeat.phase('failed',String(error.message||error));console.error('完整模板初始化失败',error);await rpc('claimFullTemplateWork',{runtimeId,ready:false,initializationError:String(error.stack||error)});}
-}
-run();
-</script>`;
-    hostWindow.document.body.appendChild(frame);
-  }
-  return { sync, dispose };
+  if (!globalSettings) hostWindow.addEventListener('dsh-template-settings', open);
+  return { open, close, sync(id, view) { const next = view?.chatId && isPlayMode(view.mode || 'story') ? id : ''; if (next !== sessionId) close(); sessionId = next; },
+    dispose() { sessionId = ''; close(); hostWindow.removeEventListener('dsh-template-settings', open); } };
 }
 
 async function initializeFullOpeningTemplate(response) {
   if (!response.preparationId) return response;
-  const id = 'opening:' + response.preparationId;
-  const executor = createFullTemplateExecutor({ window, rpc });
-  try {
-    executor.sync(id, { mode: 'story', chatId: response.preparationId });
-    const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId }, id);
-    for (const opening of response.openings || []) if (opening.openingPreview) opening.openingPreview.runtime = prepared.runtime;
-    return response;
-  } finally { executor.dispose(); }
+  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId }, 'opening:' + response.preparationId);
+  for (const opening of response.openings || []) if (opening.openingPreview) opening.openingPreview.runtime = prepared.runtime;
+  return response;
 }

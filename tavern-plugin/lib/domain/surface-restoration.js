@@ -1,6 +1,6 @@
-import { replaceSessionSurface } from './session-surface-mutations.js'
+import { createSessionSurfaceMutator } from './session-surface-mutations.js'
 import { randomUUID } from 'node:crypto'
-import { appendSessionEvent, sessionEvents } from './session-events.js'
+import { sessionEvents } from './session-events.js'
 
 export function restoredSurfaceSeqs(events) {
   return new Set(events.flatMap(event => Array.isArray(event.data?.tavernRestoredSurfaceSeqs) ? event.data.tavernRestoredSurfaceSeqs : []))
@@ -23,6 +23,7 @@ export function restoreSurface(session, targetNodes) {
   if (sources.some(event => !event || !['user/message', 'assistant/message', 'system/message', 'tool/result'].includes(event.type))) throw new Error('保存的原生上下文已不可用')
   const markerIndex = sources.findLastIndex(event => event.type !== 'tool/result')
   const shadowed = nodes.slice(prefix)
+  const mutations = createSessionSurfaceMutator(session, events)
   for (let i = 0; i < sources.length; i++) {
     const original = sources[i]
     const data = structuredClone(original.data)
@@ -35,12 +36,11 @@ export function restoreSurface(session, targetNodes) {
         id: randomUUID(), role: 'user', content: [], source: { kind: 'plugin', plugin: 'dsh-tavern-surface-restore' }
       }
       if (original.type === 'tool/result') placeholder.message.content[0].content = []
-      const seq = sessionEvents(session).length
-      appendSessionEvent(session, original.type === 'tool/result' ? original.type : 'user/message', placeholder, { surfaceOp: 'append' })
-      replaced = [seq]
+      const placeholderEvent = mutations.append(original.type === 'tool/result' ? original.type : 'user/message', placeholder, { surfaceOp: 'append' })
+      replaced = [typeof placeholderEvent === 'number' ? placeholderEvent : placeholderEvent.seq]
     }
     if (i === markerIndex) data.tavernRestoredSurfaceSeqs = shadowed
-    replaceSessionSurface(session, original.type, data, { start: replaced[0], end: replaced.at(-1), sourceEventSeqs: [...new Set([...replaced, original.seq])] })
+    mutations.replace(original.type, data, { start: replaced[0], end: replaced.at(-1), sourceEventSeqs: [...new Set([...replaced, original.seq])] })
   }
 }
 

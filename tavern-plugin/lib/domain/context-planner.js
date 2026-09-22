@@ -1,3 +1,4 @@
+import { postureForContext } from './posture-context.js'
 import { projectAgentContent } from './runtime-content-projection.js'
 
 function str(value) {
@@ -33,7 +34,7 @@ export function createContextPlanner(options = {}) {
     const guides = Array.isArray(input.chat.guides) ? input.chat.guides.filter(function (item) { return item !== null && typeof item === 'object' && str(item.text).trim() !== '' }) : []
     const projectedGuides = guides.map(function (item) { return projectText(str(item.text).trim()) }).filter(Boolean)
     const guideSection = input.includeGuides === false || projectedGuides.length === 0 ? null : { kind: 'guide', required: true, text: '【用户指导 Guide · 优先遵循】\n' + projectedGuides.map(function (text, index) { return (index + 1) + '. ' + text }).join('\n') }
-    const projectedPosture = projectText(input.chat.posture)
+    const projectedPosture = input.includePosture === false ? '' : projectText(postureForContext(input.chat))
     const postureSection = input.includePosture === false || projectedPosture === '' ? null : { kind: 'posture', required: true, text: '【现场 · 主要人物状态（每轮结算更新，务必与之一致）】\n' + projectedPosture }
     const cardInfoSections = []
     const instructionSections = []

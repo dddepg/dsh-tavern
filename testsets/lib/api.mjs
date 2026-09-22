@@ -1,9 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveServiceWebUrl } from '../../bin/service-lifecycle.mjs'
-import { startTemplateBrowser } from './template-browser.mjs'
 
-export async function connectGameplay({ runtimeHome, fetcher = fetch, startBrowser = startTemplateBrowser }) {
+export async function connectGameplay({ runtimeHome, fetcher = fetch }) {
   const root = path.join(runtimeHome, 'logs')
   const record = JSON.parse(await readFile(path.join(root, 'tavern.pid.json'), 'utf8'))
   const log = await readFile(path.join(root, 'tavern.log'))
@@ -26,21 +25,12 @@ export async function connectGameplay({ runtimeHome, fetcher = fetch, startBrows
   const capability = await request('capabilities')
   if (capability.version !== 1) throw new Error('请更新并重启正式酒馆以加载游戏 API')
   const sessions = new Map()
-  const browsers = []
   let current
   async function create(step, model) {
     if (step.card) throw new Error('API 模式直接引用正式人物卡，请用 sourceCard 文件名代替 card 路径')
     const result = await request('create', { sourceCard: step.sourceCard, cardName: step.cardName, mode: step.action === 'card' ? 'card' : 'story', model })
     current = result.sessionId
     sessions.set(current, result.chat?.id || null)
-    if (!result.error && result.chat?.mode !== 'card' && !result.requiresBrowser) {
-      try {
-        browsers.push(await startBrowser({ origin, cookie, sessionId: current, chatId: result.chat.id }))
-        result.templateRuntime = 'ready'
-      } catch (error) {
-        result.error = '自动化模板执行器启动失败：' + String(error.message || error)
-      }
-    }
     return result
   }
   const ownerFor = chatId => [...sessions].find(([, id]) => id === chatId)?.[0]
@@ -59,11 +49,7 @@ export async function connectGameplay({ runtimeHome, fetcher = fetch, startBrows
     resources: async () => (await request('resources', { sessionId: current })).resources,
     image: chat => request('imageStatus', { sessionId: chat.sessionId })
   }
-  return { create, request, evidence, async close() {
-    const results = await Promise.allSettled(browsers.splice(0).map(browser => browser.close()))
-    const failures = results.filter(result => result.status === 'rejected')
-    if (failures.length) throw new Error('关闭自动化模板执行器失败')
-  }, async cancel() {
+  return { create, request, evidence, async close() {}, async cancel() {
     const errors = []
     for (const sessionId of sessions.keys()) try { await request('cancel', { sessionId }) } catch (error) { errors.push(error.message) }
     if (errors.length) throw new Error(errors.join('; '))

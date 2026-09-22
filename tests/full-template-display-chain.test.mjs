@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import {buildMvuArtifacts} from '../tavern-plugin/lib/domain/mvu-conversion-artifacts.js'
 import {UpstreamTemplateRuntime} from './fixtures/upstream-template-runtime.mjs'
 import {projectReplyHistory} from '../tavern-plugin/lib/domain/reply-presentation.js'
 import {projectPersistentStatusView} from '../tavern-plugin/lib/domain/persistent-status-view.js'
@@ -61,4 +62,39 @@ test('新增楼层后，旧消息展示不受新的深度影响',async()=>{
  const a=await runtime.lifecycle({...context,transcript:[{role:'assistant',content:'标记'}]})
  const b=await runtime.lifecycle({...context,transcript:[...transcript(a.first),{role:'user',content:'继续'}]})
  assert.deepEqual(b.first.chat[0].template_display,a.first.chat[0].template_display)
+})
+
+test('card-to-mvu named status survives reordered rules and updates only its persistent template',async()=>{
+ const source='正文\n<mvu-status/>'
+ const panel=version=>'<html><body><p>'+version+'</p><script>window.statusMount=true</script></body></html>'
+ const rule={id:'mvu-status-view',scriptName:'MVU 状态视图',placement:[2],markdownOnly:true,findRegex:'/<mvu-status\\s*\\/>/g',replaceString:'```html\n'+panel('旧面板')+'\n```'}
+ const context={settings,charName:'Issue68'}
+ const first=await runtime.lifecycle({...context,regexScripts:[rule],transcript:[{role:'assistant',content:source}]})
+ const initial=display(first.first,[rule])
+ assert.equal(initial.statusViews.length,1)
+ const rules=[{id:'unrelated',placement:[2],markdownOnly:true,findRegex:'/正文/g',replaceString:'正文'}, {...rule,replaceString:'```html\n'+panel('新面板')+'\n```'}]
+ const next=display(first.first,rules)
+ assert.equal(next.statusViews.length,1)
+ assert.match(next.statusView.content,/新面板/)
+ assert.doesNotMatch(JSON.stringify(next.projections),/旧面板|新面板|statusMount/)
+ assert.equal(next.statusView.viewId,initial.statusView.viewId)
+ assert.deepEqual(first.first.chat[0].template_display,first.second.chat[0].template_display)
+})
+
+
+test('实际 MVU 配方在恢复与修改模板后仍只保留一个状态面板', async () => {
+ const {regexScripts}=buildMvuArtifacts({initialState:{玩家:{位置:'门口'}},updateRules:'根据正文更新位置'})
+ const context={settings,charName:'配方验证',regexScripts}
+ const initial=await runtime.lifecycle({...context,transcript:[{role:'assistant',content:'门口。\n<mvu-status/>'}]})
+ const a=display(initial.first,regexScripts)
+ assert.equal(a.statusViews.length,1)
+ assert.doesNotMatch(JSON.stringify(a.projections), /Mvu.getMvuData|mvu-status|<script|<style/)
+ const rules=[regexScripts[1],{...regexScripts[0],replaceString:regexScripts[0].replaceString.replace('</body>','<div>新版模板</div></body>')}]
+ const restored=await runtime.lifecycle({...context,regexScripts:rules,transcript:[...transcript(initial.first),{role:'user',content:'继续'},{role:'assistant',content:'抵达庭院。'}]})
+ const b=display(restored.first,rules)
+ assert.equal(b.statusViews.length,1)
+ assert.equal(b.statusView.viewId,a.statusView.viewId)
+ assert.match(b.statusView.content,/新版模板/)
+ assert.doesNotMatch(JSON.stringify(b.projections), /Mvu.getMvuData|mvu-status|新版模板|<script|<style/)
+ assert.deepEqual(restored.first.chat[0].template_display,initial.first.chat[0].template_display)
 })

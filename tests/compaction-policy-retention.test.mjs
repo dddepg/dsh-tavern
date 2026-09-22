@@ -28,3 +28,31 @@ test('teardown does not overwrite a later policy installed by another owner', ()
   dispose()
   assert.equal(engine.compactIfNeeded, replacement)
 })
+
+test('region guard protects native and forced compaction without marking no-op checks', async () => {
+  const calls = []
+  const engine = {
+    async compactIfNeeded(agent, trigger, signal) { return agent.needed ? this.compactRegion(1, 2, agent, signal) : null },
+    async compactRegion(start, end, agent) { calls.push(['region', start, end, agent.id]); return 'summary' }
+  }
+  const originalRegion = engine.compactRegion
+  const dispose = installCompactionPolicy(engine, (_agent, trigger, _signal, native, forced) => trigger === 'context-overflow' ? forced() : native(), {
+    beforeRegion: async agent => { calls.push(['guard', agent.id]); if (agent.fail) throw Error('disk failure') }
+  })
+  await engine.compactIfNeeded({ id: 'noop' }, 'pressure')
+  assert.deepEqual(calls, [])
+  await engine.compactIfNeeded({ id: 'native', needed: true }, 'pressure')
+  await engine.compactIfNeeded({ id: 'forced', needed: true }, 'context-overflow')
+  await assert.rejects(engine.compactIfNeeded({ id: 'failed', needed: true, fail: true }, 'pressure'), /disk failure/)
+  assert.deepEqual(calls, [['guard', 'native'], ['region', 1, 2, 'native'], ['guard', 'forced'], ['region', 1, 2, 'forced'], ['guard', 'failed']])
+  dispose(); assert.equal(engine.compactRegion, originalRegion)
+})
+
+test('cancellation while saving the guard cannot start a summary afterwards', async () => {
+  const controller = new AbortController()
+  let compacted = false
+  const engine = { compactIfNeeded() {}, compactRegion() { compacted = true } }
+  const dispose = installCompactionPolicy(engine, () => null, { beforeRegion: async () => controller.abort() })
+  await assert.rejects(engine.compactRegion(1, 2, {}, controller.signal), { name: 'AbortError' })
+  assert.equal(compacted, false); dispose()
+})

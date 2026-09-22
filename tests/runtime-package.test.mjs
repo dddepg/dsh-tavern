@@ -14,6 +14,7 @@ const windows = await readFile(new URL('../install.ps1', import.meta.url), 'utf8
 const workspace = parse(await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8'))
 const patches = Object.values(workspace.patchedDependencies || {}).map(value => typeof value === 'string' ? value : value.path)
 const required = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bin/dsh-compatibility.mjs', 'bin/dsh-tavern.mjs', 'bin/launcher-environment.mjs', 'bin/launcher-settings.mjs', 'bin/profile-installation.mjs', 'bin/service-lifecycle.mjs', 'bin/application-update.mjs', 'config/dsh-compatibility.json', ...patches]
+required.push('tavern-plugin/lib/domain/server-template-runtime.js', 'tavern-plugin/lib/domain/server-template-worker.js', 'tavern-plugin/lib/vendor/st-prompt-template/server-artifact/engine.js', 'tavern-plugin/lib/vendor/st-prompt-template/server-artifact/manifest.json')
 required.push('tavern-plugin/lib/domain/tavern-client-assets.js', 'tavern-plugin/lib/client-assets/tavern.css')
 required.push('bin/build-tavern-client.mjs', 'tavern-plugin/src/client/main.js',
   ...['runtime-generation-monitor', 'library-refresh', 'live-tavern-view'].map(name => `tavern-plugin/src/client/modules/${name}.js`))

@@ -223,3 +223,47 @@ test('完整模板初始化结果进入私有开场草稿，随后脚本能读�
   assert.equal(service.get(draft.id).runtime.context.chatVariables.hp, 10)
   assert.deepEqual(service.resolve((await service.create('card')).id, 'card', 'primary').variables, {})
 })
+
+test('保留的开局草稿跨过原有效期仍可用，放弃立即释放，失联草稿仍过期', async () => {
+  let now = 0
+  const service = createOpeningPreparation({ now: () => now, readCard: async () => card, worldBooks: { bound: async () => null } })
+  const retained = await service.create('card'), abandoned = await service.create('card')
+  service.select(retained.id, 'alternate:0')
+  now = 90 * 60 * 1000
+  assert.deepEqual(service.retain(retained.id), { retained: true })
+  now = 150 * 60 * 1000
+  assert.equal(service.get(retained.id).openingId, 'alternate:0')
+  assert.throws(() => service.retain(abandoned.id), /过期/)
+  assert.deepEqual(service.release(retained.id), { released: true })
+  assert.throws(() => service.get(retained.id), /过期/)
+  assert.deepEqual(service.release(retained.id), { released: false })
+})
+
+test('开局记录资源版本，不把准备页的本局修改误报为库更新', async () => {
+  const { createPlayCardSnapshots, cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
+  const { service, record } = fixture()
+  const draft = await service.create('card')
+  const entries = structuredClone(draft.worldbook.entries); entries[0].enabled = true
+  await service.replaceWorldbook(draft.id, entries, draft.worldbook.entries)
+  const openingWorldbookSnapshot = service.resolve(draft.id, 'card', 'primary').worldbookSnapshot
+  const snapshots = createPlayCardSnapshots({ worldBooks: { bound: async () => ({ ...record, document: record.view.raw }) } })
+  const chat = { cardPath: 'card', cardContentDigest: cardContentDigest(card), openingWorldbookSnapshot }
+  assert.equal((await snapshots.updateStatus(chat, card)).available, false)
+})
+
+test('旧存档无源版本时，本局脚本写入不误报库更新', async () => {
+  const { createPlayCardSnapshots, cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
+  const h = await createHelperWorldbookHost(false)
+  try {
+    const card = await h.readCard()
+    h.chat.cardContentDigest = cardContentDigest(card)
+    const record = await h.record()
+    h.chat.openingWorldbookSnapshot = { version: 1, source: record.source, document: structuredClone(record.document) }
+    const old = (await h.adapter.getWorldbook('audit', '审计书')).worldbook.entries
+    const changed = structuredClone(old); changed[0].content = '本局变量变化后的内容'
+    await h.adapter.replaceWorldbook('audit', '审计书', changed, old)
+    const api = createPlayCardSnapshots({ worldBooks: h.library })
+    assert.equal((await api.updateStatus(h.chat, card)).available, false)
+    assert.equal((await h.adapter.getWorldbook('audit', '审计书')).worldbook.entries[0].content, '本局变量变化后的内容')
+  } finally { await h.cleanup() }
+})

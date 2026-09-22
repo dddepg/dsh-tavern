@@ -254,7 +254,7 @@ export function createStoryTimeline(options = {}) {
     if (current.status === 'current' && current.branchId === chat.timeline.branchId && str(current.sessionId) !== '') {
       return { role: participantKey, sessionId: current.sessionId, rewindTo: null, lifetime: participantLifetime(current.lifetime), syncedRevision: current.syncedRevision }
     }
-    if (bound && ['running', 'interrupted', 'failed', 'deferred'].includes(bound.status)) return { role: participantKey, sessionId: bound.startedSessionId, rewindTo: null, lifetime: 'chat', syncedRevision: null }
+    if (current.status !== 'needs-rewind' && bound && ['running', 'interrupted', 'failed', 'deferred'].includes(bound.status)) return { role: participantKey, sessionId: bound.startedSessionId, rewindTo: null, lifetime: 'chat', syncedRevision: null }
     const rewindTo = Number.isSafeInteger(current.rewindTo) ? current.rewindTo : (Number.isSafeInteger(current.boundary) ? current.boundary : null)
     return {
       role: participantKey,
@@ -265,18 +265,27 @@ export function createStoryTimeline(options = {}) {
     }
   }
 
-  function commitParticipant(chat, operation, value) {
-    const participant = object(value)
+  function commitParticipant(chat, operation, value, preserveRewind = false) {
+    let participant = object(value)
+    // The identity durably bound before execution outranks a caller's stale
+    // pre-replacement receipt. Never transfer a boundary between sessions.
+    if (operation.startedSessionId && operation.startedSessionId !== str(participant.sessionId)) {
+      participant = { sessionId: operation.startedSessionId, lifetime: 'chat', boundary: null, identityOnly: true }
+    }
     if (operation.kind !== 'agent' || str(participant.sessionId) === '') return
     const lifetime = participantLifetime(participant.lifetime)
     const participantKey = participantRole(operation.role)
     const previousParticipant = object(chat.timeline.participants[participantKey])
+    // Failure is not evidence that the requested rewind reached durable storage.
+    // Keep the original boundary so every retry still has to perform it.
+    if (preserveRewind && previousParticipant.status === 'needs-rewind'
+      && previousParticipant.sessionId === participant.sessionId) return
     const nextParticipant = {
       role: participantKey,
       lifetime,
       sessionId: str(participant.sessionId),
       branchId: chat.timeline.branchId,
-      syncedRevision: chat.timeline.revision,
+      syncedRevision: participant.identityOnly ? null : chat.timeline.revision,
       boundary: Number.isSafeInteger(participant.boundary) ? participant.boundary : null,
       status: 'current',
       rewindTo: null,
@@ -494,6 +503,27 @@ export function createStoryTimeline(options = {}) {
       chat.timeline.revision++
       chat.timeline.updatedAt = now()
       chat.candidates = null
+      // Prose is authoritative. The previous settlement must not overrule the
+      // edited scene in foreground requests or in the resident background Agent.
+      chat.posture = ''
+      chat.lastSettle = null
+      chat.settleStatus = 'idle'
+      chat.settleError = null
+      const checkpoint = chat.timeline.checkpoints.at(-1)
+      for (const [role, participant] of Object.entries(chat.timeline.participants)) {
+        if (!persistentParticipant(participant.lifetime)) continue
+        const previous = object(checkpoint?.participants?.[role])
+        const source = participantCheckpointSource(previous)
+        const needsSession = participant.requiresNewSessionOnRewind === true || !str(participant.sessionId)
+        const boundary = source?.sessionId === participant.sessionId ? source.boundary : -1
+        chat.timeline.participants[role] = {
+          ...participant, status: needsSession ? 'needs-session' : 'needs-rewind',
+          sessionId: needsSession ? '' : participant.sessionId,
+          boundary: needsSession ? null : boundary, rewindTo: needsSession ? null : boundary,
+          syncedRevision: null, updatedAt: now()
+        }
+      }
+      chat.candidateAgent = null
       value = { status: 'edited', revision: chat.timeline.revision }
     }
     else if (intent.kind === 'body.begin') value = beginBody(chat, intent)
@@ -504,13 +534,31 @@ export function createStoryTimeline(options = {}) {
         || operation.basedOn.branchId !== chat.timeline.branchId || operation.basedOn.revision !== chat.timeline.revision) throw new Error('后台任务已过期，不能绑定代理')
       if (!str(intent.sessionId)) throw new Error('后台代理编号为空')
       operation.startedSessionId = str(intent.sessionId)
+      const key = participantRole(operation.role)
+      const previous = object(chat.timeline.participants[key])
+      if (str(previous.sessionId) !== operation.startedSessionId) {
+        // Session ownership is durable before the model runs; task success and
+        // synchronization are separate facts. Old checkpoints remain untouched.
+        chat.timeline.participants[key] = {
+          role: key, lifetime: 'chat', sessionId: operation.startedSessionId,
+          branchId: chat.timeline.branchId, status: 'bound', syncedRevision: null,
+          boundary: null, rewindTo: null, updatedAt: now()
+        }
+      }
       value = { status: 'bound' }
     }
     else if (intent.kind === 'background.recover') value = recoverBackground(chat, intent)
     else if (intent.kind === 'turn.rollback') value = rollback(chat, intent)
     else if (intent.kind === 'replacement.abort') {
       const currentRevision = chat.timeline.revision
-      chat = ensure(intent.restoreChat)
+      const original = ensure(intent.restoreChat)
+      // Roll back story-owned fields, not settings saved while the model ran.
+      restore(chat, snapshot(original))
+      chat.timeline = clone(original.timeline)
+      for (const key of ['nativeCommits', 'suppressedDshTurns', 'regeneratedDshTurns']) {
+        if (Object.hasOwn(original, key)) chat[key] = clone(original[key])
+        else delete chat[key]
+      }
       const branchId = makeId('branch')
       const participants = {}
       for (const role of Object.keys(chat.timeline.participants)) {
@@ -558,7 +606,7 @@ export function createStoryTimeline(options = {}) {
       return { chat, value: { status: 'deferred', branchId: chat.timeline.branchId, revision: chat.timeline.revision } }
     }
     if (outcome.status !== 'success') {
-      commitParticipant(chat, operation, outcome.participant)
+      commitParticipant(chat, operation, outcome.participant, true)
       operation.status = 'failed'
       operation.completedAt = now()
       if (operation.kind === 'agent' && operation.role === 'settlement') updateSettlementBackground(chat, operation, 'failed')

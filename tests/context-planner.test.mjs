@@ -343,3 +343,21 @@ test('卡片工作台没有实际资料片段时不生成额外上下文', async
   assert.deepEqual(result.sections, [])
   assert.equal(result.audit.totalChars, 0)
 })
+
+test('关闭姿势结算后正文和候选不再注入旧姿势，重新开启和旧存档保持兼容', async () => {
+  const planner = createContextPlanner({ prompt })
+  for (const purpose of ['body', 'candidate']) {
+    const saved = chat()
+    const original = saved.posture
+    for (const enabled of [undefined, false, true]) {
+      saved.backgroundTasks = enabled === undefined ? undefined : { posture: enabled }
+      const result = await planner.plan({ purpose, card: card(), chat: saved, task: '生成候选', worldBookContext: '' })
+      assert.equal(result.sections.some(section => section.kind === 'posture'), enabled !== false)
+      if (enabled === false) {
+        assert.ok(!result.text.includes(original))
+        assert.ok(!result.text.includes('每轮结算更新，务必与之一致'))
+      }
+      assert.equal(saved.posture, original)
+    }
+  }
+})

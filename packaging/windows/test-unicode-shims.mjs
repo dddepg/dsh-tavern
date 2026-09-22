@@ -10,7 +10,11 @@ const scratch = path.resolve(process.argv[3]);
 fs.mkdirSync(scratch, { recursive: true });
 const fixture = path.join(scratch, '命令 入口.mjs');
 fs.writeFileSync(fixture, 'console.log(JSON.stringify(process.argv.slice(2)))');
-const { installDesktopDshRuntime, installDesktopPnpmRuntime } = await import(pathToFileURL(path.join(runtime, 'resources/app.asar.unpacked/lib/desktop-runtime-environment.js')));
+const hostLib = ['resources/app/lib', 'resources/app.asar.unpacked/lib']
+  .map(item => path.join(runtime, item, 'desktop-runtime-environment.js'))
+  .find(fs.existsSync);
+if (!hostLib) throw new Error('Desktop runtime environment module not found');
+const { installDesktopDshRuntime, installDesktopPnpmRuntime } = await import(pathToFileURL(hostLib));
 const environment = { ...process.env };
 installDesktopDshRuntime({ platform: 'win32', appExecutable: process.execPath, dshBootstrapPath: fixture, profileName: 'tavern', homeDir: path.join(scratch, '旧数据'), stateDir: path.join(scratch, 'dsh'), environment });
 const pnpm = installDesktopPnpmRuntime({ platform: 'win32', appExecutable: process.execPath, pnpmBinPath: fixture, electronVersion: process.versions.electron, stateDir: path.join(scratch, 'pnpm'), environment });

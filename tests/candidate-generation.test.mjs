@@ -370,6 +370,19 @@ test('自由故事过滤无效项后按类型顺序裁剪超额候选', async ()
   assert.match(run.warnings.join('\n'), /候选项.*裁剪/)
 })
 
+test('剧本模式允许通过工具提交单个场景候选并保存类型', async () => {
+  const text = '夜幕降临，钟楼外响起巡夜人的脚步声'
+  const run = harness({ mode: 'script', outputs: [async options => {
+    const tool = options.tools.find(item => item.name === 'candidate_submit_choices')
+    assert.equal(tool.parameters.properties.actions.minItems, 0)
+    await options.onToolCall({ name: 'candidate_submit_choices', arguments: { actions: [], scene: text } })
+    return ''
+  }] })
+  const result = await run.candidates.generate({ sessionId: 'session-1', messageId: 'script-scene' })
+  assert.deepEqual(result.choices, [{ type: 'scene', text }])
+  assert.deepEqual(run.chat().candidates.choices, result.choices)
+})
+
 test('剧本模式存在多个有效候选时只保留第一个', async () => {
   const run = harness({
     mode: 'script',
@@ -692,10 +705,19 @@ test('first candidate interrupted before a result keeps its bound session for re
 test('候选准备期间人工移动游标，旧上下文不得开始模型任务或覆盖游标', async () => {
   let run
   run = harness({ mode: 'script', outputs: [], planHook: () => {
-    run.mutateChat(chat => { chat.scriptState.cursor = 2 })
+    run.mutateChat(chat => { chat.scriptState = createScriptContinuity().transition({ script: script(), state: chat.scriptState, event: { kind: 'manual-focus', cursor: 3 } }).state })
   } })
   await assert.rejects(run.candidates.generate({ sessionId: 'session-1', messageId: 'manual-cursor' }), /剧本游标已变化/)
   assert.equal(run.modelRequests.length, 0)
   assert.equal(run.chat().scriptState.cursor, 2)
   assert.equal(run.chat().candidates, undefined)
+})
+
+test('候选准备期间修改切片字数，即使游标未变也不能继续使用旧上下文', async () => {
+  let run
+  run = harness({ mode: 'script', outputs: [], planHook: () => {
+    run.mutateChat(chat => { chat.scriptState = createScriptContinuity().transition({ script: script(), state: chat.scriptState, event: { kind: 'set-chunk-size', chunkSize: 1000 } }).state })
+  } })
+  await assert.rejects(run.candidates.generate({ sessionId: 'session-1', messageId: 'new-budget' }), /剧本游标已变化/)
+  assert.equal(run.modelRequests.length, 0)
 })

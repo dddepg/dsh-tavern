@@ -58,6 +58,7 @@ export function createChatJournalStore(options = {}) {
   const logger = options.logger || console
   const now = typeof options.now === 'function' ? options.now : Date.now
   const frameLimit = Math.max(1, Number(options.frameLimit) || 200)
+  const maxSnapshotBytes = Number.isSafeInteger(options.maxSnapshotBytes) && options.maxSnapshotBytes > 0 ? options.maxSnapshotBytes : 256 * 1024 * 1024
   const byteLimit = Math.max(1, Number(options.byteLimit) || 1024 * 1024)
   const mutationTails = new Map()
   // Approximate retained JS size, bounded independently of the number of games.
@@ -258,7 +259,7 @@ export function createChatJournalStore(options = {}) {
   async function readSnapshot(paths, row) {
     try {
       const bytes = await readFile(row.path)
-      const chat = JSON.parse((row.path.endsWith('.gz') ? await decompress(bytes) : bytes).toString('utf8'))
+      const chat = JSON.parse((row.path.endsWith('.gz') ? await decompress(bytes, { maxOutputLength: maxSnapshotBytes }) : bytes).toString('utf8'))
       if (chat && typeof chat === 'object' && !Array.isArray(chat) && chat.id === paths.id &&
         Number.isSafeInteger(chat[STORAGE_REVISION]) && chat[STORAGE_REVISION] === row.revision) return chat
     } catch (error) {
@@ -282,6 +283,7 @@ export function createChatJournalStore(options = {}) {
     // Encode only at the file boundary. Preserve property order for JSON/YAML
     // variable macros and LLM prefix caching; never reconstruct MVU display deltas.
     const json = JSON.stringify(chat)
+    if (Buffer.byteLength(json) > maxSnapshotBytes) throw new Error('Chat snapshot 超过大小上限')
     const compressed = Buffer.byteLength(json) >= SNAPSHOT_COMPRESSION_BYTES
     const bytes = compressed ? await compress(json, { level: 1 }) : encodeSnapshot(chat)
     const target = plainTarget + (compressed ? '.gz' : '')

@@ -91,7 +91,7 @@ test('实验分支始终公开兼容模式，旧关闭信任值不影响运行',
 })
 
 test('设置界面提供分色与现有设置，不恢复旧兼容样式选项', () => {
-  const context = { TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
+  const context = { CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
     useState: initial => [initial, () => {}],
     useEffect() {},
     createElement: (type, props, ...children) => ({ type, props, children })
@@ -162,10 +162,14 @@ test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词
 test('系统正文提示词默认使用内置内容，并可保存自定义覆盖', function () {
   const defaults = { story: '内置正文提示词' }
   assert.deepEqual(presentTavernSettings({}, defaults), {
+    candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
     webSearchEnabled: false,
     systemAppendEnabled: false,
+    defaultDisabledWritingSkills: [],
+    defaultForegroundModel: null,
+    defaultBackgroundModel: null,
     backgroundModel: null,
     backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false },
     trustedCardMode: true,
@@ -178,10 +182,14 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
   assert.equal(saved.unknown, 1)
   assert.equal(resolveSystemPrompt(saved, 'story', function () { return '默认' }), '用户正文提示词')
   assert.deepEqual(presentTavernSettings(saved, defaults), {
+    candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
     webSearchEnabled: false,
     systemAppendEnabled: false,
+    defaultDisabledWritingSkills: [],
+    defaultForegroundModel: null,
+    defaultBackgroundModel: null,
     backgroundModel: null,
     backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false },
     trustedCardMode: true,
@@ -193,12 +201,14 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
 
 test('恢复默认只删除正文覆盖并保留其他设置', function () {
   const saved = applyTavernSettingsPatch({
+    candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
     promptOverrides: { story: '用户正文提示词', future: '保留' }
   }, { storyPrompt: null })
 
   assert.deepEqual(saved, {
+    candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
     promptOverrides: { future: '保留' }
@@ -274,4 +284,43 @@ test('已保存的全部系统提示词在重启和内置默认更新后保留�
   for (const name of SYSTEM_PROMPT_NAMES.filter(name => name !== 'story')) {
     assert.equal(resolveSystemPrompt(restored, name, key => defaults[key]), '用户内容：' + name)
   }
+})
+
+
+test('新游戏前后台默认模型分别保存、清除且不触碰旧全局模型版本', () => {
+  let settings = { unknown: true, backgroundModelRevision: 7 }
+  for (const name of ['defaultForegroundModel', 'defaultBackgroundModel']) {
+    assert.equal(presentTavernSettings(settings, {})[name], null)
+    settings = applyTavernSettingsPatch(settings, { [name]: { provider: ' p ', model: ' m ', reasoningEffort: 'low' } })
+    assert.deepEqual(presentTavernSettings(settings, {})[name], { provider: 'p', model: 'm', reasoningEffort: 'low' })
+    assert.throws(() => applyTavernSettingsPatch(settings, { [name]: { provider: 'p' } }), /默认模型配置无效/)
+  }
+  const cleared = applyTavernSettingsPatch(settings, { defaultForegroundModel: null })
+  assert.equal(cleared.defaultForegroundModel, null)
+  assert.deepEqual(cleared.defaultBackgroundModel, settings.defaultBackgroundModel)
+  assert.equal(cleared.backgroundModelRevision, 7)
+  assert.equal(cleared.unknown, true)
+})
+
+
+test('全局写作 Skill 逐项保存，恢复开启不改动其他 Skill', () => {
+  let document = applyTavernSettingsPatch({}, { defaultWritingSkill: { name: 'one', enabled: false } })
+  document = applyTavernSettingsPatch(document, { defaultWritingSkill: { name: 'two', enabled: false } })
+  document = applyTavernSettingsPatch(document, { defaultWritingSkill: { name: 'one', enabled: false } })
+  assert.deepEqual(presentTavernSettings(document, {}).defaultDisabledWritingSkills, ['one', 'two'])
+  document = applyTavernSettingsPatch(document, { defaultWritingSkill: { name: 'one', enabled: true } })
+  assert.deepEqual(document.defaultDisabledWritingSkills, ['two'])
+  assert.throws(() => applyTavernSettingsPatch(document, { defaultWritingSkill: { name: 'one', enabled: 'false' } }), /无效/)
+})
+
+test('候选项默认填入后隐藏，保存后持久化且不覆盖其他设置', async t => {
+  const h = await settingsHarness(t)
+  assert.equal((await h.read()).candidateDismissMode, 'after-fill')
+  await h.update({ systemAppendEnabled: true, candidateDismissMode: 'after-send' })
+  assert.equal((await h.read()).candidateDismissMode, 'after-send')
+  await h.update({ candidateDismissMode: 'after-fill' })
+  assert.equal((await h.read()).candidateDismissMode, 'after-fill')
+  assert.equal((await h.read()).systemAppendEnabled, true)
+  await assert.rejects(h.update({ candidateDismissMode: 'invalid' }), /无效的候选项/)
+  assert.equal((await h.read()).candidateDismissMode, 'after-fill')
 })

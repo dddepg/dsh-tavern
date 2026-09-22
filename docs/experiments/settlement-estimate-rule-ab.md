@@ -6,7 +6,7 @@
 
 ## 固定条件
 
-- 用户原创公开 demo：`demo/cards/avra-complete.json`（阿芙拉）。灯塔 demo 没有数值字段，所以本次改用阿芙拉原有的 0～100 整数信任值。
+- 用户原创公开 demo：`examples/avra/cards/avra-complete.json`（阿芙拉）。灯塔 demo 没有数值字段，所以本次改用阿芙拉原有的 0～100 整数信任值。
 - 实验副本将原有时间、地点、天气、线索、信任、状态六字段从正文状态块投影到变量工具；信任初值 18。保留 description/personality/scenario 和可信凭证、核心线索、信任范围约束。仅转换输出协议，没有修改原卡文件，没有新增信任变化公式或幅度限制。
 - 两个固定正文：确认凭证并帮忙后戒备稍松；连续数日帮忙保密后逐渐信任。两者都不提供精确信任增量。
 - 官方 DeepSeek V4 Flash，High reasoning，temperature 0.1，max_tokens 20000。两组都用现有同次提交姿势和变量协议；实验组只在末尾增加实验句。

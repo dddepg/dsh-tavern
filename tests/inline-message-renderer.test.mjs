@@ -83,10 +83,12 @@ test('脚本执行模块按 Helper Runtime 的真实检查结构报告 MVU 已�
   assert.equal(client.tavernScriptRuntimeReady(inspection), true)
 })
 
-test('长消息限制在 1200px 内并由 iframe 原生滚动', () => {
+test('长消息按内容展开，异常高度保留安全上限', () => {
   assert.equal(client.clampTavernFrameHeight(48), 48)
   assert.equal(client.clampTavernFrameHeight(1200), 1200)
-  assert.equal(client.clampTavernFrameHeight(5000), 1200)
+  assert.equal(client.clampTavernFrameHeight(5000), 5000)
+  assert.equal(client.clampTavernFrameHeight(90000), 32000)
+  assert.equal(client.clampTavernFrameHeight(Infinity), 48)
   const documentHtml = client.buildTavernFrameDocument({ content: '正文', token: 'native-scroll-token' })
   assert.doesNotMatch(documentHtml, /dsh-tavern-touch-bridge|dsh-tavern-frame-pan/)
 })
@@ -741,7 +743,15 @@ test('消息 iframe 清理完整 HTML 文档泄漏到正文层的顶级排版空
   const nestedWhitespace = { nodeType: 3, nodeValue: '\n保留', parentNode: {} }
   const body = { childNodes: [topLevelWhitespace, inlineSpace, meaningfulText] }
   nestedWhitespace.parentNode = { childNodes: [nestedWhitespace] }
-  vm.runInNewContext(normalizer[1], { document: { body }, Array })
+  let onMutation
+  vm.runInNewContext(normalizer[1], { document: { body }, Array,
+    MutationObserver: class { constructor(fn) { onMutation = fn } observe(target, options) { assert.equal(target, body); assert.equal(options.childList, true) } disconnect() {} },
+    addEventListener() {}
+  })
+  const loadedWhitespace = { nodeType: 3, nodeValue: '\n    ' }
+  body.childNodes.push(loadedWhitespace)
+  onMutation()
+  assert.equal(loadedWhitespace.nodeValue, '')
 
   assert.equal(topLevelWhitespace.nodeValue, '')
   assert.equal(inlineSpace.nodeValue, ' ')
@@ -1750,7 +1760,7 @@ test('收起的 details 隐藏内容不撑高 iframe，展开后恢复测高', (
   })
   run(); assert.equal(height, 48); assert.equal(scrollEnabled, false)
   details.open = true
-  run(); assert.equal(height, 3656); assert.equal(scrollEnabled, true)
+  run(); assert.equal(height, 3656); assert.equal(scrollEnabled, false)
   assert.match(html, /html\[data-dsh-tavern-scroll\]\{overflow-y:auto!important\}/)
   assert.match(html, /html\[data-dsh-tavern-scroll\] body\{overflow-y:visible!important\}/)
 })
@@ -2250,4 +2260,17 @@ test('unsupported card pipelines fail before draft mutation or generation', asyn
   }
   await assert.rejects(execute('/cut 0', 'game'), /未发送消息/ )
   assert.deepEqual(calls, [])
+})
+
+test('保留多个正式会话时，parent.Mvu 随当前会话切换而不是最后创建的沙箱', () => {
+  const host = { __dshTavernSelectedSessionId: 'A' }
+  const a = { frameElement: { __dshTavernSessionId: 'A' }, Mvu: { owner: 'A' } }
+  const b = { frameElement: { __dshTavernSessionId: 'B' }, Mvu: { owner: 'B' } }
+  const releaseA = client.installTavernTrustedHostFacade(host, a)
+  const releaseB = client.installTavernTrustedHostFacade(host, b)
+  assert.equal(host.Mvu, a.Mvu)
+  host.__dshTavernSelectedSessionId = 'B'; assert.equal(host.Mvu, b.Mvu)
+  host.__dshTavernSelectedSessionId = 'A'; assert.equal(host.Mvu, a.Mvu)
+  releaseB(); assert.equal(host.Mvu, a.Mvu)
+  releaseA(); assert.equal(host.Mvu, undefined)
 })

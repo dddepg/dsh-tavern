@@ -32,12 +32,16 @@ export async function synchronizeBodyEdits(session, chat, flush) {
 }
 
 /** Edit prose only; do not replay macros, scripts or settlement. */
-export function createBodyEditor({ chats, sessions, timeline, activity, project, present }) {
+export function createBodyEditor({ chats, sessions, timeline, activity, project, present, sessionPatch }) {
   const pending = new Set()
+  function refuseClosedPatch() {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
+  }
   function idle(chat, agent) {
     if (agent?.phase?.kind === 'running' || chat.regenInProgress || ['pending', 'running'].includes(chat.settleStatus) || activity(chat)?.busy) throw new Error('请等待当前生成或后台处理完成后再编辑')
   }
   async function context(sessionId) {
+    refuseClosedPatch()
     const chat = await chats.forSession(sessionId)
     if (!chat) throw new Error('会话不存在')
     const agent = sessions.get(sessionId)

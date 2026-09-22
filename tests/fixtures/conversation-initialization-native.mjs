@@ -64,7 +64,7 @@ export async function createInitializationNative(bootPath, { preset } = {}) {
   class FixtureModel extends LlmAdapter {
     async resolveModel(provider, id) { return { provider, id, name: id, context: { contextWindow: 2000 } } }
     async *stream(input) {
-      requests.push(structuredClone({ system: input.system, messages: input.messages, purpose: input.purpose }))
+      requests.push(structuredClone({ system: input.messages.filter(message => message.role === 'system').flatMap(message => message.content).map(block => block.text || '').join('\n\n'), messages: input.messages, purpose: input.purpose }))
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: '继续故事。' } }
       yield { type: 'finish', reason: { kind: 'stop' } }

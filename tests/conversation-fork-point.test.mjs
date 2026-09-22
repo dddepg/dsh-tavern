@@ -80,7 +80,7 @@ test('真实 DSH Session 种子截断后，界面与模型消息均没有未来�
   for (const turn of [1, 2, 3]) {
     source.append('turn/start', { turn })
     source.append('user/message', { turn, id: 'u' + turn, role: 'user', source: { kind: 'plugin', plugin: 'fixture' }, content: [{ type: 'text', text: 'input' + turn }] }, { surfaceOp: 'append' })
-    source.append('assistant/message', { turn, step: 1, message: { id: 'a' + turn, role: 'assistant', source: { kind: 'model', model: 'fixture', provider: 'fixture' }, content: [{ type: 'text', text: 'reply' + turn }] } }, { surfaceOp: 'append' })
+    source.append('assistant/message', { turn, step: 1, stream: [], message: { id: 'a' + turn, role: 'assistant', source: { kind: 'model', model: 'fixture', provider: 'fixture' }, content: [{ type: 'text', text: 'reply' + turn }] } }, { surfaceOp: 'append' })
     source.append('turn/end', { turn, reason: { kind: 'completed' } })
   }
   const original = sessionEvents(source)

@@ -1,3 +1,4 @@
+import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { assistantResultForTurn } from './session-turn-result.js'
 import { sessionEvents } from './session-events.js'
 import { assertConversationForkable } from './conversation-fork.js'
@@ -11,6 +12,7 @@ export async function conversationStateAtTurn(source, requestedTurn, readRevisio
   const turn = requestedTurn === undefined || requestedTurn === 0 ? turnOf(lastAssistant(source)) : Number(requestedTurn)
   const targetIndex = (source.messages || []).findIndex(message => message?.role === 'assistant' && turnOf(message) === turn)
   if (!Number.isSafeInteger(turn) || turn < 1 || targetIndex < 0) throw new Error('找不到指定分叉回合')
+  if (isRescuedHistoryMessage(source, source.messages[targetIndex])) throw new Error('存档救援导入的历史没有状态快照，不能从该回合分叉')
   let state = source
   const visited = new Set()
   while (turnOf(lastAssistant(state)) !== turn) {

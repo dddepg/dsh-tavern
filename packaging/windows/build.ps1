@@ -8,8 +8,8 @@ $ErrorActionPreference = 'Stop'
 $Payload = (Resolve-Path -LiteralPath $Payload).Path
 $SevenZip = (Resolve-Path -LiteralPath $SevenZip).Path
 $Output = [IO.Path]::GetFullPath($Output)
-# This launcher deliberately reuses the tested Desktop 2.0.5 online payload.
-$expected = '5e2e365397638d61f202753b5dbcee1d9dbd377a5a9d17c160535891f187decd'
+# This launcher embeds the Desktop 2.0.13 online payload built by build-payload.ps1.
+$expected = 'a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4'
 if ((Get-FileHash -LiteralPath $Payload -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
     throw 'Unexpected payload. Review and update the launcher runtime version before changing the payload.'
 }
@@ -22,7 +22,8 @@ try {
     $env:TEMP = $buildTemp; $env:TMP = $buildTemp
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
     $patch = Join-Path $PSScriptRoot 'patch-runtime.cjs'
-    & $compiler /nologo /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.Linq.dll "/out:$Output" "/resource:$Payload,payload" "/resource:$SevenZip,seven" "/resource:$patch,runtimePatch" (Join-Path $PSScriptRoot 'Launcher.cs') (Join-Path $PSScriptRoot 'SetupDialog.cs')
+    $packageHelper = Join-Path $PSScriptRoot '../../bin/desktop-package-manager.mjs'
+    & $compiler /nologo /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.Linq.dll "/out:$Output" "/resource:$Payload,payload" "/resource:$SevenZip,seven" "/resource:$patch,runtimePatch" "/resource:$packageHelper,packageHelper" (Join-Path $PSScriptRoot 'Launcher.cs') (Join-Path $PSScriptRoot 'SetupDialog.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed' }
     Get-FileHash -LiteralPath $Output -Algorithm SHA256
 } finally {

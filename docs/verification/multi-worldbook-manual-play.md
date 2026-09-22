@@ -6,7 +6,7 @@
 
 使用已安装的 DSH CLI 0.1.2-rc.1、实验分支插件、独立临时 Profile 和有界面的 Chromium。通过实际界面导入、绑定、开局、输入并发送消息；不修改用户原有卡片或存档。不是独立组件 fixture，也不是用户正式 Desktop Profile 的覆盖安装测试。
 
-人物卡来自公开 `demo/cards/avra-before.json`，测试副本名为“阿芙拉 · 多书手测”。仅给开场白增加两个关键词。全部前台与后台请求使用 `deepseek-official / deepseek-v4-flash`。
+人物卡来自公开 `examples/avra/cards/avra-before.json`，测试副本名为“阿芙拉 · 多书手测”。仅给开场白增加两个关键词。全部前台与后台请求使用 `deepseek-official / deepseek-v4-flash`。
 
 两本独立 JSON 世界书均使用 UID 0、1：
 

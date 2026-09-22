@@ -3,7 +3,7 @@
 // Uses production journal, template adapter, dispatch and official browser artifact.
 // Excludes DSH conversation UI, model calls and user-card scripts. Temporary data only.
 import { estimateWorldBookTokens } from '../../tavern-plugin/lib/domain/worldbook-activation.js'
-import { createFullTemplateRuntime } from '../../tavern-plugin/lib/domain/full-template-runtime.js'
+import { createFullTemplateRuntime } from './browser-template-transport.mjs'
 import { createPromptTemplateGlobalVariables } from '../../tavern-plugin/lib/domain/prompt-template-global-variables.js'
 import { createServer } from 'node:http'
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'

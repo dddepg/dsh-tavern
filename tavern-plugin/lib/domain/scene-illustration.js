@@ -1,3 +1,4 @@
+import { postureForContext } from './posture-context.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { projectAgentContent } from './runtime-content-projection.js'
 import { createImageGenerationModule } from '../../packages/dsh-image-gen/src/module.js'
@@ -65,7 +66,7 @@ export function sceneInput(chat, target, stateAtTarget) {
   // No historical snapshot means no historical posture; never borrow the latest
   // game's pose to illustrate an earlier turn.
   const snapshot = stateAtTarget || (latestTurn === target.turn && chat.settleStatus === 'done' ? chat : null)
-  const posture = typeof snapshot?.posture === 'string' ? snapshot.posture : ''
+  const posture = postureForContext(chat, snapshot)
   const state = sceneStateSources(snapshot, target, text + '\n' + posture)
   return { text, posture, ...(state.sources.length || state.omitted.length ? { state } : {}) }
 }
@@ -206,14 +207,17 @@ export function createSceneIllustrations(deps) {
     return written
   }
   function watchCancellation(path, record, controller) {
-    let checking = false
+    let checking = false, warned = false
     const timer = setInterval(async () => {
       if (checking) return
       checking = true
       try {
         const current = await deps.store.readJson(path)
         if (!current || current.requestId !== record.requestId || current.ownerId !== record.ownerId || current.cancelRequestedAt) controller.abort()
-      } catch { controller.abort() } finally { checking = false }
+      } catch {
+        // An unavailable store is not evidence of cancellation or lost ownership.
+        if (!warned) { warned = true; console.warn('dsh-tavern: 生图取消状态读取失败，将继续检查') }
+      } finally { checking = false }
     }, 250)
     return () => clearInterval(timer)
   }

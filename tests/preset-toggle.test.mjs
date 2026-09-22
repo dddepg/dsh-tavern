@@ -10,7 +10,7 @@ function render(kind, enabled, busy = false, marker = false) {
   const calls = []
   const value = { name: '测试条目', content: '内容', role: 'system', entryKey: 'entry', regexKey: 'regex', enabled, marker, edit: { promptPath: '/prompts/0', enabledPaths: ['/enabled'] } }
   const sandbox = {
-    preset: {}, groupPresetEntriesByPhase: () => ({ front: marker ? [] : [value], middle: [], back: [] }),
+    presetDropHandlers: () => ({}), preset: {}, groupPresetEntriesByPhase: () => ({ front: marker ? [] : [value], middle: [], back: [] }),
     h: (type, props, ...children) => ({ type, props, children }), busy,
     entryDraft: x => x, entryValue: x => x, regexDraft: x => x, regexValue: x => x,
     togglePresetEntry: x => calls.push(['entry', x]), togglePresetRegex: x => calls.push(['regex', x]),

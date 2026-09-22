@@ -328,3 +328,59 @@ test('显式应用新版同步刷新常驻背景、MVU 规则和模板世界书�
   assert.equal(removed.openingWorldbookSnapshot.document,null)
   assert.equal(await worldBooks.bound(chat.cardPath,card,{...chat,...removed}),null)
 })
+
+test('世界书绑定改变也提示更新，确认版本后应用且不修改剧情和变量', async () => {
+  const { cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
+  const card = { name: '人物', description: '固定背景' }
+  let book = null
+  const worldBooks = { bound: async (_path, _card, chat) => chat?.openingWorldbookSnapshot?.version === 1
+    ? { ...chat.openingWorldbookSnapshot, view: { entries: [] } } : book }
+  const api = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }), readCard: async () => card, writeChat: async () => {} })
+  const chat = { id: 'game', mode: 'story', cardPath: 'cards/a.json', cardContentDigest: cardContentDigest(card),
+    openingWorldbookSnapshot: { version: 1, source: null, document: null }, messages: [{ role: 'assistant', text: '原剧情' }], variables: { hp: 12 } }
+  assert.equal((await api.updateStatus(chat, card)).available, false)
+  book = { source: { kind: 'standalone', path: 'worldbooks/a.json' }, document: { entries: {} }, view: { entries: [] } }
+  const status = await api.updateStatus(chat, card)
+  assert.equal(status.available, true); assert.equal(status.cardChanged, false); assert.equal(status.worldbookChanged, true)
+  const before = structuredClone(chat)
+  const patch = await api.replacement(chat, card, status.digest)
+  assert.deepEqual(chat, before)
+  assert.equal(patch.variables, undefined); assert.equal(patch.messages, undefined)
+  assert.equal((await api.updateStatus({ ...chat, ...patch }, card)).available, false)
+  book.document.entries.changed = { content: '确认后又修改了' }
+  await assert.rejects(api.replacement(chat, card, status.digest), /再次修改/)
+  assert.deepEqual(chat, before)
+  book = null
+  assert.equal((await api.updateStatus({ ...chat, ...patch }, card)).worldbookChanged, true)
+})
+
+test('应用后本局脚本修改世界书不冒充资源库更新，库文件缺失也不破坏旧存档', async () => {
+  const card = { name: '人物' }
+  let missing = false
+  const live = { source: { kind: 'standalone', path: 'book.json' }, document: { entries: {} }, view: { entries: [] } }
+  const api = createPlayCardSnapshots({ worldBooks: { bound: async () => { if (missing) throw Error('世界书不存在'); return live } }, planner: createContextPlanner({ prompt: () => '' }) })
+  const chat = { id: 'game', mode: 'story', cardPath: 'card.json', messages: [] }
+  Object.assign(chat, await api.replacement(chat, card))
+  chat.openingWorldbookSnapshot.document.entries.local = { content: '仅本局脚本写入' }
+  assert.equal((await api.updateStatus(chat, card)).available, false)
+  live.document.entries.external = { content: '库里的更新' }
+  assert.equal((await api.updateStatus(chat, card)).worldbookChanged, true)
+  missing = true
+  const before = structuredClone(chat)
+  const status = await api.updateStatus(chat, card)
+  assert.match(status.error, /世界书不存在/)
+  assert.deepEqual(chat, before)
+})
+
+test('旧快照无源版本时只比较绑定，不把历史脚本改写误报为资源更新', async () => {
+  const { cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
+  const card = { name: '旧存档' }
+  let source = { kind: 'standalone', path: 'book.json' }
+  const api = createPlayCardSnapshots({ worldBooks: { bound: async () => ({ source, document: { entries: {} } }) } })
+  const chat = { cardContentDigest: cardContentDigest(card), openingWorldbookSnapshot: {
+    version: 1, source: structuredClone(source), document: { entries: { 0: { content: '过去脚本写入的状态' } } }
+  } }
+  assert.equal((await api.updateStatus(chat, card)).available, false)
+  source = { kind: 'standalone', path: 'new-book.json' }
+  assert.equal((await api.updateStatus(chat, card)).worldbookChanged, true)
+})

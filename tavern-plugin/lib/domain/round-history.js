@@ -1,3 +1,4 @@
+import { assertRescueHistoryEditable } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { canUndoRollback, restoreSurface, preflightSurfaceRestore, unchangedSinceRollback } from './surface-restoration.js'
 import { rewindBackgroundSurface } from './background-surface.js'
@@ -48,7 +49,7 @@ export function selectRegenerationTarget(chat, session, observe) {
  * Timeline owns revisions; this module owns the workflow, including aborts.
  * Callers supply host adapters, never intermediate rollback or swipe state.
  */
-export function createRoundHistory({ chats, sessions, scripts, timeline, queueSettlement, cancelSettlement, present, diagnostics }) {
+export function createRoundHistory({ chats, sessions, scripts, timeline, queueSettlement, cancelSettlement, present, diagnostics, sessionPatch }) {
   const { read: readChat, forSession: chatForSession, readCard: readChatCard,
     readRevision: readChatRevision, write: writeChat, update: updateChat } = chats
   const { read: readScript, continuity: scriptContinuity } = scripts
@@ -61,11 +62,12 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   const regenerationRecovery = createRegenerationRecovery({ chats, sessions, timeline, isActive: id => pendingRegenerations.has(id) })
 
   async function regenerate(chatId, guidance, sessionId) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (!chat) throw new Error('聊天不存在: ' + chatId)
-    if (pendingRegenerations.has(chat.id)) throw new Error('正文正在重新生成，请等待完成')
+    if (pendingRegenerations.has(chat.id) || pendingRollbacks.has(chat.id)) throw new Error('正文正在重新生成，请等待完成')
     await regenerationRecovery.recover(chat.id)
-    if (pendingRegenerations.has(chat.id)) throw new Error('正文正在重新生成，请等待完成')
+    if (pendingRegenerations.has(chat.id) || pendingRollbacks.has(chat.id)) throw new Error('正文正在重新生成，请等待完成')
     pendingRegenerations.add(chat.id)
     try { return await regenBody(chat.id, guidance, sessionId) }
     finally { pendingRegenerations.delete(chat.id) }
@@ -95,8 +97,10 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     return Object.assign({}, intent, { beforeChat })
   }
   async function regenBody(chatId, guidance, sessionId) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     let chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (chat === undefined) throw new Error('聊天不存在: ' + chatId)
+    assertRescueHistoryEditable(chat)
     const activeRound = Object.values(storyTimeline.inspect({ chat }).operations || {}).find(function (operation) {
       return operation && operation.kind === 'body' && operation.status === 'completed' &&
         operation.background && ['pending', 'running'].includes(str(operation.background.phase))
@@ -108,6 +112,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (typeof chat.sessionId !== 'string' || chat.sessionId === '') throw new Error('会话未绑定 DSH 会话')
     const agent = sessions.get(chat.sessionId)
     if (agent === undefined || agent.session === undefined) throw new Error('无法访问 DSH 会话: ' + chat.sessionId)
+    if (agent.phase?.kind === 'running') throw new Error('前台正在生成，请完成或停止后再重新生成')
     const session = agent.session
     let selection, evidence
     try { selection = selectRegenerationTarget(chat, session, diagnostics ? value => { evidence = value } : undefined) }
@@ -133,6 +138,8 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
           message: { id: randomUUID(), role: 'assistant', content: [{ type: 'text', text: msgs0[oldAssistantIndex].text }], source: oldSource }
         }, { start: oldSeq, end: oldSeq, sourceEventSeqs: [oldSeq] })
       } catch (error) {
+        if (sessionPatch?.status === 'failed') throw new Error(sessionPatch.reason, { cause: error })
+        if (sessionPatch?.serverReady) throw error
         throw new Error('当前 DSH 不支持正文替换，未启动重新生成。' + str(error?.message || error), { cause: error })
       }
     }
@@ -171,6 +178,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     const rollbackIntent = await prepareRollbackIntent(chat, { kind: 'turn.rollback', turn: oldTurn, legacyBefore })
     const lifecycleRevision = Math.max(0, Number(originalChat.tavernHelperLifecycleRevision) || 0) + 1
     chat = await updateChat(chat.id, function (current) {
+      if (agent.phase?.kind === 'running' || current.regenInProgress) throw new Error('前台正在生成，请完成或停止后再重新生成')
       assertRegenerationSourceCurrent({ originalChat, currentChat: current, assistantIndex: oldAssistantIndex })
       originalChat = structuredClone(current)
       const next = storyTimeline.apply({ chat: current, intent: rollbackIntent }).chat
@@ -188,11 +196,14 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     let committedChat, body, syntheticTurn
     try {
       if (activeRound !== undefined && typeof cancelSettlement === 'function') await cancelSettlement(chat.id)
+      if (agent.phase?.kind === 'running') throw new Error('前台正在生成，未启动重新生成')
+      const ready = await readChat(chat.id)
+      if (ready?.regenRecovery?.id !== operationId || agent.phase?.kind === 'running') throw new Error('重新生成操作已失效或前台正在生成')
       agent.followup({
         id: randomUUID(),
         role: 'user',
         content: [{ type: 'text', text: syntheticText }],
-        source: { kind: 'plugin', plugin: 'dsh-tavern-regen' }
+        source: { kind: 'plugin', plugin: 'dsh-tavern-regen', regenerationId: operationId }
       })
       await agent.whenIdle()
       syntheticTurn = agent.phase !== undefined && agent.phase !== null && Number.isFinite(Number(agent.phase.lastTurn)) ? Number(agent.phase.lastTurn) : (beforeLastTurn + 1)
@@ -214,6 +225,15 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       if (body === '') {
         throw new Error('重新生成失败：模型返回空文本')
       }
+      const replacement = planRegenerationSurface({ events: sessionEvents(session), nodes: session.surface.nodes,
+        oldAssistantSeq: oldSeq, eventStart })
+      const projection = {
+        data: { turn: oldTurn, step: 1, message: { id: 'tavern-regen:' + operationId,
+          role: 'assistant', content: [{ type: 'text', text: body }], source: oldSource } },
+        range: { start: replacement.start, end: replacement.end, sourceEventSeqs: [...replacement.shadowedSeqs] }
+      }
+      // The persisted intent must only reference events already on disk.
+      if (typeof sessions.flush === 'function') await sessions.flush(session)
       committedChat = await updateChat(latest.id, function (current) {
         if (current?.regenRecovery?.id !== operationId) throw new Error('重新生成操作已失效')
         const currentMessages = Array.isArray(current && current.messages) ? current.messages : []
@@ -227,8 +247,8 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
         if (next.nativeCommits !== null && typeof next.nativeCommits === 'object') delete next.nativeCommits[String(syntheticTurn)]
         next.nativeCommits = next.nativeCommits && typeof next.nativeCommits === 'object' ? structuredClone(next.nativeCommits) : {}
         if (originalChat.nativeCommits && originalChat.nativeCommits[String(oldTurn)]) next.nativeCommits[String(oldTurn)] = structuredClone(originalChat.nativeCommits[String(oldTurn)])
-        delete next.regenInProgress
-        delete next.regenRecovery
+        next.regenInProgress = true
+        next.regenRecovery = { ...current.regenRecovery, phase: 'committed', projection }
         next.settleStatus = 'pending'
         next.settleError = null
         next.tavernHelperLifecycleRevision = lifecycleRevision + 1
@@ -242,20 +262,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       await restoreFailedRegen()
       throw error
     }
-    // 把旧正文、失败残留、合成输入和新模型节点折叠为唯一的新正文。
-    const currentNodes = session.surface !== undefined && Array.isArray(session.surface.nodes) ? session.surface.nodes : []
-    const replacement = planRegenerationSurface({
-      events: sessionEvents(session),
-      nodes: currentNodes,
-      oldAssistantSeq: oldSeq,
-      eventStart
-    })
-    // 正文替代先独立提交到可见 Surface；后台结算失败不能撤销用户已经得到的新正文。
-    replaceSessionSurface(session, 'assistant/message', {
-      turn: oldTurn,
-      step: 1,
-      message: { id: randomUUID(), role: 'assistant', content: [{ type: 'text', text: body }], source: oldSource }
-    }, { start: replacement.start, end: replacement.end, sourceEventSeqs: replacement.shadowedSeqs })
+    committedChat = await regenerationRecovery.complete({ chatId: chat.id, session, operationId }) || committedChat
     let settledChat = committedChat
     try {
       await queueSettlement(committedChat.id)
@@ -330,8 +337,10 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
 
   // ---------- 回退本轮（删除最近一次用户输入 + LLM 输出） ----------
   async function rollbackTurn(sessionId, chatId, expectedTurn) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (chat === undefined) throw new Error('聊天不存在: ' + chatId)
+    if (pendingRegenerations.has(chat.id) || chat.regenInProgress) throw new Error('正文正在重新生成，请先完成恢复或生成')
     if (pendingRollbacks.has(chat.id)) throw new Error('正在回退本轮，请等待完成')
     pendingRollbacks.add(chat.id)
     try { return await rollbackChat(chat, expectedTurn) }
@@ -339,6 +348,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   }
 
   async function rollbackChat(chat, requestedTurn) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     await stopRollbackGeneration(chat)
     chat = await readChat(chat.id)
     const originalChat = structuredClone(chat)

@@ -178,5 +178,9 @@ test('筛选期间剧情改变，迟到结果不绑定新剧情或保存正文 F
       return { context: '', error: '筛选已过期' }
     } })
   await assert.rejects(turns.prepare({ sessionId: 'parent', turn: 1, userText: '查看资料' }), /正文准备已过期/)
-  assert.deepEqual((await h.store.readChat()).timeline.participants, {})
+  const saved = await h.store.readChat()
+  // Session identity is bound before execution for retry; stale output must not advance it.
+  assert.equal(saved.timeline.participants.background.sessionId, h.created[0])
+  assert.equal(saved.timeline.participants.background.boundary, null)
+  assert.ok(Object.values(saved.timeline.operations).every(operation => operation.status !== 'completed'))
 })

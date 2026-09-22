@@ -5,6 +5,7 @@ import { projectAgentContent, projectOpeningCommit } from './runtime-content-pro
 import { OFFICIAL_MVU_VERSION } from './official-mvu-assets.js'
 import { createScriptContinuity } from './script-continuity.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
+import { normalizeBackgroundModel } from './background-model-selection.js'
 import { normalizeBackgroundTasks } from './tavern-settings.js'
 import { ensureSessionSeedTrajectory } from './session-seed-trajectory.js'
 
@@ -151,7 +152,8 @@ export function createConversationInitialization(options) {
     chat.webSearchEnabled = false
     chat.sceneImagesEnabled = false
     chat.conversationFeaturesVersion = 1
-    chat.backgroundModelSelection = null
+    chat.backgroundModelSelection = groupOfMode(chat.mode) === 'play' ? normalizeBackgroundModel(currentSettings.defaultBackgroundModel) : null
+    chat.disabledWritingSkills = groupOfMode(chat.mode) === 'play' ? [...(currentSettings.defaultDisabledWritingSkills || [])] : []
     chat.backgroundConfigVersion = 1
     chat.backgroundTasks = normalizeBackgroundTasks({})
     chat.mvu = usesMvu ? {
@@ -217,6 +219,9 @@ export function createConversationInitialization(options) {
       chat.openingText = ''
       delete chat.sceneOpeningWorldbook
       return chat
+    }
+    if (openingTarget && groupOfMode(chat.mode) === 'play' && currentSettings.defaultForegroundModel) {
+      await native.selectModel(openingTarget, currentSettings.defaultForegroundModel)
     }
     await chats.publish(chat)
     if (hasSession) await appendNativeOpening(sessionId, chat, card, openingTarget)

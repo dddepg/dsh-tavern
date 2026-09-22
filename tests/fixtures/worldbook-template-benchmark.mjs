@@ -1,5 +1,5 @@
 // Synthetic, isolated timing harness. No model calls or user archives.
-// node tests/fixtures/worldbook-template-benchmark.mjs [output/playwright/issue43-timing] [case-name]
+// node tests/fixtures/worldbook-template-benchmark.mjs [output/playwright/issue43-timing] [case-name] [rpc-delay-ms]
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { chromium } from 'playwright'
 import fs from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
-import { createFullTemplateRuntime } from '../../tavern-plugin/lib/domain/full-template-runtime.js'
+import { createFullTemplateRuntime } from './browser-template-transport.mjs'
 import { createForegroundWorldbook } from '../../tavern-plugin/lib/domain/foreground-worldbook.js'
 import { createWorldBookLibrary } from '../../tavern-plugin/lib/domain/worldbook-library.js'
 import { createChatJournalStore } from '../../tavern-plugin/lib/domain/chat-journal-store.js'
@@ -30,6 +30,7 @@ fs.open = async (...args) => {
 }
 syncBuiltinESMExports()
 
+const rpcDelayMs = Math.max(0, Number(process.argv[4]) || 0)
 const output = resolve(process.argv[2] || 'output/playwright/issue43-timing')
 await mkdir(output, { recursive: true })
 const sourceRoot = new URL('../../tavern-plugin/lib/', import.meta.url)
@@ -72,7 +73,7 @@ window.closeBenchmark=async()=>{signals.close();await tasks.dispose()};window.re
 }catch(error){window.failure=String(error.stack||error)}
 </script>`
 
-async function runCase(browser, name, { large=true, journal=true, mode='normal', skipQueued=false }={}) {
+async function runCase(browser, name, { large=true, journal=true, mode='normal', skipQueued=false, batch=true }={}) {
   const root = await mkdtemp(join(tmpdir(),'tavern-worldbook-bench-'))
   const metrics=[]; let measuring=false, signals
   syncObserver=(path,ms)=>{if(measuring&&path.includes('template-work'))metrics.push({name:path.endsWith('.write-lock')?'fsync.lock':path.includes('.staging-')?'fsync.data':'fsync.directory',ms})}
@@ -101,7 +102,7 @@ async function runCase(browser, name, { large=true, journal=true, mode='normal',
     readCard,worldBooks:books,scriptDispatch:{},globalVariables:{...globalVariables,read:timed('globals.read',globalVariables.read)},fullExtensionSettings:{...settings,read:timed('settings.read',settings.read)}})
   const runtime=createFullTemplateRuntime({store:journal?jobStore:undefined,publishSignal:()=>signals?.write('data: work\n\n')})
   runtime.heartbeat('s','browser','ready')
-  const foreground=createForegroundWorldbook({bound:books.bound,runtime:async()=>runtime.forSession('s'),globalVariables:globalVariables.read})
+  const foreground=createForegroundWorldbook({bound:books.bound,runtime:async()=>{const engine=runtime.forSession('s');if(!batch)delete engine.renderProjections;return engine},globalVariables:globalVariables.read})
   const server=createServer(async(req,res)=>{
     try{
       const path=new URL(req.url,'http://localhost').pathname
@@ -123,6 +124,7 @@ async function runCase(browser, name, { large=true, journal=true, mode='normal',
         res.setHeader('Content-Type','application/json');res.end(JSON.stringify({ms,refs:result.refs,context:result.prefixContext,server:metrics}));return
       }
       if(path.startsWith('/rpc/')){
+        if(rpcDelayMs)await new Promise(resolve=>setTimeout(resolve,rpcDelayMs))
         let body='';for await(const chunk of req)body+=chunk
         const args=JSON.parse(body),method=path.slice(5),begin=performance.now();let result
         if(method==='claim')result=runtime.dispatch.claim('s','browser',true)
@@ -149,10 +151,11 @@ async function runCase(browser, name, { large=true, journal=true, mode='normal',
     const rounds=[]
     for(let i=0;i<4;i++){
       const result=await page.evaluate(()=>window.run())
+      assert.equal(result.server.filter(row=>row.name==='rpc:start').length,batch?2:40)
       rounds.push({...result,summary:{server:summary(result.server),browser:summary(result.browser)}})
       console.log(name,i,Math.round(result.ms)+' ms',result.server.filter(row=>row.name==='rpc:start').length+' jobs')
     }
-    const report={name,large,journal,mode,skipQueued,cardBytes:Buffer.byteLength(JSON.stringify(card)),worldbookBytes:Buffer.byteLength(JSON.stringify(document)),rounds,medianMs:median(rounds.slice(1).map(round=>round.ms))}
+    const report={name,large,journal,mode,skipQueued,batch,rpcDelayMs,cardBytes:Buffer.byteLength(JSON.stringify(card)),worldbookBytes:Buffer.byteLength(JSON.stringify(document)),rounds,medianMs:median(rounds.slice(1).map(round=>round.ms))}
     await writeFile(join(output,name+'.json'),JSON.stringify(report,null,2))
     await page.evaluate(()=>window.closeBenchmark())
     return report
@@ -161,7 +164,7 @@ async function runCase(browser, name, { large=true, journal=true, mode='normal',
 const browser=await chromium.launch({headless:true})
 try{
   const reports=[]
-  for(const [name,config] of [['small', {large:false}],['large',{}],['large-no-job-journal',{journal:false}],['large-pinned-snapshot',{mode:'pinned'}],['large-no-queued-record',{skipQueued:true}]])if(!process.argv[3] || name===process.argv[3])reports.push(await runCase(browser,name,config))
+  for(const [name,config] of [['small', {large:false}],['large',{}],['large-sequential',{batch:false}],['large-no-job-journal',{journal:false}],['large-pinned-snapshot',{mode:'pinned'}],['large-no-queued-record',{skipQueued:true}]])if(!process.argv[3] || name===process.argv[3])reports.push(await runCase(browser,name,config))
   const large=reports.find(report=>report.name==='large')
   for(const report of reports.filter(report=>report.large))for(const round of report.rounds)assert.equal(round.context,(large||report).rounds[0].context)
   const result={experiment:process.env.DSH_TAVERN_BENCH_EXPERIMENT || null,revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),warmupRounds:1,measuredRounds:3,platform:process.platform,arch:process.arch,node:process.version,browser:browser.version(),results:reports.map(({rounds,...report})=>report)}

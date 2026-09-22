@@ -16,6 +16,6 @@ foreach ($item in @(@('payload','online-payload.7z'), @('seven','7za.exe'))) {
         try { $stream.CopyTo($file) } finally { $file.Dispose() }
     } finally { $stream.Dispose() }
 }
-$expected = '5e2e365397638d61f202753b5dbcee1d9dbd377a5a9d17c160535891f187decd'
+$expected = 'a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4'
 if ((Get-FileHash -LiteralPath (Join-Path $Destination 'online-payload.7z')).Hash.ToLowerInvariant() -ne $expected) { throw 'Unexpected Desktop payload' }
 Write-Output "Verified build inputs: $Destination"

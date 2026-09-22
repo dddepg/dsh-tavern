@@ -10,12 +10,13 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
+        node: [22.19.0, 24.18.1]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.19.0
+          node-version: ${{ matrix.node }}
       - name: Enable pnpm
         run: |
           corepack enable
@@ -24,6 +25,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check launcher
         run: node --test tests/launcher.test.mjs tests/windows-command-shim.test.mjs tests/runtime-package.test.mjs tests/cdn-upgrade.test.mjs tests/plugin-dependencies.test.mjs tests/bundled-image-plugin.test.mjs
+      - name: Check server template process
+        run: node --test tests/server-template-runtime.test.mjs tests/server-template-native.test.mjs
       - name: Check help command
         run: node bin/dsh-tavern.mjs --help
 
