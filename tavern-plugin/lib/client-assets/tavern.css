@@ -1110,3 +1110,470 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 /* DSH 0.1.5-rc.2: hide Open in App and native log-download menu in Tavern's header. */
 header .CAgGvG_split,
 header .nL4_yW_moreButton { display: none !important; }
+
+/* —— 人物卡库 / 详情：Apple 字号·留白·Action Blue（scoped，不污染其它侧栏） —— */
+.dsh-tavern-card-library,
+.dsh-tavern-card-detail {
+  --dsh-card-action: #0a84ff;
+  --dsh-card-action-soft: color-mix(in srgb, #0a84ff 16%, transparent);
+  --dsh-card-action-border: color-mix(in srgb, #0a84ff 45%, transparent);
+  --dsh-card-radius-sm: 8px;
+  --dsh-card-radius-md: 11px;
+  --dsh-card-radius-lg: 18px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dsh-tavern-card-library > .dsh-tavern-status-head,
+.dsh-tavern-card-detail > .dsh-tavern-status-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-status-title,
+.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.37px;
+  line-height: 1.24;
+}
+.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-question-sub,
+.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-question-sub,
+.dsh-tavern-card-library > .dsh-tavern-card-import-hint {
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.38;
+  letter-spacing: -0.08px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-tavern-card-library > .dsh-tavern-card-import-hint {
+  padding: 0 16px 4px;
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-head-actions,
+.dsh-tavern-card-detail .dsh-tavern-card-library-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.dsh-tavern-card-library .dsh-tavern-btn,
+.dsh-tavern-card-detail .dsh-tavern-btn {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 980px;
+  background: var(--dsh-card-action-soft);
+  color: var(--dsh-card-action);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.08px;
+  line-height: 1.2;
+}
+.dsh-tavern-card-library .dsh-tavern-btn:hover,
+.dsh-tavern-card-detail .dsh-tavern-btn:hover {
+  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);
+}
+.dsh-tavern-card-library .dsh-tavern-btn.danger,
+.dsh-tavern-card-detail .dsh-tavern-btn.danger {
+  background: color-mix(in srgb, #ff3b30 12%, transparent);
+  color: #ff3b30;
+  border-color: transparent;
+}
+.dsh-tavern-card-library .dsh-tavern-btn.danger:hover,
+.dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {
+  background: color-mix(in srgb, #ff3b30 20%, transparent);
+}
+
+.dsh-tavern-card-library > .dsh-tavern-card-organization {
+  margin: 10px 16px 6px;
+  gap: 10px;
+}
+.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-card-library-search,
+.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-group-picker > summary {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsh-card-radius-md);
+  background: var(--dsw-specific-input-major);
+  font-size: 15px;
+  letter-spacing: -0.24px;
+  line-height: 1.2;
+}
+.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-card-library-search:focus,
+.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-card-library-search:focus-visible {
+  outline: none;
+  border-color: var(--dsh-card-action);
+  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);
+}
+.dsh-tavern-card-library .dsh-tavern-group-picker[open] > summary {
+  border-color: var(--dsh-card-action-border);
+  background: var(--dsh-card-action-soft);
+}
+.dsh-tavern-card-library .dsh-tavern-group-picker > summary:focus-visible {
+  outline: 2px solid var(--dsh-card-action);
+  outline-offset: 2px;
+}
+.dsh-tavern-card-library .dsh-tavern-group-menu button[aria-pressed="true"] {
+  color: var(--dsh-card-action);
+  background: var(--dsh-card-action-soft);
+  font-weight: 600;
+}
+
+.dsh-tavern-card-library > .dsh-tavern-card-batch {
+  margin: 0 16px;
+  padding: 8px 0 4px;
+}
+.dsh-tavern-card-library .dsh-tavern-card-batch-count {
+  font-size: 13px;
+  font-weight: 500;
+}
+.dsh-tavern-card-library .dsh-tavern-card-batch-notice {
+  border-radius: var(--dsh-card-radius-sm);
+  background: var(--dsh-card-action-soft);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+}
+.dsh-tavern-card-library .dsh-tavern-card-batch-checkbox {
+  width: 20px;
+  height: 20px;
+  margin: 0 8px 0 4px;
+  accent-color: var(--dsh-card-action);
+}
+
+.dsh-tavern-card-library > .dsh-tavern-resource-body {
+  padding: 8px 10px 24px;
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card-row {
+  gap: 8px;
+  margin: 2px 0;
+  padding: 2px 4px;
+  border-radius: var(--dsh-card-radius-md);
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--dsh-card-radius-md);
+  background: transparent;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card.selected {
+  border-color: var(--dsh-card-action-border);
+  background: var(--dsh-card-action-soft);
+}
+.dsh-tavern-card-library .dsh-tavern-card-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--dsh-card-radius-md);
+  border: 1px solid var(--dsw-alias-border-l2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+.dsh-tavern-card-library .dsh-tavern-card-list-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.24px;
+  line-height: 1.27;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dsh-tavern-card-library .dsh-tavern-card-library-card span {
+  margin-top: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.08px;
+  line-height: 1.35;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dsh-tavern-card-library .dsh-tavern-resource-at {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 980px;
+  background: transparent;
+  color: var(--dsh-card-action);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dsh-tavern-card-library .dsh-tavern-resource-at:hover {
+  background: var(--dsh-card-action-soft);
+}
+.dsh-tavern-card-library .dsh-tavern-card-mention {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 980px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;
+}
+.dsh-tavern-card-library .dsh-tavern-card-mention:hover {
+  background: var(--dsh-card-action-soft);
+  color: var(--dsh-card-action);
+}
+.dsh-tavern-card-library .dsh-tavern-card-mention:active {
+  transform: scale(0.94);
+}
+.dsh-tavern-card-library .dsh-tavern-card-mention:focus-visible {
+  outline: 2px solid var(--dsh-card-action);
+  outline-offset: 2px;
+}
+.dsh-tavern-card-library .dsh-tavern-card-row-menu > summary {
+  width: 32px;
+  height: 32px;
+  border-radius: 980px;
+  font-size: 18px;
+}
+.dsh-tavern-card-library .dsh-tavern-empty {
+  padding: 40px 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 15px;
+  line-height: 1.47;
+  letter-spacing: -0.24px;
+}
+
+/* 详情：整页滚动，顶部标题/操作随滚动收起（不再钉死在上） */
+.dsh-tavern-card-detail {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dsh-tavern-card-detail > .dsh-tavern-status-head,
+.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization,
+.dsh-tavern-card-detail > .dsh-tavern-script-hero {
+  flex: 0 0 auto;
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-fields {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+}
+
+.dsh-tavern-card-detail > .dsh-tavern-status-head > .dsh-tavern-btn {
+  align-self: flex-start;
+  margin: 0 0 4px;
+}
+.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title,
+.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-role {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization select {
+  height: 36px;
+  border-radius: var(--dsh-card-radius-md);
+  font-size: 15px;
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization > button {
+  height: 36px;
+  border-radius: 980px;
+}
+.dsh-tavern-card-detail-organization button[aria-pressed="true"] {
+  color: var(--dsh-card-action);
+}
+.dsh-tavern-card-detail > .dsh-tavern-script-hero {
+  margin: 12px 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsh-card-radius-lg);
+  background: var(--dsw-specific-input-major);
+}
+.dsh-tavern-card-detail .dsh-tavern-script-hero-title {
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.24px;
+}
+.dsh-tavern-card-detail .dsh-tavern-script-hero-help {
+  font-size: 13px;
+  line-height: 1.43;
+}
+.dsh-tavern-card-detail > .dsh-tavern-card-fields {
+  padding: 16px;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-advanced {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsh-card-radius-lg);
+  background: var(--dsw-specific-input-major);
+  overflow: hidden;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary {
+  padding: 14px 16px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.24px;
+  list-style: none;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary::-webkit-details-marker { display: none; }
+.dsh-tavern-card-detail .dsh-tavern-card-advanced[open] > summary {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-advanced > :not(summary) {
+  padding: 12px 16px 16px;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-worldbook {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-specific-input-major);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary {
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary:focus-visible {
+  outline: 2px solid var(--dsh-card-action);
+  outline-offset: 2px;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-worldbook > .dsh-tavern-worldbook {
+  margin: 0;
+  padding: 12px 16px 16px;
+  border: 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field {
+  margin-bottom: 14px;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field label {
+  margin-bottom: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.08px;
+  line-height: 1.35;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field input,
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea {
+  min-height: 40px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsh-card-radius-md);
+  background: var(--dsw-specific-sidebar-fill);
+  font-size: 16px;
+  letter-spacing: -0.24px;
+  line-height: 1.55;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field input:focus,
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea:focus {
+  outline: none;
+  border-color: var(--dsh-card-action);
+  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea {
+  field-sizing: content;
+  min-height: 120px;
+  max-height: min(68vh, 520px);
+  overflow-y: auto;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large {
+  min-height: 240px;
+  max-height: min(72vh, 640px);
+  line-height: 1.6;
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea.is-empty,
+.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea {
+  min-height: 64px;
+  max-height: 96px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large.is-empty,
+.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea.large {
+  min-height: 88px;
+  max-height: 120px;
+}
+.dsh-tavern-card-detail .dsh-tavern-worldbook-add,
+.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-bound,
+.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-new {
+  border: 0;
+  border-radius: 980px;
+  background: var(--dsh-card-action-soft);
+  color: var(--dsh-card-action);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+}
+.dsh-tavern-card-detail .dsh-tavern-worldbook-add:hover {
+  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);
+}
+.dsh-tavern-card-detail .dsh-tavern-worldbook-note,
+.dsh-tavern-card-detail .dsh-tavern-worldbook-title,
+.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head {
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head b {
+  color: var(--dsh-card-action);
+  font-size: 13px;
+}
+.dsh-tavern-card-detail .dsh-card-primary {
+  min-height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 980px;
+  background: var(--dsh-card-action);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.24px;
+}
+.dsh-tavern-card-detail .dsh-card-primary:hover {
+  filter: brightness(1.06);
+}
+.dsh-tavern-card-detail .dsh-card-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.dsh-tavern-card-detail .dsh-tavern-card-save {
+  padding: 14px 0 4px;
+}
