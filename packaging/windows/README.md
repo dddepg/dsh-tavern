@@ -37,7 +37,9 @@
 - 识别旧版 `%LOCALAPPDATA%\DSH-Tavern-Portable`、`D:\Workspace\.DSH-Tavern` 和 `%LOCALAPPDATA%\DSH-Tavern`。旧数据不移动、不复制、不按新目录重置。已记录的程序目录失效时，提供选择原目录、重新安装或取消；明确选择重新安装后才进入安装位置选择，不自动清除注册表或删除旧文件。配置中已记录的数据目录缺失仍阻止启动，避免误建空白数据。
 - 首次运行显示安装目录选择；旧版修复固定原位置，明确告知不迁移。每次启动会补建快捷方式。
 - Desktop 2.0.13 使用 `resources/app` 目录布局，并已自带 UTF-8 代码页 prologue。`patch-runtime.cjs` 只注入 Windows 包管理隔离桥，并在新解压运行时内写入 ready 标记前执行。运行时版本后缀变更可避免修改正在运行的旧版文件；改补丁时必须同步提升后缀。
-- 实验构建的 `online-install.mjs` 默认从 `experiment/plugin-session-patch` 拉取酒馆；合并 main 后应改回 `main`。
+- `setup2` 使用随安装包嵌入的 `setup-upgrade.mjs` 和 PowerShell 安装器，从 `main` 安装或更新 Tavern。旧 payload 中的实验性 `online-install.mjs` 不再作为安装入口。
+- 显式运行安装包时，即使已有 Tavern 也会执行更新。升级先关闭所选安装根目录下的 Desktop 进程（先请求关闭，等待十秒后结束残留托盘进程），不操作其他安装；安装页面提醒用户先保存操作。
+- 数据目录中的 `.launcher-upgrade-ready` 只在成功后记录当前启动器版本。安装失败清除旧标记，下一次可重试；正常使用已成功升级的安装入口无需联网。新启动器首次运行也会执行一次升级，以补齐旧 Profile 的宿主依赖。
 - 旧 runtime 保留用于回退；不自动清理用户历史运行时和数据。新版首次准备需要额外磁盘空间。
 
 发布时先上传新的 `Setup.exe` 附件并核对哈希，再发布 README 新链接。保留旧 `Portable.exe` / Setup，避免覆盖旧地址和丢失可复核的构建输入。
@@ -47,3 +49,5 @@
 Windows 包管理修复：`setup1` 在新运行时中加入 pnpm 入口桥，包管理使用安装目录内经过官方 SHA-256 校验的独立 Node；保留 Desktop 及 DSH 适配版本。`bin/desktop-package-manager.mjs` 同时供普通 Desktop 安装脚本与 Profile 安装使用，CLI 和非 Windows 平台跳过。
 
 真实入口回归：`node packaging/windows/test-package-manager.mjs <解压后的运行时目录> <新的测试目录>`，验证依赖安装退出和失败退出码。首次会下载校验后的 Node。
+
+升级回归：`test-upgrade.ps1 -Launcher <安装包> -Runtime <准备后的运行时> -TestDirectory <空测试目录>` 检查旧插件不被跳过、失败重试、离线启动及进程关闭范围。`test-online-upgrade.ps1 -InstallDirectory <仅经过 prepare-only 的独立测试安装目录>` 执行联网覆盖安装，检查版本、数据哨兵和 Desktop smoke；不要对用户安装执行该测试。

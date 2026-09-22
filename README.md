@@ -72,13 +72,13 @@
 
 ### 纯小白安装（仅限 Windows x64）
 
-**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)**
+**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)**
 
-下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13；已有安装和数据会保留，后续可在酒馆界面中更新。
+下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13。重新运行安装包会关闭所选安装的旧进程，并联网更新已有 Tavern 插件；请先保存当前操作。人物卡、聊天和设置保留。平时从桌面快捷方式启动无需重复更新。
 
 首次安装可选择文件夹，例如 `D:\Apps\DSH-Tavern`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 `如何启动.txt` 会列出程序及数据位置。
 
-**旧便携版找不到入口？** 下载上面的新版安装包，运行后点击「修复并启动」，会在原位置补建入口并保留原数据，不必重新导入人物卡或聊天。请不要直接运行 `AppData\Local\DSH-Tavern-Portable\runtime-…` 内的 `DSH Desktop.exe`。详见[Windows 安装与启动入口](docs/installation.md#windows-一键安装版)。
+**旧便携版找不到入口？** 下载上面的新版安装包，运行后点击「修复并启动」，会在原位置更新运行时和插件、补建入口并保留原数据，不必重新导入人物卡或聊天。请不要直接运行 `AppData\Local\DSH-Tavern-Portable\runtime-…` 内的 `DSH Desktop.exe`。详见[Windows 安装与启动入口](docs/installation.md#windows-一键安装版)。
 
 **卸载后重装提示“已记录的安装目录暂时不可用”？** 上方下载已更新为修复版。重新下载并运行，选择「重新安装」后指定安装位置即可，无需手动清理注册表。若要继续使用旧聊天和人物卡，请先连接原磁盘或选择「使用原目录」；重新安装不会删除旧文件，也不能恢复已删除的数据。
 

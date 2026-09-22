@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$Launcher,
     [Parameter(Mandatory=$true)][string]$TestDirectory
 )
@@ -16,7 +16,7 @@ function Assert-True($condition, $message) {
 }
 function Run-Launcher([string]$file, [string]$argument='--prepare-only') {
     $process = Start-Process -FilePath $file -ArgumentList $argument -PassThru -WindowStyle Hidden
-    if (!$process.WaitForExit(120000)) { $process.Kill(); throw 'Launcher timed out' }
+    $null=$process.Handle; if (!$process.WaitForExit(120000)) { $process.Kill(); throw 'Launcher timed out' }
     return $process.ExitCode
 }
 try {
@@ -37,7 +37,7 @@ try {
         $probeArguments = @((Join-Path $PSScriptRoot 'test-unicode-shims.mjs'), $runtime, (Join-Path $install '中文 命令测试')) | ForEach-Object { '"' + $_ + '"' }
         $stdout = Join-Path $install 'unicode-test.stdout.txt'; $stderr = Join-Path $install 'unicode-test.stderr.txt'
         $probe = Start-Process -FilePath (Join-Path $runtime 'DSH Desktop.exe') -ArgumentList $probeArguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        if (!$probe.WaitForExit(30000)) { $probe.Kill(); throw 'Unicode command probe timed out' }
+        $null=$probe.Handle; if (!$probe.WaitForExit(30000)) { $probe.Kill(); throw 'Unicode command probe timed out' }
         Get-Content -LiteralPath $stdout
         if ($probe.ExitCode -ne 0) { Get-Content -LiteralPath $stderr; throw 'Unicode command shim regression failed' }
     } finally { $env:ELECTRON_RUN_AS_NODE = $electronMode }
@@ -68,7 +68,7 @@ try {
     Set-Content -LiteralPath (Join-Path $legacy '存档.txt') -Value 'Legacy data'
     $settings = Join-Path $install 'launcher-settings.xml'
     $xml = [xml](Get-Content -LiteralPath $settings -Raw)
-    $xml.Installation.DataDirectory = $legacy
+    $xml.Installation.DataDirectory = [string]$legacy
     $xml.Save($settings)
     Assert-True ((Run-Launcher $stable) -eq 0) 'legacy external data path is accepted'
     Assert-True (([xml](Get-Content -LiteralPath $settings -Raw)).Installation.DataDirectory -eq $legacy) 'legacy data path is not silently reset'
@@ -83,7 +83,7 @@ try {
 
     # Missing old data must be reported rather than replaced by an empty profile.
     $missing = Join-Path $TestDirectory 'missing-data'
-    $xml.Installation.DataDirectory = $missing; $xml.Save($settings)
+    $xml.Installation.DataDirectory = [string]$missing; $xml.Save($settings)
     Assert-True ((Run-Launcher $stable) -ne 0) 'missing data path blocks silent reset'
     Assert-True (!(Test-Path -LiteralPath $missing)) 'missing data directory is not recreated'
     Write-Output 'All Windows launcher integration checks passed.'
