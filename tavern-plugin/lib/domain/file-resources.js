@@ -146,6 +146,18 @@ export function createFileResourceStore(options = {}) {
     await writeFile(target, data)
   }
 
+  function mvuDefinitionPath(revision) {
+    if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error('字段定义版本无效')
+    return path.join(dataRoot, 'mvu-conversion-definitions', revision + '.json')
+  }
+  async function readMvuDefinition(revision) {
+    const value = await durableFiles.read(mvuDefinitionPath(revision))
+    return value === undefined ? undefined : JSON.parse(value.toString('utf8'))
+  }
+  async function saveMvuDefinition(revision, definition) {
+    await durableFiles.write(mvuDefinitionPath(revision), JSON.stringify(definition))
+  }
+
   async function writeWorking(relative, data) {
     const normalized = normalizeResourcePath(relative)
     const target = absolute(normalized)
@@ -973,5 +985,5 @@ export function createFileResourceStore(options = {}) {
     return result
   }
 
-  return Object.freeze({ absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
+  return Object.freeze({ readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
 }

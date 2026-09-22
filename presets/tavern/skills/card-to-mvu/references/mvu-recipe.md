@@ -24,13 +24,13 @@
 {"action":"freezeAppearance","sourcePath":"cards/原卡.json","sourceRevision":"inspect 返回的版本号","appearance":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
 ```
 
-apply 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。下面是无原美化的默认面板例子。
+saveDefinition 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。下面是无原美化的默认面板例子。
 
 apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 preview。下面的版本号、路径和短片段仅为示例，必须来自 inspect 底稿。复制整卡、清理和安装 MVU 都由工具完成：
 
 ```json
 {
-  "action": "apply",
+  "action": "saveDefinition",
   "sourcePath": "cards/原卡.json",
   "name": "原卡 MVU版本",
   "sourceRevision": "inspect 返回的版本号",
@@ -40,9 +40,17 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
   },
   "updateRules": "玩家.位置为字符串，正文确认移动后才更新，打算移动不算。人物按姓名索引，新增时提交完整对象；离场改在场为 false，保留档案。",
   "displayFields": [{"path":"/玩家","label":"玩家"},{"path":"/人物","label":"人物"}],
-  "cleanup": [{"op":"replaceText","path":"/description","expected":"每轮末尾输出状态表。","value":""}]
+  "fieldMappings": []
 }
 ```
+
+上例没有标签状态字段，因此映射为空；有 stateInventory 时每项都必须提供 `{sourceId, path}`。先保存字段定义，随后只传返回的版本号生成副本：
+
+```json
+{"action":"apply","sourcePath":"cards/原卡.json","name":"原卡 MVU版本","sourceRevision":"inspect 返回的版本号","definitionRevision":"saveDefinition 返回的版本号","cleanup":[{"op":"replaceText","path":"/description","expected":"每轮末尾输出状态表。","value":""}]}
+```
+
+多人物美化示例：`appearance: {sourcePath: "/extensions/regex_scripts/0/replaceString", collectionPath: "/人物", bindings: [{capture: 1, path: "/姓名"}, {capture: 2, path: "/位置"}]}`。每个人物的来源字段分别映射到 `/人物/人物名/姓名` 和 `/人物/人物名/位置`，外观绑定相对于集合成员。
 
 `cleanup` 路径相对于 source 底稿，不带 `/data` 或 `/raw`。删除数组元素时用 inspect 时的原始下标，工具处理下标移动。修改后的文本保持剧情语义；不留下迁移说明。同字段多处清理分别提交小操作；所有操作按修改前底稿定位，工具拒绝重叠范围。
 
@@ -64,10 +72,10 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 ## 需要额外判断的卡
 
 - **已有 MVU**：先识别原有初值、Schema、脚本和面板。转换工具遇到残留初值、后台规则或旧状态声明会停止，要求明确合并/清理；它不是通用的已有 MVU 卡升级器。已有复杂 MVU 正常工作时可保留现状，不必强行重装。
-- **多开场**：工具给每个开场安装一个入口，但共享一份初值。开场事实不同，先统一初值策略或分别生成副本，不能声称入口检查证明各开场语义一致。
+- **多开场**：工具按 openingStates 和来源映射生成每个开场完整的 initvar；检查人物归属和已有值，不能用第一个开场替代其余开场。
 - **外部世界书**：工具复制实际绑定内容到副本，处理合并编号并保留触发条件；原卡未生效的内置书作为保留数据，不因转换而启用。inspect 返回的世界书内容是清理操作的依据。
-- **增量修订**：apply 默认把新 cleanup 追加到已保存方案，完全相同的操作去重；省略 initialState/updateRules/displayFields/appearance 沿用旧值。底稿始终是原卡，不是副本。修改同字段旧操作时提交 cleanupResetPaths，例如 `["/first_mes"]`，同时提交该字段的完整新清理。需要恢复该字段原文时，只 reset 不追加。
-- **完整重做**：planMode=replace 不继承任何旧定义或清理，必须提交完整方案。旧版副本没有 cleanup 记录，或 sourceRevision 已改变时只能完整重做。
+- **增量修订**：apply 默认把新 cleanup 追加到已保存方案，完全相同的操作去重；省略 definitionRevision 沿用已保存版本；改定义先 saveDefinition，apply 不重新提交定义内容。底稿始终是原卡，不是副本。修改同字段旧操作时提交 cleanupResetPaths，例如 `["/first_mes"]`，同时提交该字段的完整新清理。需要恢复该字段原文时，只 reset 不追加。
+- **完整重做**：planMode=replace 不继承旧清理，需提交完整清理和已保存的新 definitionRevision。旧版副本没有 cleanup 记录，或 sourceRevision 已改变时只能完整重做。
 - **已有副本被手工改过**：inspect.target.externallyModified 会提示，默认合并被拒绝。先以 scope=target 读取，把需要保留的副本修改纳入完整方案，再以 planMode=replace 和 targetRevision 更新，不能忽略差异直接覆盖。
 - **定位失败**：error.anchor 指明 expected/start/end，matches 是出现次数，candidates 是最多 5 个短上下文。0 次先读原卡字段，检查是否误用了副本附加换行；2 次以上选择更长的唯一标记。不要模糊匹配、盲目改编码或直接写资源文件。
 - **验收清单**：changes 是实际执行的清理操作，removedEntries/preservedEntries 分别列实际删除与原样保留的世界书条目，带条目名与 enabled；禁用不等于可删除。planIntegrity 检查是否有方案外修改，legacyResidue 只检查被修改来源渲染正则中可识别的标签；它们不能替代剧情语义判断。

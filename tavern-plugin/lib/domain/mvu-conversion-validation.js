@@ -1,7 +1,8 @@
+import { assertDefinition, definitionDigest } from './mvu-conversion-definition.js'
 import { Script } from 'node:vm'
 import { JSDOM } from 'jsdom'
 import { isDeepStrictEqual } from 'node:util'
-import { buildMvuArtifacts, MVU_CONVERSION_KEY, MVU_MARKER, MVU_RULE_IDS } from './mvu-conversion-artifacts.js'
+import { buildMvuArtifacts, MVU_CONVERSION_KEY, MVU_MARKER, MVU_RULE_IDS, pointerKeys } from './mvu-conversion-artifacts.js'
 import { projectReplyLayers } from './reply-presentation.js'
 import { projectPersistentStatusView } from './persistent-status-view.js'
 import { inspectCardExtensions } from './card-extension-reading.js'
@@ -42,6 +43,32 @@ async function simulatePanel(html, initialState, frozen = false) {
     if (!text().includes('DSH_MVU_VALIDATION_UPDATED') || text() === before) throw Error('更新事件后未重读最新变量')
     state = structuredClone(initialState); handlers.get('restored')()
     if (text() !== before) throw Error('恢复事件后显示未还原')
+    if (frozen?.collectionPath) {
+      const keys=pointerKeys(frozen.collectionPath)
+      const collection=()=>keys.reduce((value,key)=>value[key],state)
+      const members=Object.keys(collection()).filter(key=>!key.startsWith('$')&&!key.startsWith('__'))
+      if(members.length) {
+        // Mutating every field at once only proves that at least one is visible.
+        // Probe each member/capture independently, then exercise insertion/removal.
+        for(const member of members) for(const binding of frozen.bindings) {
+          state=structuredClone(initialState)
+          const path=pointerKeys(binding.path);let parent=collection()[member]
+          for(const key of path.slice(0,-1))parent=parent[key]
+          parent[path.at(-1)]='DSH_MVU_ONE_FIELD_PROBE'
+          handlers.get('updated')()
+          if(!text().includes('DSH_MVU_ONE_FIELD_PROBE')) throw Error('人物字段未显示: '+member+binding.path)
+        }
+        state=structuredClone(initialState)
+        const name='DSH_MVU_ADDED_MEMBER'
+        collection()[name]=structuredClone(collection()[members[0]])
+        const path=pointerKeys(frozen.bindings[0].path);let parent=collection()[name]
+        for(const key of path.slice(0,-1))parent=parent[key]
+        parent[path.at(-1)]=name;handlers.get('updated')()
+        if(!text().includes(name)) throw Error('新增人物未显示')
+        state=structuredClone(initialState);handlers.get('restored')()
+        if(text()!==before) throw Error('回退后新增人物未移除')
+      }
+    }
   } finally { w.close() }
 }
 
@@ -57,6 +84,17 @@ export async function validateMvuConversion(data) {
   await check('definition', () => { expected = buildMvuArtifacts(meta); return '初值与展示路径有效' })
   if (!expected) return { valid: false, checks }
   const entries = data.character_book?.entries || [], regexScripts = data.extensions?.regex_scripts || []
+  if (meta.definition) await check('fieldCoverage', () => {
+    if (definitionDigest(meta.definition)!==meta.definitionRevision) throw Error('字段定义指纹不一致')
+    assertDefinition(meta.definition,meta)
+    const greetings=[data.first_mes,...(data.alternate_greetings || [])]
+    if(greetings.length!==meta.openingStates.length) throw Error('开场数量与字段定义不一致')
+    for (const [index,greeting] of greetings.entries()) {
+      const blocks=[...greeting.matchAll(/<initvar>([\s\S]*?)<\/initvar>/g)]
+      if(blocks.length!==1 || !isDeepStrictEqual(JSON.parse(blocks[0][1]),meta.openingStates[index])) throw Error('开场字段缺少或初值改变: '+index)
+    }
+    return '全部已登记字段、来源值及各开场初值与保存定义一致'
+  })
   await check('initializationDefinition', () => {
     const init = entries.filter(entry => /^\s*\[initvar\]/i.test(entry.comment || ''))
     if (init.length !== 1 || init[0].enabled !== false || !isDeepStrictEqual(JSON.parse(init[0].content), meta.initialState)) throw Error('初值条目重复、被改动或进入普通正文注入')
@@ -92,7 +130,7 @@ export async function validateMvuConversion(data) {
     return '所有开场入口唯一，显示提升到右侧，模型历史不含入口'
   })
   if (trusted) await check('templateSimulation', async () => {
-    await simulatePanel(expected.statusHtml, meta.initialState, !!meta.frozenAppearance)
+    for (const state of meta.openingStates || [meta.initialState]) await simulatePanel(expected.statusHtml, state, meta.frozenAppearance)
     return meta.frozenAppearance ? '原视图在 DOM 中显示初值、更新及恢复，保留折叠交互状态' : '固定 HTML 在 DOM 中显示初值，模拟更新及恢复事件后重读最新变量'
   })
   const pending = ['真实模型后台提交与官方 MVU 结算', '浏览器布局、字号与实际会话切换', '原卡复杂脚本、活动预设/全局正则及剧情语义']

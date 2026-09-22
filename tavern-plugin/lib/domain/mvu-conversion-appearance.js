@@ -15,7 +15,7 @@ export function appearanceSources(data) {
 // Read source bytes ourselves. Model input is a source pointer plus data bindings,
 // never a rewritten template. Unknown executable views must not silently lose skin.
 export function freezeMvuAppearance(data, plan) {
-  if (!plan || typeof plan !== 'object' || Object.keys(plan).some(k => !['sourcePath','bindings'].includes(k))) throw Error('美化方案只接受 sourcePath 和 bindings，不接受模型重写 HTML')
+  if (!plan || typeof plan !== 'object' || Object.keys(plan).some(k => !['sourcePath','bindings','collectionPath'].includes(k))) throw Error('美化方案只接受 sourcePath 和 bindings，不接受模型重写 HTML')
   const entry = appearanceSources(data).find(x => x.path === plan.sourcePath)
   if (!entry) throw Error('美化来源不存在，请从 inspect.appearanceSources 选择')
   const source = data.extensions.regex_scripts[Number(plan.sourcePath.split('/')[3])].replaceString
@@ -39,18 +39,26 @@ export function freezeMvuAppearance(data, plan) {
     if (captures.some(n=>!visible.has(n))) throw Error('美化捕获不在可更新的正文文本节点中')
     if (!captures.length) throw Error('美化没有可映射的 $1、$2 状态字段，需专门适配')
     if (!Array.isArray(plan.bindings) || plan.bindings.length !== captures.length || new Set(plan.bindings.map(b=>b.capture)).size !== captures.length || plan.bindings.some(b=>!captures.includes(b.capture) || typeof b.path !== 'string' || Object.keys(b).some(k=>!['capture','path'].includes(k)))) throw Error('必须为原美化的每个捕获字段提供唯一变量映射')
-    return { version:1, sourcePath:entry.path, sourceDigest:entry.digest, html, htmlDigest:hash(html), bindings:structuredClone(plan.bindings) }
+    return { version:1, ...(plan.collectionPath ? {collectionPath:plan.collectionPath} : {}), sourcePath:entry.path, sourceDigest:entry.digest, html, htmlDigest:hash(html), bindings:structuredClone(plan.bindings) }
   } finally { dom.window.close() }
 }
 
 export function renderFrozenAppearance(frozen, pointerKeys, initialState) {
   if (frozen.version !== 1 || hash(frozen.html) !== frozen.htmlDigest) throw Error('固化美化内容指纹不匹配')
   // Revalidate persisted metadata before the validator executes the host binder.
-  freezeMvuAppearance({extensions:{regex_scripts:[{replaceString:frozen.html}]}}, {sourcePath:'/extensions/regex_scripts/0/replaceString',bindings:frozen.bindings})
+  freezeMvuAppearance({extensions:{regex_scripts:[{replaceString:frozen.html}]}}, {sourcePath:'/extensions/regex_scripts/0/replaceString',bindings:frozen.bindings,...(frozen.collectionPath?{collectionPath:frozen.collectionPath}:{})})
+  let examples = [initialState]
+  const collectionKeys = frozen.collectionPath ? pointerKeys(frozen.collectionPath) : null
+  if (collectionKeys) {
+    let collection = initialState
+    for (const key of collectionKeys) collection = collection?.[key]
+    if (!collection || typeof collection !== 'object') throw Error('美化集合路径不存在: '+frozen.collectionPath)
+    examples = Object.entries(collection).filter(([key])=>!key.startsWith('$') && !key.startsWith('__')).map(([,value])=>value)
+    if (!examples.length && collection.$meta?.template) examples = [collection.$meta.template]
+  }
   const bindings = frozen.bindings.map(binding => {
     const keys = pointerKeys(binding.path)
-    let value=initialState
-    for (const key of keys) {
+    for (let value of examples) for (const key of keys) {
       if (value == null || !Object.hasOwn(value,key)) throw Error('美化变量路径不存在: '+binding.path)
       value=value[key]
     }
@@ -60,9 +68,13 @@ export function renderFrozenAppearance(frozen, pointerKeys, initialState) {
   const script=`<script data-dsh-frozen-mvu>
 (function(){
 const bindings=${encoded};
+const collectionKeys=${JSON.stringify(collectionKeys).replace(/</g,'\\u003c')};
 const nodes=[];const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;
 while((node=walker.nextNode())){if(['SCRIPT','STYLE'].includes(node.parentElement?.tagName))continue;if(/[\\x24]([1-9]\\d?)/.test(node.nodeValue))nodes.push({node,source:node.nodeValue});}
-function render(){const state=Mvu.getMvuData({type:'message',message_id:'latest'}).stat_data;const values={};for(const binding of bindings){let value=state;for(const key of binding.keys)value=value!=null&&Object.prototype.hasOwnProperty.call(value,key)?value[key]:undefined;values[binding.capture]=value==null?'':typeof value==='object'?JSON.stringify(value):String(value);}for(const item of nodes)item.node.nodeValue=item.source.replace(/[\\x24]([1-9]\\d?)/g,(_,id)=>values[id]??'');}
+function bind(items,state){const values={};for(const binding of bindings){let value=state;for(const key of binding.keys)value=value!=null&&Object.prototype.hasOwnProperty.call(value,key)?value[key]:undefined;values[binding.capture]=value==null?'':typeof value==='object'?JSON.stringify(value):String(value);}for(const item of items)item.node.nodeValue=item.source.replace(/[\\x24]([1-9]\\d?)/g,(_,id)=>values[id]??'');}
+let prototypeView,container;const members=new Map();
+if(collectionKeys){prototypeView=document.createElement('template');for(const child of [...document.body.childNodes]){if(child.nodeName==='SCRIPT'||child.nodeName==='STYLE')continue;prototypeView.content.appendChild(child);}container=document.createElement('div');document.body.appendChild(container);}
+function render(){const state=Mvu.getMvuData({type:'message',message_id:'latest'}).stat_data;if(!collectionKeys){bind(nodes,state);return;}let collection=state;for(const key of collectionKeys)collection=collection?.[key];const entries=Object.entries(collection||{}).filter(([key])=>!key.startsWith('$')&&!key.startsWith('__'));const active=new Set(entries.map(([key])=>key));for(const [key,item] of members)if(!active.has(key)){item.root.remove();members.delete(key);}for(const [key,value] of entries){let item=members.get(key);if(!item){const root=document.createElement('div');root.appendChild(prototypeView.content.cloneNode(true));const items=[],walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let text;while((text=walk.nextNode()))if(!['STYLE','SCRIPT'].includes(text.parentElement?.tagName))items.push({node:text,source:text.nodeValue});item={root,items};members.set(key,item);container.appendChild(root);}bind(item.items,value);}}
 async function start(){await waitGlobalInitialized('Mvu');for(const event of new Set([Mvu.events.VARIABLE_INITIALIZED,Mvu.events.VARIABLE_UPDATE_ENDED,...Object.values(tavern_events)]))eventOn(event,render);render();}
 start().catch(error=>{console.error('MVU 原样式状态更新失败',error);});
 })();

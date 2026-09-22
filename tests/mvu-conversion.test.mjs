@@ -198,10 +198,11 @@ test('专用工具使用真实 DSH 参数/输出定义', {skip:!process.env.DSH_
   const {report:inspection}=await tool.execute({action:'inspect',sourcePath:f.sourcePath},exec)
   const {report:page}=await tool.execute({action:'read',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,path:'/first_mes',offset:0,limit:4},exec)
   assert.equal(page.text,original().data.first_mes.slice(0,4))
-  const {report:preview}=await tool.execute({action:'preview',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,...definition()},exec)
+  const {report:saved}=await tool.execute({action:'saveDefinition',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,...definition()},exec)
+  const {report:preview}=await tool.execute({action:'preview',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,definitionRevision:saved.definitionRevision,cleanup:definition().cleanup},exec)
   assert.equal(preview.saved,false);assert.equal(preview.validation.valid,true)
   assert.equal((await f.resources.list('card')).length,1)
-  const {report:result}=await tool.execute({action:'apply',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,...definition(),cleanup:[...definition().cleanup,{op:'remove',path:'/character_book/entries/0'}]},exec)
+  const {report:result}=await tool.execute({action:'apply',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,definitionRevision:saved.definitionRevision,cleanup:[...definition().cleanup,{op:'remove',path:'/character_book/entries/0'}]},exec)
   assert.equal(result.validation.valid,true)
   const validation=await registered.get('tavern_validate_mvu_conversion').execute({path:result.path},exec)
   assert.equal(validation.report.valid,true)
@@ -308,6 +309,10 @@ test('验收报告真实删除项目，检查旧渲染协议残留及手工修�
   data.character_book.entries.push({id:8,comment:'剧情选择点',content:'保留分支',enabled:false})
   await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
   const plan={...definition(),appearance:{sourcePath:'/extensions/regex_scripts/1/replaceString',bindings:[{capture:1,path:'/玩家/位置'}]},cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]}
+  const inspection=await f.inspect()
+  const saved=await f.conversion.convert({action:'saveDefinition',sourcePath:f.sourcePath,...inspection,...plan,fieldMappings:inspection.stateInventory.map(item=>({sourceId:item.id,path:'/玩家/位置'}))})
+  plan.initialState.玩家.位置='旧值'
+  plan.definitionRevision=saved.definitionRevision
   const preview=await f.conversion.convert({action:'preview',sourcePath:f.sourcePath,...await f.inspect(),...plan})
   assert.equal(preview.validation.checks.find(x=>x.name==='legacyResidue').status,'failed')
   assert.equal((await f.resources.list('card')).length,1)
@@ -383,8 +388,9 @@ test('工具返回结构化定位错误，preview 和 apply 均不保存失败�
   const f=await fixture(t), registered=new Map()
   registerMvuConversionTools({tools:{register:x=>registered.set(x.name,x)},defineTool:x=>x,conversion:f.conversion,chatForSession:async()=>({mode:'card'})})
   const tool=registered.get('tavern_convert_to_mvu')
+  const saved=await f.conversion.convert({action:'saveDefinition',sourcePath:f.sourcePath,...await f.inspect(),...definition()})
   for(const action of ['preview','apply']){
-    const {report}=await tool.execute({action,sourcePath:f.sourcePath,...await f.inspect(),...definition(),cleanup:[{op:'replaceText',path:'/first_mes',expected:'错误片段',value:''}]},{})
+    const {report}=await tool.execute({action,sourcePath:f.sourcePath,...await f.inspect(),definitionRevision:saved.definitionRevision,cleanup:[{op:'replaceText',path:'/first_mes',expected:'错误片段',value:''}]},{})
     assert.equal(report.ok,false);assert.equal(report.error.code,'CLEANUP_ANCHOR_MISMATCH')
     assert.equal(report.error.matches,0);assert.equal(report.error.anchor,'expected')
   }
