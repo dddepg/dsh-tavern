@@ -5,7 +5,9 @@
 
 ## 目标与约束
 
-在不修改官方 DSH Desktop、DSHA、宿主 npm 文件和启动命令的前提下，由 Tavern 插件加载内存补丁，恢复正文编辑、回退和重新生成。首个目标只针对已实验的 DSH `0.1.6-alpha.2`；其他版本不自动套用补丁，也不提前声明适配。
+在不修改官方 DSH Desktop、DSHA、宿主 npm 文件和启动命令的前提下，由 Tavern 插件加载内存补丁，恢复正文编辑、回退和重新生成。适配目标为本机已安装的 DSH Desktop `2.0.13` 内置 DSH `0.1.5-rc.2`（2026-09-22 决定）。`0.1.6-alpha.2` 隔离实验只保留为方法证据，不作为安装目标。其他版本不自动套用补丁，也不提前声明适配，验收完成前不改 `config/dsh-compatibility.json`。
+
+已核对安装包内四条替换锚点仍在：`dsh-session` 的 Surface 与存储校验、`dsh-session-format-v2-to-v3`、`dsh-api-session-controller/client`。JSONL 后端构造时不打开句柄，`agents.resume` 由会话控制器按请求触发。冷启动时插件树先于客户端请求；Web 服务是否会在 Tavern `apply` 完成前接受恢复，仍要在第 1 步实测。已有活动句柄时继续禁止热替换。
 
 沿用现有 Chat、timeline、变量与 Session 事务，不另做会话引擎。保留 assistant 角色、来源覆盖校验、system 首节点保护和模型请求顺序。正常生成不增加轮询、网络请求、逐 token 拦截或重复全历史扫描。
 

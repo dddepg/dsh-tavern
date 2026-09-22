@@ -42,7 +42,8 @@ async function main() {
     } finally { await ctx.fiber.dispose() }
     return
   }
-  const patch = await prepareExpandedPatch(runtime)
+  const expectedVersion = process.env.EXPERIMENT_DSH_VERSION || '0.1.6-alpha.2'
+  const patch = await prepareExpandedPatch(runtime, { version: expectedVersion })
   patch.patchPersistence(ctx.sessionPersistence)
   const textOf = s => s.deriveMessages().map(m => ({ role: m.role, text: m.content.filter(c => c.type === 'text').map(c => c.text).join('') }))
   const results = []
@@ -123,7 +124,7 @@ async function main() {
     assert.equal(s.seq, before)
     record('append citations / stale range / source coverage / system head remain rejected', true)
     record('installed package bytes unchanged', await patch.verifyFilesUnchanged())
-    await writeFile(join(root, 'expanded-report-' + compression + '.json'), JSON.stringify({ version: '0.1.6-alpha.2', compression, results }, null, 2) + '\n')
+    await writeFile(join(root, 'expanded-report-' + compression + '.json'), JSON.stringify({ version: expectedVersion, compression, results }, null, 2) + '\n')
     console.log('REPORT ' + join(root, 'expanded-report-' + compression + '.json'))
   } finally {
     await ctx.fiber.dispose()

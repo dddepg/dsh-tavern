@@ -49,7 +49,7 @@ export function selectRegenerationTarget(chat, session, observe) {
  * Timeline owns revisions; this module owns the workflow, including aborts.
  * Callers supply host adapters, never intermediate rollback or swipe state.
  */
-export function createRoundHistory({ chats, sessions, scripts, timeline, queueSettlement, cancelSettlement, present, diagnostics }) {
+export function createRoundHistory({ chats, sessions, scripts, timeline, queueSettlement, cancelSettlement, present, diagnostics, sessionPatch }) {
   const { read: readChat, forSession: chatForSession, readCard: readChatCard,
     readRevision: readChatRevision, write: writeChat, update: updateChat } = chats
   const { read: readScript, continuity: scriptContinuity } = scripts
@@ -61,6 +61,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   const regenerationRecovery = createRegenerationRecovery({ chats, sessions, timeline, isActive: id => pendingRegenerations.has(id) })
 
   async function regenerate(chatId, guidance, sessionId) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (!chat) throw new Error('聊天不存在: ' + chatId)
     if (pendingRegenerations.has(chat.id) || pendingRollbacks.has(chat.id)) throw new Error('正文正在重新生成，请等待完成')
@@ -95,6 +96,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     return Object.assign({}, intent, { beforeChat })
   }
   async function regenBody(chatId, guidance, sessionId) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     let chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (chat === undefined) throw new Error('聊天不存在: ' + chatId)
     assertRescueHistoryEditable(chat)
@@ -135,6 +137,8 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
           message: { id: randomUUID(), role: 'assistant', content: [{ type: 'text', text: msgs0[oldAssistantIndex].text }], source: oldSource }
         }, { start: oldSeq, end: oldSeq, sourceEventSeqs: [oldSeq] })
       } catch (error) {
+        if (sessionPatch?.status === 'failed') throw new Error(sessionPatch.reason, { cause: error })
+        if (sessionPatch?.serverReady) throw error
         throw new Error('当前 DSH 不支持正文替换，未启动重新生成。' + str(error?.message || error), { cause: error })
       }
     }
@@ -278,6 +282,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
 
   // ---------- 回退本轮（删除最近一次用户输入 + LLM 输出） ----------
   async function rollbackTurn(sessionId, chatId, expectedTurn) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (chat === undefined) throw new Error('聊天不存在: ' + chatId)
     if (pendingRegenerations.has(chat.id) || chat.regenInProgress) throw new Error('正文正在重新生成，请先完成恢复或生成')
@@ -288,6 +293,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   }
 
   async function rollbackChat(chat, requestedTurn) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     await stopRollbackGeneration(chat)
     chat = await readChat(chat.id)
     const originalChat = structuredClone(chat)

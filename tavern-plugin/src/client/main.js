@@ -224,6 +224,9 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		// @include modules/host-session-patch.js
+		installTavernSessionHistoryPatch(require, rpc);
+
 		function recordImageInteraction(sessionId, turn, requestId, stage, reason) {
 			void rpc("recordSceneImageInteraction", { turn: turn, requestId: requestId, stage: stage, reason: reason }, sessionId).catch(function () {});
 		}

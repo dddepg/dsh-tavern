@@ -4,7 +4,9 @@
 
 ### Windows 一键安装版
 
-下载首页提供的 `DSH-Tavern-Desktop-2.0.5-x64-Setup-UpdateFix.exe`，双击后选择安装文件夹，再点击「安装并启动」。首次需要联网下载兼容的最新版酒馆；无需另外安装 Node.js 或 DSH Desktop。
+v2.1 的 Windows 桌面宿主是 **Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`）。请先安装这个 Desktop，再按下文「DSH Desktop 桌面版」安装酒馆。
+
+旧的一键包 `DSH-Tavern-Desktop-2.0.5-x64-Setup-UpdateFix.exe` 绑定 Desktop 2.0.5，不能用来安装本版。已有旧安装需要修复入口或重装时，仍可下载首页这个包：双击后选择安装文件夹，再点击「安装并启动」。首次需要联网；无需另外安装 Node.js。
 
 - **以后启动：** 双击桌面或开始菜单中的「DSH Tavern」。也可以在安装目录双击 `DSH Tavern.exe`；不要直接运行 `runtime-…` 里的 `DSH Desktop.exe`，内部程序需要外层启动器提供正确的数据路径。
 - **安装位置：** 首次可自选，默认 `%LOCALAPPDATA%\DSH-Tavern`。新安装的程序、运行文件和数据放在所选目录下；数据位于 `data` 子目录。完成提示和目录中的 `如何启动.txt` 列出实际位置。
@@ -15,7 +17,7 @@
 
 Windows Desktop 更新会在数据根目录的 `harness/tools/desktop-package-manager`（普通 Desktop 为 `DSH_HOME/tools/desktop-package-manager`）准备经过 SHA-256 校验的 Node 22.22.3，仅用于包管理。首次需要联网下载，之后复用；不依赖电脑上其他软件附带的 Node，不更换 DSH。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
 
-Desktop 固定为 **2.0.5**；以后在酒馆界面更新插件。切换到下面的 CLI 安装方式不会自动同步这份数据。
+v2.1 适配的桌面宿主是 **Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`）。上面的一键包是 Desktop 2.0.5，只用于旧安装的修复和重装。切换到下面的 CLI 安装方式不会自动同步这份数据。
 
 ### 命令行及宿主内安装
 
@@ -27,9 +29,9 @@ CLI 首次安装可选择：**默认目录 `~/.dsh-tavern/`、当前目录（回
 
 | 安装方式 | DSH 运行时与版本策略 | 数据位置 |
 | --- | --- | --- |
-| 命令行版（Windows / macOS / Linux） | 使用独立的 DSH `0.1.2-rc.1`；版本匹配且可启动时直接复用，不要求预装 DSH，不复用或替换全局 DSH | 默认 `~/.dsh-tavern/`，与外部 DSH 数据分开 |
-| DSH Desktop | 适配版本：**2.0.5**，复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | Desktop 的 Tavern Profile 数据目录 |
-| DSHA（Android，实验性支持） | 适配版本：**1.2.0-rc1.4**，复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | DSHA 的 Tavern Profile 数据目录 |
+| 命令行版（Windows / macOS / Linux） | 使用独立的 DSH `0.1.5-rc.2`；版本匹配且可启动时直接复用，不要求预装 DSH，不复用或替换全局 DSH | 默认 `~/.dsh-tavern/`，与外部 DSH 数据分开 |
+| DSH Desktop | 适配版本：**2.0.13**（内置 DSH `0.1.5-rc.2`），复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | Desktop 的 Tavern Profile 数据目录 |
+| DSHA（Android，实验性支持） | 适配版本：**0.1.5-rc2**（内置 DSH `0.1.5-rc.2`），复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | DSHA 的 Tavern Profile 数据目录 |
 
 命令行版与 Desktop / DSHA 不再共用一套数据。切换安装方式不会自动同步人物卡或对话；首次升级旧 CLI 时会复制旧 CLI 配置和游戏数据，保留原件，Desktop / DSHA 数据不会自动迁入。
 
@@ -41,7 +43,7 @@ Desktop / DSHA 安装器会检查宿主内置的 DSH 版本：与适配版本不
 
 适合不想单独配置运行环境和管理服务的用户，支持 Windows 和 macOS。
 
-适配版本：**DSH Desktop 2.0.5**（内置 DSH `0.1.2-rc.1`），内置 DSH 版本必须匹配，否则停止安装。请自行打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.5**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。
+适配版本：**DSH Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`），内置 DSH 版本必须匹配，否则停止安装。请自行打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.13**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。
 
 安装后，从系统托盘（macOS 菜单栏）打开 **Open DSH Terminal**，运行对应命令：
 
@@ -121,7 +123,7 @@ node ./bin/dsh-tavern.mjs install --host desktop
 
 > **Android 属于实验性支持，不保证一定可用。** 不同手机系统、DSHA 版本、网络和后台限制都可能导致安装或运行失败。
 
-适配版本：**DSHA 1.2.0-rc1.4**（预览版，内置 DSH `0.1.2-rc.1`）。内置 DSH 版本必须匹配，否则停止安装。请自行打开 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)，找到 **v1.2.0-rc1.4**，展开 **Assets**，下载适合手机系统的 APK；不要下载 Source code。
+v2.1 要求宿主 DSH `0.1.5-rc.2`。请安装 **[DSHA v0.1.5-rc2](https://github.com/DSH-APP/DSHA/releases/tag/v0.1.5-rc2)**（内置这个版本）。Android 11 及以上用标准包 `dsha-0.1.5-rc2.apk`，更早的系统用兼容包 `dsha-0.1.5-rc2low.apk`。旧的 DSHA 1.2.0-rc1.4 内置的不是这个版本，安装会停止。历史包见 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)。
 
 借助 [DSHA](https://github.com/DSH-APP/DSHA)，可以尝试在 Android 手机上运行本项目。首次安装步骤：
 
