@@ -10,7 +10,7 @@ import { constantWorldBookContext, mvuUpdateRulesFromWorldBook } from './worldbo
 
 // Only the exact host-owned template is executed. Imported card JS/EJS never runs
 // in this process. These are DOM/data simulations, not a model or MVU settlement.
-async function simulatePanel(html, initialState) {
+async function simulatePanel(html, initialState, frozen = false) {
   const dom = new JSDOM(html, { runScripts: 'outside-only' })
   const handlers = new Map(), w = dom.window
   let state = structuredClone(initialState)
@@ -19,18 +19,26 @@ async function simulatePanel(html, initialState) {
     tavern_events: { CHAT_CHANGED: 'restored' }, waitGlobalInitialized: async () => {},
     eventOn: (name, callback) => handlers.set(name, callback)
   })
-  const text = () => w.document.querySelector('#values').textContent
+  const text = () => {
+    if (!frozen) return w.document.querySelector('#values').textContent
+    const walker = w.document.createTreeWalker(w.document.body,w.NodeFilter.SHOW_TEXT)
+    let node, result = ''
+    while ((node=walker.nextNode())) if (!['SCRIPT','STYLE'].includes(node.parentElement?.tagName)) result += node.nodeValue
+    return result
+  }
   try {
     for (const element of w.document.querySelectorAll('script')) new Script(element.textContent).runInContext(dom.getInternalVMContext(), { timeout: 1000 })
     await new Promise(resolve => setImmediate(resolve))
     if (!handlers.has('updated') || !handlers.has('initialized') || !handlers.has('restored')) throw Error('缺少初始化、更新或恢复订阅')
     const before = text()
-    if (!w.document.querySelector('#values').children.length) throw Error('模板未显示初值')
+    if (!(frozen ? before.length : w.document.querySelector('#values').children.length)) throw Error('模板未显示初值')
     // Change all visible leaves, including selected fields and nested collections.
     const mutate = value => value && typeof value === 'object'
       ? Object.fromEntries(Object.entries(value).map(([key, child]) => [key, key.startsWith('$') || key.startsWith('__') ? child : mutate(child)]))
       : 'DSH_MVU_VALIDATION_UPDATED'
+    const details = w.document.querySelector('details'); if (details) details.open = true
     state = mutate(initialState); handlers.get('updated')()
+    if (details && (!details.open || details !== w.document.querySelector('details'))) throw Error('变量更新丢失原视图折叠状态')
     if (!text().includes('DSH_MVU_VALIDATION_UPDATED') || text() === before) throw Error('更新事件后未重读最新变量')
     state = structuredClone(initialState); handlers.get('restored')()
     if (text() !== before) throw Error('恢复事件后显示未还原')
@@ -66,10 +74,10 @@ export async function validateMvuConversion(data) {
   await check('managedPanel', () => {
     for (const rule of expected.regexScripts) {
       const found = regexScripts.filter(candidate => candidate.id === rule.id)
-      if (found.length !== 1 || !isDeepStrictEqual(found[0], rule)) throw Error('固定状态规则被改动或重复: ' + rule.id)
+      if (found.length !== 1 || !isDeepStrictEqual(found[0], rule)) throw Error('托管状态规则被改动或重复: ' + rule.id)
     }
     if (regexScripts.some(rule => !MVU_RULE_IDS.includes(rule.id) && /StatusPlaceHolderImpl|<[a-z0-9-]*-status\b/i.test(rule.findRegex || ''))) throw Error('仍有另一套状态面板规则')
-    trusted = true; return '唯一的宿主维护模板与显示规则'
+    trusted = true; return '唯一的宿主管理视图与显示规则'
   })
   await check('greetingsAndHistory', () => {
     const displayRules = inspectCardExtensions(data).regexScripts
@@ -79,14 +87,14 @@ export async function validateMvuConversion(data) {
       if (layers.sessionText.includes(MVU_MARKER) || layers.sessionText.includes('Mvu.getMvuData')) throw Error('状态入口或 HTML 泄漏到模型历史')
       const view = projectPersistentStatusView([{ role: 'assistant', turn: 1, text: greeting }], [{turn:1,parts:layers.displayParts}], {regexScripts:displayRules})
       if (view.statusViews.length !== 1 || view.projections.some(p => p.parts.some(part => part.kind === 'html' && /Mvu\.getMvuData|<mvu-status/.test(part.content)))) throw Error('开场 ' + index + ' 状态面板缺失或重复')
-      if (view.statusView.content.trim() !== expected.statusHtml.trim()) throw Error('显示替换改变了固定模板，请检查其他正则冲突')
+      if (view.statusView.content.trim() !== expected.statusHtml.trim()) throw Error('显示替换改变了固化视图，请检查其他正则冲突')
     }
     return '所有开场入口唯一，显示提升到右侧，模型历史不含入口'
   })
   if (trusted) await check('templateSimulation', async () => {
-    await simulatePanel(expected.statusHtml, meta.initialState)
-    return '固定 HTML 在 DOM 中显示初值，模拟更新及恢复事件后重读最新变量'
+    await simulatePanel(expected.statusHtml, meta.initialState, !!meta.frozenAppearance)
+    return meta.frozenAppearance ? '原视图在 DOM 中显示初值、更新及恢复，保留折叠交互状态' : '固定 HTML 在 DOM 中显示初值，模拟更新及恢复事件后重读最新变量'
   })
   const pending = ['真实模型后台提交与官方 MVU 结算', '浏览器布局、字号与实际会话切换', '原卡复杂脚本、活动预设/全局正则及剧情语义']
-  return { valid: checks.every(item => item.status === 'passed'), checks, pending, scope: '自动结构/投影检查及固定模板 DOM 模拟；不代表真实游玩验收' }
+  return { valid: checks.every(item => item.status === 'passed'), checks, pending, scope: '自动结构/投影检查及托管视图 DOM 模拟；不代表真实游玩验收' }
 }

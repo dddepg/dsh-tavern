@@ -18,6 +18,14 @@
 
 默认 inspect 已展开正文；补读多个叶子字段用 paths，例如 `["/character_book/entries/0/content", "/alternate_greetings/0"]`。对象/数组返回下一层目录；字符串返回原文 text、总长度和 nextOffset。search 使用原文 query，不执行正则；每个匹配包含 JSON Pointer、字符位置和短上下文。read/search 都校验版本。位置仅供定位，cleanup 仍用唯一原文边界。
 
+原卡有美化时，先固化；只提交来源路径和捕获字段映射，HTML/CSS 由工具从磁盘复制：
+
+```json
+{"action":"freezeAppearance","sourcePath":"cards/原卡.json","sourceRevision":"inspect 返回的版本号","appearance":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
+```
+
+apply 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。下面是无原美化的默认面板例子。
+
 apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 preview。下面的版本号、路径和短片段仅为示例，必须来自 inspect 底稿。复制整卡、清理和安装 MVU 都由工具完成：
 
 ```json
@@ -51,14 +59,14 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 
 `remove` / `replace` 由来源版本号保护，省略 `expected`。`replaceBlock` 包含首尾标记，两者必须各自唯一、前后有序；边界有歧义时选择更长但仍简短的标记。无需转录区块内部代码或保留的剧情。
 
-展示路径使用 JSON Pointer，键中的 `~` 和 `/` 分别写作 `~0`、`~1`。省略 displayFields 展示全部非内部字段；选择集合时，新成员会自动展示。工具不会生成自定义布局或迁移按钮行为。
+展示路径使用 JSON Pointer，键中的 `~` 和 `/` 分别写作 `~0`、`~1`。省略 displayFields 展示全部非内部字段；选择集合时，新成员会自动展示。原美化通过 appearance 固化，保留原生 details 交互；脚本按钮、动态属性和嵌入文档需专门适配。
 
 ## 需要额外判断的卡
 
 - **已有 MVU**：先识别原有初值、Schema、脚本和面板。转换工具遇到残留初值、后台规则或旧状态声明会停止，要求明确合并/清理；它不是通用的已有 MVU 卡升级器。已有复杂 MVU 正常工作时可保留现状，不必强行重装。
 - **多开场**：工具给每个开场安装一个入口，但共享一份初值。开场事实不同，先统一初值策略或分别生成副本，不能声称入口检查证明各开场语义一致。
 - **外部世界书**：工具复制实际绑定内容到副本，处理合并编号并保留触发条件；原卡未生效的内置书作为保留数据，不因转换而启用。inspect 返回的世界书内容是清理操作的依据。
-- **增量修订**：apply 默认把新 cleanup 追加到已保存方案，完全相同的操作去重；省略 initialState/updateRules/displayFields 沿用旧值。底稿始终是原卡，不是副本。修改同字段旧操作时提交 cleanupResetPaths，例如 `["/first_mes"]`，同时提交该字段的完整新清理。需要恢复该字段原文时，只 reset 不追加。
+- **增量修订**：apply 默认把新 cleanup 追加到已保存方案，完全相同的操作去重；省略 initialState/updateRules/displayFields/appearance 沿用旧值。底稿始终是原卡，不是副本。修改同字段旧操作时提交 cleanupResetPaths，例如 `["/first_mes"]`，同时提交该字段的完整新清理。需要恢复该字段原文时，只 reset 不追加。
 - **完整重做**：planMode=replace 不继承任何旧定义或清理，必须提交完整方案。旧版副本没有 cleanup 记录，或 sourceRevision 已改变时只能完整重做。
 - **已有副本被手工改过**：inspect.target.externallyModified 会提示，默认合并被拒绝。先以 scope=target 读取，把需要保留的副本修改纳入完整方案，再以 planMode=replace 和 targetRevision 更新，不能忽略差异直接覆盖。
 - **定位失败**：error.anchor 指明 expected/start/end，matches 是出现次数，candidates 是最多 5 个短上下文。0 次先读原卡字段，检查是否误用了副本附加换行；2 次以上选择更长的唯一标记。不要模糊匹配、盲目改编码或直接写资源文件。

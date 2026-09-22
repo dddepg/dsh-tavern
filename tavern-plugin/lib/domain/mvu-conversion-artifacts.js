@@ -1,3 +1,4 @@
+import { renderFrozenAppearance } from './mvu-conversion-appearance.js'
 import { readFile } from 'node:fs/promises'
 
 export const MVU_CONVERSION_KEY = 'dsh_mvu_conversion'
@@ -11,7 +12,7 @@ export function pointerKeys(path) {
   if (keys.some(key => ['__proto__', 'prototype', 'constructor'].includes(key))) throw Error('不支持的路径: ' + path)
   return keys
 }
-export function buildMvuArtifacts({ initialState, updateRules, displayFields = [] }) {
+export function buildMvuArtifacts({ initialState, updateRules, displayFields = [], frozenAppearance }) {
   if (!isObject(initialState) || !Object.keys(initialState).length) throw Error('initialState 必须是非空变量对象，不包裹 stat_data')
   if (Object.hasOwn(initialState, 'stat_data')) throw Error('initialState 不应包裹 stat_data')
   if (typeof updateRules !== 'string' || !updateRules.trim()) throw Error('updateRules 必须说明状态变化依据')
@@ -27,7 +28,7 @@ export function buildMvuArtifacts({ initialState, updateRules, displayFields = [
     return { keys, label: field.label || keys.join(' · ') }
   })
   // Values are JS string data, not regex replacement captures or identity macros.
-  const statusHtml = template.replace('__DSH_MVU_FIELDS__', () => JSON.stringify(fields).replace(/</g, '\\u003c').replace(/\$/g, () => '\\u0024').replace(/\{\{/g, () => '\\u007b\\u007b').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')).replace(/\$/g, () => '\\u0024')
+  const statusHtml = frozenAppearance ? renderFrozenAppearance(frozenAppearance, pointerKeys, initialState) : template.replace('__DSH_MVU_FIELDS__', () => JSON.stringify(fields).replace(/</g, '\\u003c').replace(/\$/g, () => '\\u0024').replace(/\{\{/g, () => '\\u007b\\u007b').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')).replace(/\$/g, () => '\\u0024')
   const entries = [
     { keys: [], comment: '[initvar]状态初值', enabled: false, constant: false, insertion_order: 100, content: JSON.stringify(initialState, null, 2), extensions: {} },
     { keys: [], comment: '[mvu_update]状态更新规则', enabled: true, constant: true, insertion_order: 100,
