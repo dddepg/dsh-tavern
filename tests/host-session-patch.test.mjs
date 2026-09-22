@@ -101,3 +101,14 @@ test('0.1.5-rc.2 补丁允许替换，未打补丁的读取仍拒绝，官方文
     'aad7aaabe6cd9b39ae4cc3b50a2873c9b5d73b69d929051f31b18ecc13647c72')
   await ctx.fiber.dispose()
 })
+
+test('issue #74: patched persistence rewrites dynamic import("koffi") to a file URL', () => {
+  // Mirror compile()'s specifier rewrite without booting the full host patch.
+  const sample = 'async function win32(){ const k = (await import("koffi")).default; return k }\nexport default {}\n'
+  const resolve = specifier => 'file:///resolved/' + specifier + '/index.js'
+  let modified = sample
+  modified = modified.replace(/\bfrom\s+"([^"]+)"/g, (_, specifier) => 'from ' + JSON.stringify(resolve(specifier)))
+  modified = modified.replace(/\bimport\s*\(\s*"([^"]+)"\s*\)/g, (_, specifier) => 'import(' + JSON.stringify(resolve(specifier)) + ')')
+  assert.doesNotMatch(modified, /\bimport\s*\(\s*["']koffi["']\s*\)/)
+  assert.match(modified, /\bimport\("file:\/\/\/resolved\/koffi\/index\.js"\)/)
+})

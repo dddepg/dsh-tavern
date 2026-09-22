@@ -31,11 +31,18 @@ export async function prepareExpandedPatch(runtime, options = {}) {
   async function compile(name, transform = text => text) {
     const { path, text } = await source(name)
     const localRequire = createRequire(path)
+    function resolveSpecifier(specifier) {
+      if (urls.has(specifier)) return urls.get(specifier)
+      if (/^(node:|file:|data:)/.test(specifier)) return specifier
+      return pathToFileURL(localRequire.resolve(specifier)).href
+    }
+    // data: modules cannot resolve bare specifiers. Rewrite both static and
+    // dynamic imports (Windows persistence lazily `import("koffi")`).
     let modified = transform(text)
-    modified = modified.replace(/from "([^"]+)"/g, (_, specifier) => {
-      const url = urls.get(specifier) ?? (/^(node:|file:|data:)/.test(specifier) ? specifier : pathToFileURL(localRequire.resolve(specifier)).href)
-      return 'from ' + JSON.stringify(url)
-    })
+    modified = modified.replace(/\bfrom\s+"([^"]+)"/g, (_, specifier) => 'from ' + JSON.stringify(resolveSpecifier(specifier)))
+    modified = modified.replace(/\bfrom\s+'([^']+)'/g, (_, specifier) => 'from ' + JSON.stringify(resolveSpecifier(specifier)))
+    modified = modified.replace(/\bimport\s*\(\s*"([^"]+)"\s*\)/g, (_, specifier) => 'import(' + JSON.stringify(resolveSpecifier(specifier)) + ')')
+    modified = modified.replace(/\bimport\s*\(\s*'([^']+)'\s*\)/g, (_, specifier) => 'import(' + JSON.stringify(resolveSpecifier(specifier)) + ')')
     modified = modified.replaceAll('import.meta.url', JSON.stringify(pathToFileURL(path).href))
     const url = 'data:text/javascript;base64,' + Buffer.from(modified).toString('base64')
     urls.set(name, url)
@@ -92,6 +99,14 @@ export async function prepareExpandedPatch(runtime, options = {}) {
       `if (event.type === "assistant/message" && sources !== void 0 && !${own}) throw`))
     const { sessionFormatCatalog: catalog } = await compile('@deepseek-ai/dsh-session-format-catalog')
     const { default: PatchedPersistence } = await compile('@deepseek-ai/dsh-session-persistence-jsonl')
+    // Guard #74: Windows create/rename path does `await import("koffi")`. If the
+    // bare specifier survived into the data: module, new chats fail immediately.
+    {
+      const encoded = urls.get('@deepseek-ai/dsh-session-persistence-jsonl')
+      const decoded = Buffer.from(String(encoded).slice(String(encoded).indexOf(',') + 1), 'base64').toString('utf8')
+      assert.doesNotMatch(decoded, /\bimport\s*\(\s*["']koffi["']\s*\)/)
+      if (decoded.includes('koffi')) assert.match(decoded, /\bimport\s*\(\s*"file:[^"]*koffi[^"]*"\s*\)/)
+    }
     const query = await compile('@deepseek-ai/dsh-session-query', text =>
       `import { SessionQueryError as NativeQueryError } from ${JSON.stringify(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-query')).href)};\n` +
       text.replace(/\bnew SessionQueryError\(/g, 'new NativeQueryError(').replace(/\binstanceof SessionQueryError\b/g, 'instanceof NativeQueryError') +
