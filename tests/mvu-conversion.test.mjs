@@ -484,3 +484,14 @@ test('工具固化原渐变、图标、details：映射变量，更新和回退�
   await assert.rejects(f.apply({appearance:{...appearance,html:'<div>改皮肤</div>'}}),/不接受模型重写/)
   await assert.rejects(f.apply({appearance:{...appearance,bindings:[]}}),/每个捕获/)
 })
+
+test('资源库删除 MVU 副本后可用同名重新转换',async t=>{
+  const f=await fixture(t),first=await f.apply()
+  await f.resources.remove(first.path)
+  const inspection=await f.inspect()
+  assert.equal(inspection.destination.available,true)
+  assert.equal(inspection.destination.originalExists,false)
+  const second=await f.apply()
+  assert.equal(second.path,first.path)
+  assert.equal(second.validation.valid,true)
+})
