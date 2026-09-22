@@ -1,3 +1,4 @@
+// @include android-web-polyfills.js
 window.__ModuleLoader__.load({
 	id: "dsh-tavern-plugin",
 	factory: (require) => {

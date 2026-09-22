@@ -1,3 +1,80 @@
+// DSH 0.1.5 session projections use findLast; Android WebView 95 lacks it.
+(function () {
+  for (const name of ['findLast', 'findLastIndex']) {
+    if (typeof Array.prototype[name] === 'function') continue
+    Object.defineProperty(Array.prototype, name, {
+      configurable: true, writable: true,
+      value: function (predicate, thisArg) {
+        'use strict'
+        if (this == null) throw new TypeError('Array receiver is null or undefined')
+        const object = Object(this)
+        const length = Math.min(Math.max(Math.trunc(Number(object.length)) || 0, 0), Number.MAX_SAFE_INTEGER)
+        if (typeof predicate !== 'function') throw new TypeError('predicate must be a function')
+        for (let index = length - 1; index >= 0; index--) {
+          const value = object[index]
+          if (predicate.call(thisArg, value, index, object)) return name === 'findLast' ? value : index
+        }
+        return name === 'findLast' ? undefined : -1
+      }
+    })
+  }
+})();
+
+// MuMu / older Android WebView lack AbortSignal.throwIfAborted / any used by DSH history load.
+// A bad AbortSignal.any polyfill aborts follow immediately → empty transcript, no error toast.
+(function (global) {
+	if (!global || !global.AbortSignal) return;
+	var AbortSignal = global.AbortSignal;
+	var AbortController = global.AbortController;
+	if (typeof AbortSignal.prototype.throwIfAborted !== "function") {
+		AbortSignal.prototype.throwIfAborted = function throwIfAborted() {
+			if (!this.aborted) return;
+			if (this.reason !== undefined) throw this.reason;
+			var error = new Error("This operation was aborted");
+			error.name = "AbortError";
+			throw error;
+		};
+	}
+	if (typeof AbortSignal.any !== "function" && AbortController) {
+		AbortSignal.any = function any(signals) {
+			var list = Array.prototype.slice.call(signals || []);
+			var controller = new AbortController();
+			function onAbort() {
+				if (controller.signal.aborted) return;
+				var reason;
+				for (var i = 0; i < list.length; i++) {
+					if (list[i] && list[i].aborted) { reason = list[i].reason; break; }
+				}
+				if (reason === undefined) {
+					reason = new Error("This operation was aborted");
+					reason.name = "AbortError";
+				}
+				try { controller.abort(reason); } catch (_) { controller.abort(); }
+			}
+			for (var i = 0; i < list.length; i++) {
+				var signal = list[i];
+				if (!signal || typeof signal.addEventListener !== "function") continue;
+				if (signal.aborted) { onAbort(); break; }
+				(function (target) {
+					function onAbortOnce() {
+						if (typeof target.removeEventListener === "function") target.removeEventListener("abort", onAbortOnce);
+						onAbort();
+					}
+					target.addEventListener("abort", onAbortOnce);
+				})(signal);
+			}
+			return controller.signal;
+		};
+	}
+	if (global.Promise && typeof global.Promise.withResolvers !== "function") {
+		global.Promise.withResolvers = function withResolvers() {
+			var resolve, reject;
+			var promise = new Promise(function (res, rej) { resolve = res; reject = rej; });
+			return { promise: promise, resolve: resolve, reject: reject };
+		};
+	}
+})(typeof globalThis !== "undefined" ? globalThis : window);
+
 window.__ModuleLoader__.load({
 	id: "dsh-tavern-entry",
 	factory: (require) => {
