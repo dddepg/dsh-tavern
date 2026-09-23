@@ -19,10 +19,10 @@ test('显式历史按位置与条数展开，错误向调用者传播', async ()
   assert.deepEqual(request.messages.map(m => m.content[0].text), ['规则', '新', '问题'])
   await assert.rejects(generateHelperRaw({ ordered_prompts: [{ role: 'user', content: 'x' }] }, { callModel: async () => { throw Error('模型失败') } }), /模型失败/)
 })
-test('should_stream:true 按假流式忽略，仍一次性返回全文', async () => {
+test('should_stream:true 与 generation_id 按假流式忽略，仍一次性返回全文', async () => {
   let called = false
   const result = await generateHelperRaw(
-    { ordered_prompts: [{ role: 'user', content: 'x' }], should_stream: true },
+    { ordered_prompts: [{ role: 'user', content: 'x' }], should_stream: true, generation_id: 'build-1' },
     { callModel: async () => { called = true; return '全文' } }
   )
   assert.equal(called, true)
