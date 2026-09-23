@@ -204,7 +204,7 @@ async function get(url, timeout = 30000) {
   const metadata = await (await get(process.env.CDN_METADATA_URL, 15000)).json()
   if (!/^[0-9a-f]{40}$/i.test(String(metadata.revision || ''))) throw new Error('jsDelivr 运行清单缺少有效提交号')
   const files = (metadata.files || []).map((file) => ({ ...file, path: String(file.path || '').replace(/^\/+/, '') }))
-    .filter((file) => allowed.test(file.path) && !file.path.split('/').includes('..') && /^[0-9a-f]{64}$/i.test(String(file.sha256 || '')))
+    .filter((file) => allowed.test(file.path) && !file.path.split('/').some(part => part === '..' || part === 'docs') && /^[0-9a-f]{64}$/i.test(String(file.sha256 || '')))
   if (files.length === 0) throw new Error('jsDelivr 未返回运行文件清单')
   for (const file of files) {
     const bytes = Buffer.from(await (await get(`${process.env.CDN_ROOT_URL}@${metadata.revision}/${file.path}`)).arrayBuffer())
@@ -245,7 +245,7 @@ elif [ "${USED_GIT}" -eq 1 ]; then
   tar -xf "${TEMP_DIR}/app.tar" -C "${TEMP_DIR}/extract"
   SOURCE_DIR=${TEMP_DIR}/extract
 else
-  tar -xzf "${TEMP_DIR}/app.tar.gz" -C "${TEMP_DIR}/extract"
+  tar -xzf "${TEMP_DIR}/app.tar.gz" -C "${TEMP_DIR}/extract" --exclude='*/docs' --exclude='*/docs/*'
   SOURCE_DIR=$(find "${TEMP_DIR}/extract" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 fi
 [ -n "${SOURCE_DIR}" ] || fail "下载内容不完整。"

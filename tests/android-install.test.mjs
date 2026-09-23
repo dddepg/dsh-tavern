@@ -290,6 +290,11 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   await writeFile(path.join(source, 'package.json'), JSON.stringify({ name: 'dsh-profile-tavern' }), 'utf8')
   await writeFile(path.join(source, 'bin', 'dsh-tavern.mjs'), '', 'utf8')
   await writeFile(path.join(source, 'android', 'install.sh'), '#!/usr/bin/env bash\nset -euo pipefail\nprintf "installed\\n" >> "${DSH_HOME}/setup-runs"\n', 'utf8')
+  const documentImages = ['docs/images/readme/overview.png', 'tavern-plugin/packages/dsh-image-gen/docs/assets/demo.png']
+  for (const file of documentImages) {
+    await mkdir(path.dirname(path.join(source, file)), { recursive: true })
+    await writeFile(path.join(source, file), 'documentation image')
+  }
   for (const args of [
     ['init', '-b', 'main'],
     ['config', 'user.email', 'test@example.com'],
@@ -306,6 +311,12 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   assert.equal(first.status, 0, first.stderr)
   assert.match(first.stdout, /全部完成/)
 
+  const installedSource = path.join(dshHome, 'apps', 'dsh-tavern')
+  for (const file of documentImages) await assert.rejects(access(path.join(installedSource, file)))
+  // Emulate an installation from before sparse updates, then exercise its migration.
+  const fullCheckout = spawnSync('git', ['-C', installedSource, 'sparse-checkout', 'disable'], { encoding: 'utf8' })
+  assert.equal(fullCheckout.status, 0, fullCheckout.stderr)
+  for (const file of documentImages) await access(path.join(installedSource, file))
   await writeFile(path.join(source, 'version.txt'), 'next\n', 'utf8')
   for (const args of [['add', '.'], ['commit', '-m', 'next']]) {
     const result = spawnSync('git', args, { cwd: source, encoding: 'utf8' })
@@ -313,6 +324,7 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   }
   const second = spawnSync('bash', [new URL('../android/setup.sh', import.meta.url).pathname], { env: environment, encoding: 'utf8' })
   assert.equal(second.status, 0, second.stderr)
+  for (const file of documentImages) await assert.rejects(access(path.join(installedSource, file)))
   assert.equal(await readFile(path.join(dshHome, 'setup-runs'), 'utf8'), 'installed\ninstalled\n')
   assert.equal(await readFile(path.join(dshHome, 'apps', 'dsh-tavern', 'version.txt'), 'utf8'), 'next\n')
 
@@ -375,6 +387,10 @@ test('Git 下载失败时通过 tarball 安装更新，保留旧数据并在安�
     await writeFile(path.join(source, 'version.txt'), version + '\n', 'utf8')
     await writeFile(path.join(source, 'bin', 'dsh-tavern.mjs'), '', 'utf8')
     await writeFile(path.join(source, 'android', 'install.sh'), `#!/usr/bin/env bash\nprintf "${version}\\n" >> "\${DSH_HOME}/setup-runs"\nexit ${installExit}\n`, 'utf8')
+    for (const file of ['docs/images/readme/demo.png', 'tavern-plugin/packages/dsh-image-gen/docs/assets/demo.png']) {
+      await mkdir(path.dirname(path.join(source, file)), { recursive: true })
+      await writeFile(path.join(source, file), 'documentation image')
+    }
     if (version === 'v1') await writeFile(path.join(source, 'removed-in-v2.txt'), 'old\n', 'utf8')
     const packed = spawnSync('tar', ['-czf', archive, '-C', sourceParent, 'dsh-tavern-main'], { encoding: 'utf8' })
     assert.equal(packed.status, 0, packed.stderr)
@@ -393,6 +409,8 @@ test('Git 下载失败时通过 tarball 安装更新，保留旧数据并在安�
   const first = spawnSync('bash', [setupPath], { env: environment, encoding: 'utf8' })
   assert.equal(first.status, 0, first.stderr)
   assert.match(first.stdout, /改用 GitHub 压缩包/)
+  await assert.rejects(access(path.join(appDir, 'docs')))
+  await assert.rejects(access(path.join(appDir, 'tavern-plugin/packages/dsh-image-gen/docs')))
   assert.equal(await readFile(path.join(appDir, 'version.txt'), 'utf8'), 'v1\n')
   await mkdir(path.join(appDir, 'data'), { recursive: true })
   await writeFile(path.join(appDir, 'data', 'legacy.txt'), '用户数据\n', 'utf8')
