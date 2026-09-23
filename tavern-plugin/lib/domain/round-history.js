@@ -287,6 +287,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   // prefix the provider already cached; replaying the same input then only pays
   // for the completion that was interrupted.
   async function replayFailedTurn(chatId, sessionId) {
+    if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (chat === undefined || chat === null) throw new Error('聊天不存在: ' + chatId)
     if (pendingReplays.has(chat.id)) throw new Error('正在重放失败回合，请等待完成')
@@ -318,12 +319,14 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
         }
       }, { source: 'replay.failed-turn' })
       // The replay input is a first-class turn input so the normal foreground
-      // prepare/finalize pipeline commits it exactly like a typed message.
+      // prepare/finalize pipeline commits it exactly like a typed message. Its
+      // source must stay kind 'user': hosts render anything else as a context
+      // node, which would hide the player's text instead of resending it.
       agent.followup({
         id: randomUUID(),
         role: 'user',
         content: [{ type: 'text', text: target.userText }],
-        source: { kind: 'plugin', plugin: 'dsh-tavern-replay' }
+        source: target.source
       })
       await agent.whenIdle()
       const latest = await readChat(chat.id) || chat

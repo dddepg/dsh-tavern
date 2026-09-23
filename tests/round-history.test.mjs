@@ -962,7 +962,9 @@ test('失败尾部重放：移除被中断的回复后原样重发本轮输入�
   const result = await h.create().replayFailed('chat', 'session')
 
   assert.equal(h.agent.input.content[0].text, '重放这句')
-  assert.deepEqual(h.agent.input.source, { kind: 'plugin', plugin: 'dsh-tavern-replay' })
+  // 宿主只把 source.kind 为 user 的消息渲染成输入行；用 plugin 身份重发会让
+  // 玩家文字变成上下文节点而彻底看不见。
+  assert.deepEqual(h.agent.input.source, { kind: 'user', rpcId: 'rpc-3' })
   assert.deepEqual(result.replayed, { turn: 3, userText: '重放这句', cleared: 0 })
   // 已经清理过的失败回合不会再插一个清理墓碑。
   assert.equal(h.session.events.filter(event => event.data?.source?.plugin === 'dsh-tavern-failed-turn-cleanup').length, 1)
@@ -986,6 +988,18 @@ test('失败清理钩子缺失时，重放先补清被中断的回复再重发',
   assert.deepEqual(tombstone.data.source, { kind: 'plugin', plugin: 'dsh-tavern-failed-turn-cleanup' })
   assert.deepEqual(tombstone.sourceEventSeqs, [3, 4])
   assert.equal(h.agent.input.content[0].text, '重放这句')
+  // 输入原本来自插件消息（历史遗留的重放输入）时，重发也必须回到用户身份。
+  assert.equal(h.agent.input.source.kind, 'user')
+})
+
+test('重放失败回合会拒绝在宿主机会话补丁尚未握手时执行', async () => {
+  const h = harness({ checkpoint: true, journal: true })
+  h.session.append('turn/start', { turn: 3 })
+  h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  h.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+  h.options.sessionPatch = { replacementAllowed: () => false, blockReason: () => '页面尚未完成会话补丁握手，请刷新后再试' }
+  await assert.rejects(h.create().replayFailed('chat', 'session'), /握手/)
+  assert.equal(h.agent.input, undefined)
 })
 
 test('重放只在失败仍拥有尾部时可用，且生成中或已完成回合都拒绝', async () => {

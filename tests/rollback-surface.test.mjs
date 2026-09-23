@@ -343,7 +343,7 @@ test('失败尾部可重放出原始用户输入，即使清理墓碑已替换�
     { seq: 4, type: 'user/message', data: { role: 'user', content: [], source: { kind: 'plugin', plugin: 'dsh-tavern-failed-turn-cleanup' } },
       surfaceOp: { op: 'replace', start: 1, end: 2 }, sourceEventSeqs: [1, 2] }
   ]
-  assert.deepEqual(replayableFailedTurn({ events }), { turn: 2, startSeq: 0, endSeq: 3, userText: '本轮输入' })
+  assert.deepEqual(replayableFailedTurn({ events }), { turn: 2, startSeq: 0, endSeq: 3, userText: '本轮输入', source: { kind: 'user', rpcId: 'rpc-2' } })
 })
 
 test('失败尾部重放同样认领重放/重生成输入，且只认领真正拥有尾部的回合', () => {
