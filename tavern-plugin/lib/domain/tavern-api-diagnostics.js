@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { redactDiagnostic } from './mvu-diagnostics.js'
 
-const tracked = /^(?:.*TavernHelper.*|getFullPromptTemplateState|saveFullPromptTemplateState|saveFullPromptTemplateSettings|saveFullPromptTemplateGlobals|saveTavernChatData|saveTavernExtensionSettings|loadTavernWorldInfo|saveTavernWorldInfo|callOpeningRuntime)$/
+const tracked = /^(?:.*TavernHelper.*|getSession|syncSession|getFullPromptTemplateState|saveFullPromptTemplateState|saveFullPromptTemplateSettings|saveFullPromptTemplateGlobals|saveTavernChatData|saveTavernExtensionSettings|loadTavernWorldInfo|saveTavernWorldInfo|callOpeningRuntime)$/
 const pathFor = id => 'diagnostics/api-calls-' + createHash('sha256').update(id).digest('hex') + '.json'
 
 // Values and property names may contain private story data. Neither is retained.
@@ -11,6 +11,11 @@ export function summarizeApiArgument(value) {
   if (Array.isArray(value)) return { type: 'array', length: value.length }
   if (typeof value === 'object') return { type: 'object', fields: Object.keys(value).length }
   return { type: typeof value }
+}
+
+function jsonBytes(value) {
+  try { return Buffer.byteLength(JSON.stringify(value ?? null)) }
+  catch { return null }
 }
 
 function redactApiError(error, args) {
@@ -78,11 +83,13 @@ export function createTavernApiDiagnostics(storage) {
         turn: Number.isSafeInteger(args.turn) ? args.turn : null,
         messageId: Number.isSafeInteger(args.option?.message_id) ? args.option.message_id : null,
         attribution: owner.scriptId ? 'runtime-request' : 'unknown',
+        requestBytes: jsonBytes(args),
         arguments: Object.values(args || {}).slice(0, 16).map(summarizeApiArgument) }
       try {
         const result = await run()
         row.status = result?.stale || result?.rejected ? 'rejected' : 'success'
         if (row.status === 'rejected') row.reason = result?.stale ? 'stale-target' : 'operation-not-applied'
+        row.responseBytes = jsonBytes(result)
         return result
       } catch (error) {
         row.status = /MISMATCH|UNSUPPORTED|CONFLICT|STALE|FORBIDDEN|INVALID/.test(String(error?.code || ''))

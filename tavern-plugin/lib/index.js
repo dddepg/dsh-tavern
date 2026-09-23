@@ -1516,7 +1516,17 @@ export async function apply(ctx) {
       }
       receipts.push({ turn, receipt })
     }
-    return receipts
+    // Keep recent history short on the wire; always retain actionable statuses.
+    const notable = new Set(['pending', 'error', 'interrupted', 'partial', 'stale'])
+    const notableRows = []
+    const quietRows = []
+    for (const row of receipts) {
+      if (notable.has(str(row.receipt && row.receipt.status))) notableRows.push(row)
+      else quietRows.push(row)
+    }
+    const byTurn = new Map()
+    for (const row of notableRows.concat(quietRows.slice(-3))) byTurn.set(row.turn, row)
+    return [...byTurn.values()].sort((left, right) => left.turn - right.turn)
   }
   function withLegacyPresentationProjection(chat, projections) {
     const result = Array.isArray(projections) ? projections.slice() : []
@@ -1589,6 +1599,20 @@ export async function apply(ctx) {
     return Object.assign({}, operation, { result: { candidates } })
   }
   const synchronizeSessionView = createSessionViewSync()
+  const sessionViewProjectionCache = new Map()
+
+  function volatileSessionViewFields(chat, activity) {
+    let scriptProgress = null
+    return {
+      activity,
+      settleStatus: activity.busy ? 'running' : (activity.phase === 'failed' && activity.role === 'settlement' ? 'error' : 'done'),
+      settleError: activity.reason === 'interrupted' ? '后台结算已中断，请重试结算。' : (chat.settleError || null),
+      settlementTurn: settlementTurn(chat),
+      scriptProgress,
+      updatedAt: chat.updatedAt || 0,
+      mvuReceipts: mvuReceiptsOf(chat)
+    }
+  }
 
   async function sessionView(sessionId) {
     const chat = await requestPerformance.stage('readChat', () => chatForSession(sessionId))
@@ -1596,8 +1620,29 @@ export async function apply(ctx) {
     const activity = backgroundTasks.activity(chat)
     requestPerformance.state({ foregroundRunning: agentRegistry.get(str(sessionId))?.phase?.kind === 'running', backgroundBusy: activity.busy, backgroundRole: activity.role })
     const isCard = (chat.mode || 'story') === 'card'
+    const revision = Number(chat._storageRevision) || 0
+    const cardPath = str(chat.cardPath)
+    const cardContextRevision = Number(chat.cardContextRevision) || 0
+    const cached = sessionViewProjectionCache.get(chat.id)
+    if (cached
+      && cached.revision === revision
+      && cached.cardPath === cardPath
+      && cached.cardContextRevision === cardContextRevision
+      && cached.isCard === isCard
+      && cached.mode === (chat.mode || 'story')) {
+      const reused = Object.assign({}, cached.view, volatileSessionViewFields(chat, activity))
+      if ((chat.mode || 'story') === 'script') {
+        reused.scriptProgress = await requestPerformance.stage('scriptProgress', async () => {
+          const script = await readScript(chat.cardPath)
+          return script !== undefined && Array.isArray(script.chunks)
+            ? scriptContinuity.inspect({ script: script, state: chat.scriptState, request: { kind: 'progress' } })
+            : null
+        })
+      }
+      return reused
+    }
     let card = null, cardReadError = null
-    try { card = isCard && str(chat.cardPath) === '' ? null : await requestPerformance.stage('readCard', () => readChatCard(chat)) }
+    try { card = isCard && cardPath === '' ? null : await requestPerformance.stage('readCard', () => readChatCard(chat)) }
     catch (error) {
       if (!isCard) throw error
       cardReadError = '人物卡暂时无法读取，请在工作台校验并修复：' + chat.cardPath
@@ -1607,6 +1652,10 @@ export async function apply(ctx) {
     if (cardReadError) result.cardReadError = cardReadError
     if (isCard) result.workspace = workspaceViewOf(chat)
     if ((chat.mode || 'story') === 'script') result.scriptPreview = await requestPerformance.stage('scriptPreview', () => scriptPreviewOf(chat))
+    sessionViewProjectionCache.set(chat.id, {
+      revision, cardPath, cardContextRevision, isCard, mode: chat.mode || 'story', view: result
+    })
+    while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
     return result
   }
   async function ensureNativeOpening(sessionId) {
@@ -3299,8 +3348,21 @@ export async function apply(ctx) {
       case 'getEjsEditorInfo': return await fullPromptTemplateRuntimeInfo()
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': {
-        const view = await sessionView(args && args.sessionId)
-        return args?.viewSync === 1 ? synchronizeSessionView(args.sessionId, view, args.viewCursor) : { view }
+        const sessionId = args && args.sessionId
+        const view = await sessionView(sessionId)
+        if (args?.viewSync !== 1) return { view }
+        const previous = synchronizeSessionView.peek?.(args.viewCursor)
+        const chat = await chatForSession(sessionId)
+        const revision = Number(chat && chat._storageRevision) || 0
+        let dirtyMessageIndices = null
+        if (previous && previous.sessionId === str(sessionId) && Number.isSafeInteger(previous.revision)) {
+          if (previous.revision === revision) dirtyMessageIndices = new Set()
+          else {
+            const changed = chat && chat.id ? await chatPersistence.readChangedSlice(chat.id, previous.revision) : undefined
+            if (changed && Array.isArray(changed.indices)) dirtyMessageIndices = new Set(changed.indices)
+          }
+        }
+        return synchronizeSessionView(str(sessionId), view, args.viewCursor, { revision, dirtyMessageIndices })
       }
       case 'designCharacter': return await manualCharacterDesign.start(args || {})
       case 'sendPhoneMessage': return { phoneChat: await phoneChat.send(args || {}) }

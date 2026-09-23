@@ -507,10 +507,15 @@ window.__ModuleLoader__.load({
 			if (sessionId) payload.sessionId = sessionId;
 			const viewRead = method === "getSession" ? beginSessionViewRead(payload.sessionId) : null;
 			if (viewRead) { payload.viewSync = 1; payload.viewCursor = viewRead.cursor; }
+			const requestBody = JSON.stringify(payload);
+			if (trace) {
+				try { trace.requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).length : requestBody.length; }
+				catch (_error) { trace.requestBytes = requestBody.length; }
+			}
 			const request = {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload)
+				body: requestBody
 			};
 			if (requestOptions && requestOptions.signal) request.signal = requestOptions.signal;
 			if (requestOptions && requestOptions.keepalive === true) request.keepalive = true;
@@ -518,7 +523,14 @@ window.__ModuleLoader__.load({
 			return fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
                 if (trace) trace.headersMs = Math.round(performance.now() - clockStart);
                 const result = await readTavernJsonResponse(response);
-                if (trace) trace.parsedMs = Math.round(performance.now() - clockStart);
+                if (trace) {
+					trace.parsedMs = Math.round(performance.now() - clockStart);
+					try {
+						const header = response.headers && typeof response.headers.get === "function" ? response.headers.get("content-length") : null;
+						if (header) trace.responseBytes = Number(header);
+						else trace.responseBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(JSON.stringify(result)).length : JSON.stringify(result).length;
+					} catch (_error) {}
+				}
                 return result;
             }).then(function (result) {
 				tavernRuntimeGenerationMonitor.observe(result && result.runtimeGeneration);
@@ -4931,7 +4943,8 @@ window.__ModuleLoader__.load({
 			const invoke = options && options.rpc || rpc;
 			const reportError = options && options.reportError || function (source, error) { tavernErrorHub.report(source, error); };
 			const resolveError = options && options.resolveError || function (source, beforeAt) { tavernErrorHub.resolve(source, beforeAt); };
-			const reportMutation = options && options.onMutation || function (sessionId) { liveTavernView.invalidate(sessionId); };
+			const notifyMutation = options && options.onMutation || function (sessionId) { liveTavernView.invalidate(sessionId); };
+			const mutationCoalesceMs = Math.max(0, options && options.mutationCoalesceMs !== undefined && options.mutationCoalesceMs !== null ? Number(options.mutationCoalesceMs) : 400);
 			const onReady = options && typeof options.onReady === "function" ? options.onReady : function () {};
 			const onMvuLoadState = options && options.onMvuLoadState || function () {};
 			const initializationTimeoutMs = Math.max(1000, Number(options && options.initializationTimeoutMs) || 15000);
@@ -4939,8 +4952,10 @@ window.__ModuleLoader__.load({
 			const now = options && options.now || Date.now;
 			const records = new Map();
 			const pendingEvents = new Map();
+			const pendingMutationSessions = new Map();
 			const closedEventIds = new Set();
 			const closedEventOrder = [];
+			const structuralMutationMethods = new Set(["updateTavernHelperPrompts", "updateTavernHelperMessages", "createTavernHelperMessages", "replaceTavernHelperWorldbook", "saveTavernExtensionSettings", "saveTavernWorldInfo", "saveTavernChatData"]);
 			const allowedMethods = new Set(["getTavernHelperContext", "generateTavernHelperRaw", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "createTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook", "saveTavernExtensionSettings", "loadTavernWorldInfo", "saveTavernWorldInfo", "saveTavernChatData"]);
 			let activeSessionId = "";
 			let root = null;
@@ -4948,8 +4963,41 @@ window.__ModuleLoader__.load({
 			let eventSequence = 0;
 			let readinessKey = "";
 			let announcedReadinessKey = "";
+			let suppressedCompactMutations = 0;
 			function clone(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
 			function token() { return hostWindow.crypto && typeof hostWindow.crypto.randomUUID === "function" ? hostWindow.crypto.randomUUID() : String(Date.now()) + ":" + String(Math.random()); }
+			function recordInitializing(record) {
+				return Boolean(record && record.suppressCompactViewRefresh);
+			}
+			function clearPendingMutation(sessionId) {
+				const pending = pendingMutationSessions.get(sessionId);
+				if (!pending) return null;
+				if (pending.timer !== null) hostWindow.clearTimeout(pending.timer);
+				pendingMutationSessions.delete(sessionId);
+				return pending;
+			}
+			function reportMutation(sessionId, method, result) {
+				const id = String(sessionId || "");
+				if (!id) return;
+				const compactVariable = method === "updateTavernHelperVariables" && result && result.contextDelta;
+				if (compactVariable && recordInitializing(records.get("shared"))) {
+					suppressedCompactMutations += 1;
+					return;
+				}
+				if (structuralMutationMethods.has(method) || (method === "updateTavernHelperVariables" && !compactVariable) || mutationCoalesceMs === 0) {
+					clearPendingMutation(id);
+					notifyMutation(id, method, result);
+					return;
+				}
+				clearPendingMutation(id);
+				const entry = { method: method, result: result, timer: null };
+				entry.timer = hostWindow.setTimeout(function () {
+					if (pendingMutationSessions.get(id) !== entry) return;
+					pendingMutationSessions.delete(id);
+					notifyMutation(id, entry.method, entry.result);
+				}, mutationCoalesceMs);
+				pendingMutationSessions.set(id, entry);
+			}
 			function stringHash(value, seed) {
 				if (typeof value !== "string") return 0;
 				let h1 = 0xdeadbeef ^ (Number(seed) || 0), h2 = 0x41c6ce57 ^ (Number(seed) || 0);
@@ -4971,7 +5019,15 @@ window.__ModuleLoader__.load({
 				if (Array.from(records.values()).some(function (record) { return mvuInitializationError(record); })) return;
 				if (Array.from(records.values()).some(function (record) { return !record.loaded || (!record.subscriptionsReady && !record.initializationFailed); })) return;
 				announcedReadinessKey = readinessKey;
-				Promise.resolve(onReady(activeSessionId)).catch(function (error) { reportError("人物卡脚本初始化", error); });
+				const readySessionId = activeSessionId;
+				const refreshAfterSuppress = suppressedCompactMutations > 0;
+				suppressedCompactMutations = 0;
+				for (const record of records.values()) record.suppressCompactViewRefresh = false;
+				Promise.resolve(onReady(readySessionId)).catch(function (error) { reportError("人物卡脚本初始化", error); });
+				if (readySessionId && refreshAfterSuppress) {
+					clearPendingMutation(readySessionId);
+					notifyMutation(readySessionId, "initialization-ready", null);
+				}
 			}
 			function settleInitialization(record, error, failurePhase) {
 				if (record.initializationTimer) hostWindow.clearTimeout(record.initializationTimer);
@@ -4980,6 +5036,7 @@ window.__ModuleLoader__.load({
 					recordMvuLoadDiagnostic(record, { phase: failurePhase || "initialization-timeout", failureStep: record.mvuLoadState ? "initialization" : "bootstrap", message: String(error.message || error).slice(0, 2000) });
 					if (record.scripts.has("__dsh_official_mvu__")) onMvuLoadState({ phase: "error", canRetry: false, error: String(error.message || error) });
 					record.initializationFailed = true;
+					record.suppressCompactViewRefresh = false;
 					const unfinished = Array.from(record.scripts.values()).filter(function (script) { return !script.subscriptionsReady && !script.initializationFailed; });
 					for (const script of unfinished) { script.initializationFailed = true; script.initializationError = String(error && error.message || error).slice(0, 4000); }
 					const message = String(error && error.message || error || "初始化失败");
@@ -5194,6 +5251,8 @@ window.__ModuleLoader__.load({
 				return current;
 			}
 			function clear() {
+				for (const sessionId of Array.from(pendingMutationSessions.keys())) clearPendingMutation(sessionId);
+				suppressedCompactMutations = 0;
 				Array.from(records.keys()).forEach(removeRecord);
 				if (root) root.remove();
 				root = null;
@@ -5228,6 +5287,7 @@ window.__ModuleLoader__.load({
 					trustedCardMode: trustedCardMode,
 					startedAt: Date.now(),
 					fingerprint: fingerprint,
+					suppressCompactViewRefresh: true,
 					token: token(),
 					compatibilityId: token(),
 					compatibilityCatalog: new Map((context.compatibilityCapabilities || []).map(function (entry) { return [entry.id, entry]; })),

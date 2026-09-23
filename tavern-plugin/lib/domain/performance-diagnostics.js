@@ -37,7 +37,7 @@ export function createPerformanceDiagnostics() {
       }
       if (Array.isArray(value.requests)) clean.requests = value.requests.slice(-60).filter(row => row && /^[a-f0-9-]{36}$/.test(row.id || '') && ['getSession', 'syncSession'].includes(row.method)).map(row => {
         const result = { id: row.id, method: row.method, failed: row.failed === true }
-        for (const key of ['sentAt', 'active', 'headersMs', 'parsedMs', 'durationMs']) {
+        for (const key of ['sentAt', 'active', 'headersMs', 'parsedMs', 'durationMs', 'requestBytes', 'responseBytes']) {
           if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = Math.min(1e12, Math.round(row[key]))
         }
         return result
