@@ -5957,6 +5957,7 @@ window.__ModuleLoader__.load({
 			const lastModeSession = React.useRef(null);
 			const fileRef = React.useRef(null);
 			const initialImportRef = React.useRef(null);
+			const initialImportKindRef = React.useRef("source");
 			const playWorkspaceIdRef = React.useRef(workspaceId);
 			const playWorkspaceResolverRef = React.useRef(null);
 			const playPrewarmRef = React.useRef(null);
@@ -6167,21 +6168,28 @@ window.__ModuleLoader__.load({
 				setOpeningPicker(null);
 				if (id) void call("releaseOpeningPreparation", { id: id }).catch(function () {});
 			}
+			async function loadWorldBookInitialResources() {
+				const response = await call("listWorldBooks");
+				return (response.standalone || []).concat(response.embedded || []).map(function (item) {
+					return { kind: "worldbook", path: item.kind === "card" ? item.cardPath : item.path, title: item.name, detail: item.kind === "card" ? "人物卡内置 · " + item.cardName : "独立世界书" };
+				});
+			}
+			async function loadPresetInitialResources() {
+				const response = await call("listPresets");
+				return (response.presets || []).map(function (item) { return { kind: "preset", path: item.path, title: item.title, detail: "作为编辑目标引用，不会在当前 Agent 中运行" }; });
+			}
+			async function loadSourceInitialResources() {
+				const response = await call("listResources");
+				return (response.resources || []).map(function (item) { return Object.assign({}, item, { kind: "source" }); });
+			}
 			async function loadInitialResources(task) {
-				let resources = [];
-					if (task === "worldbook") {
-						const response = await call("listWorldBooks");
-						resources = (response.standalone || []).concat(response.embedded || []).map(function (item) {
-							return { kind: "worldbook", path: item.kind === "card" ? item.cardPath : item.path, title: item.name, detail: item.kind === "card" ? "人物卡内置 · " + item.cardName : "独立世界书" };
-						});
-					} else if (task === "preset") {
-						const response = await call("listPresets");
-						resources = (response.presets || []).map(function (item) { return { kind: "preset", path: item.path, title: item.title, detail: "作为编辑目标引用，不会在当前 Agent 中运行" }; });
-					} else {
-						const response = await call("listResources");
-						resources = (response.resources || []).map(function (item) { return Object.assign({}, item, { kind: "source" }); });
-					}
-				return resources;
+				if (task === "resource-edit") {
+					const groups = await Promise.all([loadSourceInitialResources(), loadWorldBookInitialResources(), loadPresetInitialResources()]);
+					return groups[0].concat(groups[1], groups[2]);
+				}
+				if (task === "worldbook") return await loadWorldBookInitialResources();
+				if (task === "preset") return await loadPresetInitialResources();
+				return await loadSourceInitialResources();
 			}
 			async function openResourcePicker(task) {
 				setBusy(true); setError("");
@@ -6201,7 +6209,7 @@ window.__ModuleLoader__.load({
 					else if (task === "preset") await call("importPreset", { payload: payload });
 					else await call("importSource", { payload: payload });
 					notifyDataChanged([task === "worldbook" ? "worldbooks" : (task === "preset" ? "presets" : "scripts")]);
-					setInitialResources(await loadInitialResources(task));
+					setInitialResources(await loadInitialResources(cardEntry === "resource-edit" ? "resource-edit" : task));
 					setSelectedInitialResources({});
 				} catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
@@ -6209,7 +6217,7 @@ window.__ModuleLoader__.load({
 			function toggleInitialResource(item) {
 				const key = item.kind + ":" + item.path;
 				setSelectedInitialResources(function (current) {
-					const next = cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? {} : Object.assign({}, current);
+					const next = cardEntry === "resource-edit" ? {} : Object.assign({}, current);
 					if (next[key]) delete next[key];
 					else next[key] = { kind: item.kind, path: item.path, title: item.title };
 					return next;
@@ -6720,32 +6728,56 @@ window.__ModuleLoader__.load({
 					}) : h("div", { className: "dsh-tavern-side-empty", style: { padding: "8px" } }, "暂无")
 				);
 			}
-				const initialResourceTitle = cardEntry === "writing-skill" ? "剧本与素材" : cardEntry === "worldbook" ? "世界书" : cardEntry === "preset" ? "预设" : "剧本";
-			const initialResourcePicker = initialResources.length ? h(React.Fragment, null,
-				initialResourceGroup(initialResourceTitle, initialResources),
-				h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || !chosenInitialResources.length, onClick: function () {
+			function startResourceEditConversation() {
+				const chosen = chosenInitialResources[0];
+				if (!chosen) return;
+				if (chosen.kind === "worldbook") newCardConversation(null, "worldbook", "修改世界书", chosenInitialResources);
+				else if (chosen.kind === "preset") newCardConversation(null, "preset", "修改预设", chosenInitialResources);
+				else newCardConversation(null, "script", "修改剧本", chosenInitialResources);
+			}
+			function startInitialImport(kind) {
+				initialImportKindRef.current = kind;
+				const input = initialImportRef.current;
+				if (!input) return;
+				input.accept = kind === "worldbook" || kind === "preset" ? ".json,application/json" : ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip";
+				input.click();
+			}
+			const initialResourceTitle = cardEntry === "writing-skill" ? "剧本与素材" : "剧本";
+			const resourceEditPicker = h(React.Fragment, null,
+				initialResourceGroup("剧本", initialResources.filter(function (item) { return item.kind === "source"; })),
+				initialResourceGroup("世界书", initialResources.filter(function (item) { return item.kind === "worldbook"; })),
+				initialResourceGroup("预设", initialResources.filter(function (item) { return item.kind === "preset"; })),
+				h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || chosenInitialResources.length !== 1, onClick: startResourceEditConversation }, "用已选目标开始"))
+			);
+			const initialResourcePicker = cardEntry === "resource-edit"
+				? resourceEditPicker
+				: (initialResources.length ? h(React.Fragment, null,
+					initialResourceGroup(initialResourceTitle, initialResources),
+					h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || !chosenInitialResources.length, onClick: function () {
 						if (cardEntry === "writing-skill") newCardConversation(null, "writing-skill", "创建写作 Skill", chosenInitialResources);
-					else if (cardEntry === "script") newCardConversation(null, "script", "修改剧本", chosenInitialResources);
-					else if (cardEntry === "worldbook") newCardConversation(null, "worldbook", "修改世界书", chosenInitialResources);
-					else if (cardEntry === "preset") newCardConversation(null, "preset", "修改预设", chosenInitialResources);
 						else newCardConversation(null, "extract", "从剧本新建人物卡", chosenInitialResources);
-				} }, "用已选 " + chosenInitialResources.length + (cardEntry === "script" || cardEntry === "extract" ? " 份剧本开始" : " 项开始")))
-			) : h("div", { className: "dsh-tavern-empty" }, "暂无可选" + initialResourceTitle + "，可点击右上角导入。");
-			const initialImportLabel = cardEntry === "worldbook" ? "导入世界书" : cardEntry === "preset" ? "导入预设" : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "script" ? "导入剧本或素材" : "";
-			const initialImportAccept = cardEntry === "worldbook" || cardEntry === "preset" ? ".json,application/json" : ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip";
+					} }, "用已选 " + chosenInitialResources.length + (cardEntry === "extract" ? " 份剧本开始" : " 项开始")))
+				) : h("div", { className: "dsh-tavern-empty" }, "暂无可选" + initialResourceTitle + "，可点击右上角导入。"));
+			const initialImportButtons = cardEntry === "resource-edit"
+				? h(React.Fragment, null,
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("source"); } }, "导入剧本或素材"),
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("worldbook"); } }, "导入世界书"),
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("preset"); } }, "导入预设")
+				)
+				: (cardEntry === "writing-skill" || cardEntry === "extract"
+					? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("source"); } }, "导入剧本或素材")
+					: null);
 			const cardPicker = h("div", { className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": "选择卡片工作台起始任务" }, pickerError,
-				h("div", { className: "dsh-tavern-card-picker-head" }, cardEntry ? h("button", { className: "dsh-tavern-btn", onClick: function () { setCardEntry(""); } }, "← 返回") : h("span", null, "选择起始任务"), cardEntry === "writing-skill" ? h("span", null, "选择参考素材（至少 1 份）") : cardEntry === "extract" ? h("span", null, "选择初始剧本（至少 1 份）") : cardEntry === "mvu" ? h("span", null, "选择要转换的人物卡") : cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? h("span", null, "选择一个编辑目标") : null, h("span", { className: "dsh-tavern-spacer" }), cardEntry === "edit" || cardEntry === "gentle" || cardEntry === "mvu" ? h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }) : null, initialImportLabel ? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { initialImportRef.current && initialImportRef.current.click(); } }, initialImportLabel) : null, h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
+				h("div", { className: "dsh-tavern-card-picker-head" }, cardEntry ? h("button", { className: "dsh-tavern-btn", onClick: function () { setCardEntry(""); } }, "← 返回") : h("span", null, "选择起始任务"), cardEntry === "writing-skill" ? h("span", null, "选择参考素材（至少 1 份）") : cardEntry === "extract" ? h("span", null, "选择初始剧本（至少 1 份）") : cardEntry === "mvu" ? h("span", null, "选择要转换的人物卡") : cardEntry === "resource-edit" ? h("span", null, "选择一个编辑目标") : null, h("span", { className: "dsh-tavern-spacer" }), cardEntry === "edit" || cardEntry === "gentle" || cardEntry === "mvu" ? h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }) : null, initialImportButtons, h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
 				h("input", { ref: fileRef, type: "file", accept: ".png,.json", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importCard(f); e.target.value = ""; } }),
-				h("input", { ref: initialImportRef, type: "file", accept: initialImportAccept, style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importInitialResource(f, cardEntry); e.target.value = ""; } }),
-					(cardEntry === "edit" || cardEntry === "gentle") ? cardEditRows : cardEntry === "mvu" ? cardMvuRows : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? initialResourcePicker : h(React.Fragment, null,
+				h("input", { ref: initialImportRef, type: "file", accept: ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importInitialResource(f, initialImportKindRef.current); e.target.value = ""; } }),
+					(cardEntry === "edit" || cardEntry === "gentle") ? cardEditRows : cardEntry === "mvu" ? cardMvuRows : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "resource-edit" ? initialResourcePicker : h(React.Fragment, null,
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("edit"); } }, h("b", null, "修改人物卡"), h("span", null, "先选择人物卡，再追加修改任务提示词")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("gentle"); } }, h("b", null, "人物卡温和改写"), h("span", null, "人物卡被模型拒绝输出时，适当改写为温和版本，减少拒绝并实测效果")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("mvu"); } }, h("b", null, "把人物卡转成 MVU 版"), h("span", null, "转换为 MVU 后，状态栏绝对不会掉格式")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("writing-skill"); } }, h("b", null, "创建写作 Skill"), h("span", null, "从素材中提炼写作提示词，明确适用与禁用场景，用于前台正文写作")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("extract"); } }, h("b", null, "从剧本新建人物卡"), h("span", null, "先选择至少一份剧本，再进入工作台")),
-						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("script"); } }, h("b", null, "修改剧本"), h("span", null, "先选择一份剧本，再进入工作台修改工作版")),
-					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("worldbook"); } }, h("b", null, "修改世界书"), h("span", null, "先选择一本世界书，再进入工作台按条目修改")),
-					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("preset"); } }, h("b", null, "修改预设"), h("span", null, "先选择一个预设，交给卡片 Agent 阅读和修改")),
+						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("resource-edit"); } }, h("b", null, "修改剧本 / 世界书 / 预设"), h("span", null, "先选择一个目标，再进入工作台修改")),
 					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { newCardConversation(null); } }, h("b", null, "空白开始"), h("span", null, "不追加任务提示词，自由使用完整卡片 Agent"))
 				)
 			);

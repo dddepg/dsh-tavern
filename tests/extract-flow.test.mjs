@@ -443,24 +443,24 @@ test('创建对话失败时服务端记录请求边界但不记录开场白正�
   assert.doesNotMatch(dispatch, /greeting|openingText/)
 })
 
-test('卡片模式通过人物卡、剧本、世界书、预设和空白入口进入同一个 Agent', () => {
+test('卡片模式通过人物卡、合并资源编辑和空白入口进入同一个 Agent', () => {
   const flow = between(clientSource, 'async function newCardConversation', 'function formatTime')
   const recovery = between(clientSource, 'async function finishPendingOpen', 'async function retryPendingOpen')
 
   assert.match(clientSource, /"修改人物卡"/)
   assert.match(clientSource, /"把人物卡转成 MVU 版"/)
   assert.match(clientSource, /"从剧本新建人物卡"/)
-  assert.match(clientSource, /"修改剧本"/)
-  assert.match(clientSource, /"修改世界书"/)
-  assert.match(clientSource, /"修改预设"/)
+  assert.match(clientSource, /"修改剧本 \/ 世界书 \/ 预设"/)
+  assert.match(clientSource, /openResourcePicker\("resource-edit"\)/)
   assert.match(clientSource, /作为编辑目标引用，不会在当前 Agent 中运行/)
   assert.match(clientSource, /dsh-tavern-edit-preset/)
   assert.match(clientSource, /newCardConversation\(null, "preset", "修改预设", \[\{ kind: "preset"/)
   assert.match(clientSource, /"空白开始"/)
 	assert.doesNotMatch(clientSource, /请先从右侧侧边栏的对应资源库导入人物卡、剧本、世界书或预设文件。/)
-	assert.match(clientSource, /initialImportLabel = cardEntry === "worldbook" \? "导入世界书"/)
-	assert.match(clientSource, /cardEntry === "extract" \|\| cardEntry === "script" \? "导入剧本或素材"/)
-	assert.match(clientSource, /importInitialResource\(f, cardEntry\)/)
+	assert.match(clientSource, /startInitialImport\("source"\)/)
+	assert.match(clientSource, /startInitialImport\("worldbook"\)/)
+	assert.match(clientSource, /startInitialImport\("preset"\)/)
+	assert.match(clientSource, /importInitialResource\(f, initialImportKindRef\.current\)/)
 	assert.match(clientSource, /暂无可选.*可点击右上角导入/)
 	assert.match(flow, /kind: "card", targetMode: "card"/)
   assert.match(flow, /task: task, label: label, card: card, selectedResources: selectedResources \|\| \[\]/)
@@ -523,15 +523,30 @@ test('用户画像右侧栏聚焦实际生效偏好，详细依据折叠并可�
   assert.match(clientSource, /id: "dsh-tavern:user-profile"/)
 })
 
-test('世界书与预设起始任务先选择一个目标并自动追加类型引用', () => {
+test('资源编辑起始任务合并剧本、世界书与预设，选中后按 kind 映射任务', () => {
   const sidebar = between(clientSource, 'function TavernSidebar', 'function TavernResourcesTab')
 
+  assert.match(sidebar, /openResourcePicker\("resource-edit"\)/)
+  assert.match(sidebar, /task === "resource-edit"/)
+  assert.match(sidebar, /loadWorldBookInitialResources/)
+  assert.match(sidebar, /loadPresetInitialResources/)
+  assert.match(sidebar, /loadSourceInitialResources/)
   assert.match(sidebar, /call\("listWorldBooks"\)/)
   assert.match(sidebar, /call\("listPresets"\)/)
+  assert.match(sidebar, /call\("listResources"\)/)
+  assert.match(sidebar, /function startResourceEditConversation/)
+  assert.match(sidebar, /chosen\.kind === "worldbook"/)
   assert.match(sidebar, /newCardConversation\(null, "worldbook", "修改世界书"/)
   assert.match(sidebar, /newCardConversation\(null, "preset", "修改预设"/)
+  assert.match(sidebar, /newCardConversation\(null, "script", "修改剧本"/)
+  assert.match(sidebar, /initialResourceGroup\("剧本"/)
+  assert.match(sidebar, /initialResourceGroup\("世界书"/)
+  assert.match(sidebar, /initialResourceGroup\("预设"/)
   assert.match(sidebar, /kind: "worldbook"/)
   assert.match(sidebar, /kind: "preset"/)
+  assert.doesNotMatch(sidebar, /openResourcePicker\("script"\)/)
+  assert.doesNotMatch(sidebar, /openResourcePicker\("worldbook"\)/)
+  assert.doesNotMatch(sidebar, /openResourcePicker\("preset"\)/)
 })
 
 test('世界书库在卡片对话中可引用独立或内置世界书', () => {
@@ -543,23 +558,22 @@ test('世界书库在卡片对话中可引用独立或内置世界书', () => {
   assert.match(clientSource, /tavern-worldbook:/)
 })
 
-test('人物卡抽取与剧本修改都使用剧本与素材库，并自动追加引用', () => {
+test('人物卡抽取使用剧本与素材库，并自动追加引用', () => {
   const sidebar = between(clientSource, 'function TavernSidebar', 'function TavernResourcesTab')
   const recovery = between(sidebar, 'async function finishPendingOpen', 'async function retryPendingOpen')
 
   assert.match(sidebar, /async function openResourcePicker\(task\)/)
-  assert.match(sidebar, /const response = await call\("listResources"\)/)
+  assert.match(sidebar, /loadSourceInitialResources/)
   assert.match(sidebar, /kind: "source"/)
   assert.match(sidebar, /initialResourceGroup\(initialResourceTitle, initialResources\)/)
   assert.doesNotMatch(sidebar, /initialResourceGroup\("素材"/)
   assert.doesNotMatch(sidebar, /initialResourceGroup\("已绑定剧本"/)
   assert.match(sidebar, /disabled: busy \|\| !chosenInitialResources\.length/)
   assert.match(sidebar, /newCardConversation\(null, "extract", "从剧本新建人物卡", chosenInitialResources\)/)
-  assert.match(sidebar, /newCardConversation\(null, "script", "修改剧本", chosenInitialResources\)/)
   assert.match(recovery, /\(pending\.selectedResources \|\| \[\]\)\.forEach/)
   assert.match(recovery, /props\.appendMention\(pending\.sessionId, resource\.kind, resource\.path, resource\.title\)/)
   assert.doesNotMatch(recovery, /pending\.task === "boundary"/)
-  assert.match(sidebar, /先选择一份剧本，再进入工作台修改工作版/)
+  assert.match(sidebar, /先选择至少一份剧本，再进入工作台/)
   assert.doesNotMatch(sidebar, /newCardConversation\(null, "extract", "从素材新建人物卡"\);/)
 })
 
