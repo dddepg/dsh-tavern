@@ -1761,7 +1761,7 @@ export async function apply(ctx) {
   async function ensureNativeSystemPrefix(session, chat) {
     const before = readSessionStablePrefix(session)
     const revision = Number(chat.cardContextRevision) || 0
-    const text = before?.version === 3 && revision <= Number(before.message.source.cardContextRevision || 0) ? '' : await ensurePlayCardSnapshot(chat)
+    const text = before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
     const prefix = await ensureSessionStablePrefix(session, text, stablePrefixStorage, revision)
     if (prefix && prefix.event !== before?.event) await sessionStore.flush(session)
     return prefix

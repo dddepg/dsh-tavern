@@ -1422,11 +1422,11 @@ test('生图已有空前缀会话补入开局 system，连续任务保持背景�
 })
 
 for (const task of ['settlement', 'image']) test(task + ' 已有会话在明确更新人物卡后切换背景', async () => {
-  let assemble, pending, revision = 0, background = '开局人物设定'
+  let assemble, pending, revision = 0, background = '开局人物设定', backgroundReads = 0
   const seen = [], sections = []
   const session = { id: 'updated-' + task, header: {}, events: [], append(type, data) { const event = { type, data, seq: this.events.length + 1 }; this.events.push(event); return event } }
   const runner = createBackgroundAgentRunner({
-    resolveStablePrefixRevision: async () => revision, resolveStablePrefix: async () => background,
+    resolveStablePrefixRevision: async () => revision, resolveStablePrefix: async () => { backgroundReads++; return background },
     agents: { get: () => ({ session: { header: {} } }), async create(options) {
       await options.setup({ systemPrompt: { section(value) { sections.push(value) }, suppressRuntimeContext() {} }, tools: { restrict() {}, register() {} }, on(event, callback) { if (event === 'system-prompt/assemble') assemble = callback } })
       return { agent: { session, followup() { pending = (async () => {
@@ -1445,7 +1445,8 @@ for (const task of ['settlement', 'image']) test(task + ' 已有会话在明确�
     assert.doesNotMatch(seen[1], /开局人物设定/)
     assert.match(seen[1], /已确认的新版设定/)
     assert.equal(seen[1], seen[2])
-    assert.equal(session.events.filter(e => e.data?.source?.cardContextRevision === 1).length, 1)
+    assert.equal(session.events.filter(e => e.data?.id === 'tavern-session-prefix:' + session.id + ':revision-1').length, 1)
+    assert.equal(backgroundReads, 2, 'unchanged revision reuses the saved background')
   } finally { await runner.dispose() }
 })
 

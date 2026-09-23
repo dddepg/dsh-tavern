@@ -511,7 +511,7 @@ test('正式模型工具、调度器、草稿与剧情提交链路：漏领后�
   assert.equal(run.get().settleStatus, 'done')
   assert.equal(models, 1)
   assert.equal(gate.complete('session', offer.event.id, [1], 'browser', offer.leaseToken), true, 'duplicate receipt acknowledges the original execution without committing twice')
-  await assert.rejects(adapter.updateMessages('session', [{ message_id: 1, data: { stat_data: { hp: 8 } } }], 0, offer.event.id), /结算事件/)
+  await assert.rejects(adapter.updateMessages('session', [{ message_id: 1, data: { stat_data: { hp: 8 } } }], 0, offer.event.id), { code: 'MVU_SETTLEMENT_EVENT_MISMATCH' })
   assert.equal(run.get().messages[1].variables[0].stat_data.hp, 9)
   run.reconciler.dispose()
 })

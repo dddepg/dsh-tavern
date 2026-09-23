@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import vm from 'node:vm'
 import os from 'node:os'
 import path from 'node:path'
 import { Session } from './fixtures/dsh-session-host.mjs'
@@ -11,6 +12,27 @@ const text = '【故事设定 · 人物卡】\n名字: 测试人物\n\n设定: �
 let messageId = 0
 const user = value => ({ id: 'message-' + (++messageId), role: 'user', content: [{ type: 'text', text: value }], source: { kind: 'user' } })
 const plugin = value => ({ ...user(value), source: { kind: 'plugin', plugin: 'dsh-tavern' } })
+
+test('前台确认更新后同版本复用背景，重开 Session 后仍复用', async () => {
+  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const implementation = source.slice(source.indexOf('  async function ensureNativeSystemPrefix('), source.indexOf('  async function ensureNativeCardWorkspace('))
+  let reads = 0, flushes = 0
+  const run = vm.runInNewContext(`(${implementation.trim()})`, {
+    readSessionStablePrefix, ensureSessionStablePrefix,
+    ensurePlayCardSnapshot: async chat => { reads++; return '背景版本 ' + chat.cardContextRevision },
+    stablePrefixStorage: undefined, sessionStore: { flush: async () => { flushes++ } }
+  })
+  let session = Session.create('foreground-prefix-reuse')
+  for (const revision of [0, 1, 1]) await run(session, {cardContextRevision:revision})
+  assert.equal(reads, 2)
+  assert.equal(flushes, 2)
+  session = Session.create(session.id, sessionEvents(session), session.header)
+  await run(session, {cardContextRevision:1})
+  assert.equal(reads, 2)
+  await run(session, {cardContextRevision:2})
+  assert.equal(reads, 3)
+  assert.equal(readSessionStablePrefix(session).text, '背景版本 2')
+})
 
 test('固定背景快照只写一次，正文不进入可压缩历史，恢复后仍装配为系统上下文', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'tavern-prefix-'))
