@@ -77,9 +77,16 @@ export function createTavernScriptHostAdapter(options = {}) {
   }
 
   function assertTransactionEvent(transaction, eventId) {
-    if ((transaction !== undefined && transaction.eventId !== str(eventId))
-      || (transaction === undefined && str(eventId).startsWith('mvu-work:'))) {
-      const error = new Error('脚本写入不属于当前 MVU 结算事件')
+    const id = str(eventId)
+    if (transaction !== undefined && transaction.eventId !== id) {
+      const error = new Error(id === ''
+        ? '脚本异步写入未携带当前 MVU 结算事件身份，已拒绝'
+        : '脚本写入不属于当前 MVU 结算事件')
+      error.code = 'MVU_SETTLEMENT_EVENT_MISMATCH'
+      throw error
+    }
+    if (transaction === undefined && id.startsWith('mvu-work:')) {
+      const error = new Error('结算已结束，迟到的结算写入已忽略')
       error.code = 'MVU_SETTLEMENT_EVENT_MISMATCH'
       throw error
     }

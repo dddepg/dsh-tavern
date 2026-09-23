@@ -2182,12 +2182,22 @@ window.__ModuleLoader__.load({
 			for (const script of scriptList) scriptsById[script.id] = script;
 			let currentScriptId = scriptList[0] ? scriptList[0].id : "";
 			let activeHostEventId = "";
+			// MVU settlement events keep a short sticky identity so setTimeout/debounce
+			// writes after the handler returns still attach to the open transaction.
+			let stickyHostEventId = "";
+			let stickyHostEventUntil = 0;
+			const MVU_WORK_EVENT_PREFIX = "mvu-work:";
+			const MVU_WORK_EVENT_STICKY_MS = 3000;
 			let synchronousScriptId = "";
 			let hostEventTail = Promise.resolve();
             const hostEvents = new Map();
 			let facade;
 			const transport = modules.createTransport({ parent: parent, token: token, copy: copy,
-				identity: function () { return { eventId: activeHostEventId, scriptId: currentScript().id, lifecycleRevision: Number(state.lifecycleRevision) || 0 }; },
+				identity: function () {
+					let eventId = activeHostEventId;
+					if (!eventId && stickyHostEventId && Date.now() < stickyHostEventUntil) eventId = stickyHostEventId;
+					return { eventId: eventId, scriptId: currentScript().id, lifecycleRevision: Number(state.lifecycleRevision) || 0 };
+				},
 				listen: function (receive) { addEventListener("message", receive); },
 				onContext: async function (result, method) {
                     if (result.contextDelta) {
@@ -2252,7 +2262,14 @@ window.__ModuleLoader__.load({
 							}
 							await events.emitHost(data.eventId, data.name, suppliedArgs);
 							return suppliedArgs;
-						} finally { activeHostEventId = previousEventId; }
+						} finally {
+							const endingId = String(data.eventId || "");
+							if (endingId.indexOf(MVU_WORK_EVENT_PREFIX) === 0) {
+								stickyHostEventId = endingId;
+								stickyHostEventUntil = Date.now() + MVU_WORK_EVENT_STICKY_MS;
+							}
+							activeHostEventId = previousEventId;
+						}
 					});
 					hostEventTail = task;
 					task.then(function (args) {
@@ -3340,6 +3357,11 @@ window.__ModuleLoader__.load({
 			const onMvuLoadState = options && options.onMvuLoadState || function () {};
 			const initializationTimeoutMs = Math.max(1000, Number(options && options.initializationTimeoutMs) || 15000);
 			const eventTimeoutMs = Math.max(10, Number(options && options.eventTimeoutMs) || 15000);
+			// Card scripts often debounce derived writes with setTimeout after MESSAGE_RECEIVED.
+			// Keep mvu-work events open briefly so those writes still join the settlement.
+			const mvuWorkEventPrefix = "mvu-work:";
+			const mvuWorkEventDeferQuietMs = Math.max(0, Number(options && options.mvuWorkEventDeferQuietMs) || 350);
+			const mvuWorkEventDeferMaxMs = Math.max(mvuWorkEventDeferQuietMs, Number(options && options.mvuWorkEventDeferMaxMs) || 3000);
 			const now = options && options.now || Date.now;
 			const records = new Map();
 			const pendingEvents = new Map();
@@ -3530,6 +3552,7 @@ window.__ModuleLoader__.load({
 				for (const [eventId, pending] of pendingEvents) {
 					if (pending.record !== record) continue;
 					hostWindow.clearTimeout(pending.timer);
+					if (pending.deferTimer) hostWindow.clearTimeout(pending.deferTimer);
 					closeEventId(eventId);
 					pendingEvents.delete(eventId);
 					pending.reject(new Error("人物卡脚本运行时已重置，事件未完成"));
@@ -3856,28 +3879,61 @@ window.__ModuleLoader__.load({
                         return;
                     }
                     pending.contactAt = now();
-					// Close admission now, but keep accepted RPCs and the deadline alive
-					// until persistence finishes. A callback reply is not a write receipt.
-					pending.finishing = true;
+					pending.completeData = data;
+					pending.completedAt = now();
 					const finish = function () {
 						if (pendingEvents.get(eventId) !== pending) return;
+						if (pending.deferTimer) { hostWindow.clearTimeout(pending.deferTimer); pending.deferTimer = null; }
+						pending.finishing = true;
+						pending.armDeferredClose = null;
 						pendingEvents.delete(eventId);
 						closeEventId(eventId);
 						hostWindow.clearTimeout(pending.timer);
                         post(record, { type: "dsh-tavern-helper-event-ack", eventId: eventId });
-						if (data.error) {
-							const script = record.scripts.get(String(data.scriptId || pending.activeScriptId || ""));
+						const completeData = pending.completeData || data;
+						if (completeData.error) {
+							const script = record.scripts.get(String(completeData.scriptId || pending.activeScriptId || ""));
 							const prefix = script ? "人物卡脚本「" + script.name + "」" : "共享脚本沙箱";
-							const error = new Error(prefix + "处理事件「" + pending.name + "」失败：" + String(data.error));
-							if (typeof data.errorCode === "string" && data.errorCode) error.code = data.errorCode;
-							if (pending.diagnostics && pending.diagnostics.length < 50) pending.diagnostics.push({ kind: "event-error", name: pending.name, scriptId: String(data.scriptId || pending.activeScriptId || ""), errorCode: String(error.code || "") });
+							const error = new Error(prefix + "处理事件「" + pending.name + "」失败：" + String(completeData.error));
+							if (typeof completeData.errorCode === "string" && completeData.errorCode) error.code = completeData.errorCode;
+							if (pending.diagnostics && pending.diagnostics.length < 50) pending.diagnostics.push({ kind: "event-error", name: pending.name, scriptId: String(completeData.scriptId || pending.activeScriptId || ""), errorCode: String(error.code || "") });
 							reportError(script ? "人物卡脚本「" + script.name + "」" : "人物卡共享脚本沙箱", error);
 							pending.reject(error);
 						} else if (pending.writeError) pending.reject(pending.writeError);
-						else pending.resolve(clone(Array.isArray(data.args) ? data.args : []));
+						else pending.resolve(clone(Array.isArray(completeData.args) ? completeData.args : []));
 					};
-					if (data.error || !pending.writes || pending.writes.size === 0) finish();
-					else Promise.all(Array.from(pending.writes)).then(finish);
+					const settleWritesThenFinish = function () {
+						if (pending.writeError || !pending.writes || pending.writes.size === 0) finish();
+						else Promise.all(Array.from(pending.writes)).then(finish, finish);
+					};
+					const armDeferredClose = function () {
+						if (pendingEvents.get(eventId) !== pending || pending.finishing) return;
+						if (pending.deferTimer) hostWindow.clearTimeout(pending.deferTimer);
+						const elapsed = now() - pending.completedAt;
+						if (elapsed >= mvuWorkEventDeferMaxMs) {
+							settleWritesThenFinish();
+							return;
+						}
+						pending.deferTimer = hostWindow.setTimeout(function () {
+							pending.deferTimer = null;
+							if (pendingEvents.get(eventId) !== pending || pending.finishing) return;
+							if (pending.writes && pending.writes.size > 0) {
+								Promise.all(Array.from(pending.writes)).then(armDeferredClose, armDeferredClose);
+								return;
+							}
+							settleWritesThenFinish();
+						}, Math.min(mvuWorkEventDeferQuietMs, mvuWorkEventDeferMaxMs - elapsed));
+					};
+					pending.armDeferredClose = armDeferredClose;
+					if (data.error) {
+						pending.finishing = true;
+						settleWritesThenFinish();
+					} else if (eventId.indexOf(mvuWorkEventPrefix) === 0) {
+						armDeferredClose();
+					} else {
+						pending.finishing = true;
+						settleWritesThenFinish();
+					}
 					return;
 				}
 				if (data.type === "dsh-tavern-helper-bootstrap-failed") {
@@ -3953,6 +4009,7 @@ window.__ModuleLoader__.load({
 					}).catch(function (error) { if (!writeOwner.writeError) writeOwner.writeError = error; });
 					writeOwner.writes.add(receipt);
 					receipt.then(function () { writeOwner.writes.delete(receipt); });
+					if (typeof writeOwner.armDeferredClose === "function") writeOwner.armDeferredClose();
 				}
 
 				rpcTask.then(function (result) {

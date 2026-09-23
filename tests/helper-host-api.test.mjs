@@ -293,6 +293,24 @@ test('awaited MVU event writes retain the host event identity across asynchronou
   assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete').eventId, 'settlement-1')
 })
 
+
+test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async () => {
+  const h = helperHostHarness({ messages: [{ role: 'assistant', variables: { stat_data: { hp: 10 } } }] })
+  h.window.eventOn('MESSAGE_RECEIVED', () => {
+    h.window.setTimeout(() => {
+      void h.window.replaceVariables({ stat_data: { hp: 8 } }, { type: 'message', message_id: 0 })
+    }, 0)
+  })
+  h.receive({ type: 'dsh-tavern-helper-event', name: 'MESSAGE_RECEIVED', eventId: 'mvu-work:defer-1', args: [0] })
+  await tick()
+  assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete')?.eventId, 'mvu-work:defer-1')
+  assert.equal(h.calls().length, 0)
+  await new Promise(resolve => setTimeout(resolve, 20))
+  const call = h.calls().find(item => item.method === 'updateTavernHelperVariables')
+  assert.equal(call?.eventId, 'mvu-work:defer-1')
+  h.reply(call, { updated: true })
+})
+
 test('原卡关闭前端不兼容选项的 ready 回调无需写入不存在的 ST 设置', async () => {
   const run = helperHostHarness(), callbacks = []
   run.window.$ = value => {
