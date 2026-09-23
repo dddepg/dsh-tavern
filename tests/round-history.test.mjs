@@ -91,6 +91,38 @@ function harness({ checkpoint = false, mode = 'story', journal = false } = {}) {
 
 
 
+for (const stored of [true, false]) test('rollback after foreground Agent release, stored Session=' + stored, async () => {
+  const h = harness({checkpoint:true,journal:true})
+  h.chat._storageRevision=9
+  h.revisions.set(9,structuredClone(h.chat))
+  let resumed=0,disposed=0
+  h.options.sessions.get=()=>undefined
+  h.options.sessions.getSession=()=>stored?h.session:undefined
+  h.options.sessions.resume=async()=>{resumed++;return {agent:h.agent,dispose:async()=>{disposed++}}}
+  await h.create().rollback('session','chat',2)
+  assert.equal(h.chat.messages.length,1)
+  assert.equal(resumed,stored?0:1)
+  assert.equal(disposed,resumed)
+  assert.equal(h.calls.includes('followup'),false)
+  await h.create().undoRollback('session','chat')
+  assert.equal(h.chat.messages.length,3)
+  assert.equal(resumed,stored?0:2)
+  assert.equal(disposed,resumed)
+})
+
+test('failed foreground resume leaves rollback data intact and permits retry', async () => {
+  const h=harness({checkpoint:true})
+  const before=structuredClone(h.chat)
+  h.options.sessions.get=()=>undefined
+  h.options.sessions.resume=async()=>{throw Error('resume unavailable')}
+  const history=h.create()
+  await assert.rejects(history.rollback('session','chat',2),/resume unavailable/)
+  assert.deepEqual(h.chat,before)
+  h.options.sessions.getSession=()=>h.session
+  await history.rollback('session','chat',2)
+  assert.equal(h.chat.messages.length,1)
+})
+
 test('rc.1 snapshot-only history supports regeneration and rollback without rewriting native events', async () => {
   for (const operation of ['regenerate', 'rollback']) {
     const h = harness({ checkpoint: true })

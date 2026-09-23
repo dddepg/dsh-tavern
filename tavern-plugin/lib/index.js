@@ -1401,9 +1401,10 @@ export async function apply(ctx) {
     const helperContext = helperEnabled
       ? await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, { skeletonUntil }))
       : null
-    const projectionEvents = sessionDebugEvidence(chat.sessionId).events
+    const rollbackEvidence = sessionDebugEvidence(chat.sessionId, true)
+    const projectionEvents = rollbackEvidence.events
     const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
-    const rollbackState = rollbackAvailability(chat, { events: projectionEvents, nodes: agentRegistry.get(chat.sessionId)?.session?.surface?.nodes || [] })
+    const rollbackFields = rollbackViewFields(chat, rollbackEvidence)
     const replayTarget = replayableFailedTurn({ events: projectionEvents })
     return {
       chatId: chat.id,
@@ -1431,15 +1432,12 @@ export async function apply(ctx) {
       latestAssistantTurn: latestStoryTurn,
       inputSources,
       inputTemplateDisplays,
-      canClearIncompleteReply: rollbackState.canClearIncompleteReply,
+      ...rollbackFields,
       canReplayFailedTurn: replayTarget !== null,
       replayFailedTurn: replayTarget === null ? null : replayTarget.turn,
-      canRollback: rollbackState.canRollback,
-      rollbackUnavailableReason: hasRollbackMessages(chat.messages) ? rollbackState.reason : '',
       canRegenerate: hasRollbackMessages(chat.messages) && !isRescuedHistoryMessage(chat, chat.messages?.findLast(m => m.role === 'assistant')),
       canEditBody: hasRollbackMessages(chat.messages),
       rollbackTargetTurn: latestStoryTurn,
-      undoRollbackTurn: canUndoRollback(chat, liveSession) ? chat.rollbackUndo.turn : null,
       presentation: null,
       replyProjections: replyDisplay.projections,
       tavernStatusView: replyDisplay.statusView || null,
@@ -1611,9 +1609,24 @@ export async function apply(ctx) {
   const synchronizeSessionView = createSessionViewSync()
   const sessionViewProjectionCache = new Map()
 
+  function rollbackViewFields(chat, evidence = sessionDebugEvidence(chat.sessionId, true)) {
+    const nodes = evidence.session?.surface?.nodes
+    const rollbackState = Array.isArray(nodes) ? rollbackAvailability(chat, { events: evidence.events, nodes }) : {
+      canRollback: false, canClearIncompleteReply: false,
+      reason: '当前会话的消息流尚未加载，请重新打开对话后重试；历史正文仍保留。'
+    }
+    return {
+      canRollback: rollbackState.canRollback,
+      canClearIncompleteReply: rollbackState.canClearIncompleteReply,
+      undoRollbackTurn: canUndoRollback(chat, evidence.session) ? chat.rollbackUndo.turn : null,
+      rollbackUnavailableReason: hasRollbackMessages(chat.messages) ? rollbackState.reason : ''
+    }
+  }
+
   function volatileSessionViewFields(chat, activity) {
     let scriptProgress = null
     return {
+      ...rollbackViewFields(chat),
       activity,
       settleStatus: activity.busy ? 'running' : (activity.phase === 'failed' && activity.role === 'settlement' ? 'error' : 'done'),
       settleError: activity.reason === 'interrupted' ? '后台结算已中断，请重试结算。' : (chat.settleError || null),
