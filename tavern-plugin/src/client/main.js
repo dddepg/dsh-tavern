@@ -5425,9 +5425,12 @@ window.__ModuleLoader__.load({
 				const input = conversation.input.for(actx);
 				if (draftMatch) { input.setDraft(draftMatch[1] || ""); return Promise.resolve({ drafted: true }); }
 				const binding = triggerOnly && ctx.sessions.binding(sessionId);
+                // DSH requires nonempty prompt content. Helper messages are already
+                // persisted; admit a continuation without resending them or touching the draft.
+                const triggerContent = [{ type: "text", text: "继续。" }];
                 // Template execution owns the generation queue; waiting here would deadlock it.
                 if (options?.waitForCompletion === false) {
-                    if (triggerOnly) return Promise.resolve(binding.session.prompt([], "queue")).then(function(result) {
+                    if (triggerOnly) return Promise.resolve(binding.session.prompt(triggerContent, "queue")).then(function(result) {
                         if (!result?.ok) throw new Error(result?.error?.message || "生成提交失败");
                         return {submitted:true};
                     });
@@ -5458,7 +5461,7 @@ window.__ModuleLoader__.load({
 					try {
 						if (triggerOnly) {
 							// Helper messages are already persisted and projected into the next request.
-							Promise.resolve(binding.session.prompt([], "queue")).then(function (result) {
+							Promise.resolve(binding.session.prompt(triggerContent, "queue")).then(function (result) {
 								if (!result || !result.ok) finish(new Error(result && result.error && result.error.message || "开局生成提交失败"));
 							}, finish);
 						} else {

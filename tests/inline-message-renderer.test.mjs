@@ -1795,7 +1795,7 @@ test('standalone /trigger admits a native turn without overwriting the draft or 
   const ctx = {
     sessions: {
       scope() { return {} },
-      binding(id) { assert.equal(id, 'opening'); return { session: { prompt(content, mode) { prompts.push([content, mode]); return Promise.resolve(reply) } } } },
+      binding(id) { assert.equal(id, 'opening'); return { session: { prompt(content, mode) { assert.ok(content.some(part => part.type === 'text' && part.text.trim()), '宿主拒绝空 prompt'); prompts.push([content, mode]); return Promise.resolve(reply) } } } },
       list: {
         getSnapshot() { return { byId: { opening: summary } } },
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) }
@@ -1805,7 +1805,7 @@ test('standalone /trigger admits a native turn without overwriting the draft or 
   }
   const execute = client.createTavernFrameSlashExecutor(ctx, { setTimeout, clearTimeout })
   const completion = execute('/trigger', 'opening')
-  assert.deepEqual(JSON.parse(JSON.stringify(prompts)), [[[], 'queue']])
+  assert.deepEqual(JSON.parse(JSON.stringify(prompts)), [[[ { type: 'text', text: '继续。' } ], 'queue']])
   summary.running = true
   listeners.forEach(fn => fn())
   summary.running = false
@@ -2275,6 +2275,26 @@ test('模板内生成命令在提交后返回，不占住模板队列等待下�
   assert.equal((await execute('/send 下一步|/trigger','game',{waitForCompletion:false})).submitted,true)
   assert.deepEqual(calls,['下一步','queue'])
   assert.equal((await execute('/trigger','game',{waitForCompletion:false})).submitted,true)
+})
+
+test('独立 /trigger 不向拒绝空输入的宿主提交空 prompt', async () => {
+  const calls = []
+  const ctx = {
+    sessions: {
+      scope: () => ({}),
+      binding: () => ({ session: { prompt: async content => {
+        calls.push(content)
+        if (!content.some(part => part.type === 'text' && part.text.trim())) {
+          return { ok: false, error: { message: 'prompt content must include non-whitespace text or an attachment (gateway/bad-request)' } }
+        }
+        return { ok: true }
+      } } })
+    },
+    get: () => ({ input: { for: () => ({ setDraft: assert.fail, submit: assert.fail }) } })
+  }
+  const execute = client.createTavernFrameSlashExecutor(ctx, { setTimeout, clearTimeout })
+  assert.equal((await execute('/trigger', 'game', { waitForCompletion: false })).submitted, true)
+  assert.equal(calls.length, 1)
 })
 
 
