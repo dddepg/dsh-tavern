@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "95cb121f41fc57385eb0bf71b178e65a9275dc67",
-  "releaseSequence": 354,
+  "revision": "58597518df5b2cf2adec7ee5162a39f57aaf6cc2",
+  "releaseSequence": 355,
   "version": "2.1.0",
   "files": [
     {
@@ -276,13 +276,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "9bfa71a7c418c05e46340951127e3c664b4ff21e9a12ca39dd6613a7105512d1",
-      "size": 156627
+      "sha256": "8d137473bc24dbe69f8099de6d2a24d372ac752633ef22a12bd65762c50c2bbe",
+      "size": 156963
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "3939b1b64b0c599f1abdf6ecea76f65f426fc5b2d094c3cabe28d4e791502845",
-      "size": 1103269
+      "sha256": "fcc909878724cd538d4f13d305d5a0a69ae3998876ba3abb775859749b4c1643",
+      "size": 1107778
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -881,13 +881,13 @@
     },
     {
       "path": "tavern-plugin/lib/domain/rollback-surface.js",
-      "sha256": "3feaef46bb452a85298a024b8aaab859e85a1933897d1c8a04b196f9ce36e80f",
-      "size": 22157
+      "sha256": "a24c7734c1c061c80678cb28900c7b40ba2e95e9af85291a4a09a42ae05db18d",
+      "size": 25845
     },
     {
       "path": "tavern-plugin/lib/domain/round-history.js",
-      "sha256": "1054df5a51e5da529d78eae218f3ab01335dea568f7a502ab4d0894ab09935a3",
-      "size": 36355
+      "sha256": "51a7eac5661d51d4651d0fe6181900fb7c0879e976d728a8cb52d608e74a175d",
+      "size": 40279
     },
     {
       "path": "tavern-plugin/lib/domain/runtime-content-projection.js",
@@ -1411,8 +1411,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "2268b83551b892fc4ffb442fa34ca2a84c41aa269b4f0351ad52ccd62a8e0d2f",
-      "size": 305996
+      "sha256": "df5c7a90ce1495f2d3c1a838084b7e0de4020c006ed05e0b756bbe861425e8be",
+      "size": 306403
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -3876,8 +3876,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "f0ddf8b41563bf0dcc3f29843b04612c9cdf4c8180c6cabe02c55a7d0ae40521",
-      "size": 784701
+      "sha256": "19b27a9fc064c926abd16b59394d754886417757dc0a6613fe6c332e3c5b22ca",
+      "size": 786826
     },
     {
       "path": "tavern-plugin/src/client/modules/confirm-dialog.js",
@@ -3986,8 +3986,8 @@
     },
     {
       "path": "tavern-plugin/src/client/turn-error-controls.js",
-      "sha256": "8145bb783374016be98388311e9f3196addf90a298fb6cec4e2b4603edf8ef96",
-      "size": 4758
+      "sha256": "13e22d0a012b481b92dd8fcf67c7dce49faf25fccd45f5a4179d1ea85813b437",
+      "size": 6747
     },
     {
       "path": "tavern-plugin/src/client/variable-receipts.js",
