@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "7b33892e7b1d67e632392874dc391e6cc51c0e98",
-  "releaseSequence": 358,
+  "revision": "8fa0da0df982b6b08f5eccdff3c983bcf880cae4",
+  "releaseSequence": 359,
   "version": "2.1.0",
   "files": [
     {
@@ -271,8 +271,8 @@
     },
     {
       "path": "tavern-plugin/lib/background-agent-task.js",
-      "sha256": "60b760ecd31977c432637ff128b6fc8e44f67e0dab2056afd38837a0bfe892ed",
-      "size": 24981
+      "sha256": "1ad51206472d42f4afbc1d1967e9de885852705af1f28b3af44156cff41f0614",
+      "size": 24942
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
@@ -1411,8 +1411,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "ae3b7523b5448cbba537237bb7f7e2ffef5a87cbdc08753b9901352cd546272a",
-      "size": 306730
+      "sha256": "50256e4f9edc454ad179c35da8d9722c4d43229f49873cabe9e7d16fc547bd2c",
+      "size": 306691
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
