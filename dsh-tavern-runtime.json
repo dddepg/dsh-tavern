@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "401ef9ca80860c0b606571a6b323337da54c9744",
-  "releaseSequence": 362,
+  "revision": "34a288697ed24dcd9e386f14a22c24be08bfdb75",
+  "releaseSequence": 363,
   "version": "2.1.0",
   "files": [
     {
@@ -136,13 +136,13 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "332069ea38cb799461be0119f39e3d42a3410724c7d2d4a23bae070d886c1ec9",
-      "size": 21035
+      "sha256": "997797735ceb1e20ccb5d8a0ae961b71a1fa178995bd9d18a4ece11ae2250ecc",
+      "size": 21338
     },
     {
       "path": "install.sh",
-      "sha256": "f2acaf698c10b528b2347e4f76eb8176345059b9f4a8477e1ad9fbc95287560b",
-      "size": 15876
+      "sha256": "40ea7ec01b4f5019d344701bbb818445e7828c67d26422b298bf84910750d9ff",
+      "size": 15948
     },
     {
       "path": "package.json",
@@ -2895,26 +2895,6 @@
       "size": 211
     },
     {
-      "path": "tavern-plugin/lib/vendor/st-prompt-template/upstream/docs/features_cn.md",
-      "sha256": "600c7465e03e3b3f75361b95fbe7bbbeb4225fdf8055045711fd178f3044ed98",
-      "size": 37929
-    },
-    {
-      "path": "tavern-plugin/lib/vendor/st-prompt-template/upstream/docs/features.md",
-      "sha256": "e4be97267abfafa3478e74acde950621abaf516c4b8bc3e2d9892a414fc2c74e",
-      "size": 42889
-    },
-    {
-      "path": "tavern-plugin/lib/vendor/st-prompt-template/upstream/docs/reference_cn.md",
-      "sha256": "aedb3310b107111372e8de7fed5eaac13df7f6f9a8bbc6291b567d4082b98e65",
-      "size": 40360
-    },
-    {
-      "path": "tavern-plugin/lib/vendor/st-prompt-template/upstream/docs/reference.md",
-      "sha256": "91291f1169d6b96f131e7426727cf0c2e210dd4fbad8dd089defdfe42dfea7b1",
-      "size": 43830
-    },
-    {
       "path": "tavern-plugin/lib/vendor/st-prompt-template/upstream/include/reference_cn.js",
       "sha256": "37707077bb6cd00273a59a4de9d61a87c47e7de5df1a48342e370aec458ccc57",
       "size": 25145
@@ -3158,36 +3138,6 @@
       "path": "tavern-plugin/packages/dsh-image-gen/cordis.patch.yml",
       "sha256": "928dc9960090b285d40c52bb06d0746251cf71130b8632216687f8b0c130c82b",
       "size": 129
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/chat-preview.png",
-      "sha256": "9226a51ab1c7424816545c23de7e0ebf51dfc266448bb6e24bb83e9d294e2c4e",
-      "size": 316305
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/edit-example.png",
-      "sha256": "076fd41e4de7de7e203e30dee0a3ce94b9e6feab11d42a57d6c1aa1610628d40",
-      "size": 670666
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/gallery-preview.png",
-      "sha256": "c464438272aa1d9ab0eba3f817e4ce1092721c92ac086797ad1bb7ffd37a5da1",
-      "size": 451641
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/generate-example.png",
-      "sha256": "e2df1c08db5cc31034877a3e4bb6f1ddf3eea846326740aaff8b2476a9c620b0",
-      "size": 685731
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/hero-poster.webp",
-      "sha256": "63763fb7314a3f4372e536d04785ed1bcb39e63a7fa8c706e3c368ebb23afcc1",
-      "size": 225920
-    },
-    {
-      "path": "tavern-plugin/packages/dsh-image-gen/docs/assets/settings-preview.png",
-      "sha256": "b6ec44c3441ee048e2e12ab12e311910fafe3cb2b076c327d0c6327259b5ee38",
-      "size": 140913
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/FORK.md",
