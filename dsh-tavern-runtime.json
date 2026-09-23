@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "b5121a246a6d67786fb72410743df65288d6d34a",
-  "releaseSequence": 360,
+  "revision": "9cc87bae797a547f23ddf6d1baf5832d063e05b1",
+  "releaseSequence": 361,
   "version": "2.1.0",
   "files": [
     {
@@ -886,8 +886,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/round-history.js",
-      "sha256": "51a7eac5661d51d4651d0fe6181900fb7c0879e976d728a8cb52d608e74a175d",
-      "size": 40279
+      "sha256": "f19abb2e824d1ca9e834734fffa4af514e9f259dc49c49fbf54802cec444cd59",
+      "size": 40980
     },
     {
       "path": "tavern-plugin/lib/domain/runtime-content-projection.js",
@@ -1411,8 +1411,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "50256e4f9edc454ad179c35da8d9722c4d43229f49873cabe9e7d16fc547bd2c",
-      "size": 306691
+      "sha256": "d5dd1331ebfd1afe0935d240eab44ec587c9ab3f9edff10f0729bb669dcc84e1",
+      "size": 307182
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
