@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { redactDiagnostic } from './mvu-diagnostics.js'
 
-const tracked = /^(?:.*TavernHelper.*|getSession|syncSession|getFullPromptTemplateState|saveFullPromptTemplateState|saveFullPromptTemplateSettings|saveFullPromptTemplateGlobals|saveTavernChatData|saveTavernExtensionSettings|loadTavernWorldInfo|saveTavernWorldInfo|callOpeningRuntime)$/
+const tracked = /^(?:.*TavernHelper.*|getSession|hydrateTavernHelperMessages|syncSession|getFullPromptTemplateState|saveFullPromptTemplateState|saveFullPromptTemplateSettings|saveFullPromptTemplateGlobals|saveTavernChatData|saveTavernExtensionSettings|loadTavernWorldInfo|saveTavernWorldInfo|callOpeningRuntime)$/
 const pathFor = id => 'diagnostics/api-calls-' + createHash('sha256').update(id).digest('hex') + '.json'
 
 // Values and property names may contain private story data. Neither is retained.

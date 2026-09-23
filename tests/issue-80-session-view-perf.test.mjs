@@ -128,6 +128,10 @@ test('session view projection cache reuses unchanged revisions', () => {
   assert.match(serverSource, /sessionViewProjectionCache/)
   assert.match(serverSource, /volatileSessionViewFields/)
   assert.match(serverSource, /dirtyMessageIndices/)
+  assert.match(serverSource, /viewRebuild/)
+  assert.match(serverSource, /helperMessagesProjection/)
+  assert.match(serverSource, /windowHelperMessages/)
+  assert.match(serverSource, /hydrateTavernHelperMessages/)
 })
 
 test('api diagnostics record request and response byte sizes', async () => {

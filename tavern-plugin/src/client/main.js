@@ -299,11 +299,35 @@ window.__ModuleLoader__.load({
 			return /^人物卡不存在:\s*/.test(String(value && value.message || value || ""));
 		}
 
+		function applyTavernHelperMessageHydration(view, payload) {
+			if (!view || !view.tavernHelper || !Array.isArray(view.tavernHelper.messages) || !payload || !Array.isArray(payload.messages)) return view;
+			const messages = view.tavernHelper.messages.slice();
+			for (const message of payload.messages) {
+				const index = Number(message && message.message_id);
+				if (!Number.isSafeInteger(index) || index < 0 || index >= messages.length) continue;
+				messages[index] = message;
+			}
+			const nextHelper = Object.assign({}, view.tavernHelper, { messages: messages });
+			delete nextHelper.messagesPending;
+			return Object.assign({}, view, { tavernHelper: nextHelper });
+		}
+
+		async function hydrateLiveTavernHelperMessages(sessionId, view) {
+			const pending = view && view.tavernHelper && view.tavernHelper.messagesPending;
+			if (!pending) return view;
+			const payload = await rpc("hydrateTavernHelperMessages", {
+				from: pending.from,
+				to: pending.to
+			}, sessionId);
+			return applyTavernHelperMessageHydration(view, payload);
+		}
+
 		const liveTavernView = createLiveTavernViewModule({
 			loadTimeoutMs: 10000,
 			cacheRetentionMs: 10 * 60 * 1000,
 			timeoutRetryDelayMs: 5000,
 			load: function (sessionId, request) { return rpc("getSession", {}, sessionId, request); },
+			hydrateHelperMessages: hydrateLiveTavernHelperMessages,
 			shouldPoll: function (view) { return !!(view && view.activity && view.activity.busy); },
 			pollWhileBusy: false,
 			isTerminalError: isMissingTavernCardError
@@ -4370,8 +4394,14 @@ window.__ModuleLoader__.load({
 				if (current === record && transition.getSnapshot()) return;
 				const state = record.viewState;
 				if (state && state.phase === "ready") {
-					record.execution.sync(record.sessionId, state.view || {});
-					record.templatePanel.sync(record.sessionId, state.view || {});
+					const view = state.view || {};
+					// Cold getSession may ship stub Helper floors; wait for hydration before scripts.
+					if (view.tavernHelper && view.tavernHelper.messagesPending) {
+						retire(record);
+						return;
+					}
+					record.execution.sync(record.sessionId, view);
+					record.templatePanel.sync(record.sessionId, view);
 				}
 				retire(record);
 			}

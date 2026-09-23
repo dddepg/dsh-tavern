@@ -60,13 +60,25 @@ function createLiveTavernViewModule(options) {
 			try { result = await load; }
 			finally { if (deadlineTimer !== null) cancelTimer(deadlineTimer); }
 			if (records.get(record.id) !== record) return;
-			const view = result && result.view ? result.view : null;
+			let view = result && result.view ? result.view : null;
 			if (pollWhileBusy && record.optimisticBusy && !shouldPoll(view)) {
 				schedule(record, 200);
 				return;
 			}
 			if (shouldPoll(view)) record.optimisticBusy = false;
 			publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
+			if (view && view.tavernHelper && view.tavernHelper.messagesPending && typeof options.hydrateHelperMessages === "function") {
+				try {
+					view = await options.hydrateHelperMessages(record.id, view) || view;
+					if (records.get(record.id) !== record) return;
+					publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
+				} catch (hydrateError) {
+					if (records.get(record.id) !== record) return;
+					publish(record, { phase: "retrying", view: view, error: String(hydrateError && hydrateError.message || hydrateError || "补全历史变量失败"), updatedAt: Date.now() });
+					schedule(record, 1500);
+					return;
+				}
+			}
 			if (pollWhileBusy && shouldPoll(view)) schedule(record, 200);
 			else if (idlePollIntervalMs > 0) schedule(record, idlePollIntervalMs);
 		} catch (error) {

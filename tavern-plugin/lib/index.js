@@ -117,7 +117,7 @@ import { createForegroundOrchestrationStrategies } from './domain/foreground-orc
 import { rollbackAvailability, foregroundSuppressedTurns, clearFailedTurnSurface, hasRollbackMessages, supersededRegenerationErrorTurns } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
-import { lastTavernHelperVariables, projectTavernHelperContext } from './domain/tavern-helper-context.js'
+import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
 import { projectTavernHelperWorldbook } from './domain/tavern-helper-worldbook.js'
 import { applyTavernHelperVariableMacros } from './domain/tavern-helper-variable-macros.js'
 import { projectTavernHelperScripts, hasTavernScriptRuntime } from './domain/tavern-helper-scripts.js'
@@ -1303,7 +1303,7 @@ export async function apply(ctx) {
     return Object.assign(cardPreparation.present({ card: card, as: 'view' }), { path: str(card.path || chat.cardPath) })
   }
   const incrementalReplyView = createIncrementalReplyView({ readChanges: (id, revision) => chatPersistence.readChangedSlice(id, revision) })
-  async function view(chat, card, persistedProjection = false) {
+  async function view(chat, card, persistedProjection = false, options = {}) {
     templateSync.schedule(chat.sessionId, chat._storageRevision)
     const runtimeSettings = await requestPerformance.stage('settings', () => readTavernSettings())
     let scriptProgress = null
@@ -1394,6 +1394,13 @@ export async function apply(ctx) {
         helperRuntime.diagnostics.push({ scriptId: '', name: '世界书', status: 'unavailable', message: str(error && error.message || error) })
       }
     }
+    const messageCount = Array.isArray(chat.messages) ? chat.messages.length : 0
+    const skeletonUntil = options.skeletonUntil === true
+      ? Math.max(0, messageCount - HELPER_MESSAGE_COLD_WINDOW)
+      : (Number.isSafeInteger(options.skeletonUntil) ? Math.max(0, options.skeletonUntil) : 0)
+    const helperContext = helperEnabled
+      ? await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, { skeletonUntil }))
+      : null
     const projectionEvents = sessionDebugEvidence(chat.sessionId).events
     const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
     const rollbackState = rollbackAvailability(chat, { events: projectionEvents, nodes: agentRegistry.get(chat.sessionId)?.session?.surface?.nodes || [] })
@@ -1435,7 +1442,7 @@ export async function apply(ctx) {
       tavernStatusView: replyDisplay.statusView || null,
       tavernStatusViews: replyDisplay.statusViews || [],
       mvuReceipts: mvuReceiptsOf(chat),
-      tavernHelper: helperEnabled ? { ...projectTavernHelperContext(chat), openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
+      tavernHelper: helperContext ? { ...helperContext, openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
       tavernMvuRuntime: chat.mvu && chat.mvu.enabled === true ? {
         owner: chat.mvu.owner === 'official' ? 'official' : 'legacy',
         commit: OFFICIAL_MVU_VERSION.commit,
@@ -1614,24 +1621,38 @@ export async function apply(ctx) {
     }
   }
 
-  async function sessionView(sessionId) {
+  async function sessionView(sessionId, options = {}) {
     const chat = await requestPerformance.stage('readChat', () => chatForSession(sessionId))
     if (chat === undefined) return null
     const activity = backgroundTasks.activity(chat)
-    requestPerformance.state({ foregroundRunning: agentRegistry.get(str(sessionId))?.phase?.kind === 'running', backgroundBusy: activity.busy, backgroundRole: activity.role })
     const isCard = (chat.mode || 'story') === 'card'
     const revision = Number(chat._storageRevision) || 0
     const cardPath = str(chat.cardPath)
     const cardContextRevision = Number(chat.cardContextRevision) || 0
+    const mode = chat.mode || 'story'
     const cached = sessionViewProjectionCache.get(chat.id)
-    if (cached
-      && cached.revision === revision
-      && cached.cardPath === cardPath
-      && cached.cardContextRevision === cardContextRevision
-      && cached.isCard === isCard
-      && cached.mode === (chat.mode || 'story')) {
+    const dirtyMessageIndices = options.dirtyMessageIndices instanceof Set ? options.dirtyMessageIndices : null
+    const windowHelperMessages = options.windowHelperMessages === true
+    function cacheIdentityMatches() {
+      return cached
+        && cached.cardPath === cardPath
+        && cached.cardContextRevision === cardContextRevision
+        && cached.isCard === isCard
+        && cached.mode === mode
+    }
+    function finish(view, rebuild) {
+      requestPerformance.state({
+        foregroundRunning: agentRegistry.get(str(sessionId))?.phase?.kind === 'running',
+        backgroundBusy: activity.busy,
+        backgroundRole: activity.role,
+        viewRebuild: rebuild,
+        helperMessageCount: Array.isArray(view?.tavernHelper?.messages) ? view.tavernHelper.messages.length : 0
+      })
+      return view
+    }
+    if (cached && cached.revision === revision && cacheIdentityMatches()) {
       const reused = Object.assign({}, cached.view, volatileSessionViewFields(chat, activity))
-      if ((chat.mode || 'story') === 'script') {
+      if (mode === 'script') {
         reused.scriptProgress = await requestPerformance.stage('scriptProgress', async () => {
           const script = await readScript(chat.cardPath)
           return script !== undefined && Array.isArray(script.chunks)
@@ -1639,7 +1660,67 @@ export async function apply(ctx) {
             : null
         })
       }
-      return reused
+      return finish(reused, 'cache')
+    }
+    if (cached && dirtyMessageIndices && cacheIdentityMatches() && cached.view && cached.view.tavernHelper
+      && Array.isArray(cached.view.tavernHelper.messages) && Array.isArray(chat.messages)) {
+      const previousMessages = cached.view.tavernHelper.messages
+      const nextMessages = chat.messages
+      let structural = previousMessages.length > nextMessages.length
+        || previousMessages.some(function (message) { return message && message.stub === true })
+      if (!structural) {
+        for (const index of dirtyMessageIndices) {
+          if (!Number.isSafeInteger(index) || index < 0 || index >= nextMessages.length) { structural = true; break }
+          if (index >= previousMessages.length) continue
+          const previousRole = previousMessages[index] && previousMessages[index].role
+          const source = nextMessages[index]
+          const nextRole = source && source.role === 'user' ? 'user' : 'assistant'
+          if (previousRole && previousRole !== 'assistant' && previousRole !== 'user' && previousRole !== 'system') continue
+          if (previousRole && source && previousRole !== nextRole && source.role !== 'tavern-helper') { structural = true; break }
+        }
+      }
+      if (!structural) {
+        const result = await requestPerformance.stage('projectViewDirty', async () => {
+          const next = Object.assign({}, cached.view, volatileSessionViewFields(chat, activity))
+          const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
+            previousMessages,
+            dirtyIndices: dirtyMessageIndices
+          }))
+          next.tavernHelper = Object.assign({}, cached.view.tavernHelper, helperCore, {
+            openingHost: cached.view.tavernHelper.openingHost,
+            worldbook: cached.view.tavernHelper.worldbook,
+            globalVariables: cached.view.tavernHelper.globalVariables,
+            characterVariables: cached.view.tavernHelper.characterVariables,
+            compatibilityCapabilities: cached.view.tavernHelper.compatibilityCapabilities,
+            extensionSettings: cached.view.tavernHelper.extensionSettings,
+            regexScripts: cached.view.tavernHelper.regexScripts
+          })
+          delete next.tavernHelper.messagesPending
+          if (mode === 'story' || mode === 'script') {
+            let cardExtensions = { regexScripts: [], helperScripts: [] }
+            try { cardExtensions = await readCardExtensions(chat.cardPath) || cardExtensions } catch (_error) { cardExtensions = { regexScripts: [], helperScripts: [] } }
+            const activePresetSnapshot = groupOfMode(chat.mode) === 'play' && chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object'
+              ? chat.runtimePresetSnapshot : null
+            const presetRegexScripts = Array.isArray(activePresetSnapshot && activePresetSnapshot.regexScripts) ? activePresetSnapshot.regexScripts : []
+            const replyDisplay = await requestPerformance.stage('historyProjection', () => incrementalReplyView.project(chat, {
+              charName: chat.cardName, macroState: chat.macroState,
+              regexScripts: composeTavernRegexScripts(cardExtensions, presetRegexScripts),
+              placement: 2, isMarkdown: true, isEdit: false, depth: 0
+            }, { charName: chat.cardName, macroState: chat.macroState, regexScripts: cardExtensions.regexScripts }))
+            replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
+            next.replyProjections = replyDisplay.projections
+            next.tavernStatusView = replyDisplay.statusView || null
+            next.tavernStatusViews = replyDisplay.statusViews || []
+          }
+          next.mvuReceipts = mvuReceiptsOf(chat)
+          return next
+        })
+        sessionViewProjectionCache.set(chat.id, {
+          revision, cardPath, cardContextRevision, isCard, mode, view: result
+        })
+        while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
+        return finish(result, 'dirty')
+      }
     }
     let card = null, cardReadError = null
     try { card = isCard && cardPath === '' ? null : await requestPerformance.stage('readCard', () => readChatCard(chat)) }
@@ -1648,15 +1729,19 @@ export async function apply(ctx) {
       cardReadError = '人物卡暂时无法读取，请在工作台校验并修复：' + chat.cardPath
       card = { name: chat.cardName || chat.cardPath }
     }
-    const result = await requestPerformance.stage('projectView', () => view(chat, card, true))
+    const result = await requestPerformance.stage('projectView', () => view(chat, card, true, {
+      skeletonUntil: windowHelperMessages === true
+    }))
     if (cardReadError) result.cardReadError = cardReadError
     if (isCard) result.workspace = workspaceViewOf(chat)
-    if ((chat.mode || 'story') === 'script') result.scriptPreview = await requestPerformance.stage('scriptPreview', () => scriptPreviewOf(chat))
-    sessionViewProjectionCache.set(chat.id, {
-      revision, cardPath, cardContextRevision, isCard, mode: chat.mode || 'story', view: result
-    })
-    while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
-    return result
+    if (mode === 'script') result.scriptPreview = await requestPerformance.stage('scriptPreview', () => scriptPreviewOf(chat))
+    if (!(result.tavernHelper && result.tavernHelper.messagesPending)) {
+      sessionViewProjectionCache.set(chat.id, {
+        revision, cardPath, cardContextRevision, isCard, mode, view: result
+      })
+      while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
+    }
+    return finish(result, 'full')
   }
   async function ensureNativeOpening(sessionId) {
     return await conversationInitialization.ensureOpening(sessionId)
@@ -3349,12 +3434,10 @@ export async function apply(ctx) {
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': {
         const sessionId = args && args.sessionId
-        const view = await sessionView(sessionId)
-        if (args?.viewSync !== 1) return { view }
-        const previous = synchronizeSessionView.peek?.(args.viewCursor)
-        const chat = await chatForSession(sessionId)
+        const chat = await requestPerformance.stage('readChat', () => chatForSession(sessionId))
         const revision = Number(chat && chat._storageRevision) || 0
         let dirtyMessageIndices = null
+        const previous = args?.viewSync === 1 ? synchronizeSessionView.peek?.(args.viewCursor) : null
         if (previous && previous.sessionId === str(sessionId) && Number.isSafeInteger(previous.revision)) {
           if (previous.revision === revision) dirtyMessageIndices = new Set()
           else {
@@ -3362,7 +3445,17 @@ export async function apply(ctx) {
             if (changed && Array.isArray(changed.indices)) dirtyMessageIndices = new Set(changed.indices)
           }
         }
+        const view = await sessionView(sessionId, {
+          dirtyMessageIndices,
+          windowHelperMessages: args?.viewSync === 1 && (args.viewCursor === undefined || args.viewCursor === null || args.viewCursor === '')
+        })
+        if (args?.viewSync !== 1) return { view }
         return synchronizeSessionView(str(sessionId), view, args.viewCursor, { revision, dirtyMessageIndices })
+      }
+      case 'hydrateTavernHelperMessages': {
+        const chat = await chatForSession(args && args.sessionId)
+        if (!chat) throw new Error('请先打开游玩会话')
+        return hydrateTavernHelperMessages(chat, args && args.from, args && args.to)
       }
       case 'designCharacter': return await manualCharacterDesign.start(args || {})
       case 'sendPhoneMessage': return { phoneChat: await phoneChat.send(args || {}) }
