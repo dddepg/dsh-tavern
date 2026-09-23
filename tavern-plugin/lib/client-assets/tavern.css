@@ -16,6 +16,20 @@
   --dsh-tavern-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
   --dsh-tavern-font-sans: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
 }
+/* Host dark theme: keep coral voltage, flip ink/cream to Claude on-dark / surface-dark. */
+body[data-ds-dark-theme],
+[data-ds-dark-theme] {
+  --dsh-tavern-accent: #d4896c;
+  --dsh-tavern-accent-active: #e8a890;
+  --dsh-tavern-accent-soft: color-mix(in srgb, #d4896c 24%, transparent);
+  --dsh-tavern-accent-border: color-mix(in srgb, #d4896c 40%, transparent);
+  --dsh-tavern-accent-ink: #faf9f5;
+  --dsh-tavern-accent-muted: #a09d96;
+  --dsh-tavern-accent-hairline: color-mix(in srgb, #faf9f5 14%, transparent);
+  --dsh-tavern-accent-cream: #181715;
+  --dsh-tavern-accent-surface: #252320;
+  --dsh-tavern-accent-error: #e57373;
+}
 body.dsh-tavern-shell-active,
 .dsh-tavern-library,
 .dsh-tavern-status,
@@ -1340,7 +1354,8 @@ header .nL4_yW_moreButton { display: none !important; }
   --dsh-card-action-active: var(--dsh-tavern-accent-active);
   --dsh-card-action-soft: var(--dsh-tavern-accent-soft);
   --dsh-card-action-border: var(--dsh-tavern-accent-border);
-  --dsh-card-ink: color-mix(in srgb, var(--dsh-tavern-accent-ink) 88%, var(--dsw-alias-label-primary));
+  /* Follow theme tokens (light ink / dark on-dark), not a fixed light-mode mix. */
+  --dsh-card-ink: var(--dsh-tavern-accent-ink);
   --dsh-card-muted: var(--dsh-tavern-accent-muted);
   --dsh-card-hairline: color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));
   --dsh-card-cream: color-mix(in srgb, var(--dsh-tavern-accent-cream) 22%, var(--dsw-specific-sidebar-fill));
@@ -1355,6 +1370,15 @@ header .nL4_yW_moreButton { display: none !important; }
   background: var(--dsh-card-cream);
   font-family: var(--dsh-card-sans);
   -webkit-font-smoothing: antialiased;
+}
+[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger,
+[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger {
+  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 18%, transparent);
+  color: var(--dsh-tavern-accent-error);
+}
+[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger:hover,
+[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {
+  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 28%, transparent);
 }
 
 .dsh-tavern-card-library > .dsh-tavern-status-head,
