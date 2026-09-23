@@ -346,7 +346,7 @@ test('失败尾部可重放出原始用户输入，即使清理墓碑已替换�
   assert.deepEqual(replayableFailedTurn({ events }), { turn: 2, startSeq: 0, endSeq: 3, userText: '本轮输入', source: { kind: 'user', rpcId: 'rpc-2' } })
 })
 
-test('失败尾部重放同样认领重放/重生成输入，且只认领真正拥有尾部的回合', () => {
+test('失败尾部重放认领用户输入与历史重放输入，且只认领真正拥有尾部的回合', () => {
   const replayInput = { kind: 'plugin', plugin: 'dsh-tavern-replay' }
   const events = [
     { seq: 0, type: 'turn/start', data: { turn: 2 } },
@@ -362,6 +362,18 @@ test('失败尾部重放同样认领重放/重生成输入，且只认领真正�
   // 尾部已完成、或失败之后又有新回合开始，都不再有可重放的失败尾部。
   assert.equal(replayableFailedTurn({ events: events.map(event => event.seq === 5 ? { ...event, data: { turn: 3, reason: { kind: 'completed' } } } : event) }), null)
   assert.equal(replayableFailedTurn({ events: [...events, { seq: 6, type: 'turn/start', data: { turn: 4 } }, { seq: 7, type: 'user/message', data: { content: [{ type: 'text', text: '第三次' }], source: { kind: 'user' } } }] }), null)
+})
+
+test('重生成合成输入的失败尾部不提供重放，避免把补充要求当成玩家原文提交', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 3 } },
+    { seq: 1, type: 'user/message', data: {
+      content: [{ type: 'text', text: '推门\n\n【本轮补充要求】\n写短一些' }],
+      source: { kind: 'plugin', plugin: 'dsh-tavern-regen', regenerationId: 'op-1' }
+    } },
+    { seq: 2, type: 'turn/end', data: { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } } }
+  ]
+  assert.equal(replayableFailedTurn({ events }), null)
 })
 
 test('没有用户输入的失败回合不提供重放', () => {

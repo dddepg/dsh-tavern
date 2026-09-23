@@ -1024,6 +1024,30 @@ test('重放只在失败仍拥有尾部时可用，且生成中或已完成回�
   await assert.rejects(advanced.create().replayFailed('chat', 'session'), /当前没有可重新生成的失败回合/)
 })
 
+test('重放与重生成、回退互斥', async () => {
+  async function hangingReplay() {
+    const h = harness()
+    h.session.append('turn/start', { turn: 3 })
+    h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    h.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+    let entered
+    const started = new Promise(resolve => { entered = resolve })
+    h.beforeGenerate(async () => { entered(); await new Promise(() => {}) })
+    const live = h.create()
+    void live.replayFailed('chat', 'session')
+    await started
+    return { h, live }
+  }
+
+  const { h, live } = await hangingReplay()
+  await assert.rejects(live.regenerate('chat', '', 'session'), /正在重放失败回合/)
+  await assert.rejects(live.rollback('session', 'chat'), /正在重放失败回合/)
+  assert.equal(h.agent.input.content[0].text, '重放这句')
+
+  const { live: regenerating } = await interruptedRegeneration()
+  await assert.rejects(regenerating.replayFailed('chat', 'session'), /正在重新生成/)
+})
+
 test('native replacement failure after Chat commit must remain recoverable',async()=>{
  const h=harness({checkpoint:true,journal:true});const append=h.session.append
  h.session.append=function(type,data,intent){if(type==='assistant/message' && intent?.surfaceOp?.op==='replace')throw Error('disk/projection failure');return append.call(this,type,data,intent)}
