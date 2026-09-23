@@ -311,6 +311,30 @@ function isNativeMarkdownProjection(parts, sessionText) {
   return Array.isArray(parts) && parts.length === 1 && parts[0]?.kind === 'markdown' && str(parts[0].text) === str(sessionText)
 }
 
+/** Strip markup for equality checks; comments and tags contribute no text. */
+function stripHtmlTags(value) {
+  return str(value).replace(/<!--[\s\S]*?-->|<[^>]+>/g, '')
+}
+
+/** Tags with attributes imply author/UI HTML, not a plain markdown wrap. */
+function hasAttributedHtmlTags(value) {
+  return /<[a-z][\w:-]*\s+[^>\/]/i.test(str(value))
+}
+
+/**
+ * Degenerate template_display: markdown wrapped the body (e.g. &lt;p&gt;…&lt;/p&gt;)
+ * without EJS/author markup. Using it as a single html part sends the whole
+ * message into the iframe and enlarges native body font size.
+ */
+function isDegenerateTemplateDisplay(html, sourceText, options = {}) {
+  if (hasAttributedHtmlTags(html)) return false
+  const expected = resolveDisplayIdentityMacros(
+    str(sourceText).replace(/<\/?mvu-status\b[^>]*>/gi, ''),
+    options
+  )
+  return stripHtmlTags(html) === expected
+}
+
 /** Bound retained projection data as well as entry count; oversized replies bypass caching. */
 export function createReplyHistoryProjector({ maxCacheBytes = 16 * 1024 * 1024, maxCacheEntries = 2048 } = {}) {
   const cache = new Map()
@@ -370,7 +394,8 @@ export function createReplyHistoryProjector({ maxCacheBytes = 16 * 1024 * 1024, 
         : sourceText
 
       const templateDisplay = message.tavernPluginData?.template_display
-      if (templateDisplay && templateDisplay.source === sourceText && templateDisplay.swipe === (message.swipeId || 0)) {
+      if (templateDisplay && templateDisplay.source === sourceText && templateDisplay.swipe === (message.swipeId || 0)
+        && !isDegenerateTemplateDisplay(templateDisplay.html, sourceText, options)) {
         const visible = visibleTemplateDisplay(templateDisplay)
         projections.push({ version: 2, turn, text: visible.html, mode: 'html', parts: Array.isArray(visible.parts) ? structuredClone(visible.parts) : [{ kind: 'html', content: visible.html }], warnings: [] })
         latestSourceBacked = hasSource
