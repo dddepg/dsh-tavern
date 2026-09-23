@@ -3,7 +3,7 @@ export async function generateHelperRaw(config, { callModel, sessionId = '', his
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('generateRaw 参数必须是对象')
   const allowed = new Set(['ordered_prompts', 'user_input', 'max_chat_history', 'should_stream', 'should_silence', 'overrides'])
   for (const key of Object.keys(config)) if (!allowed.has(key)) throw new Error('generateRaw 暂不支持参数：' + key)
-  if (config.should_stream === true) throw new Error('generateRaw 暂不支持流式事件，请设置 should_stream: false')
+  // MagVarUpdate「兼容假流式」会传 should_stream:true；调用方仍 await 全文，这里按假流式处理：不推送流式事件，一次性返回。
   if (!Array.isArray(config.ordered_prompts) || !config.ordered_prompts.length) throw new Error('generateRaw 需要显式 ordered_prompts')
   const overrides = config.overrides || {}
   for (const [key, value] of Object.entries(overrides)) {
