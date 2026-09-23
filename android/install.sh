@@ -89,7 +89,7 @@ WEB_PROFILE_DIR="${DSH_ROOT}/profiles/${WEB_PROFILE_NAME}"
 printf '\n正在安装 dsh-tavern 核心依赖……\n'
 pnpm --dir "${REPO_ROOT}" install --frozen-lockfile
 
-if [ -f "${TAVERN_PROFILE_DIR}/package.json" ]; then
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" != 1 ] && [ -f "${TAVERN_PROFILE_DIR}/package.json" ]; then
   printf '\n正在停止旧版酒馆服务……\n'
   DSH_HOME="${DSH_ROOT}" DSH_TAVERN_PORT="${TAVERN_PORT}" \
     node "${REPO_ROOT}/bin/dsh-tavern.mjs" stop
@@ -107,6 +107,11 @@ pnpm --dir "${WEB_PROFILE_DIR}" install
 node "${SCRIPT_DIR}/configure-profiles.mjs" "${REPO_ROOT}" "${TAVERN_PROFILE_DIR}" "${WEB_PROFILE_DIR}"
 run_dsh --profile tavern --dump-config >/dev/null
 run_dsh --profile "${WEB_PROFILE_NAME}" --dump-config >/dev/null
+
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" = 1 ]; then
+  printf '\n安装完成。请返回 DSH Tavern 应用并重新启动酒馆。\n'
+  exit 0
+fi
 
 printf '\n正在启动 3088 酒馆服务……\n'
 DSH_HOME="${DSH_ROOT}" DSH_TAVERN_PORT="${TAVERN_PORT}" \

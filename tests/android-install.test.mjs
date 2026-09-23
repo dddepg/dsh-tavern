@@ -176,7 +176,7 @@ test('Android 安装脚本增量配置两个 Profile，失败不会伪装成成�
   assert.doesNotMatch(installer, /tavern-plugin\/lib\/client\.js/)
 })
 
-for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed']) {
+for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed', 'standalone']) {
 test(`Android 安装固定 pnpm 并先安装依赖再停止旧服务：${initialVersion}`, async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dsh-android-install-order-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -245,7 +245,7 @@ esac
 `, { mode: 0o755 })
 
   const result = spawnSync('bash', [new URL('../android/install.sh', import.meta.url).pathname], {
-    env: { ...process.env, DSH_HOME: dshHome, PATH: `${mockBin}${path.delimiter}${process.env.PATH}` },
+    env: { ...process.env, DSH_HOME: dshHome, DSH_TAVERN_ANDROID_STANDALONE: initialVersion === 'standalone' ? '1' : '0', PATH: `${mockBin}${path.delimiter}${process.env.PATH}` },
     encoding: 'utf8',
   })
   const recorded = (await readFile(events, 'utf8')).trim().split('\n')
@@ -256,6 +256,11 @@ esac
   }
   assert.equal(result.status, 0, result.stderr)
   const expected = initialVersion === 'cached' ? [] : [`npm install --global --prefix ${pnpmRoot} pnpm@11.25.0`]
+  if (initialVersion === 'standalone') {
+    assert.deepEqual(recorded, [...expected, 'dependencies', 'install'])
+    assert.match(result.stdout, /返回 DSH Tavern 应用并重新启动/)
+    return
+  }
   assert.deepEqual(recorded.slice(0, expected.length + 3), [...expected, 'dependencies', 'stop', 'install'])
 })
 }

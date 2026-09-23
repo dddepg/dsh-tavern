@@ -118,7 +118,8 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
     if (outputFile !== '' && existsSync(outputFile)) unlinkSync(outputFile)
     outputFile = ''
     writeUpdateStatus(options.statusFile, {
-      phase: 'completed', attemptId, host: options.host, completedAt: Date.now(), requiresRestart: options.host === 'desktop',
+      phase: 'completed', attemptId, host: options.host, completedAt: Date.now(),
+      requiresRestart: options.host === 'desktop' || (options.host === 'android' && process.env.DSH_TAVERN_ANDROID_STANDALONE === '1'),
       ...(targetCommit ? { targetCommit } : {}),
     })
   } catch (error) {
