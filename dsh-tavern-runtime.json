@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "e9034a07efa1fc91ff1de6c07c834a2653c402d2",
-  "releaseSequence": 345,
+  "revision": "eb11728579838b40c7652b919dc47163c27f9fc5",
+  "releaseSequence": 346,
   "version": "2.1.0",
   "files": [
     {
@@ -846,8 +846,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/reply-presentation.js",
-      "sha256": "bcc4e9d8f88f647565f5245ed4b4cb570da671f17dbc38bfb54dd9dddb11a0c2",
-      "size": 18402
+      "sha256": "bc11c2678b7cd55dbaadbd0e77449f042eb45c130d58ca8ca7210ceb216d2a24",
+      "size": 19357
     },
     {
       "path": "tavern-plugin/lib/domain/request-performance.js",
