@@ -12,6 +12,7 @@ using System.Text;
 using System.Xml.Linq;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 class Launcher : Form {
  // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
@@ -22,7 +23,43 @@ class Launcher : Form {
  const string LauncherName="DSH Tavern.exe";
  const string SettingsName="launcher-settings.xml";
  static string TestRoot { get { return Environment.GetEnvironmentVariable("DSH_LAUNCHER_TEST_ROOT"); } }
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern IntPtr GetEnvironmentStringsW();
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool FreeEnvironmentStringsW(IntPtr block);
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool SetEnvironmentVariableW(string name, string value);
+ // ProcessStartInfo copies the environment into a case-insensitive dictionary and throws if both NO_PROXY and no_proxy exist.
+ static void RepairDuplicateEnvironmentVariables() {
+  for(int pass=0; pass<8; pass++) {
+   var names=new List<string>(); var values=new List<string>();
+   IntPtr block=GetEnvironmentStringsW(); if(block==IntPtr.Zero)return;
+   try {
+    IntPtr current=block;
+    while(true) {
+     string entry=Marshal.PtrToStringUni(current);
+     if(string.IsNullOrEmpty(entry))break;
+     current=IntPtr.Add(current,(entry.Length+1)*2);
+     if(entry[0]=='=')continue;
+     int split=entry.IndexOf('='); if(split<=0)continue;
+     names.Add(entry.Substring(0,split)); values.Add(entry.Substring(split+1));
+    }
+   } finally { FreeEnvironmentStringsW(block); }
+   var first=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+   var count=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+   for(int i=0;i<names.Count;i++) {
+    int n; if(!count.TryGetValue(names[i], out n)) { count[names[i]]=1; first[names[i]]=i; }
+    else count[names[i]]=n+1;
+   }
+   bool duplicate=false;
+   foreach(var pair in count) {
+    if(pair.Value<2)continue;
+    duplicate=true; int index=first[pair.Key];
+    for(int n=0;n<pair.Value;n++) SetEnvironmentVariableW(names[index], null);
+    SetEnvironmentVariableW(names[index], values[index]);
+   }
+   if(!duplicate)return;
+  }
+ }
  [STAThread] static void Main(string[] args) {
+  RepairDuplicateEnvironmentVariables();
   Application.EnableVisualStyles(); Application.Run(new Launcher(args));
  }
  Launcher(string[] a) {
