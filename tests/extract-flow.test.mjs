@@ -311,7 +311,9 @@ test('后台结算期间禁用候选项按钮，完成后自动恢复', () => {
   const coordination = between(clientSource, 'const tavernCoordination', 'function describeTavernActivity')
   const submit = between(clientSource, 'async function submitCandidateTask', 'const regenPanel')
   const guide = between(clientSource, 'function CandidateGuidePanel', 'function RegenPanel')
-  const activity = between(serverSource, 'async function sessionActivity', 'async function sessionView')
+  // sessionActivity must stay lightweight; settleStatus lives on sessionView's
+  // volatile fields, which sit between sessionOperation and sessionView.
+  const activity = between(serverSource, 'async function sessionActivity', 'async function sessionOperation')
 
   assert.match(serverSource, /case 'syncSession'/)
   assert.match(serverSource, /case 'submitTask'/)
@@ -820,7 +822,7 @@ test('剧本与素材库可以把未绑定剧本绑定给未绑定人物卡，�
   assert.match(library, /rpc\("bindScript", \{ cardPath: cardPath, path: item\.path \}/)
   assert.match(library, /rpc\("deleteScript", \{ cardPath: boundCard\.path \}/)
   assert.match(library, /"绑定人物卡"/)
-  assert.match(library, /"解绑"/)
+  assert.match(library, /"解绑人物卡"/)
 })
 
 test('人物卡库可以查看详情，并在当前卡片对话中引用人物卡', () => {
