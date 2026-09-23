@@ -1998,7 +1998,7 @@ window.__ModuleLoader__.load({
 			}
 			// Both entry points reference the same functions; plugin wrappers stay visible to each other.
 			const helper = {};
-			const helperNames = ["generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros"];
+			const helperNames = ["generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros", "iframe_events", "tavern_events"];
 			for (const name of helperNames) Object.defineProperty(helper, name, { enumerable: true, configurable: true, get: function () { return window[name]; }, set: function (value) { window[name] = value; } });
 			window.TavernHelper = helper;
 			const eventSource = { on: window.eventOn, once: window.eventOnce, off: window.eventOff, removeListener: window.eventOff, makeFirst: window.eventMakeFirst, makeLast: window.eventMakeLast, emit: window.eventEmit };
@@ -2577,7 +2577,27 @@ window.__ModuleLoader__.load({
 				localSetMessages(plain);
 				return await call("updateTavernHelperMessages", { messages: plain });
 			};
-			window.generateRaw = function (config) { return call("generateTavernHelperRaw", { config: copy(config) }).then(function (result) { return result.text; }); };
+			window.generateRaw = function (config) {
+				const payload = copy(config || {});
+				const streaming = payload.should_stream === true;
+				const generationId = payload.generation_id != null && String(payload.generation_id) !== ""
+					? String(payload.generation_id)
+					: ("dsh-gen-" + Date.now().toString(16) + "-" + Math.random().toString(16).slice(2, 8));
+				if (streaming) {
+					if (payload.generation_id == null || payload.generation_id === "") payload.generation_id = generationId;
+					// 假流式：宿主一次性返回全文，这里补发酒馆助手流式事件，供评议等 UI 收尾。
+					void window.eventEmit(window.iframe_events.GENERATION_STARTED, generationId);
+				}
+				return call("generateTavernHelperRaw", { config: payload }).then(function (result) {
+					const text = result && result.text;
+					if (!streaming) return text;
+					const events = window.iframe_events;
+					return Promise.resolve(window.eventEmit(events.STREAM_TOKEN_RECEIVED_FULLY, text, generationId))
+						.then(function () { return window.eventEmit(events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, text, generationId); })
+						.then(function () { return window.eventEmit(events.GENERATION_ENDED, text, generationId); })
+						.then(function () { return text; });
+				});
+			};
 			window.createChatMessages = async function (messages, option) {
 				const result = await call("createTavernHelperMessages", {
 					messages: copy(Array.isArray(messages) ? messages : []),
@@ -2747,6 +2767,14 @@ window.__ModuleLoader__.load({
 				CHAT_CHANGED: "CHAT_CHANGED", CHAT_CREATED: "CHAT_CREATED", CHARACTER_PAGE_LOADED: "CHARACTER_PAGE_LOADED",
 				GENERATE_BEFORE_COMBINE_PROMPTS: "GENERATE_BEFORE_COMBINE_PROMPTS"
 			};
+			window.iframe_events = Object.freeze({
+				MESSAGE_IFRAME_RENDER_STARTED: "message_iframe_render_started",
+				MESSAGE_IFRAME_RENDER_ENDED: "message_iframe_render_ended",
+				GENERATION_STARTED: "js_generation_started",
+				STREAM_TOKEN_RECEIVED_FULLY: "js_stream_token_received_fully",
+				STREAM_TOKEN_RECEIVED_INCREMENTALLY: "js_stream_token_received_incrementally",
+				GENERATION_ENDED: "js_generation_ended"
+			});
 			if (!officialMvuEnabled && state.mvuEnabled !== false) window.Mvu = {
 				events: { VARIABLE_INITIALIZED: "mag_variable_initialized", VARIABLE_UPDATE_STARTED: "mag_variable_update_started", COMMAND_PARSED: "mag_command_parsed", VARIABLE_UPDATE_ENDED: "mag_variable_update_ended", BEFORE_MESSAGE_UPDATE: "mag_before_message_update" },
 				getMvuData: function (option) { return getVariables(option); },
