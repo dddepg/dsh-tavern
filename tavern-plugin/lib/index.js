@@ -1625,7 +1625,7 @@ export async function apply(ctx) {
   }
 
   async function sessionView(sessionId, options = {}) {
-    const chat = await requestPerformance.stage('readChat', () => chatForSession(sessionId))
+    const chat = Object.hasOwn(options, 'chat') ? options.chat : await requestPerformance.stage('readChat', () => chatForSession(sessionId))
     if (chat === undefined) return null
     const activity = backgroundTasks.activity(chat)
     const isCard = (chat.mode || 'story') === 'card'
@@ -1634,7 +1634,13 @@ export async function apply(ctx) {
     const cardContextRevision = Number(chat.cardContextRevision) || 0
     const mode = chat.mode || 'story'
     const cached = sessionViewProjectionCache.get(chat.id)
-    const dirtyMessageIndices = options.dirtyMessageIndices instanceof Set ? options.dirtyMessageIndices : null
+    // Projection cache and transport cursor may represent different revisions.
+    // Compute changes against the projection actually reused here.
+    let dirtyMessageIndices = null
+    if (cached && cached.revision < revision) {
+      const changed = await chatPersistence.readChangedIndices(chat.id, cached.revision)
+      if (changed?.revision === revision) dirtyMessageIndices = new Set(changed.indices)
+    }
     const windowHelperMessages = options.windowHelperMessages === true
     function cacheIdentityMatches() {
       return cached
@@ -3444,12 +3450,12 @@ export async function apply(ctx) {
         if (previous && previous.sessionId === str(sessionId) && Number.isSafeInteger(previous.revision)) {
           if (previous.revision === revision) dirtyMessageIndices = new Set()
           else {
-            const changed = chat && chat.id ? await chatPersistence.readChangedSlice(chat.id, previous.revision) : undefined
-            if (changed && Array.isArray(changed.indices)) dirtyMessageIndices = new Set(changed.indices)
+            const changed = chat && chat.id ? await chatPersistence.readChangedIndices(chat.id, previous.revision) : undefined
+            if (changed?.revision === revision) dirtyMessageIndices = new Set(changed.indices)
           }
         }
         const view = await sessionView(sessionId, {
-          dirtyMessageIndices,
+          chat,
           windowHelperMessages: args?.viewSync === 1 && (args.viewCursor === undefined || args.viewCursor === null || args.viewCursor === '')
         })
         if (args?.viewSync !== 1) return { view }

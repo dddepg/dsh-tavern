@@ -244,6 +244,9 @@ export function createChatPersistence(options = {}) {
     const selected = await records.readChangedSlice?.(chatId, revision)
     return selected ? {...selected, chat: normalize(selected.chat)} : undefined
   }
+  async function readChangedIndices(chatId, revision) {
+    return await records.readChangedIndices?.(chatId, revision)
+  }
   // Returns metadata only. Callers cannot accidentally retain another complete history.
   async function patch(chatId, revision, changes, metadata={}) {
     if(!records.patch)return undefined
@@ -257,5 +260,5 @@ export function createChatPersistence(options = {}) {
     await records.remove(chatId)
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, patch, readRevision, write, update, version, remove })
+  return Object.freeze({ read, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, write, update, version, remove })
 }

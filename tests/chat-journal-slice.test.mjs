@@ -44,5 +44,7 @@ test('changed slices cover multiple commits and fall back after external writes 
  assert.equal(await db.readChangedSlice('c',1),undefined)
  const revision=(await db.read('c'))._storageRevision
  for(let i=0;i<33;i++)await db.update('c',c=>{c.counter=i;return c})
- assert.equal(await db.readChangedSlice('c',revision),undefined)
+ const metadataOnly=await db.readChangedSlice('c',revision)
+ assert.deepEqual(metadataOnly.indices,[])
+ assert.equal(metadataOnly.chat.counter,32)
 })

@@ -376,19 +376,37 @@ export function createChatJournalStore(options = {}) {
       if (change.path.length > 1 && Number.isSafeInteger(change.path[1])) indices.add(change.path[1])
       else tail = Math.min(tail, change.op === 'splice' ? change.index : 0)
     }
-    return previous.concat({revision, indices: [...indices], tail}).slice(-32)
+    const frames = previous.concat({baseRevision: revision - 1, revision, indices: [...indices], tail})
+    if (frames.length <= 32) return frames
+    const [first, second, ...rest] = frames
+    const mergedTail = Math.min(first.tail, second.tail)
+    const mergedIndices = [...new Set([...first.indices, ...second.indices])].filter(index => index < mergedTail)
+    // Keep a conservative older summary plus exact recent frames. Bound the
+    // summary too; eviction loses coverage and safely restores the full fallback.
+    if (mergedIndices.length > 4096) return frames.slice(-32)
+    return [{baseRevision:first.baseRevision,revision:second.revision,indices:mergedIndices,tail:mergedTail},...rest]
   }
-  async function readChangedSlice(chatId, revision) {
-    const state = await cachedState(chatId)
-    if (!state || !Number.isSafeInteger(revision) || revision >= state.revision) return undefined
+  function changedIndices(chatId, state, revision) {
+    if (!state || !Number.isSafeInteger(revision) || revision < 0 || revision > state.revision) return undefined
+    if (revision === state.revision) return {indices:[],baseRevision:revision,revision:state.revision}
     const frames = knownChanges(chatId, state).filter(frame => frame.revision > revision)
-    if (frames.length !== state.revision - revision || frames[0]?.revision !== revision + 1) return undefined
+    if (!frames.length || frames[0].baseRevision > revision || frames.at(-1).revision !== state.revision
+      || frames.some((frame,index)=>index > 0 && frame.baseRevision !== frames[index-1].revision)) return undefined
     const length = state.chat.messages?.length || 0
     const indices = new Set(frames.flatMap(frame => frame.indices).filter(index => index < length))
     const tail = Math.min(...frames.map(frame => frame.tail))
     for (let index = tail; index < length; index++) indices.add(index)
     const sorted = [...indices].sort((a,b) => a-b)
-    return {...slice(state.chat, sorted), indices: sorted, baseRevision: revision}
+    return {indices:sorted,baseRevision:revision,revision:state.revision}
+  }
+  async function readChangedIndices(chatId, revision) {
+    return changedIndices(chatId, await cachedState(chatId), revision)
+  }
+  async function readChangedSlice(chatId, revision) {
+    const state = await cachedState(chatId)
+    if (revision === state?.revision) return undefined
+    const changed = changedIndices(chatId,state,revision)
+    return changed ? {...slice(state.chat,changed.indices),indices:changed.indices,baseRevision:revision} : undefined
   }
   /** Exact-version internal commit; stale callers must use their existing merge path. */
   async function patch(chatId, expectedRevision, changes, metadata={}) {
@@ -521,5 +539,5 @@ export function createChatJournalStore(options = {}) {
     })
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, patch, readRevision, update, version, remove })
+  return Object.freeze({ read, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, update, version, remove })
 }
