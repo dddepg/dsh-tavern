@@ -212,4 +212,8 @@ if ! DSH_HOME="${DSH_ROOT}" bash "${APP_DIR}/android/install.sh"; then
 fi
 
 SOURCE_SWAPPED=0
-printf '\n全部完成。请重启 DSHA，然后点击侧栏里的“酒馆工作台”。\n'
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" = 1 ]; then
+  printf '\n全部完成。请返回 DSH Tavern 应用并重新启动酒馆。\n'
+else
+  printf '\n全部完成。请重启 DSHA，然后点击侧栏里的“酒馆工作台”。\n'
+fi
