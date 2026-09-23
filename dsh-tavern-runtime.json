@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "d69eb6b193e195fd91fcdc020de7f0141768c59e",
-  "releaseSequence": 340,
+  "revision": "24fe29e4d4fdd7e9208b22d7a78fe07cc0f29389",
+  "releaseSequence": 341,
   "version": "2.1.0",
   "files": [
     {
@@ -611,8 +611,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/host-session-patch.js",
-      "sha256": "cc66964843b3f32841caedbf542463419abfeaa6a0dcab931ac5fed32d6fc64e",
-      "size": 18127
+      "sha256": "035f76b2422fb4d856090c1e411df8fb1ebaca73a479ba732a72dc669d05b20d",
+      "size": 18729
     },
     {
       "path": "tavern-plugin/lib/domain/host-subprocess-patch.js",
