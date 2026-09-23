@@ -7,7 +7,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { repairMigratedCurrentHeader, decodeSessionLog, encodeCurrentGeneration, encodeMigratedSessionLog, migrateInstalledLegacySessions, migrateLegacySessionDirectory, prepareLegacySessionLog, reframeConcatenatedSessionLog } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
+import { repairMigratedCurrentHeader, decodeSessionLog, encodeCurrentGeneration, encodeMigratedSessionLog, migrateInstalledLegacySessions, migrateLegacySessionDirectory, parseSessionLog, prepareLegacySessionLog, reframeConcatenatedSessionLog } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 
 test('迁移日志的第一帧只有文件头一行', () => {
@@ -22,6 +22,20 @@ test('迁移日志的第一帧只有文件头一行', () => {
   assert.equal(headerFrameText(fixed), header + '\n')
   assert.equal(decodeSessionLog(fixed), text)
   assert.equal(reframeConcatenatedSessionLog(bytes), null)
+})
+
+test('issue #84: 大体量事件编码成多帧后仍可完整解压', () => {
+  const header = '{"version":0,"id":"chunked"}'
+  const events = Array.from({ length: 2000 }, (_, seq) => ({
+    type: 'assistant/message',
+    seq,
+    data: { message: { id: 'm' + seq, content: [{ type: 'text', text: 'x'.repeat(300) }] } },
+  }))
+  const bytes = encodeMigratedSessionLog(header, events)
+  const expected = header + '\n' + events.map(event => JSON.stringify(event)).join('\n') + '\n'
+  assert.equal(headerFrameText(bytes), header + '\n')
+  assert.equal(decodeSessionLog(bytes), expected)
+  assert.equal(parseSessionLog(bytes).events.length, events.length)
 })
 
 test('启动迁移走宿主目录，会话在 data 的上一级', async () => {

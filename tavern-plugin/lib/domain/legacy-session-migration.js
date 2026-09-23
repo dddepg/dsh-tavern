@@ -12,10 +12,38 @@ const ALLOWED_FORM = new Set(['instructions', 'catalog', 'snapshot', 'notice', '
 const TAVERN_SOURCE_KEYS = new Set(['kind', 'plugin', 'form', 'sections', 'summary'])
 const ZSTD_MAGIC = 0xFD2FB528
 const BACKUP_SUFFIX = '.bak-tavern-premigrate'
+// Keep each body frame under this uncompressed size so encode does not hold one
+// giant joined string for a whole archive (issue #84).
+const BODY_FRAME_TARGET = 512 * 1024
 
 export function decodeSessionLog(buffer) {
   const frames = scanZstdFrames(buffer)
-  return Buffer.concat(frames.map(frame => zstdDecompressSync(buffer.subarray(frame.start, frame.end)))).toString('utf8')
+  let text = ''
+  for (const frame of frames) text += zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+  return text
+}
+
+/** Parse header + events frame by frame without concatenating the whole archive. */
+export function parseSessionLog(buffer) {
+  const frames = scanZstdFrames(buffer)
+  let headerLine = null
+  let header = null
+  const events = []
+  for (const frame of frames) {
+    const text = zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const line = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!line) continue
+      if (headerLine === null) {
+        headerLine = line
+        header = JSON.parse(line)
+      } else events.push(JSON.parse(line))
+    }
+  }
+  return { headerLine, header, events }
 }
 
 export function prepareLegacySessionLog(text, catalog) {
@@ -26,11 +54,45 @@ export function prepareLegacySessionLog(text, catalog) {
   if (header?.version !== 0) return { ok: true, changed: false }
   let events
   try { events = lines.slice(1).map(line => JSON.parse(line)) } catch { return refuse('事件不是 JSON') }
+  return prepareParsedLegacySession(header, events, lines[0], catalog, () => lines.slice(1).map(line => JSON.parse(line)))
+}
+
+function prepareLegacySessionBuffer(buffer, catalog) {
+  let frames
+  try { frames = scanZstdFrames(buffer) }
+  catch (error) { return refuse(error.message || String(error)) }
+  let headerLine = null
+  let header = null
+  const events = []
+  for (const frame of frames) {
+    const text = zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const line = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!line) continue
+      if (headerLine === null) {
+        headerLine = line
+        try { header = JSON.parse(line) } catch { return refuse('文件头不是 JSON') }
+      } else {
+        try { events.push(JSON.parse(line)) } catch { return refuse('事件不是 JSON') }
+      }
+    }
+  }
+  if (!headerLine) return refuse('空日志')
+  if (header?.version !== 0) return { ok: true, changed: false }
+  return prepareParsedLegacySession(header, events, headerLine, catalog, () => parseSessionLog(buffer).events)
+}
+
+function prepareParsedLegacySession(header, events, headerLine, catalog, reparse) {
   // Issue #71: stripping illegal source keys (fixedSystemText, …) alone is enough
   // for the host to open many archives. Prefer that over leaving the raw v0 file
   // when the fuller rewrite refuses.
-  const sanitize = () => sanitizeLegacySessionLog(header, events, catalog, lines[0])
-  const draft = structuredClone(events)
+  // Issue #84: mutate the freshly parsed events in place; reparse() only if sanitize
+  // needs a pristine copy after a failed rewrite.
+  const sanitize = () => sanitizeLegacySessionLog(header, reparse(), catalog, headerLine)
+  const draft = events
   const prefix = prefixTexts(draft).join('\n\n')
   let cleaned = false
   for (const event of draft) if (cleanEvent(event)) cleaned = true
@@ -74,7 +136,7 @@ export function prepareLegacySessionLog(text, catalog) {
       } else if (!reason && prefix && !systemText(repaired.artifact.events).includes(prefix)) {
         reason = '固定背景未完全进入 system 头，已写出可打开版本'
       }
-      return { ok: true, changed: true, headerLine: lines[0], events: repaired.events, artifact: repaired.artifact, reason }
+      return { ok: true, changed: true, headerLine, events: repaired.events, artifact: repaired.artifact, reason }
     }
     return sanitize() || { ok: true, changed: false, reason: opened.reason }
   }
@@ -87,12 +149,13 @@ export function prepareLegacySessionLog(text, catalog) {
   } else if (prefix && !systemText(opened.artifact.events).includes(prefix)) {
     reason = '固定背景未完全进入 system 头，已写出可打开版本'
   }
-  return { ok: true, changed: true, headerLine: lines[0], events: next, artifact: opened.artifact, reason }
+  return { ok: true, changed: true, headerLine, events: next, artifact: opened.artifact, reason }
 }
 
 /** Drop only non-released source members, then open with the official catalog. */
 export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
-  const only = structuredClone(events)
+  // Caller owns `events` (fresh reparse or disposable draft); mutate in place.
+  const only = events
   let changed = false
   for (const event of only) if (cleanEvent(event)) changed = true
   let next = only
@@ -147,7 +210,8 @@ export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
 
 /** Progressively drop conflicting rows until the host catalog accepts the log. */
 function repairUntilOpenable(header, events, catalog) {
-  let current = structuredClone(events)
+  // openSession clones per row; softenForOpenFailure clones before mutating.
+  let current = events
   const notes = []
   let cursor = 0
   while (cursor < 8) {
@@ -297,7 +361,7 @@ function dropMismatchedToolResults(events) {
 
 export async function commitLegacySessionFile(file, catalog) {
   const original = await readFile(file)
-  const prepared = prepareLegacySessionLog(decodeSessionLog(original), catalog)
+  const prepared = prepareLegacySessionBuffer(original, catalog)
   if (!prepared.ok) return { ...prepared, written: false }
   let writtenSource = false
   if (prepared.changed) {
@@ -329,18 +393,28 @@ export async function commitLegacySessionFile(file, catalog) {
 }
 
 export function encodeMigratedSessionLog(headerLine, events) {
-  const header = compressFrame(Buffer.from(headerLine + '\n'))
-  if (!events.length) return header
-  const body = Buffer.from(events.map(event => JSON.stringify(event)).join('\n') + '\n')
-  return Buffer.concat([header, compressFrame(body)])
+  return encodeFramedSessionLog(headerLine + '\n', events, event => JSON.stringify(event) + '\n')
 }
 
 export function encodeCurrentGeneration(artifact, catalog) {
-  const header = compressFrame(Buffer.from(JSON.stringify(catalog.encodeCurrentHeader(artifact.header, artifact.inheritedEventCount)) + '\n'))
+  const headerLine = JSON.stringify(catalog.encodeCurrentHeader(artifact.header, artifact.inheritedEventCount)) + '\n'
   const events = Array.isArray(artifact.events) ? artifact.events : []
-  if (!events.length) return header
-  const body = Buffer.from(events.map(event => JSON.stringify(catalog.encodeCurrentEvent(event))).join('\n') + '\n')
-  return Buffer.concat([header, compressFrame(body)])
+  return encodeFramedSessionLog(headerLine, events, event => JSON.stringify(catalog.encodeCurrentEvent(event)) + '\n')
+}
+
+function encodeFramedSessionLog(headerLine, events, stringify) {
+  const parts = [compressFrame(Buffer.from(headerLine))]
+  if (!events.length) return parts[0]
+  let chunk = ''
+  for (const event of events) {
+    chunk += stringify(event)
+    if (chunk.length >= BODY_FRAME_TARGET) {
+      parts.push(compressFrame(Buffer.from(chunk)))
+      chunk = ''
+    }
+  }
+  if (chunk) parts.push(compressFrame(Buffer.from(chunk)))
+  return Buffer.concat(parts)
 }
 
 export function reframeConcatenatedSessionLog(buffer) {
@@ -431,7 +505,9 @@ function refuse(reason) {
 function openSession(catalog, header, events) {
   try {
     const restore = catalog.createRestore(header, { recovery: 'recoverable', validation: 'current' })
-    for (const event of structuredClone(events)) restore.decodeRow(event)
+    // Clone one row at a time so validation never doubles the whole object graph
+    // in memory (issue #84).
+    for (const event of events) restore.decodeRow(structuredClone(event))
     const artifact = restore.finish()
     if (artifact?.header?.version !== 3) return refuse('迁移后不是 v3')
     return { ok: true, artifact }
@@ -1101,8 +1177,23 @@ export async function repairMigratedCurrentHeader(file, catalog) {
   const physical = catalog.encodeCurrentHeader(header, 0)
   if (catalog.readHeader(physical).status !== 'current') throw new Error('修复后的会话头仍无效')
   const restore = catalog.createRestore(physical, { recovery:'strict', validation:'current' })
-  const rows = decodeSessionLog(bytes).trimEnd().split('\n').slice(1)
-  for (const row of rows) restore.decodeRow(JSON.parse(row))
+  // Feed rows frame by frame; skip the first line of the archive (the bad header).
+  let skippedHeader = false
+  for (const frame of frames) {
+    const text = zstdDecompressSync(bytes.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const row = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!row) continue
+      if (!skippedHeader) {
+        skippedHeader = true
+        continue
+      }
+      restore.decodeRow(JSON.parse(row))
+    }
+  }
   restore.finish()
   const backup = file + '.bak-tavern-header'
   if (!(await exists(backup))) await copyFile(file, backup)
