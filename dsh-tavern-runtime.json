@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "eb11728579838b40c7652b919dc47163c27f9fc5",
-  "releaseSequence": 346,
+  "revision": "a31b5b8f7c48c9bbe441d4c980e3e7c31f95af21",
+  "releaseSequence": 347,
   "version": "2.1.0",
   "files": [
     {
@@ -161,8 +161,8 @@
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "0ef569c482a53e54368eaa9711b9e89654f2906ea9f0913dec52a18ad13088b5",
-      "size": 238
+      "sha256": "4aaaca3620240fd42d3a9417fb349f8e592da6d0a507f54010e16e4d9abbe743",
+      "size": 374
     },
     {
       "path": "presets/tavern-background/agent.cordis.yml",
