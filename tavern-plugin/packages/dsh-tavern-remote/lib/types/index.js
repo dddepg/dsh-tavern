@@ -37,11 +37,14 @@ let TavernSessionSignalRemote = (() => {
     let _classSuper = TypertRemoteService;
     let _instanceExtraInitializers = [];
     let _follow_decorators;
+    let _control_decorators;
     return class TavernSessionSignalRemote extends _classSuper {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
             _follow_decorators = [Remote({ mode: 'stream' })];
+            _control_decorators = [Remote({ mode: 'stream' })];
             __esDecorate(this, null, _follow_decorators, { kind: "method", name: "follow", static: false, private: false, access: { has: obj => "follow" in obj, get: obj => obj.follow }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _control_decorators, { kind: "method", name: "control", static: false, private: false, access: { has: obj => "control" in obj, get: obj => obj.control }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
         static inject = ['typert', 'tavernSessionSignals'];
@@ -51,6 +54,11 @@ let TavernSessionSignalRemote = (() => {
         }
         follow(sessionIds, signal) {
             return this.ctx.tavernSessionSignals.follow(sessionIds, signal);
+        }
+        // A finite stream uses the existing mux socket instead of HTTP connection slots.
+        // No automatic replay: the executor recovers by querying the same event/lease.
+        async *control(method, args, signal) {
+            yield await this.ctx.tavernSessionSignals.control(method, args, signal);
         }
     };
 })();

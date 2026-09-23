@@ -3585,6 +3585,18 @@ export async function apply(ctx) {
   })
 
   ctx.provide('tavernSessionSignals', Object.freeze({
+    async control(method, args, signal) {
+      if (!['claimTavernScriptWork', 'startTavernScriptWork', 'getTavernScriptWorkState',
+        'heartbeatTavernScriptRuntime', 'completeTavernHelperEvent', 'releaseTavernHelperRuntime'].includes(method)) {
+        throw new Error('不支持的运行时控制请求')
+      }
+      signal?.throwIfAborted()
+      // Keep the existing identities, ownership checks and receipt recovery semantics.
+      const result = await dispatch(method, args)
+      // Claim responses can carry an entire historical script context. Preserve
+      // the HTTP JSON envelope without recursively walking it through Remote codecs.
+      return JSON.stringify({ ok: true, ...result, runtimeGeneration })
+    },
     async * follow(sessionIds, signal) {
       const ids = Array.from(new Set((Array.isArray(sessionIds) ? sessionIds : []).map(str).filter(Boolean)))
       const stops = ids.map(function (sessionId) { return coordinationEvents.watch(sessionId) })

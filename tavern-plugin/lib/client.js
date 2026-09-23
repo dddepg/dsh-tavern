@@ -493,12 +493,14 @@ window.__ModuleLoader__.load({
 		const beginSessionViewRead = createSessionViewReader();
 
 		function rpc(method, args, sessionId, requestOptions) {
+			const runtimeControl = ["claimTavernScriptWork", "startTavernScriptWork", "getTavernScriptWorkState", "heartbeatTavernScriptRuntime", "completeTavernHelperEvent", "releaseTavernHelperRuntime"].includes(method);
+			const controlChannel = runtimeControl && typeof tavernSessionSignals !== "undefined" && typeof tavernSessionSignals.control === "function" ? tavernSessionSignals : null;
 			const started = Date.now();
             const clockStart = performance.now();
             const traced = method === "getSession" || method === "syncSession";
             const trace = traced ? { id: window.crypto?.randomUUID?.() || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === "x" ? n : (n & 3) | 8).toString(16); }), method, sentAt: started, active: ++performanceActiveRequests } : null;
             const payload = Object.assign({}, args || {});
-			if (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method)) {
+			if (!runtimeControl && (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method))) {
 				pagePerformance.observedMs = started - pagePerformanceStarted;
 				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice() });
 				performanceReportAt = started;
@@ -520,7 +522,9 @@ window.__ModuleLoader__.load({
 			if (requestOptions && requestOptions.signal) request.signal = requestOptions.signal;
 			if (requestOptions && requestOptions.keepalive === true) request.keepalive = true;
 			if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "sent");
-			return fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
+			const responsePromise = controlChannel
+				? Promise.resolve().then(() => controlChannel.control(method, JSON.parse(requestBody), requestOptions && requestOptions.signal))
+				: fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
                 if (trace) trace.headersMs = Math.round(performance.now() - clockStart);
                 const result = await readTavernJsonResponse(response);
                 if (trace) {
@@ -532,7 +536,8 @@ window.__ModuleLoader__.load({
 					} catch (_error) {}
 				}
                 return result;
-            }).then(function (result) {
+            });
+			return responsePromise.then(function (result) {
 				tavernRuntimeGenerationMonitor.observe(result && result.runtimeGeneration);
 				if (!result || !result.ok) {
 					const error = new Error(result && result.error ? result.error : "操作失败");

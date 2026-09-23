@@ -5,7 +5,7 @@ window.__ModuleLoader__.load({
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let _deepseek_ai_dsh_api_gateway_client = require("@deepseek-ai/dsh-api-gateway/client");
-		//#region ../../node_modules/zod/v4/core/core.js
+		//#region node_modules/zod/v4/core/core.js
 		var _a$1;
 		function $constructor(name, initializer, params) {
 			function init(inst, def) {
@@ -64,7 +64,7 @@ window.__ModuleLoader__.load({
 			return globalConfig;
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/util.js
+		//#region node_modules/zod/v4/core/util.js
 		function getEnumValues(entries) {
 			const numericValues = Object.values(entries).filter((v) => typeof v === "number");
 			return Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
@@ -378,7 +378,7 @@ window.__ModuleLoader__.load({
 			return { ...iss };
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/errors.js
+		//#region node_modules/zod/v4/core/errors.js
 		const initializer$1 = (inst, def) => {
 			inst.name = "$ZodError";
 			Object.defineProperty(inst, "_zod", {
@@ -438,7 +438,7 @@ window.__ModuleLoader__.load({
 			return fieldErrors;
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/parse.js
+		//#region node_modules/zod/v4/core/parse.js
 		const _parse = (_Err) => (schema, value, _ctx, _params) => {
 			const ctx = _ctx ? {
 				..._ctx,
@@ -552,7 +552,7 @@ window.__ModuleLoader__.load({
 			return _safeParseAsync(_Err)(schema, value, _ctx);
 		};
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/regexes.js
+		//#region node_modules/zod/v4/core/regexes.js
 		/**
 		* @deprecated CUID v1 is deprecated by its authors due to information leakage
 		* (timestamps embedded in the id). Use {@link cuid2} instead.
@@ -616,7 +616,7 @@ window.__ModuleLoader__.load({
 		const lowercase = /^[^A-Z]*$/;
 		const uppercase = /^[^a-z]*$/;
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/checks.js
+		//#region node_modules/zod/v4/core/checks.js
 		const $ZodCheck = /*@__PURE__*/ $constructor("$ZodCheck", (inst, def) => {
 			var _a;
 			inst._zod ?? (inst._zod = {});
@@ -978,7 +978,7 @@ window.__ModuleLoader__.load({
 			};
 		});
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/doc.js
+		//#region node_modules/zod/v4/core/doc.js
 		var Doc = class {
 			constructor(args = []) {
 				this.content = [];
@@ -1009,14 +1009,14 @@ window.__ModuleLoader__.load({
 			}
 		};
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/versions.js
+		//#region node_modules/zod/v4/core/versions.js
 		const version = {
 			major: 4,
 			minor: 4,
 			patch: 3
 		};
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/schemas.js
+		//#region node_modules/zod/v4/core/schemas.js
 		const $ZodType = /*@__PURE__*/ $constructor("$ZodType", (inst, def) => {
 			var _a;
 			inst ?? (inst = {});
@@ -2259,7 +2259,7 @@ window.__ModuleLoader__.load({
 			}
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/registries.js
+		//#region node_modules/zod/v4/core/registries.js
 		var _a;
 		var $ZodRegistry = class {
 			constructor() {
@@ -2306,7 +2306,7 @@ window.__ModuleLoader__.load({
 		(_a = globalThis).__zod_globalRegistry ?? (_a.__zod_globalRegistry = registry());
 		const globalRegistry = globalThis.__zod_globalRegistry;
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/api.js
+		//#region node_modules/zod/v4/core/api.js
 		// @__NO_SIDE_EFFECTS__
 		function _string(Class, params) {
 			return new Class({
@@ -2811,7 +2811,7 @@ window.__ModuleLoader__.load({
 			return ch;
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/to-json-schema.js
+		//#region node_modules/zod/v4/core/to-json-schema.js
 		function initializeContext(params) {
 			let target = params?.target ?? "draft-2020-12";
 			if (target === "draft-4") target = "draft-04";
@@ -3106,7 +3106,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return finalize(ctx, schema);
 		};
 		//#endregion
-		//#region ../../node_modules/zod/v4/core/json-schema-processors.js
+		//#region node_modules/zod/v4/core/json-schema-processors.js
 		const formatMap = {
 			guid: "uuid",
 			url: "uri",
@@ -3377,7 +3377,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			seen.ref = innerType;
 		};
 		//#endregion
-		//#region ../../node_modules/zod/v4/classic/iso.js
+		//#region node_modules/zod/v4/classic/iso.js
 		const ZodISODateTime = /*@__PURE__*/ $constructor("ZodISODateTime", (inst, def) => {
 			$ZodISODateTime.init(inst, def);
 			ZodStringFormat.init(inst, def);
@@ -3407,7 +3407,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return /* @__PURE__ */ _isoDuration(ZodISODuration, params);
 		}
 		//#endregion
-		//#region ../../node_modules/zod/v4/classic/errors.js
+		//#region node_modules/zod/v4/classic/errors.js
 		const initializer = (inst, issues) => {
 			$ZodError.init(inst, issues);
 			inst.name = "ZodError";
@@ -3429,7 +3429,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 		const ZodRealError = /*@__PURE__*/ $constructor("ZodError", initializer, { Parent: Error });
 		//#endregion
-		//#region ../../node_modules/zod/v4/classic/parse.js
+		//#region node_modules/zod/v4/classic/parse.js
 		const parse = /* @__PURE__ */ _parse(ZodRealError);
 		const parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 		const safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -3443,7 +3443,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 		const safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 		//#endregion
-		//#region ../../node_modules/zod/v4/classic/schemas.js
+		//#region node_modules/zod/v4/classic/schemas.js
 		const _installedGroups = /* @__PURE__ */ new WeakMap();
 		function _installLazyMethods(inst, group, methods) {
 			const proto = Object.getPrototypeOf(inst);
@@ -4260,6 +4260,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			array(lazy(() => TavernJsonValueRemoteCodec$schema)),
 			record(string(), lazy(() => TavernJsonValueRemoteCodec$schema))
 		]);
+		const TavernJsonValueRemoteCodec$schema2 = union([
+			literal(null),
+			string(),
+			number(),
+			literal(false),
+			literal(true),
+			array(lazy(() => TavernJsonValueRemoteCodec$schema2)),
+			record(string(), lazy(() => TavernJsonValueRemoteCodec$schema2))
+		]);
+		const dsh_tavern_remote_tavernSignals_control_parameter_0$schema = union([
+			literal("claimTavernScriptWork"),
+			literal("startTavernScriptWork"),
+			literal("getTavernScriptWorkState"),
+			literal("heartbeatTavernScriptRuntime"),
+			literal("completeTavernHelperEvent"),
+			literal("releaseTavernHelperRuntime")
+		]);
+		const dsh_tavern_remote_tavernSignals_control_parameter_1$schema = record(string(), union([
+			literal(null),
+			string(),
+			number(),
+			literal(false),
+			literal(true),
+			array(lazy(() => TavernJsonValueRemoteCodec$schema2)),
+			record(string(), lazy(() => TavernJsonValueRemoteCodec$schema2))
+		]));
+		const dsh_tavern_remote_tavernSignals_control_result$schema = string();
 		const dsh_tavern_remote_tavernSignals_follow_parameter_0$schema = array(string());
 		const dsh_tavern_remote_tavernSignals_follow_result$schema = union([object({
 			"type": literal("snapshot").readonly(),
@@ -4317,6 +4344,43 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const TYPERT_REMOTE = {
 			package: "dsh-tavern-remote",
 			descriptors: [{
+				id: "dsh-tavern-remote#tavernSignals/control",
+				service: "tavernSignalRemote",
+				namespace: "tavernSignals",
+				method: "control",
+				mode: "stream",
+				invocation: { kind: "direct" },
+				parameters: [{
+					name: "method",
+					wire: "method",
+					source: "json",
+					codec: {
+						mode: "strict",
+						typeSymbol: "dsh-tavern-remote/types#TavernRuntimeControlMethod",
+						schema: dsh_tavern_remote_tavernSignals_control_parameter_0$schema
+					}
+				}, {
+					name: "args",
+					wire: "args",
+					source: "json",
+					codec: {
+						mode: "strict",
+						typeSymbol: "dsh-tavern-remote#tavernSignals/control:args",
+						schema: dsh_tavern_remote_tavernSignals_control_parameter_1$schema
+					}
+				}],
+				cancellation: { parameter: "signal" },
+				result: {
+					mode: "strict",
+					typeSymbol: "dsh-tavern-remote#tavernSignals/control:result",
+					schema: dsh_tavern_remote_tavernSignals_control_result$schema
+				},
+				sourceLocation: {
+					"file": "packages/dsh-tavern-remote/src/index.ts",
+					"line": 27,
+					"column": 11
+				}
+			}, {
 				id: "dsh-tavern-remote#tavernSignals/follow",
 				service: "tavernSignalRemote",
 				namespace: "tavernSignals",
@@ -4417,34 +4481,41 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				control = next;
 				next.start();
 			};
-			const service = Object.freeze({ subscribe(sessionId, kind, listener, onError, onConnect) {
-				const item = {
-					sessionId: String(sessionId),
-					kind: String(kind),
-					listener,
-					onError,
-					onConnect
-				};
-				const before = sessionIds().join("\0");
-				listeners.add(item);
-				const after = sessionIds().join("\0");
-				const signal = latest.get(key(item.sessionId, item.kind));
-				if (connected) item.onConnect?.();
-				if (signal !== void 0) item.listener(signal);
-				if (!started) {
-					started = true;
-					startStream();
-				} else if (control === void 0) startStream();
-				else if (before !== after) control.restart();
-				let stopped = false;
-				return () => {
-					if (stopped) return;
-					stopped = true;
-					const previous = sessionIds().join("\0");
-					listeners.delete(item);
-					if (previous !== sessionIds().join("\0")) control?.restart();
-				};
-			} });
+			const service = Object.freeze({
+				async control(method, args, signal) {
+					if (disposed) throw new Error("Tavern runtime control has been disposed");
+					for await (const result of tavernSignals.control(method, args, signal)) return JSON.parse(result);
+					throw new Error("Tavern runtime control ended without a response");
+				},
+				subscribe(sessionId, kind, listener, onError, onConnect) {
+					const item = {
+						sessionId: String(sessionId),
+						kind: String(kind),
+						listener,
+						onError,
+						onConnect
+					};
+					const before = sessionIds().join("\0");
+					listeners.add(item);
+					const after = sessionIds().join("\0");
+					const signal = latest.get(key(item.sessionId, item.kind));
+					if (connected) item.onConnect?.();
+					if (signal !== void 0) item.listener(signal);
+					if (!started) {
+						started = true;
+						startStream();
+					} else if (control === void 0) startStream();
+					else if (before !== after) control.restart();
+					let stopped = false;
+					return () => {
+						if (stopped) return;
+						stopped = true;
+						const previous = sessionIds().join("\0");
+						listeners.delete(item);
+						if (previous !== sessionIds().join("\0")) control?.restart();
+					};
+				}
+			});
 			ctx.provide("tavernSessionSignals", service);
 			return async () => {
 				disposed = true;
