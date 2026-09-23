@@ -949,6 +949,105 @@ test('历史恢复点丢失时不删除标志或伪造原正文', async () => {
   assert.deepEqual(h.chat, before)
 })
 
+test('失败尾部重放：移除被中断的回复后原样重发本轮输入，不回退已完成剧情', async () => {
+  const h = harness()
+  const committed = h.chat.messages.map(message => message.text)
+  h.session.append('turn/start', { turn: 3 })
+  h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user', rpcId: 'rpc-3' } }, { surfaceOp: 'append' })
+  h.session.append('assistant/message', { turn: 3, step: 1, interrupted: true, message: { role: 'assistant', source: { kind: 'model', provider: 'fixture', model: 'fixture' }, content: [{ type: 'text', text: '半截正文' }] } }, { surfaceOp: 'append' })
+  h.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+  // 失败清理钩子已经在失败时执行过，重放不再改动消息面。
+  clearFailedTurnSurface({ session: h.session, turn: 3 })
+
+  const result = await h.create().replayFailed('chat', 'session')
+
+  assert.equal(h.agent.input.content[0].text, '重放这句')
+  // 宿主只把 source.kind 为 user 的消息渲染成输入行；用 plugin 身份重发会让
+  // 玩家文字变成上下文节点而彻底看不见。
+  assert.deepEqual(h.agent.input.source, { kind: 'user', rpcId: 'rpc-3' })
+  assert.deepEqual(result.replayed, { turn: 3, userText: '重放这句', cleared: 0 })
+  // 已经清理过的失败回合不会再插一个清理墓碑。
+  assert.equal(h.session.events.filter(event => event.data?.source?.plugin === 'dsh-tavern-failed-turn-cleanup').length, 1)
+  assert.deepEqual(h.chat.suppressedDshTurns, [3])
+  assert.deepEqual(h.chat.messages.map(message => message.text).slice(0, committed.length), committed)
+  assert.equal(h.chat.messages.at(-2).text, '重放这句')
+  assert.equal(h.chat.messages.at(-1).text, '新正文3')
+})
+
+test('失败清理钩子缺失时，重放先补清被中断的回复再重发', async () => {
+  const h = harness()
+  h.session.append('turn/start', { turn: 3 })
+  h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  h.session.append('assistant/message', { turn: 3, step: 1, interrupted: true, message: { role: 'assistant', source: { kind: 'model', provider: 'fixture', model: 'fixture' }, content: [{ type: 'text', text: '半截正文' }] } }, { surfaceOp: 'append' })
+  h.session.append('turn/end', { turn: 3, reason: { kind: 'aborted' } })
+
+  const result = await h.create().replayFailed('chat', 'session')
+
+  assert.equal(result.replayed.cleared, 2)
+  const tombstone = h.session.events.at(-4)
+  assert.deepEqual(tombstone.data.source, { kind: 'plugin', plugin: 'dsh-tavern-failed-turn-cleanup' })
+  assert.deepEqual(tombstone.sourceEventSeqs, [3, 4])
+  assert.equal(h.agent.input.content[0].text, '重放这句')
+  // 输入原本来自插件消息（历史遗留的重放输入）时，重发也必须回到用户身份。
+  assert.equal(h.agent.input.source.kind, 'user')
+})
+
+test('重放失败回合会拒绝在宿主机会话补丁尚未握手时执行', async () => {
+  const h = harness({ checkpoint: true, journal: true })
+  h.session.append('turn/start', { turn: 3 })
+  h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  h.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+  h.options.sessionPatch = { replacementAllowed: () => false, blockReason: () => '页面尚未完成会话补丁握手，请刷新后再试' }
+  await assert.rejects(h.create().replayFailed('chat', 'session'), /握手/)
+  assert.equal(h.agent.input, undefined)
+})
+
+test('重放只在失败仍拥有尾部时可用，且生成中或已完成回合都拒绝', async () => {
+  const idle = harness()
+  await assert.rejects(idle.create().replayFailed('chat', 'session'), /当前没有可重新生成的失败回合/)
+  assert.equal(idle.agent.input, undefined)
+
+  const running = harness()
+  running.session.append('turn/start', { turn: 3 })
+  running.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '输入' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  running.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+  running.agent.phase = { kind: 'running', lastTurn: 3, turn: 3 }
+  await assert.rejects(running.create().replayFailed('chat', 'session'), /正在生成/)
+  assert.equal(running.agent.input, undefined)
+
+  const advanced = harness()
+  advanced.session.append('turn/start', { turn: 3 })
+  advanced.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '输入' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  advanced.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+  advanced.session.append('turn/start', { turn: 4 })
+  advanced.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '新输入' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  await assert.rejects(advanced.create().replayFailed('chat', 'session'), /当前没有可重新生成的失败回合/)
+})
+
+test('重放与重生成、回退互斥', async () => {
+  async function hangingReplay() {
+    const h = harness()
+    h.session.append('turn/start', { turn: 3 })
+    h.session.append('user/message', { role: 'user', content: [{ type: 'text', text: '重放这句' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    h.session.append('turn/end', { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } })
+    let entered
+    const started = new Promise(resolve => { entered = resolve })
+    h.beforeGenerate(async () => { entered(); await new Promise(() => {}) })
+    const live = h.create()
+    void live.replayFailed('chat', 'session')
+    await started
+    return { h, live }
+  }
+
+  const { h, live } = await hangingReplay()
+  await assert.rejects(live.regenerate('chat', '', 'session'), /正在重放失败回合/)
+  await assert.rejects(live.rollback('session', 'chat'), /正在重放失败回合/)
+  assert.equal(h.agent.input.content[0].text, '重放这句')
+
+  const { live: regenerating } = await interruptedRegeneration()
+  await assert.rejects(regenerating.replayFailed('chat', 'session'), /正在重新生成/)
+})
+
 test('native replacement failure after Chat commit must remain recoverable',async()=>{
  const h=harness({checkpoint:true,journal:true});const append=h.session.append
  h.session.append=function(type,data,intent){if(type==='assistant/message' && intent?.surfaceOp?.op==='replace')throw Error('disk/projection failure');return append.call(this,type,data,intent)}

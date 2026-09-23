@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { rollbackAvailability, pendingFailedSurfaceTurns, abortedRegenerationTurns, clearFailedTurnSurface, hasRollbackMessages, locateRollbackSurface, planFailedTurnSurface, planRegenerationSurface, regenerationAttemptTurns } from '../tavern-plugin/lib/domain/rollback-surface.js'
+import { rollbackAvailability, pendingFailedSurfaceTurns, abortedRegenerationTurns, clearFailedTurnSurface, hasRollbackMessages, locateRollbackSurface, planFailedTurnSurface, planRegenerationSurface, regenerationAttemptTurns, replayableFailedTurn } from '../tavern-plugin/lib/domain/rollback-surface.js'
 
 function modelSource() {
   return { kind: 'model', provider: 'test', model: 'test-model' }
@@ -332,4 +332,55 @@ test('失败清理只豁免已退役的历史提示词，不放宽跨正文的�
   ]) {
     assert.throws(() => planFailedTurnSurface({ events: events.map(event => event === frame ? replacement : event), nodes: [6, 3, 7], turn: 2 }), /不是连续区间/)
   }
+})
+
+test('失败尾部可重放出原始用户输入，即使清理墓碑已替换掉原生节点', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 2 } },
+    { seq: 1, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '本轮输入' }], source: { kind: 'user', rpcId: 'rpc-2' } } },
+    { seq: 2, type: 'user/message', data: { content: [], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame' } } },
+    { seq: 3, type: 'turn/end', data: { turn: 2, reason: { kind: 'error', message: 'HTTP 500' } } },
+    { seq: 4, type: 'user/message', data: { role: 'user', content: [], source: { kind: 'plugin', plugin: 'dsh-tavern-failed-turn-cleanup' } },
+      surfaceOp: { op: 'replace', start: 1, end: 2 }, sourceEventSeqs: [1, 2] }
+  ]
+  assert.deepEqual(replayableFailedTurn({ events }), { turn: 2, startSeq: 0, endSeq: 3, userText: '本轮输入', source: { kind: 'user', rpcId: 'rpc-2' } })
+})
+
+test('失败尾部重放认领用户输入与历史重放输入，且只认领真正拥有尾部的回合', () => {
+  const replayInput = { kind: 'plugin', plugin: 'dsh-tavern-replay' }
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 2 } },
+    { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: '第一次' }], source: { kind: 'user' } } },
+    { seq: 2, type: 'turn/end', data: { turn: 2, reason: { kind: 'error' } } },
+    { seq: 3, type: 'turn/start', data: { turn: 3 } },
+    { seq: 4, type: 'user/message', data: { content: [{ type: 'text', text: '第二次' }], source: replayInput } },
+    { seq: 5, type: 'turn/end', data: { turn: 3, reason: { kind: 'aborted' } } }
+  ]
+  assert.equal(replayableFailedTurn({ events }).userText, '第二次')
+  // 只把失败回合之后的用户消息算作输入，之前的输入不参与重放。
+  assert.equal(replayableFailedTurn({ events: events.map(event => event.seq === 4 ? { ...event, data: { ...event.data, source: { kind: 'user' } } } : event) }).userText, '第二次')
+  // 尾部已完成、或失败之后又有新回合开始，都不再有可重放的失败尾部。
+  assert.equal(replayableFailedTurn({ events: events.map(event => event.seq === 5 ? { ...event, data: { turn: 3, reason: { kind: 'completed' } } } : event) }), null)
+  assert.equal(replayableFailedTurn({ events: [...events, { seq: 6, type: 'turn/start', data: { turn: 4 } }, { seq: 7, type: 'user/message', data: { content: [{ type: 'text', text: '第三次' }], source: { kind: 'user' } } }] }), null)
+})
+
+test('重生成合成输入的失败尾部不提供重放，避免把补充要求当成玩家原文提交', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 3 } },
+    { seq: 1, type: 'user/message', data: {
+      content: [{ type: 'text', text: '推门\n\n【本轮补充要求】\n写短一些' }],
+      source: { kind: 'plugin', plugin: 'dsh-tavern-regen', regenerationId: 'op-1' }
+    } },
+    { seq: 2, type: 'turn/end', data: { turn: 3, reason: { kind: 'error', message: 'HTTP 500' } } }
+  ]
+  assert.equal(replayableFailedTurn({ events }), null)
+})
+
+test('没有用户输入的失败回合不提供重放', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 1 } },
+    { seq: 1, type: 'turn/end', data: { turn: 1, reason: { kind: 'error' } } }
+  ]
+  assert.equal(replayableFailedTurn({ events }), null)
+  assert.equal(replayableFailedTurn({ events: [] }), null)
 })

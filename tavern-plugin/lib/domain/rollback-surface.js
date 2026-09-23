@@ -14,6 +14,43 @@ function eventAt(events, seq) {
   return events.find(event => event && Number(event.seq) === Number(seq)) || null
 }
 
+function contentText(value) {
+  const message = object(value)
+  const content = message && message.content
+  if (typeof content === 'string') return content.trim()
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter(block => object(block) && block.type === 'text')
+    .map(block => (typeof block.text === 'string' ? block.text : ''))
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+// Inputs that failed-turn replay may resend as the player's own message.
+// Native user messages and legacy replay attempts qualify; regeneration inputs
+// do not — they carry synthetic guidance text and belong to regenerate recovery.
+function isReplayableInputSource(source) {
+  const value = object(source)
+  if (!value) return false
+  if (value.kind === 'user') return true
+  return value.kind === 'plugin' && value.plugin === 'dsh-tavern-replay'
+}
+
+// The host chat UI turns a user/message into an input row only when its source
+// kind is 'user'; every other kind is classified as a context node. A replay
+// therefore has to resend the input as the player's own message, otherwise the
+// text disappears from the transcript while the suppressed failure keeps it
+// hidden. The original request identity is kept so provider prefix reuse and
+// failure diagnostics stay continuous.
+function replayInputSource(source) {
+  const value = object(source) || {}
+  const next = { kind: 'user' }
+  if (typeof value.rpcId === 'string' && value.rpcId.trim() !== '') next.rpcId = value.rpcId.trim()
+  if (typeof value.clientTimeZone === 'string' && value.clientTimeZone.trim() !== '') next.clientTimeZone = value.clientTimeZone
+  return next
+}
+
 function modelSourceOf(event) {
   const data = object(event && event.data)
   const message = object(data && data.message)
@@ -191,6 +228,47 @@ export function pendingFailedSurfaceTurns({ events = [], nodes = [], suppressed 
     }
   }
   return [...turns].sort((a, b) => a - b)
+}
+
+// A failed tail never reached the stored story, so recovering it is not a
+// rollback: drop the interrupted native residue and replay its original input.
+// The input survives in the append-only log even after the cleanup tombstone.
+export function replayableFailedTurn(input) {
+  const events = Array.isArray(input && input.events) ? input.events : []
+  let lastEnd = null
+  for (const event of events) {
+    if (!event || event.type !== 'turn/end' || !Number.isSafeInteger(Number(event.seq))) continue
+    const turn = Number(event.data && event.data.turn)
+    if (!Number.isSafeInteger(turn) || turn < 1) continue
+    if (lastEnd === null || Number(event.seq) > Number(lastEnd.seq)) lastEnd = event
+  }
+  if (lastEnd === null) return null
+  const reason = lastEnd.data && lastEnd.data.reason ? lastEnd.data.reason.kind : ''
+  if (reason !== 'error' && reason !== 'aborted') return null
+  const turn = Number(lastEnd.data.turn)
+  const endSeq = Number(lastEnd.seq)
+  // A turn that already started after this failure owns the tail now; replaying
+  // would insert an older input behind newer story.
+  for (const event of events) {
+    if (!event || event.type !== 'turn/start' || !Number.isSafeInteger(Number(event.seq))) continue
+    if (Number(event.seq) > endSeq) return null
+  }
+  let startSeq = -1
+  for (const event of events) {
+    if (!event || event.type !== 'turn/start' || Number(event.data && event.data.turn) !== turn) continue
+    startSeq = Math.max(startSeq, Number(event.seq) || 0)
+  }
+  if (startSeq < 0) return null
+  for (const event of events) {
+    if (!event || event.type !== 'user/message') continue
+    const seq = Number(event.seq)
+    if (!Number.isSafeInteger(seq) || seq <= startSeq || seq >= endSeq) continue
+    if (!isReplayableInputSource(event.data && event.data.source)) continue
+    const userText = contentText(event.data)
+    if (userText === '') continue
+    return Object.freeze({ turn, startSeq, endSeq, userText, source: replayInputSource(event.data && event.data.source) })
+  }
+  return null
 }
 
 export function locateRollbackSurface(input) {
