@@ -7211,7 +7211,7 @@ window.__ModuleLoader__.load({
 			const status = ["pending", "updated", "partial", "error", "stale", "interrupted", "unchanged"].includes(receipt.status) ? receipt.status : "unchanged";
 			const sideEffectSuffix = sideEffects.length > 0 ? " · 人物卡联动 " + sideEffects.length + " 项" : "";
 			const labels = {
-				pending: "变量结算中…",
+				pending: props.busy ? "变量结算中…" : "变量结算等待中",
 				interrupted: "变量结算已中断",
 				updated: (changes.length > 0 ? "变量已更新 · " + changes.length + " 项" : "变量已更新 · 旧记录无明细") + sideEffectSuffix,
 				partial: "变量部分更新 · " + changes.length + " 项成功 · " + failures.length + " 项失败" + sideEffectSuffix,
@@ -7225,6 +7225,11 @@ window.__ModuleLoader__.load({
 				if (retrying) return;
 				setRetrying(true);
 				try {
+					if (status === "pending") {
+						await rpc("retrySettlement", { turn: props.turn }, props.sessionId);
+						liveTavernView.invalidate(props.sessionId);
+						return;
+					}
 					await askTavernText({
 						title: "重新结算变量", description: "指导意见（选填），仅对本次结算生效。正文保持不变。",
 						placeholder: "例如：这轮还没有交付物品，不要扣除库存。",
@@ -7236,7 +7241,7 @@ window.__ModuleLoader__.load({
 				finally { setRetrying(false); }
 			}
 			const retryButton = props.latest
-				? h("button", { type: "button", className: "dsh-tavern-mvu-retry", disabled: retrying || props.busy || status === "pending", onClick: retry }, props.busy || status === "pending" ? "结算中…" : retrying ? "重试中…" : ["error", "stale", "interrupted", "partial"].includes(status) ? "重试变量结算" : "重新结算变量")
+				? h("button", { type: "button", className: "dsh-tavern-mvu-retry", disabled: retrying || props.busy, onClick: retry }, props.busy ? "结算中…" : retrying ? "重试中…" : status === "pending" ? "重新投递结算" : ["error", "stale", "interrupted", "partial"].includes(status) ? "重试变量结算" : "重新结算变量")
 				: null;
 			const hasDetails = String(receipt.summary || "") !== "" || changes.length > 0 || sideEffects.length > 0 || failures.length > 0 || retryButton;
 			if (!hasDetails) return h("div", { className: "dsh-tavern-mvu-receipt", "data-status": status }, summary);

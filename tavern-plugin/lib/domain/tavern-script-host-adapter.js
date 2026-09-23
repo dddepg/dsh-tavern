@@ -592,7 +592,7 @@ export function createTavernScriptHostAdapter(options = {}) {
     const beforeDispatch = options.scriptDispatch.status?.(sessionId)
     if (beforeDispatch?.busy) {
       await record('runtime-deferred', { availability: beforeDispatch })
-      return { updated: false, deferred: true, context: projectTavernHelperContext(current) }
+      return { updated: false, deferred: true, deferredReason: 'runtime-busy', context: projectTavernHelperContext(current) }
     }
     const originalText = str((message.swipes && message.swipes[swipeId]) ?? message.sourceText ?? message.text)
     const transaction = {
@@ -641,7 +641,7 @@ export function createTavernScriptHostAdapter(options = {}) {
       // it when the executor registers again.
       if (availability && availability.ready !== true) {
         await record('runtime-deferred', { availability })
-        return { updated: false, deferred: true, context: projectTavernHelperContext(current) }
+        return { updated: false, deferred: true, deferredReason: 'runtime-not-ready', context: projectTavernHelperContext(current) }
       }
       const dispatched = await options.scriptDispatch.dispatch(sessionId, 'MESSAGE_RECEIVED', [messageId], eventContext, { eventId: transaction.eventId, signal: input.signal })
       await record('runtime-completed', { handled: dispatched.handled === true, timedOut: dispatched.timedOut === true, executionLost: dispatched.executionLost === true, claimTimedOut: dispatched.claimTimedOut === true, phase: dispatched.phase, disposed: dispatched.disposed === true, error: dispatched.error, diagnostics: dispatched.diagnostics || [] })
@@ -649,7 +649,7 @@ export function createTavernScriptHostAdapter(options = {}) {
         if (dispatched.initializationFailed === true) return await initializationRejected(str(dispatched.error))
         if (dispatched.unavailable === true || (input.durable === true && (dispatched.disposed === true || dispatched.timedOut === true || /超时|timed?\s*out|timeout/i.test(str(dispatched.error))))) {
           await record('runtime-deferred', { availability: options.scriptDispatch.status?.(sessionId) })
-          return { updated: false, deferred: true, context: projectTavernHelperContext(current) }
+          return { updated: false, deferred: true, deferredReason: dispatched.claimTimedOut === true ? 'claim-timeout' : 'delivery-interrupted', context: projectTavernHelperContext(current) }
         }
         if (str(dispatched.error).trim() !== '' && !dispatched.timedOut && !dispatched.disposed
           && !/超时|timed?\s*out|timeout/i.test(str(dispatched.error))) {

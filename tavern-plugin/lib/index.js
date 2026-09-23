@@ -2756,6 +2756,15 @@ export async function apply(ctx) {
     const officialMvu = chat.mvu && chat.mvu.enabled === true && chat.mvu.owner === 'official'
     if (officialMvu) {
       if (!target.message.mvu) throw new Error('当前最新正文没有可重试的变量结算')
+      if (target.message.mvu.receipt?.status === 'pending') {
+        if (str(guidance).trim()) throw new Error('等待中的任务只能重新投递，不能追加指导意见重新生成变量计划')
+        if (!target.message.mvu.pendingSubmission && !target.message.mvu.delivery?.prepared) throw new Error('当前任务尚未保存可重新投递的变量操作，请等待或停止后台任务')
+        if (activity.phase !== 'pending') throw new Error('等待中的结算状态已经变化，请刷新后重试')
+        // Reuse the durable submission/effect and the existing per-chat job.
+        // Never reset MVU state or request another model plan on redelivery.
+        void queueSettlement(chat.id).catch(error => console.error('dsh-tavern: 重新投递变量结算失败', str(error?.message || error)))
+        return await view(chat, await readChatCard(chat))
+      }
       const swipeId = Math.max(0, Number(target.message.swipeId) || 0)
       if (!target.message.mvuBaseline || target.message.mvuBaseline.swipeId !== swipeId) {
         if (['updated', 'unchanged', 'partial'].includes(target.message.mvu.receipt?.status)) {

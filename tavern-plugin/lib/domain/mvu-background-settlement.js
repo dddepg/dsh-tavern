@@ -441,6 +441,17 @@ export function createMvuSettlementModule(options = {}) {
     return { applied, after, audit, rolledBack, changes, sideEffects, status, effect: applied.effect }
   }
 
+  function pendingReceipt(applied, diagnosticId) {
+    const reasons = {
+      'claim-timeout': '任务领取超时，变量操作已保存，等待重新投递；无需反复重载 MVU。',
+      'runtime-busy': '执行器正在处理其他任务，变量操作已保存，等待空闲后继续。',
+      'runtime-not-ready': 'MVU 执行器尚未就绪，变量操作已保存，就绪后自动继续。',
+      'delivery-interrupted': '任务投递中断，变量操作已保存，等待重新投递。'
+    }
+    const deferredReason = Object.hasOwn(reasons, applied.deferredReason) ? applied.deferredReason : 'runtime-not-ready'
+    return { version: 1, status: 'pending', deferredReason, summary: reasons[deferredReason], diagnosticId, changes: [], sideEffects: [], failures: [] }
+  }
+
   async function resumeVariables(input = {}) {
     const frame = taskFrame(input)
     const submission = resolveMvuSubmissionMacros(normalizeMvuToolSubmission(input.submission), input)
@@ -448,7 +459,7 @@ export function createMvuSettlementModule(options = {}) {
     const outcome = await applySubmission(input, frame, submission, diagnosticId)
     if (outcome.applied.deferred === true) {
       return { frame, submission, variables: clone(input.currentVariables),
-        receipt: { version: 1, status: 'pending', summary: '等待本地 MVU 执行器恢复', diagnosticId, changes: [], sideEffects: [], failures: [] } }
+        receipt: pendingReceipt(outcome.applied, diagnosticId) }
     }
     if (outcome.applied.stale === true) {
       return { frame, submission, receipt: { version: 1, status: 'stale', summary: '变量结算目标已经变化，迟到结果未写入。', diagnosticId, changes: [], sideEffects: [], failures: [] } }
@@ -536,9 +547,10 @@ export function createMvuSettlementModule(options = {}) {
       }
       if (applied.applied.deferred === true) {
         await record('deferred')
-        feedback = { ok: false, retryable: false, deferred: true, error: '本地 MVU 执行器暂时不可用，已保存任务，连接恢复后自动继续。' }
+        const receipt = pendingReceipt(applied.applied, diagnosticId)
+        feedback = { ok: false, retryable: false, deferred: true, deferredReason: receipt.deferredReason, error: receipt.summary }
         result = { variables: clone(input.currentVariables), submission,
-          receipt: { version: 1, status: 'pending', summary: '等待本地 MVU 执行器恢复', diagnosticId, changes: [], sideEffects: [], failures: [] } }
+          receipt }
         return JSON.stringify(feedback)
       }
       if (applied.applied.stale === true) {
