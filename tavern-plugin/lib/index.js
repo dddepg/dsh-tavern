@@ -114,7 +114,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
 import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
-import { rollbackAvailability, foregroundSuppressedTurns, clearFailedTurnSurface, hasRollbackMessages, supersededRegenerationErrorTurns } from './domain/rollback-surface.js'
+import { rollbackAvailability, foregroundSuppressedTurns, clearFailedTurnSurface, hasRollbackMessages, supersededRegenerationErrorTurns, replayableFailedTurn } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
@@ -1404,6 +1404,7 @@ export async function apply(ctx) {
     const projectionEvents = sessionDebugEvidence(chat.sessionId).events
     const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
     const rollbackState = rollbackAvailability(chat, { events: projectionEvents, nodes: agentRegistry.get(chat.sessionId)?.session?.surface?.nodes || [] })
+    const replayTarget = replayableFailedTurn({ events: projectionEvents })
     return {
       chatId: chat.id,
       contextCompaction: chat.contextCompaction || null,
@@ -1431,6 +1432,8 @@ export async function apply(ctx) {
       inputSources,
       inputTemplateDisplays,
       canClearIncompleteReply: rollbackState.canClearIncompleteReply,
+      canReplayFailedTurn: replayTarget !== null,
+      replayFailedTurn: replayTarget === null ? null : replayTarget.turn,
       canRollback: rollbackState.canRollback,
       rollbackUnavailableReason: hasRollbackMessages(chat.messages) ? rollbackState.reason : '',
       canRegenerate: hasRollbackMessages(chat.messages) && !isRescuedHistoryMessage(chat, chat.messages?.findLast(m => m.role === 'assistant')),
@@ -2915,7 +2918,7 @@ export async function apply(ctx) {
     void mvuSettlementReconciler.scan()
   }
   // ---------- 重新生成正文（生成即替换，无确认） ----------
-  const { regenerate: regenBody, recover: recoverRegeneration, rollback: rollbackTurn, undoRollback: undoRollbackTurn } = createRoundHistory({
+  const { regenerate: regenBody, replayFailed: replayFailedTurn, recover: recoverRegeneration, rollback: rollbackTurn, undoRollback: undoRollbackTurn } = createRoundHistory({
     diagnostics: mvuDiagnostics,
     chats: { read: readChat, forSession: chatForSession, readCard: readChatCard,
       readRevision: readChatRevision, write: writeChat, update: updateChat },
@@ -3501,6 +3504,7 @@ export async function apply(ctx) {
       case 'getBodyEdit': return { edit: await bodyEditor.read(args && args.sessionId) }
       case 'saveBodyEdit': return { view: await bodyEditor.save(args && args.sessionId, args) }
       case 'regenBody': return { view: await regenBody(args && args.chatId, args && args.guidance, args && args.sessionId) }
+      case 'replayTurn': return { view: await replayFailedTurn(args && args.chatId, args && args.sessionId) }
       case 'setAllFailedErrorVisibility': {
         const sessionId = str(args && args.sessionId)
         const chat = await chatForSession(sessionId)
@@ -3790,7 +3794,7 @@ export async function apply(ctx) {
 
   function isTurnInput(message) {
     const source = message && message.source
-    return source && (source.kind === 'user' || (source.kind === 'plugin' && source.plugin === 'dsh-tavern-regen'))
+    return source && (source.kind === 'user' || (source.kind === 'plugin' && (source.plugin === 'dsh-tavern-regen' || source.plugin === 'dsh-tavern-replay')))
   }
 
   function activeTurnOf(exec) {

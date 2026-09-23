@@ -9777,6 +9777,20 @@ window.__ModuleLoader__.load({
 			setCandidatePanel(null);
 		}
 
+		// A failed turn never committed a story round, so recovering it is not a
+		// rollback: remove the interrupted reply and resend the same input, which
+		// lets the provider reuse the cached prompt prefix.
+		async function submitFailedTurnReplay(sessionId) {
+			const res = await rpc("replayTurn", {}, sessionId);
+			applyBodyRegenerationResult({ liveTavernView: liveTavernView, historyProjection: historyProjection, sessionId: sessionId, view: res.view, tail: null });
+			setRegenPanel(null);
+			setCandidatePanel(null);
+			setCandidateGuidePanel(null);
+			notifyTavernDataChanged(["sessions"], "play-controls");
+			tavernCoordination.invalidate(sessionId);
+			return res;
+		}
+
 		function CandidateAction(props) {
 			const [busy, setBusy] = React.useState(false);
 			const candidatePanelState = useCandidatePanel();
@@ -9790,10 +9804,12 @@ window.__ModuleLoader__.load({
 			const settlementActive = activity.role === "settlement" && (activity.phase === "pending" || activity.phase === "running");
 			const canRollback = rollbackViewState.view && (rollbackViewState.view.canRegenerate ?? rollbackViewState.view.canRollback) === true;
             const clearIncomplete = rollbackViewState.view && rollbackViewState.view.canClearIncompleteReply === true;
+			const canReplayFailed = rollbackViewState.view && rollbackViewState.view.canReplayFailedTurn === true;
 			const candidateTask = activityState.view && activityState.view.task;
 			const taskForMessage = candidateTask && candidateTask.kind === "candidate" && candidateTask.input && String(candidateTask.input.messageId || "") === String(props.messageId || "") ? candidateTask : null;
 			const taskBusy = !!(taskForMessage && taskForMessage.busy);
 			const regenBusy = regenPanelState !== null && regenPanelState.sessionId === props.sessionId && regenPanelState.phase === "loading";
+			const [replayBusy, setReplayBusy] = React.useState(false);
 			const projectedTaskRef = React.useRef("");
 			React.useEffect(function () {
 				if (!taskForMessage) return;
@@ -9840,6 +9856,15 @@ window.__ModuleLoader__.load({
 				setCandidatePanel(null);
 				setRegenPanel(regenerationPanelFor(event, "input"));
 			}
+			// A failed tail has nothing to replace: one click clears the
+			// interrupted reply and replays the same request, so no guidance box.
+			async function replayFailed() {
+				if (!canReplayFailed || frontRunning || replayBusy) return;
+				setReplayBusy(true);
+				try { await submitFailedTurnReplay(props.sessionId); }
+				catch (err) { tavernErrorHub.report("重新生成本轮", err); }
+				finally { setReplayBusy(false); liveTavernView.invalidate(props.sessionId); }
+			}
 			const h = React.createElement;
 			const isScript = sessionMode === "script";
 			const hasReadyPanel = candidatePanelState !== null && candidatePanelState.sessionId === props.sessionId && candidatePanelState.messageId === props.messageId && candidatePanelState.phase === "ready";
@@ -9856,7 +9881,7 @@ window.__ModuleLoader__.load({
 						generate(false);
 					}
 				} }, settlementActive ? "后台结算中…" : (activity.busy ? activity.label : ((busy || taskBusy) ? "生成中…" : (hasReadyPanel ? "重新生成候选项" : "生成候选项")))),
-				canRollback ? h("button", { className: "dsh-tavern-choice-trigger", disabled: frontRunning || (activity.busy && !settlementActive) || regenBusy, title: settlementActive ? "重新生成将取消当前正文的后台结算" : (activity.busy ? activity.blockReason : "可选择填写意见，再重新生成并替换当前正文"), onClick: openRegeneration }, regenBusy ? "重生成中…" : "重新生成正文") : null
+				(canReplayFailed || canRollback) ? h("button", { className: "dsh-tavern-choice-trigger", disabled: frontRunning || (!canReplayFailed && activity.busy && !settlementActive) || regenBusy || replayBusy, title: canReplayFailed ? "移除被中断的回复并原样重放本轮请求（复用模型缓存）" : (settlementActive ? "重新生成将取消当前正文的后台结算" : (activity.busy ? activity.blockReason : "可选择填写意见，再重新生成并替换当前正文")), onClick: canReplayFailed ? replayFailed : openRegeneration }, replayBusy ? "重放中…" : regenBusy ? "重生成中…" : canReplayFailed ? "重新生成本轮" : "重新生成正文") : null
 			);
 		}
 
@@ -10202,16 +10227,22 @@ window.__ModuleLoader__.load({
 			const state = useLiveTavernView(props.sessionId, "suppression:" + String(latestMessageId || "") + ":" + String(running));
 			const turns = state.view && state.view.suppressedDshErrorTurns || [];
 			const hiddenTurns = state.view && state.view.hiddenDshErrorTurns;
-			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local");
+			const replayTurn = state.view && state.view.canReplayFailedTurn ? Number(state.view.replayFailedTurn) || null : null;
+			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local") + ":" + String(replayTurn || "");
 			React.useEffect(function () {
 				const root = marker.current && marker.current.closest("[data-conversation-scroll]");
 				if (!root) return;
 				const projection = createSupersededErrorProjection(root);
 				const controls = createTurnErrorControls(root, {
-                    sessionId: props.sessionId, storage: window.localStorage, hiddenTurns: hiddenTurns,
+                    sessionId: props.sessionId, storage: window.localStorage, hiddenTurns: hiddenTurns, replayTurn: replayTurn,
                     onToggle: !Array.isArray(hiddenTurns) ? undefined : async function (turn, hidden) {
                         const result = await rpc("setFailedErrorVisibility", { sessionId: props.sessionId, turn: turn, hidden: hidden });
                         liveTavernView.setView(props.sessionId, result.view);
+                    },
+                    onReplay: replayTurn === null ? undefined : async function () {
+                        try { await submitFailedTurnReplay(props.sessionId); }
+                        catch (error) { tavernErrorHub.report("重新生成本轮", error); }
+                        finally { liveTavernView.invalidate(props.sessionId); }
                     },
                     onError: function (error) { tavernErrorHub.report("保存错误提示状态失败", error); }
                 });

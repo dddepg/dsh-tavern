@@ -59,6 +59,21 @@ for (const alpha of [false, true]) {
   })
 }
 
+for (const alpha of [false, true]) {
+  test(`${alpha ? 'alpha' : 'main'} 重放失败回合隐藏被中断的正文与错误行，重放的新回合保持可见`, () => {
+    const committed = ['user', 'assistant-step', 'turn-tail'].map(kind => row(kind, 3, alpha))
+    const failed = ['system-prompt', 'user', 'turn-error', 'assistant-step', 'turn-tail'].map(kind => row(kind, 4, alpha))
+    // 重放把同一段输入重新提交为一个新回合，不能被失败轮次的隐藏波及。
+    const replayed = ['user', 'assistant-step', 'turn-tail'].map(kind => row(kind, 5, alpha))
+    const projection = harness([...committed, ...failed, ...replayed])
+    projection.applySuppressedDshTurns([4])
+    assert.ok(failed.every(row => row.style.display === 'none'), '失败轮次的残留正文与错误行整轮隐藏')
+    assert.ok([...committed, ...replayed].every(row => row.style.display === ''), '已完成剧情与重放出的新回合保持可见')
+    projection.applySuppressedDshTurns([4])
+    assert.ok(failed.every(row => row.style.display === 'none'), '重复投影保持稳定')
+  })
+}
+
 test('alpha 上一轮尾部未挂载时，仍按明确轮次边界保留上一轮', () => {
   const before = row('assistant-step', 5, true)
   const removed = ['system-prompt', 'user', 'assistant-step', 'turn-tail'].map(kind => row(kind, 6, true))

@@ -5,6 +5,18 @@ import vm from 'node:vm'
 
 const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const component = source.slice(source.indexOf('function CandidateAction('), source.indexOf('function CandidateDockActions('))
+// The replay submit path sits above CandidateAction; slice it with its only helper.
+function clientFunction(name) {
+  const start = source.indexOf(name)
+  assert.ok(start >= 0, name)
+  let depth = 0
+  for (let index = source.indexOf('{', start); index < source.length; index++) {
+    if (source[index] === '{') depth++
+    else if (source[index] === '}' && --depth === 0) return source.slice(start, index + 1)
+  }
+  throw new Error('unbalanced ' + name)
+}
+const replaySources = clientFunction('function applyBodyRegenerationResult(') + '\n' + clientFunction('async function submitFailedTurnReplay(')
 
 function harness() {
   let running = true, activity = { phase: 'idle', busy: false, role: '' }, regen = null, fail = false, warning = '', canRollback = true, undoTurn = null
@@ -28,11 +40,12 @@ function harness() {
     window: { confirm: () => { calls.push('confirm'); return true } },
     rpc: async () => { calls.push('rpc'); if (fail) throw new Error('本次回复未完成'); return { view: { rollbackWarning: warning } } },
     historyProjection: { rolledBack: () => calls.push('project'), restored: () => calls.push('restore') },
-    setCandidatePanel() {}, setRegenPanel() {}, setCandidateGuidePanel() {},
+    setCandidatePanel() { calls.push('set-candidate-panel') }, setRegenPanel() { calls.push('set-regen-panel') }, setCandidateGuidePanel() { calls.push('set-guide-panel') },
     liveTavernView: { invalidate: () => calls.push('refresh-view') },
     tavernCoordination: { invalidate: () => calls.push('refresh-activity') },
     notifyTavernDataChanged: () => calls.push('notify'),
     tavernErrorHub: { report: (name, error) => calls.push(name + ': ' + error.message) },
+    submitFailedTurnReplay: async sessionId => { calls.push('replay'); return { view: {} } },
     TavernCompactionAction: function TavernCompactionAction() {}
   }
   const actions = vm.runInNewContext(component + '; ({ CandidateAction, TavernRollbackAction, TavernUndoRollbackAction, TavernMoreActions })', context)
@@ -174,4 +187,52 @@ test('不可回退时展示原因，仍允许独立的正文重新生成', () =>
   assert.match(h.button().children[0], /不在可回退/)
   assert.deepEqual(h.buttons().map(button => button.children[0]), ['生成候选项', '重新生成正文'])
   assert.deepEqual(h.calls, [])
+})
+
+test('失败尾部显示一键重放，点击直接重发而不是打开意见面板', async () => {
+  const h = harness()
+  h.running(false); h.playerRound(true)
+  h.view({ canReplayFailedTurn: true, replayFailedTurn: 3 })
+  const replay = h.buttons()[1]
+  assert.equal(replay.children[0], '重新生成本轮')
+  assert.match(replay.props.title, /重放本轮请求/)
+  assert.equal(replay.props.onClick.name, 'replayFailed')
+  await replay.props.onClick()
+  assert.deepEqual(h.calls.filter(call => call === 'replay'), ['replay'])
+  assert.ok(!h.calls.includes('set-regen-panel'), '失败重放不打开意见面板')
+  assert.ok(h.calls.includes('refresh-view'))
+  // 失败尾部重放优先于整体替换，即便回退入口同时可用。
+  assert.equal(h.buttons().length, 2)
+  h.view({ canReplayFailedTurn: false })
+  assert.equal(h.buttons()[1].children[0], '重新生成正文')
+  assert.equal(h.buttons()[1].props.onClick.name, 'openRegeneration')
+})
+
+test('提交失败重放走 replayTurn，刷新视图与回合投影并清空面板', async () => {
+  const seen = []
+  const context = {
+    rpc: async (...args) => { seen.push(['rpc'].concat(args)); return { view: { suppressedDshTurns: [3], replayed: { turn: 3 } } } },
+    liveTavernView: { setView: (sessionId, view) => seen.push(['setView', sessionId, view]) },
+    historyProjection: { regenerated: (sessionId, view, tail) => seen.push(['regenerated', sessionId, view, tail]) },
+    setCandidatePanel: value => seen.push(['setCandidatePanel', value]),
+    setRegenPanel: value => seen.push(['setRegenPanel', value]),
+    setCandidateGuidePanel: value => seen.push(['setCandidateGuidePanel', value]),
+    notifyTavernDataChanged: (...args) => seen.push(['notify'].concat(args)),
+    tavernCoordination: { invalidate: id => seen.push(['invalidate', id]) }
+  }
+  const { submitFailedTurnReplay } = vm.runInNewContext(replaySources + '; ({ submitFailedTurnReplay })', context)
+  const result = await submitFailedTurnReplay('session')
+  assert.equal(seen[0][0], 'rpc')
+  assert.equal(seen[0][1], 'replayTurn')
+  assert.equal(seen[0][3], 'session')
+  assert.deepEqual(Object.keys(seen[0][2]), [], '重放不携带意见参数')
+  assert.equal(seen[1][0], 'setView')
+  assert.equal(seen[1][1], 'session')
+  assert.equal(seen[2][0], 'regenerated')
+  assert.equal(seen[2][3], null, '重放不依赖点击时的回合尾部')
+  assert.equal(JSON.stringify(seen.slice(3)), JSON.stringify([
+    ['setRegenPanel', null], ['setCandidatePanel', null], ['setCandidateGuidePanel', null],
+    ['notify', ['sessions'], 'play-controls'], ['invalidate', 'session']
+  ]))
+  assert.deepEqual(Array.from(result.view.suppressedDshTurns), [3])
 })
