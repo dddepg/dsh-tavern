@@ -74,7 +74,11 @@
 
 **[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)**
 
+SHA-256：`a21e2ea4bc7bb8d1154b6d133c3bd6c6ca139006c74140527925104731d02951`
+
 下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13。重新运行安装包会关闭所选安装的旧进程，并联网更新已有 Tavern 插件；请先保存当前操作。人物卡、聊天和设置保留。平时从桌面快捷方式启动无需重复更新。
+
+若启动时报「安装或更新失败」或「对路径 DSH Desktop.exe 的访问被拒绝」，请重新下载上方安装包（勿用旧版 `Setup.exe`），关闭已打开的酒馆后再运行。
 
 首次安装可选择文件夹，例如 `D:\Apps\DSH-Tavern`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 `如何启动.txt` 会列出程序及数据位置。
 

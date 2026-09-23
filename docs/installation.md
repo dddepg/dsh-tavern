@@ -4,7 +4,7 @@
 
 ### Windows 一键安装版
 
-下载首页提供的 `DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe`，双击后选择安装文件夹，再点击「安装并启动」。首次需要联网下载兼容的最新版酒馆；无需另外安装 Node.js 或 DSH Desktop。
+下载首页提供的 `DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe`（SHA-256：`a21e2ea4bc7bb8d1154b6d133c3bd6c6ca139006c74140527925104731d02951`），双击后选择安装文件夹，再点击「安装并启动」。首次需要联网下载兼容的最新版酒馆；无需另外安装 Node.js 或 DSH Desktop。若遇到「安装或更新失败」或「对路径 DSH Desktop.exe 的访问被拒绝」，请改用上述修复版并先关闭已打开的酒馆。
 
 - **以后启动：** 双击桌面或开始菜单中的「DSH Tavern」。也可以在安装目录双击 `DSH Tavern.exe`；不要直接运行 `runtime-…` 里的 `DSH Desktop.exe`，内部程序需要外层启动器提供正确的数据路径。
 - **安装位置：** 首次可自选，默认 `%LOCALAPPDATA%\DSH-Tavern`。新安装的程序、运行文件和数据放在所选目录下；数据位于 `data` 子目录。完成提示和目录中的 `如何启动.txt` 列出实际位置。

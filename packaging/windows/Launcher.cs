@@ -193,7 +193,9 @@ class Launcher : Form {
      patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
      using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
      Directory.Move(app,runtime);File.WriteAllText(Path.Combine(runtime,"ready"),Version);
-     } finally {if(Directory.Exists(stage))Directory.Delete(stage,true);}
+     // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
+     // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.
+     } finally {TryDeleteTree(stage);}
     }
     if(Array.IndexOf(args,"--prepare-only")<0)EnsureTavern();
    }finally{if(locked)mutex.ReleaseMutex();}
@@ -258,5 +260,16 @@ class Launcher : Form {
     }
    }
   } finally {foreach(var p in owned)p.Dispose();}
+ }
+ static void TryDeleteTree(string path) {
+  if(string.IsNullOrEmpty(path)||!Directory.Exists(path))return;
+  try {
+   foreach(var file in Directory.GetFiles(path,"*",SearchOption.AllDirectories))
+    File.SetAttributes(file,FileAttributes.Normal);
+   foreach(var directory in Directory.GetDirectories(path,"*",SearchOption.AllDirectories))
+    File.SetAttributes(directory,FileAttributes.Normal);
+   File.SetAttributes(path,FileAttributes.Normal);
+   Directory.Delete(path,true);
+  } catch {}
  }
 }
