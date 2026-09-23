@@ -159,6 +159,7 @@ test('游玩控制 Feature module 统一注册状态栏与对话控制面板', f
   const feature = browser.createPlayControlsFeatureModule()
   const tabs = []
   const injectedSlots = []
+  const registered = []
   const ctx = {
     sessions: {},
     get() { return {} },
@@ -167,7 +168,7 @@ test('游玩控制 Feature module 统一注册状态栏与对话控制面板', f
   }
   const slots = {
     inject(name, activate) { injectedSlots.push(name); return activate() },
-    register() { return function () {} }
+    register(options) { registered.push(options); return function () {} }
   }
 
   feature.register({ ctx, slots })
@@ -175,6 +176,9 @@ test('游玩控制 Feature module 统一注册状态栏与对话控制面板', f
   assert.deepEqual(Object.keys(feature), ['register'])
   assert.deepEqual(tabs.map(tab => tab.id), ['dsh-tavern:conversation-settings', 'dsh-tavern:status'])
   assert.deepEqual(injectedSlots, [
+    'conversation.session.header.actions',
+    'conversation.session.header.utilities',
+    'conversation.session.header.utilities',
     'conversation.session.header.utilities',
     'conversation.session.header.utilities',
     'conversation.session.header.utilities',
@@ -183,6 +187,14 @@ test('游玩控制 Feature module 统一注册状态栏与对话控制面板', f
     'conversation.input.dock',
     'conversation.input.dock'
   ])
+  assert.deepEqual(
+    registered.filter(item => ['agent-preset', 'open-in-app', 'session-log-download'].includes(item.id)).map(item => ({ id: item.id, priority: item.priority })),
+    [
+      { id: 'agent-preset', priority: -1 },
+      { id: 'open-in-app', priority: -1 },
+      { id: 'session-log-download', priority: -1 }
+    ]
+  )
 })
 
 test('持久状态视图不再注册到粘滞输入区域', function () {

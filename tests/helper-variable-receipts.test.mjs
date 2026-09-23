@@ -87,7 +87,7 @@ for (const mismatch of [false,true]) test('parent runtime forwards compact recei
   if(tag==='div')return root
   return frame={contentWindow:{postMessage(message){sent.push(message)}},listeners:{},addEventListener(name,fn){this.listeners[name]=fn},remove(){}}
  }}
- const runtime=helperClient.createTavernHelperScriptRuntime({window:hostWindow,document,
+ const runtime=helperClient.createTavernHelperScriptRuntime({window:hostWindow,document,mutationCoalesceMs:0,
   async rpc(method){calls.push(method);return method==='getTavernHelperContext'
    ? {context:{...baseline(),stateRevision:6,chatVariables:{hp:2,concurrent:1}}}
    : {updated:true,contextDelta:delta(mismatch?{baseRevision:5,stateRevision:6}:{})}},
@@ -95,6 +95,8 @@ for (const mismatch of [false,true]) test('parent runtime forwards compact recei
  })
  runtime.sync('audit',{chatId:'c',tavernHelper:baseline(),tavernHelperScripts:[{id:'a',content:'void 0'}]})
  frame.listeners.load()
+ listeners.message({source:frame.contentWindow,data:{token:'receipt-test',type:'dsh-tavern-helper-subscriptions',ready:true,names:['MESSAGE_RECEIVED']}})
+ await tick()
  listeners.message({source:frame.contentWindow,data:{token:'receipt-test',type:'dsh-tavern-helper-call',method:'updateTavernHelperVariables',requestId:'1',args:{option:{type:'chat'},variables:{hp:2}},scriptId:'a',lifecycleRevision:2}})
  await tick();await tick()
  const result=sent.find(m=>m.type==='dsh-tavern-helper-response').result
@@ -102,7 +104,7 @@ for (const mismatch of [false,true]) test('parent runtime forwards compact recei
  assert.equal(calls.includes('getTavernHelperContext'),mismatch)
  assert.equal(!!result.contextDelta,!mismatch)
  assert.equal(!!result.context,mismatch)
- assert.equal(mutations[0].context.chatVariables.hp,2)
+ assert.equal(mutations.at(-1).context.chatVariables.hp,2)
  runtime.dispose()
 })
 

@@ -8,15 +8,15 @@ class SetupDialog : Form {
  readonly TextBox directory=new TextBox();
  public string InstallRoot { get { return Path.GetFullPath(directory.Text.Trim()); } }
  public SetupDialog(string initial,bool existing) {
-  Text=existing?"修复 DSH Tavern 启动入口":"安装 DSH Tavern";
+  Text=existing?"更新 DSH Tavern":"安装 DSH Tavern";
   ClientSize=new Size(600,300);AutoScaleMode=AutoScaleMode.Dpi;
   StartPosition=FormStartPosition.CenterParent;FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;
-  var heading=new Label{Text=existing?"已找到原安装，将保留现有酒馆和数据。":"选择安装文件夹",AutoSize=false};
+  var heading=new Label{Text=existing?"已找到原安装，将更新程序并保留数据。":"选择安装文件夹",AutoSize=false};
   heading.SetBounds(24,22,550,28);Controls.Add(heading);
   directory.SetBounds(24,60,444,26);directory.Text=initial;directory.ReadOnly=existing;Controls.Add(directory);
   var browse=new Button{Text="浏览…",Enabled=!existing};browse.SetBounds(480,58,96,30);Controls.Add(browse);
   browse.Click+=delegate{using(var picker=new FolderBrowserDialog{Description="选择用于存放 DSH Tavern 的文件夹",SelectedPath=directory.Text})if(picker.ShowDialog(this)==DialogResult.OK)directory.Text=Path.Combine(picker.SelectedPath,"DSH-Tavern");};
-  var note=new Label{Text=existing?"将在原位置补建桌面和开始菜单快捷方式。\n原数据位置保持不变，本次不会迁移数据。":"程序、运行环境和新数据将存放在此文件夹。\n首次安装需要联网；Desktop 固定为 2.0.13。"};
+  var note=new Label{Text=existing?"将关闭此安装的酒馆并联网更新，请先保存当前操作。\n原数据位置保持不变，本次不会迁移数据。":"程序、运行环境和新数据将存放在此文件夹。\n首次安装需要联网；Desktop 固定为 2.0.13。"};
   note.SetBounds(24,105,550,52);Controls.Add(note);
   var entry=new Label{Text="安装后：从桌面或开始菜单打开「DSH Tavern」。\n下载的安装包可以删除，已安装的启动入口会保留。"};
   entry.SetBounds(24,171,550,48);Controls.Add(entry);

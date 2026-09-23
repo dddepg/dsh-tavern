@@ -200,6 +200,38 @@ test('generateRaw 返回独立 RPC 文本，不创建聊天消息', async () => 
   assert.equal(run.calls().length, 1)
 })
 
+test('generateRaw should_stream 假流式补发 iframe 流式事件', async () => {
+  const run = helperHostHarness({ chatId: 'one' })
+  const w = run.window
+  assert.equal(w.TavernHelper.iframe_events, w.iframe_events)
+  assert.equal(w.iframe_events.STREAM_TOKEN_RECEIVED_FULLY, 'js_stream_token_received_fully')
+  const seen = []
+  w.eventOn(w.iframe_events.GENERATION_STARTED, id => seen.push(['started', id]))
+  w.eventOn(w.iframe_events.STREAM_TOKEN_RECEIVED_FULLY, (text, id) => seen.push(['full', text, id]))
+  w.eventOn(w.iframe_events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, (text, id) => seen.push(['incr', text, id]))
+  w.eventOn(w.iframe_events.GENERATION_ENDED, (text, id) => seen.push(['ended', text, id]))
+  const pending = w.generateRaw({
+    ordered_prompts: [{ role: 'user', content: '评议' }],
+    should_stream: true,
+    generation_id: 'build-review'
+  })
+  await tick()
+  const request = run.calls().at(-1)
+  assert.equal(request.method, 'generateTavernHelperRaw')
+  assert.equal(request.args.config.should_stream, true)
+  assert.equal(request.args.config.generation_id, 'build-review')
+  assert.deepEqual(seen, [['started', 'build-review']])
+  run.reply(request, { text: '评分 72' })
+  assert.equal(await pending, '评分 72')
+  await tick()
+  assert.deepEqual(seen, [
+    ['started', 'build-review'],
+    ['full', '评分 72', 'build-review'],
+    ['incr', '评分 72', 'build-review'],
+    ['ended', '评分 72', 'build-review']
+  ])
+})
+
 test('异步 RPC 报错保留调用时的脚本和事件，不能署名最后加载的脚本', async () => {
   const h = helperHostHarness(), w = h.window
   w.__dshTavernHelperSetCurrentScript('a')
@@ -259,6 +291,24 @@ test('awaited MVU event writes retain the host event identity across asynchronou
   h.reply(call, { updated: true })
   await tick()
   assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete').eventId, 'settlement-1')
+})
+
+
+test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async () => {
+  const h = helperHostHarness({ messages: [{ role: 'assistant', variables: { stat_data: { hp: 10 } } }] })
+  h.window.eventOn('MESSAGE_RECEIVED', () => {
+    h.window.setTimeout(() => {
+      void h.window.replaceVariables({ stat_data: { hp: 8 } }, { type: 'message', message_id: 0 })
+    }, 0)
+  })
+  h.receive({ type: 'dsh-tavern-helper-event', name: 'MESSAGE_RECEIVED', eventId: 'mvu-work:defer-1', args: [0] })
+  await tick()
+  assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete')?.eventId, 'mvu-work:defer-1')
+  assert.equal(h.calls().length, 0)
+  await new Promise(resolve => setTimeout(resolve, 20))
+  const call = h.calls().find(item => item.method === 'updateTavernHelperVariables')
+  assert.equal(call?.eventId, 'mvu-work:defer-1')
+  h.reply(call, { updated: true })
 })
 
 test('原卡关闭前端不兼容选项的 ready 回调无需写入不存在的 ST 设置', async () => {

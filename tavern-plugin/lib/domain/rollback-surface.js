@@ -27,14 +27,14 @@ function contentText(value) {
     .trim()
 }
 
-// The inputs a turn may legitimately start from: a native user message or the
-// plugin-injected input of a replay/regeneration attempt. The plugin branch only
-// has to recognise inputs already recorded by older builds.
-function isTurnInputSource(source) {
+// Inputs that failed-turn replay may resend as the player's own message.
+// Native user messages and legacy replay attempts qualify; regeneration inputs
+// do not — they carry synthetic guidance text and belong to regenerate recovery.
+function isReplayableInputSource(source) {
   const value = object(source)
   if (!value) return false
   if (value.kind === 'user') return true
-  return value.kind === 'plugin' && (value.plugin === 'dsh-tavern-regen' || value.plugin === 'dsh-tavern-replay')
+  return value.kind === 'plugin' && value.plugin === 'dsh-tavern-replay'
 }
 
 // The host chat UI turns a user/message into an input row only when its source
@@ -263,7 +263,7 @@ export function replayableFailedTurn(input) {
     if (!event || event.type !== 'user/message') continue
     const seq = Number(event.seq)
     if (!Number.isSafeInteger(seq) || seq <= startSeq || seq >= endSeq) continue
-    if (!isTurnInputSource(event.data && event.data.source)) continue
+    if (!isReplayableInputSource(event.data && event.data.source)) continue
     const userText = contentText(event.data)
     if (userText === '') continue
     return Object.freeze({ turn, startSeq, endSeq, userText, source: replayInputSource(event.data && event.data.source) })

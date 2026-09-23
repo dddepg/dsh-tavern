@@ -1795,7 +1795,7 @@ test('standalone /trigger admits a native turn without overwriting the draft or 
   const ctx = {
     sessions: {
       scope() { return {} },
-      binding(id) { assert.equal(id, 'opening'); return { session: { prompt(content, mode) { prompts.push([content, mode]); return Promise.resolve(reply) } } } },
+      binding(id) { assert.equal(id, 'opening'); return { session: { prompt(content, mode) { assert.ok(content.some(part => part.type === 'text' && part.text.trim()), '宿主拒绝空 prompt'); prompts.push([content, mode]); return Promise.resolve(reply) } } } },
       list: {
         getSnapshot() { return { byId: { opening: summary } } },
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) }
@@ -1805,7 +1805,7 @@ test('standalone /trigger admits a native turn without overwriting the draft or 
   }
   const execute = client.createTavernFrameSlashExecutor(ctx, { setTimeout, clearTimeout })
   const completion = execute('/trigger', 'opening')
-  assert.deepEqual(JSON.parse(JSON.stringify(prompts)), [[[], 'queue']])
+  assert.deepEqual(JSON.parse(JSON.stringify(prompts)), [[[ { type: 'text', text: '继续。' } ], 'queue']])
   summary.running = true
   listeners.forEach(fn => fn())
   summary.running = false
@@ -2201,6 +2201,33 @@ test('initializeGlobal publishes the value before waking existing global waiters
   assert.equal(await window.waitGlobalInitialized('Controller'), value)
 })
 
+test('官方 MVU 下载前提供可写 bootstrap，waitGlobalInitialized 仍等真正模块', async () => {
+  const document = client.buildTavernHelperScriptDocument({
+    token: 'mvu-bootstrap-token',
+    scripts: [{ id: '__dsh_official_mvu__', name: '官方 MVU', system: 'official-mvu', assetUrl: '/api/dsh-tavern/vendor/magvarupdate/bundle.js', content: '', buttons: [] }],
+    context: { messages: [{ message_id: 0, variables: { stat_data: { hp: 3 }, schema: {} } }] }
+  })
+  assert.match(document, /__dshBootstrap:\s*true/)
+  assert.match(document, /officialMvuEnabled\) window\.Mvu = Object\.assign\(\{ __dshBootstrap: true \}/)
+  const source = clientSource.slice(clientSource.indexOf('window.initializeGlobal = function'), clientSource.indexOf('window.getTavernHelperVersion =', clientSource.indexOf('window.initializeGlobal = function')))
+  const events = client.createTavernHelperEventBus({ currentScript: () => ({ id: 'mvu' }), withScript: (_id, fn) => fn(), reportSubscriptions() {}, post() {} })
+  const window = {
+    Mvu: { __dshBootstrap: true, getMvuData() { return { ok: true } } },
+    eventOn: events.listen, eventOff: events.off, eventEmit: events.emit
+  }
+  vm.runInNewContext(source, { window })
+  let resolved = false
+  const waiting = window.waitGlobalInitialized('Mvu').then(value => { resolved = true; return value })
+  await Promise.resolve()
+  assert.equal(resolved, false)
+  assert.equal(window.Mvu.__dshBootstrap, true)
+  const real = { getMvuData() { return { ready: true } } }
+  await window.initializeGlobal('Mvu', real)
+  assert.equal(await waiting, real)
+  assert.equal(resolved, true)
+  assert.equal(await window.waitGlobalInitialized('Mvu'), real)
+})
+
 test('frame setinput updates the owning session draft without submitting', async () => {
   const writes = []
   const ctx = { sessions: { scope: id => ({ id }) }, get: () => ({ input: { for: scope => ({ setDraft: text => writes.push([scope.id, text]), submit: assert.fail }) } }) }
@@ -2248,6 +2275,26 @@ test('模板内生成命令在提交后返回，不占住模板队列等待下�
   assert.equal((await execute('/send 下一步|/trigger','game',{waitForCompletion:false})).submitted,true)
   assert.deepEqual(calls,['下一步','queue'])
   assert.equal((await execute('/trigger','game',{waitForCompletion:false})).submitted,true)
+})
+
+test('独立 /trigger 不向拒绝空输入的宿主提交空 prompt', async () => {
+  const calls = []
+  const ctx = {
+    sessions: {
+      scope: () => ({}),
+      binding: () => ({ session: { prompt: async content => {
+        calls.push(content)
+        if (!content.some(part => part.type === 'text' && part.text.trim())) {
+          return { ok: false, error: { message: 'prompt content must include non-whitespace text or an attachment (gateway/bad-request)' } }
+        }
+        return { ok: true }
+      } } })
+    },
+    get: () => ({ input: { for: () => ({ setDraft: assert.fail, submit: assert.fail }) } })
+  }
+  const execute = client.createTavernFrameSlashExecutor(ctx, { setTimeout, clearTimeout })
+  assert.equal((await execute('/trigger', 'game', { waitForCompletion: false })).submitted, true)
+  assert.equal(calls.length, 1)
 })
 
 

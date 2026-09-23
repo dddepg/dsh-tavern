@@ -37,10 +37,14 @@ export function createRequestPerformance({ now = () => performance.now(), wall =
       try { return await operation() }
       finally { if (row && row.stages.length < 40) row.stages.push({ name, durationMs: Math.round(now() - start) }) }
     },
-    state({ foregroundRunning, backgroundBusy, backgroundRole }) {
+    state({ foregroundRunning, backgroundBusy, backgroundRole, viewRebuild, helperMessageCount }) {
       const row = context.getStore()
-      if (row) row.activity = { foregroundRunning: foregroundRunning === true, backgroundBusy: backgroundBusy === true,
-        backgroundRole: ['candidate', 'settlement', 'worldbook-filter', 'image', 'phone'].includes(backgroundRole) ? backgroundRole : '' }
+      if (row) {
+        row.activity = { foregroundRunning: foregroundRunning === true, backgroundBusy: backgroundBusy === true,
+          backgroundRole: ['candidate', 'settlement', 'worldbook-filter', 'image', 'phone'].includes(backgroundRole) ? backgroundRole : '' }
+        if (viewRebuild === 'full' || viewRebuild === 'dirty' || viewRebuild === 'cache') row.viewRebuild = viewRebuild
+        if (Number.isSafeInteger(helperMessageCount) && helperMessageCount >= 0) row.helperMessageCount = helperMessageCount
+      }
     },
     read() { return structuredClone({ recent, slow }) }
   }

@@ -3,6 +3,8 @@ packages:
 
 nodeLinker: hoisted
 autoInstallPeers: false
+# Desktop 2.0.13 自带 pnpm 11.8.0。经 Electron 加载时，缺失的默认 .pnpmfile.mjs 会让安装失败。
+ignorePnpmfile: true
 allowBuilds:
   node-pty: false
 minimumReleaseAgeExclude:

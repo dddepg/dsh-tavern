@@ -1,9 +1,9 @@
 /** Compile the explicitly ordered, text-only generateRaw contract without Session writes. */
 export async function generateHelperRaw(config, { callModel, sessionId = '', history = [] }) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('generateRaw 参数必须是对象')
-  const allowed = new Set(['ordered_prompts', 'user_input', 'max_chat_history', 'should_stream', 'should_silence', 'overrides'])
+  // generation_id / should_stream / should_silence：酒馆助手元数据；假流式不推送流式事件，仍一次性返回全文。
+  const allowed = new Set(['ordered_prompts', 'user_input', 'max_chat_history', 'should_stream', 'should_silence', 'overrides', 'generation_id'])
   for (const key of Object.keys(config)) if (!allowed.has(key)) throw new Error('generateRaw 暂不支持参数：' + key)
-  if (config.should_stream === true) throw new Error('generateRaw 暂不支持流式事件，请设置 should_stream: false')
   if (!Array.isArray(config.ordered_prompts) || !config.ordered_prompts.length) throw new Error('generateRaw 需要显式 ordered_prompts')
   const overrides = config.overrides || {}
   for (const [key, value] of Object.entries(overrides)) {

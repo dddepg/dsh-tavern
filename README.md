@@ -72,13 +72,17 @@
 
 ### 纯小白安装（仅限 Windows x64）
 
-**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)**
+**[点击下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)**
 
-下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13；已有安装和数据会保留，后续可在酒馆界面中更新。
+SHA-256：`a21e2ea4bc7bb8d1154b6d133c3bd6c6ca139006c74140527925104731d02951`
+
+下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13。重新运行安装包会关闭所选安装的旧进程，并联网更新已有 Tavern 插件；请先保存当前操作。人物卡、聊天和设置保留。平时从桌面快捷方式启动无需重复更新。
+
+若启动时报「安装或更新失败」或「对路径 DSH Desktop.exe 的访问被拒绝」，请重新下载上方安装包（勿用旧版 `Setup.exe`），关闭已打开的酒馆后再运行。
 
 首次安装可选择文件夹，例如 `D:\Apps\DSH-Tavern`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 `如何启动.txt` 会列出程序及数据位置。
 
-**旧便携版找不到入口？** 下载上面的新版安装包，运行后点击「修复并启动」，会在原位置补建入口并保留原数据，不必重新导入人物卡或聊天。请不要直接运行 `AppData\Local\DSH-Tavern-Portable\runtime-…` 内的 `DSH Desktop.exe`。详见[Windows 安装与启动入口](docs/installation.md#windows-一键安装版)。
+**旧便携版找不到入口？** 下载上面的新版安装包，运行后点击「修复并启动」，会在原位置更新运行时和插件、补建入口并保留原数据，不必重新导入人物卡或聊天。请不要直接运行 `AppData\Local\DSH-Tavern-Portable\runtime-…` 内的 `DSH Desktop.exe`。详见[Windows 安装与启动入口](docs/installation.md#windows-一键安装版)。
 
 **卸载后重装提示“已记录的安装目录暂时不可用”？** 上方下载已更新为修复版。重新下载并运行，选择「重新安装」后指定安装位置即可，无需手动清理注册表。若要继续使用旧聊天和人物卡，请先连接原磁盘或选择「使用原目录」；重新安装不会删除旧文件，也不能恢复已删除的数据。
 
@@ -165,13 +169,13 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 **老用户更新：**点击酒馆左侧栏底部的 **更新到最新版**；酒馆打不开时，回到 DSHA 主界面，在 **酒馆工作台**旁点 **更新/修复**。更新完成后，在 DSHA 底部 **启动** 页点 **重启**，再按上述路径进入，即可使用新窗口。安装报错或找不到入口时，见 [Android 安装与排错说明](docs/android-install.md)。
 
-### 手机远程访问（可选插件）
+### 手机远程访问
 
 **版本提醒：酒馆当前适配 DSH `0.1.5-rc.2`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
 
 酒馆运行在电脑或服务器上，手机通过浏览器访问，可按场景选择：
 
-- **自己电脑运行，手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。安装并重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码即可。
+- **自己电脑运行，手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。Desktop 安装和更新会自动配置 Pocket，不再同时安装 `dsh-web-mobile`；DSHA 继续使用 `dsh-web-mobile`。重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码即可。
 - **服务器部署，手机远程登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)。为远程 WebUI 添加账号密码认证；服务器地址、监听与端口需先配置为可访问，插件本身不提供内网穿透。首次账号设置及配置方法见插件 README。
 
 ## 开始游玩
@@ -230,3 +234,5 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 [![用户反馈：世界书和角色卡调整方便，与 DSH 语音阅读插件兼容良好](docs/images/readme/testimonials/setup-and-plugin-compatibility.jpg)](docs/images/readme/testimonials/setup-and-plugin-compatibility.jpg)
 
 [![用户反馈：AI 修改内容方便，变量更新稳定，轻前端游玩体验不错](docs/images/readme/testimonials/ai-editing-and-variable-stability.jpg)](docs/images/readme/testimonials/ai-editing-and-variable-stability.jpg)
+
+[![用户反馈：长局 184 轮仍保持 99% 缓存命中与 272 tok/s](docs/images/readme/testimonials/long-session-cache-hit.png)](docs/images/readme/testimonials/long-session-cache-hit.png)

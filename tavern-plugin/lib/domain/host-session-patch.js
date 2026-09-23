@@ -31,11 +31,18 @@ export async function prepareExpandedPatch(runtime, options = {}) {
   async function compile(name, transform = text => text) {
     const { path, text } = await source(name)
     const localRequire = createRequire(path)
+    function resolveSpecifier(specifier) {
+      if (urls.has(specifier)) return urls.get(specifier)
+      if (/^(node:|file:|data:)/.test(specifier)) return specifier
+      return pathToFileURL(localRequire.resolve(specifier)).href
+    }
+    // data: modules cannot resolve bare specifiers. Rewrite both static and
+    // dynamic imports (Windows persistence lazily `import("koffi")`).
     let modified = transform(text)
-    modified = modified.replace(/from "([^"]+)"/g, (_, specifier) => {
-      const url = urls.get(specifier) ?? (/^(node:|file:|data:)/.test(specifier) ? specifier : pathToFileURL(localRequire.resolve(specifier)).href)
-      return 'from ' + JSON.stringify(url)
-    })
+    modified = modified.replace(/\bfrom\s+"([^"]+)"/g, (_, specifier) => 'from ' + JSON.stringify(resolveSpecifier(specifier)))
+    modified = modified.replace(/\bfrom\s+'([^']+)'/g, (_, specifier) => 'from ' + JSON.stringify(resolveSpecifier(specifier)))
+    modified = modified.replace(/\bimport\s*\(\s*"([^"]+)"\s*\)/g, (_, specifier) => 'import(' + JSON.stringify(resolveSpecifier(specifier)) + ')')
+    modified = modified.replace(/\bimport\s*\(\s*'([^']+)'\s*\)/g, (_, specifier) => 'import(' + JSON.stringify(resolveSpecifier(specifier)) + ')')
     modified = modified.replaceAll('import.meta.url', JSON.stringify(pathToFileURL(path).href))
     const url = 'data:text/javascript;base64,' + Buffer.from(modified).toString('base64')
     urls.set(name, url)
@@ -92,6 +99,14 @@ export async function prepareExpandedPatch(runtime, options = {}) {
       `if (event.type === "assistant/message" && sources !== void 0 && !${own}) throw`))
     const { sessionFormatCatalog: catalog } = await compile('@deepseek-ai/dsh-session-format-catalog')
     const { default: PatchedPersistence } = await compile('@deepseek-ai/dsh-session-persistence-jsonl')
+    // Guard #74: Windows create/rename path does `await import("koffi")`. If the
+    // bare specifier survived into the data: module, new chats fail immediately.
+    {
+      const encoded = urls.get('@deepseek-ai/dsh-session-persistence-jsonl')
+      const decoded = Buffer.from(String(encoded).slice(String(encoded).indexOf(',') + 1), 'base64').toString('utf8')
+      assert.doesNotMatch(decoded, /\bimport\s*\(\s*["']koffi["']\s*\)/)
+      if (decoded.includes('koffi')) assert.match(decoded, /\bimport\s*\(\s*"file:[^"]*koffi[^"]*"\s*\)/)
+    }
     const query = await compile('@deepseek-ai/dsh-session-query', text =>
       `import { SessionQueryError as NativeQueryError } from ${JSON.stringify(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-query')).href)};\n` +
       text.replace(/\bnew SessionQueryError\(/g, 'new NativeQueryError(').replace(/\binstanceof SessionQueryError\b/g, 'instanceof NativeQueryError') +
@@ -169,15 +184,25 @@ export async function prepareExpandedPatch(runtime, options = {}) {
 export const SESSION_PATCH_PROTOCOL = 1
 export const SESSION_PATCH_VERSION = '0.1.5-rc.2'
 const INSTALLED = Symbol.for('dsh-tavern.host-session-patch.v1')
+// Each entry lists every known-good bytes of that file for 0.1.5-rc.2.
+// Official npm is always first. DSHA v0.1.5-rc2 rewrites two packages at
+// packaging time (legacy rc.1 session shape + Android atomic publish); those
+// variants keep the same Tavern replacement anchors and must be accepted.
 const PINNED_SHA256 = Object.freeze({
-  '@deepseek-ai/dsh-session/surface': 'aad7aaabe6cd9b39ae4cc3b50a2873c9b5d73b69d929051f31b18ecc13647c72',
-  '@deepseek-ai/dsh-session': '05e94f57d96e7979670a5b51024c8591572eb0051ce793613dbdec35cf2c47bf',
-  '@deepseek-ai/dsh-session-persistence': '0dc2a1634e4b6ebb558aac214009da3dc00f54f315762a56a1841d12baf770d4',
-  '@deepseek-ai/dsh-session-format-v2-to-v3': '2d35e1e0ed497af569d5735fc590187de1568489cfe60d070b5f61330cd5a338',
-  '@deepseek-ai/dsh-session-format-catalog': 'bf4bde9e6563d7793f820c4a1b3141f6527283dd6c58f16bf43a67bc557cc48c',
-  '@deepseek-ai/dsh-session-persistence-jsonl': '7d0640c9fc4be6c703b77605fdee6af519c542fae28a6cd4489353309812f062',
-  '@deepseek-ai/dsh-session-query': 'c2a3954a0060942b179a92111cce556f27b8d659a4d815bb0e9defadbdb874da',
-  '@deepseek-ai/dsh-api-session-controller/client': 'ff33d1f85a0b2f14568fcb555d5f52d2ba5f57f2e0ecfa5d7885ba83e7ff6069',
+  '@deepseek-ai/dsh-session/surface': Object.freeze(['aad7aaabe6cd9b39ae4cc3b50a2873c9b5d73b69d929051f31b18ecc13647c72']),
+  '@deepseek-ai/dsh-session': Object.freeze(['05e94f57d96e7979670a5b51024c8591572eb0051ce793613dbdec35cf2c47bf']),
+  '@deepseek-ai/dsh-session-persistence': Object.freeze(['0dc2a1634e4b6ebb558aac214009da3dc00f54f315762a56a1841d12baf770d4']),
+  '@deepseek-ai/dsh-session-format-v2-to-v3': Object.freeze([
+    '2d35e1e0ed497af569d5735fc590187de1568489cfe60d070b5f61330cd5a338',
+    '8e7cc1aab2eef1099cbca390dd04c4a8ff3e6b3f64bd9e34e2357630b5e65af5',
+  ]),
+  '@deepseek-ai/dsh-session-format-catalog': Object.freeze(['bf4bde9e6563d7793f820c4a1b3141f6527283dd6c58f16bf43a67bc557cc48c']),
+  '@deepseek-ai/dsh-session-persistence-jsonl': Object.freeze([
+    '7d0640c9fc4be6c703b77605fdee6af519c542fae28a6cd4489353309812f062',
+    'd387931d4ae848152411ec5f152064108b899bd9b5bd813c540afa2274703998',
+  ]),
+  '@deepseek-ai/dsh-session-query': Object.freeze(['c2a3954a0060942b179a92111cce556f27b8d659a4d815bb0e9defadbdb874da']),
+  '@deepseek-ai/dsh-api-session-controller/client': Object.freeze(['ff33d1f85a0b2f14568fcb555d5f52d2ba5f57f2e0ecfa5d7885ba83e7ff6069']),
 })
 
 function hostRequireFrom(anchor) {
@@ -186,7 +211,7 @@ function hostRequireFrom(anchor) {
 
 // The plugin file lives in this repo. The running host packages live next to
 // the dsh launcher. Pick the copy that actually constructed the live store.
-async function defaultHostRequire(persistence) {
+export async function defaultHostRequire(persistence) {
   const anchors = [fileURLToPath(new URL('../../package.json', import.meta.url))]
   if (process.argv[1]) anchors.push(process.argv[1])
   const found = []
@@ -278,13 +303,13 @@ export async function installHostSessionPatch({ hostRequire, persistence, query 
     if (!installed.loadSessionCatalog) installed.loadSessionCatalog = loadSessionCatalog
     return installed
   }
-  for (const [name, expected] of Object.entries(PINNED_SHA256)) {
+  for (const [name, allowed] of Object.entries(PINNED_SHA256)) {
     let actual = ''
     try { actual = createHash('sha256').update(readFileSync(require.resolve(name))).digest('hex') }
     catch (error) {
       return finish({ status: 'failed', hostVersion, reason: '无法校验宿主文件 ' + name + '：' + (error.message || error) })
     }
-    if (actual !== expected) return finish({ status: 'failed', hostVersion, reason: '宿主文件与 0.1.5-rc.2 补丁清单不一致：' + name })
+    if (!allowed.includes(actual)) return finish({ status: 'failed', hostVersion, reason: '宿主文件与 0.1.5-rc.2 补丁清单不一致：' + name })
   }
   if (!persistence?.tracker?.openHandles || !persistence?.tracker?.writers) {
     return finish({ status: 'failed', hostVersion, reason: '宿主没有 JSONL 会话存储，不能安装补丁' })

@@ -22,7 +22,24 @@ function installOpeningPreviewBridge(token, preview) {
     });
   }
   window.generateRaw = function (config) {
-    return request('dsh-tavern-helper-call', { method: 'generateTavernHelperRaw', args: { config: copy(config) } }).then(function (result) { return result.text; });
+    const payload = copy(config);
+    const streaming = payload && payload.should_stream === true;
+    const generationId = payload && payload.generation_id != null && String(payload.generation_id) !== ''
+      ? String(payload.generation_id)
+      : ('dsh-gen-' + Date.now().toString(16));
+    if (streaming && window.iframe_events && typeof window.eventEmit === 'function') {
+      if (payload.generation_id == null || payload.generation_id === '') payload.generation_id = generationId;
+      void window.eventEmit(window.iframe_events.GENERATION_STARTED, generationId);
+    }
+    return request('dsh-tavern-helper-call', { method: 'generateTavernHelperRaw', args: { config: payload } }).then(function (result) {
+      const text = result.text;
+      if (!streaming || !window.iframe_events || typeof window.eventEmit !== 'function') return text;
+      const events = window.iframe_events;
+      return Promise.resolve(window.eventEmit(events.STREAM_TOKEN_RECEIVED_FULLY, text, generationId))
+        .then(function () { return window.eventEmit(events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, text, generationId); })
+        .then(function () { return window.eventEmit(events.GENERATION_ENDED, text, generationId); })
+        .then(function () { return text; });
+    });
   };
   window.getCharWorldbookNames = function () { return { primary: worldbook ? worldbook.name : null, additional: [] }; };
   window.getWorldbook = async function (name) {

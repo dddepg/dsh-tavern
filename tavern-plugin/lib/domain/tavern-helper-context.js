@@ -41,42 +41,100 @@ export function lastTavernHelperVariables(messages) {
   return undefined
 }
 
+/** How many trailing Helper floors keep full bodies on a cold getSession. */
+export const HELPER_MESSAGE_COLD_WINDOW = 48
+
+function tavernHelperRole(source) {
+  return source.role === 'tavern-helper'
+    ? (['system', 'assistant', 'user'].includes(source.tavernRole) ? source.tavernRole : 'assistant')
+    : (source.role === 'user' ? 'user' : 'assistant')
+}
+
+/** Project one Chat floor into the synchronous Tavern Helper message shape. */
+export function projectTavernHelperMessage(source, messageId) {
+  const swipeId = selectedSwipe(source)
+  const swipes = Array.isArray(source.swipes) && source.swipes.length > 0
+    ? source.swipes.map(str)
+    : [str(source.sourceText || source.text)]
+  const variables = Array.isArray(source.variables) ? clone(source.variables) : []
+  const projected = {
+    pluginData: clone(source.tavernPluginData || {}),
+    message_id: messageId,
+    role: tavernHelperRole(source),
+    message: swipes[swipeId] ?? swipes[0] ?? '',
+    swipe_id: swipeId,
+    swipes,
+    swipes_data: variables,
+    variables: clone(variables[swipeId] || {})
+  }
+  if (source.role === 'tavern-helper') {
+    projected.is_hidden = source.tavernHidden === true
+    if (str(source.name) !== '') projected.name = str(source.name)
+  }
+  return projected
+}
+
+/** Cold-start placeholder: keeps dense ids without cloning large variables. */
+export function projectTavernHelperMessageSkeleton(source, messageId) {
+  const swipeId = selectedSwipe(source)
+  const projected = {
+    pluginData: {},
+    message_id: messageId,
+    role: tavernHelperRole(source),
+    message: '',
+    swipe_id: swipeId,
+    swipes: [''],
+    swipes_data: [],
+    variables: {},
+    stub: true
+  }
+  if (source.role === 'tavern-helper') {
+    projected.is_hidden = source.tavernHidden === true
+    if (str(source.name) !== '') projected.name = str(source.name)
+  }
+  return projected
+}
+
+function rememberAssistantTurn(turnMessageIds, source, messageId, role) {
+  if (role !== 'assistant') return
+  const turn = Math.max(0, Number(source.turn) || (source.greeting === true ? 1 : 0))
+  if (turn > 0) turnMessageIds[String(turn)] = messageId
+}
+
 /** Project authoritative Chat state into the synchronous Tavern Helper read API. */
-export function projectTavernHelperContext(chat) {
+export function projectTavernHelperContext(chat, options = {}) {
+  const sources = Array.isArray(chat && chat.messages) ? chat.messages : []
+  const previousMessages = Array.isArray(options.previousMessages) ? options.previousMessages : null
+  const dirtyIndices = options.dirtyIndices instanceof Set ? options.dirtyIndices : null
+  const skeletonUntil = Number.isSafeInteger(options.skeletonUntil) ? Math.max(0, options.skeletonUntil) : 0
+  const dirty = dirtyIndices ? new Set(dirtyIndices) : null
+  if (dirty && previousMessages) {
+    const previousCount = previousMessages.length
+    const nextCount = sources.length
+    for (let index = Math.min(previousCount, nextCount); index < nextCount; index++) dirty.add(index)
+  }
   const messages = []
   const turnMessageIds = {}
-  for (const source of Array.isArray(chat && chat.messages) ? chat.messages : []) {
+  for (let index = 0; index < sources.length; index++) {
+    const source = sources[index]
     if (!source || typeof source !== 'object') continue
     const messageId = messages.length
-    const swipeId = selectedSwipe(source)
-    const swipes = Array.isArray(source.swipes) && source.swipes.length > 0
-      ? source.swipes.map(str)
-      : [str(source.sourceText || source.text)]
-    const variables = Array.isArray(source.variables) ? clone(source.variables) : []
-    const tavernRole = source.role === 'tavern-helper'
-      ? (['system', 'assistant', 'user'].includes(source.tavernRole) ? source.tavernRole : 'assistant')
-      : (source.role === 'user' ? 'user' : 'assistant')
-    const projected = {
-      pluginData: clone(source.tavernPluginData || {}),
-      message_id: messageId,
-      role: tavernRole,
-      message: swipes[swipeId] ?? swipes[0] ?? '',
-      swipe_id: swipeId,
-      swipes,
-      swipes_data: variables,
-      variables: clone(variables[swipeId] || {})
+    if (messageId !== index) {
+      // Sparse/invalid floors break dirty reuse; finish with a full project.
+      return projectTavernHelperContext(chat, { skeletonUntil })
     }
-    if (source.role === 'tavern-helper') {
-      projected.is_hidden = source.tavernHidden === true
-      if (str(source.name) !== '') projected.name = str(source.name)
+    let projected
+    if (dirty && previousMessages && !dirty.has(index) && previousMessages[index] && previousMessages[index].message_id === index && previousMessages[index].stub !== true) {
+      projected = previousMessages[index]
+    } else if (index < skeletonUntil) {
+      projected = projectTavernHelperMessageSkeleton(source, messageId)
+    } else {
+      projected = projectTavernHelperMessage(source, messageId)
     }
     messages.push(projected)
-    if (projected.role === 'assistant') {
-      const turn = Math.max(0, Number(source.turn) || (source.greeting === true ? 1 : 0))
-      if (turn > 0) turnMessageIds[String(turn)] = messageId
-    }
+    rememberAssistantTurn(turnMessageIds, source, messageId, projected.role)
   }
-  return {
+  const result = {
     version: 1,
     chatId: str(chat && chat.id),
     scriptPrompts: clone(chat && chat.tavernScriptPrompts || []),
@@ -89,6 +147,24 @@ export function projectTavernHelperContext(chat) {
     chatVariables: clone(chat && chat.variables && typeof chat.variables === 'object' ? chat.variables : {}),
     scriptVariables: clone(chat && chat.tavernHelperScriptVariables && typeof chat.tavernHelperScriptVariables === 'object' ? chat.tavernHelperScriptVariables : {})
   }
+  if (skeletonUntil > 0 && messages.length > skeletonUntil) {
+    result.messagesPending = { from: 0, to: skeletonUntil - 1 }
+  }
+  return result
+}
+
+/** Replace stub floors with full projections for a closed index range. */
+export function hydrateTavernHelperMessages(chat, from, to) {
+  const sources = Array.isArray(chat && chat.messages) ? chat.messages : []
+  const start = Math.max(0, Number(from) || 0)
+  const end = Math.min(sources.length - 1, Number.isSafeInteger(Number(to)) ? Number(to) : sources.length - 1)
+  const messages = []
+  for (let index = start; index <= end; index++) {
+    const source = sources[index]
+    if (!source || typeof source !== 'object') throw new Error('消息楼层不存在: ' + index)
+    messages.push(projectTavernHelperMessage(source, index))
+  }
+  return { from: start, to: end, messages }
 }
 
 /** Append Helper-owned floors without turning plugin records into story rounds. */

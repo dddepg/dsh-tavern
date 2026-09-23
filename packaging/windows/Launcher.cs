@@ -12,17 +12,54 @@ using System.Text;
 using System.Xml.Linq;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 class Launcher : Form {
  // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
- const string Version="a272f20b3f1f5b15-setup1";
+ const string Version="a272f20b3f1f5b15-setup2";
  Label label=new Label(); ProgressBar bar=new ProgressBar();
  string root, runtime, data; string[] args;
  string installedLauncher; bool showCompletion, installationSelected;
  const string LauncherName="DSH Tavern.exe";
  const string SettingsName="launcher-settings.xml";
  static string TestRoot { get { return Environment.GetEnvironmentVariable("DSH_LAUNCHER_TEST_ROOT"); } }
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern IntPtr GetEnvironmentStringsW();
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool FreeEnvironmentStringsW(IntPtr block);
+ [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool SetEnvironmentVariableW(string name, string value);
+ // ProcessStartInfo copies the environment into a case-insensitive dictionary and throws if both NO_PROXY and no_proxy exist.
+ static void RepairDuplicateEnvironmentVariables() {
+  for(int pass=0; pass<8; pass++) {
+   var names=new List<string>(); var values=new List<string>();
+   IntPtr block=GetEnvironmentStringsW(); if(block==IntPtr.Zero)return;
+   try {
+    IntPtr current=block;
+    while(true) {
+     string entry=Marshal.PtrToStringUni(current);
+     if(string.IsNullOrEmpty(entry))break;
+     current=IntPtr.Add(current,(entry.Length+1)*2);
+     if(entry[0]=='=')continue;
+     int split=entry.IndexOf('='); if(split<=0)continue;
+     names.Add(entry.Substring(0,split)); values.Add(entry.Substring(split+1));
+    }
+   } finally { FreeEnvironmentStringsW(block); }
+   var first=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+   var count=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+   for(int i=0;i<names.Count;i++) {
+    int n; if(!count.TryGetValue(names[i], out n)) { count[names[i]]=1; first[names[i]]=i; }
+    else count[names[i]]=n+1;
+   }
+   bool duplicate=false;
+   foreach(var pair in count) {
+    if(pair.Value<2)continue;
+    duplicate=true; int index=first[pair.Key];
+    for(int n=0;n<pair.Value;n++) SetEnvironmentVariableW(names[index], null);
+    SetEnvironmentVariableW(names[index], values[index]);
+   }
+   if(!duplicate)return;
+  }
+ }
  [STAThread] static void Main(string[] args) {
+  RepairDuplicateEnvironmentVariables();
   Application.EnableVisualStyles(); Application.Run(new Launcher(args));
  }
  Launcher(string[] a) {
@@ -129,6 +166,7 @@ class Launcher : Form {
   using(var mutex=new Mutex(false,"Local\\DSHTavernPrepare-Online")) {
    Status("正在等待运行文件准备完成…"); bool locked=false;
    try {try {locked=mutex.WaitOne();}catch(AbandonedMutexException){locked=true;}
+    if(Array.IndexOf(args,"--prepare-only")<0 && NeedsUpgrade()) StopInstallationProcesses();
     SaveEntry();
     if(!File.Exists(Path.Combine(runtime,"ready"))) {
      Status("首次准备运行环境，后续启动无需重复解压…");
@@ -147,13 +185,17 @@ class Launcher : Form {
      if(!File.Exists(Path.Combine(app,"DSH Desktop.exe")))throw new Exception("运行环境不完整");
      var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
      var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
+     Resource("setupUpgrade",Path.Combine(app,@"resources\setup-upgrade.mjs"));
+     Resource("powershellInstaller",Path.Combine(app,@"resources\install.ps1"));
      var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app)+" "+Quote(packageHelper));
      patchStart.UseShellExecute=false;patchStart.CreateNoWindow=true;patchStart.RedirectStandardError=true;
      patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
      patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
      using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
      Directory.Move(app,runtime);File.WriteAllText(Path.Combine(runtime,"ready"),Version);
-     } finally {if(Directory.Exists(stage))Directory.Delete(stage,true);}
+     // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
+     // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.
+     } finally {TryDeleteTree(stage);}
     }
     if(Array.IndexOf(args,"--prepare-only")<0)EnsureTavern();
    }finally{if(locked)mutex.ReleaseMutex();}
@@ -170,10 +212,10 @@ class Launcher : Form {
   using(var p=Process.Start(start)){if(Array.IndexOf(args,"--tavern-smoke")>=0){p.WaitForExit();if(p.ExitCode!=0)throw new Exception("启动检查失败");}}
  }
  void EnsureTavern() {
-  var source=Path.Combine(data,@"harness\apps\dsh-tavern");
-  if(File.Exists(Path.Combine(source,"package.json"))&&!File.Exists(Path.Combine(source,".portable-install-pending.json")))return;
-  Status("首次启动需要联网，正在安装最新版酒馆…");
-  var pi=new ProcessStartInfo(Path.Combine(runtime,"DSH Desktop.exe"),"--expose-internals "+Quote(Path.Combine(runtime,@"resources\online-install.mjs"))+" "+Quote(data));
+  if(!NeedsUpgrade())return;
+  File.Delete(Path.Combine(data,".launcher-upgrade-ready"));
+  Status("正在联网安装或更新酒馆，保留现有数据…");
+  var pi=new ProcessStartInfo(Path.Combine(runtime,"DSH Desktop.exe"),"--expose-internals "+Quote(Path.Combine(runtime,@"resources\setup-upgrade.mjs"))+" "+Quote(data));
   pi.UseShellExecute=false;pi.CreateNoWindow=true;pi.RedirectStandardOutput=true;pi.RedirectStandardError=true;
   pi.StandardOutputEncoding=Encoding.UTF8;pi.StandardErrorEncoding=Encoding.UTF8;
   pi.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";pi.EnvironmentVariables["NODE_USE_ENV_PROXY"]="1";
@@ -184,7 +226,50 @@ class Launcher : Form {
    p.OutputDataReceived+=(sender,e)=>{if(e.Data!=null&&e.Data.StartsWith("DSH_STATUS "))Status(e.Data.Substring(11));};
    p.ErrorDataReceived+=(sender,e)=>{if(e.Data!=null&&errors.Length<4000)errors.AppendLine(e.Data);};
    p.Start();p.BeginOutputReadLine();p.BeginErrorReadLine();p.WaitForExit();
-   if(p.ExitCode!=0)throw new Exception(errors.Length>0?errors.ToString():"首次安装未完成，请检查网络后重试。");
+    if(p.ExitCode!=0)throw new Exception(errors.Length>0?errors.ToString():"安装或更新未完成，请检查网络后重试。");
   }
+  File.WriteAllText(Path.Combine(data,".launcher-upgrade-ready"),Version);
+ }
+ bool NeedsUpgrade() {
+  string source=Path.Combine(data,@"harness\apps\dsh-tavern");
+  string marker=Path.Combine(data,".launcher-upgrade-ready");
+  return showCompletion || !File.Exists(Path.Combine(source,"package.json")) || File.Exists(Path.Combine(source,".portable-install-pending.json")) || !File.Exists(marker) || File.ReadAllText(marker)!=Version;
+ }
+ bool OwnsDesktop(string executable) {
+  if(string.IsNullOrEmpty(executable)||!string.Equals(Path.GetFileName(executable),"DSH Desktop.exe",StringComparison.OrdinalIgnoreCase))return false;
+  var directory=Path.GetDirectoryName(Path.GetFullPath(executable));
+  return Path.GetFileName(directory).StartsWith("runtime-",StringComparison.OrdinalIgnoreCase) && SamePath(Path.GetDirectoryName(directory),root);
+ }
+ void StopInstallationProcesses() {
+  Status("正在关闭此安装目录中的酒馆，以便更新…");
+  var owned=new System.Collections.Generic.List<Process>();
+  try {
+   foreach(var p in Process.GetProcessesByName("DSH Desktop")) {
+    bool keep=false;
+    try {if(OwnsDesktop(p.MainModule.FileName)){owned.Add(p);keep=true;p.CloseMainWindow();}}
+    catch(System.ComponentModel.Win32Exception){throw new Exception("无法检查或关闭运行中的酒馆，请退出此安装的 DSH Tavern 后重试。");}
+    catch(InvalidOperationException){}
+    finally {if(!keep)p.Dispose();}
+   }
+   var deadline=DateTime.UtcNow.AddSeconds(10);
+   foreach(var p in owned) {
+    int remaining=Math.Max(0,(int)(deadline-DateTime.UtcNow).TotalMilliseconds);
+    if(!p.WaitForExit(remaining)) {
+     if(!OwnsDesktop(p.MainModule.FileName))throw new Exception("酒馆进程位置已改变，请退出后重试。");
+     p.Kill();if(!p.WaitForExit(10000))throw new Exception("酒馆仍在退出，请稍后重试。");
+    }
+   }
+  } finally {foreach(var p in owned)p.Dispose();}
+ }
+ static void TryDeleteTree(string path) {
+  if(string.IsNullOrEmpty(path)||!Directory.Exists(path))return;
+  try {
+   foreach(var file in Directory.GetFiles(path,"*",SearchOption.AllDirectories))
+    File.SetAttributes(file,FileAttributes.Normal);
+   foreach(var directory in Directory.GetDirectories(path,"*",SearchOption.AllDirectories))
+    File.SetAttributes(directory,FileAttributes.Normal);
+   File.SetAttributes(path,FileAttributes.Normal);
+   Directory.Delete(path,true);
+  } catch {}
  }
 }

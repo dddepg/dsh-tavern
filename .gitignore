@@ -14,8 +14,8 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 
-# 浏览器验证产生的本地临时截图
-output/playwright/
+# 本地临时输出（截图、手动验证产物等）
+output/
 
 # 本地代码分析资料、快照和缓存
 .ua/

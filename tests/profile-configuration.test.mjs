@@ -92,6 +92,52 @@ for (const recorded of [false, true]) {
   })
 }
 
+for (const host of ['desktop', 'android', 'cli']) {
+  for (const recorded of [false, true]) {
+    test(`平台移动插件选择与重复升级：${host}，管理记录：${recorded}`, async () => {
+      const source = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+      const names = ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav', 'dsh-pocket']
+      const current = {
+        dependencies: { ...Object.fromEntries(names.map(name => [name, '1.0.0'])), 'user-extra': '3.0.0' },
+        dsh: { profile: { bundles: [...names, 'user-extra'] } },
+        ...(recorded ? { dshTavern: { managedBundles: ['dsh-web-mobile'], managedDependencies: ['dsh-web-mobile'] } } : {}),
+      }
+      const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host }
+      const next = mergeProfileManifest({ ...options, current })
+      const selected = host === 'desktop' ? 'dsh-pocket' : 'dsh-web-mobile'
+      assert.equal(next.dependencies[selected], source.dependencies[selected])
+      assert.ok(next.dshTavern.managedBundles.includes(selected))
+      assert.ok(next.dshTavern.managedDependencies.includes(selected))
+      assert.equal(next.dependencies['user-extra'], '3.0.0')
+      assert.ok(next.dsh.profile.bundles.includes('user-extra'))
+      for (const name of names) {
+        // CLI preserves a manually installed Pocket; its default remains web-mobile.
+        if (host === 'cli' && name === 'dsh-pocket') continue
+        assert.equal(next.dsh.profile.bundles.filter(value => value === name).length, name === selected ? 1 : 0)
+        if (name !== selected) assert.equal(next.dependencies[name], undefined)
+      }
+      assert.deepEqual(mergeProfileManifest({ ...options, current: next }), next)
+      const fresh = mergeProfileManifest(options)
+      assert.deepEqual(fresh.dsh.profile.bundles.filter(name => names.includes(name)), [selected])
+    })
+  }
+}
+
+test('同一源码在 Desktop 与 DSHA 之间切换只保留目标平台移动插件', async () => {
+  const source = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data' }
+  let current = {}
+  for (const host of ['android', 'desktop', 'android', 'desktop']) {
+    current = mergeProfileManifest({ ...options, host, current })
+    const selected = host === 'desktop' ? 'dsh-pocket' : 'dsh-web-mobile'
+    const removed = host === 'desktop' ? 'dsh-web-mobile' : 'dsh-pocket'
+    assert.equal(current.dependencies[selected], source.dependencies[selected])
+    assert.equal(current.dependencies[removed], undefined)
+    assert.ok(current.dsh.profile.bundles.includes(selected))
+    assert.ok(!current.dsh.profile.bundles.includes(removed))
+  }
+})
+
 test('Profile 安装同步 pnpm 声明的受管依赖补丁', async () => {
   const sourceRoot = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-patch-source-'))
   const profileDir = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-patch-profile-'))

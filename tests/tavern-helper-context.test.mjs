@@ -4,8 +4,11 @@ import { projectOpeningCommit, projectRuntimeReplyHistory } from '../tavern-plug
 
 import {
   appendTavernHelperMessages,
+  HELPER_MESSAGE_COLD_WINDOW,
+  hydrateTavernHelperMessages,
   lastTavernHelperVariables,
   projectTavernHelperContext,
+  projectTavernHelperMessage,
   replaceTavernHelperMessages,
   replaceTavernHelperVariables
 } from '../tavern-plugin/lib/domain/tavern-helper-context.js'
@@ -186,4 +189,78 @@ test('官方 MVU 可以一次写回所有开场 swipe 的独立变量快照', ()
 
   assert.deepEqual(chat.messages[0].variables.map(item => item.stat_data.route), ['甲', '乙'])
   assert.equal(projectTavernHelperContext(chat).messages[0].variables.stat_data.route, '乙')
+})
+
+test('冷启动只对窗口外楼层出骨架，补水后与全量投影一致', () => {
+  const count = HELPER_MESSAGE_COLD_WINDOW + 3
+  const chat = {
+    id: 'cold',
+    messages: Array.from({ length: count }, (_, index) => ({
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      text: '正文' + index,
+      variables: [{ hp: index, blob: 'x'.repeat(200) }]
+    }))
+  }
+  const skeletonUntil = count - HELPER_MESSAGE_COLD_WINDOW
+  const cold = projectTavernHelperContext(chat, { skeletonUntil })
+  assert.deepEqual(cold.messagesPending, { from: 0, to: skeletonUntil - 1 })
+  assert.equal(cold.messages[0].stub, true)
+  assert.equal(cold.messages[0].message, '')
+  assert.deepEqual(cold.messages[0].variables, {})
+  assert.equal(cold.messages[skeletonUntil].stub, undefined)
+  assert.equal(cold.messages[skeletonUntil].message, '正文' + skeletonUntil)
+  assert.equal(cold.messages[skeletonUntil].variables.hp, skeletonUntil)
+
+  const hydrated = hydrateTavernHelperMessages(chat, cold.messagesPending.from, cold.messagesPending.to)
+  assert.equal(hydrated.messages.length, skeletonUntil)
+  const merged = cold.messages.slice()
+  for (const message of hydrated.messages) merged[message.message_id] = message
+  const full = projectTavernHelperContext(chat)
+  assert.deepEqual(merged, full.messages)
+  assert.deepEqual(hydrated.messages[0], projectTavernHelperMessage(chat.messages[0], 0))
+})
+
+test('dirty 局部投影复用未脏楼层，只重建脏索引与新增尾段', () => {
+  const chat = {
+    id: 'dirty',
+    messages: [
+      { role: 'assistant', text: '甲', variables: [{ hp: 1 }] },
+      { role: 'user', text: '乙' },
+      { role: 'assistant', text: '丙', variables: [{ hp: 3 }] }
+    ]
+  }
+  const previous = projectTavernHelperContext(chat)
+  const kept = previous.messages[0]
+  chat.messages[2].variables = [{ hp: 9 }]
+  chat.messages.push({ role: 'user', text: '丁' })
+  const next = projectTavernHelperContext(chat, {
+    previousMessages: previous.messages,
+    dirtyIndices: new Set([2])
+  })
+  assert.equal(next.messages[0], kept)
+  assert.equal(next.messages[1], previous.messages[1])
+  assert.notEqual(next.messages[2], previous.messages[2])
+  assert.equal(next.messages[2].variables.hp, 9)
+  assert.equal(next.messages[3].message, '丁')
+  assert.deepEqual(next.messages, projectTavernHelperContext(chat).messages.map((message, index) => (
+    index === 0 || index === 1 ? previous.messages[index] : message
+  )))
+})
+
+test('含 stub 的 previous 不作 dirty 复用，结构回退全量投影', () => {
+  const chat = {
+    messages: [
+      { role: 'assistant', text: '旧', variables: [{ hp: 1, heavy: 'y'.repeat(50) }] },
+      { role: 'assistant', text: '新', variables: [{ hp: 2 }] }
+    ]
+  }
+  const cold = projectTavernHelperContext(chat, { skeletonUntil: 1 })
+  assert.equal(cold.messages[0].stub, true)
+  const rebuilt = projectTavernHelperContext(chat, {
+    previousMessages: cold.messages,
+    dirtyIndices: new Set([1])
+  })
+  assert.equal(rebuilt.messages[0].stub, undefined)
+  assert.equal(rebuilt.messages[0].variables.hp, 1)
+  assert.deepEqual(rebuilt.messages, projectTavernHelperContext(chat).messages)
 })

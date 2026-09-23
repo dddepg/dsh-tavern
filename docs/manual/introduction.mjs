@@ -89,7 +89,7 @@ export const installation = `
 
 ## 纯小白一键安装（仅 Windows x64）
 
-[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.0/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe)
+[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)
 
 1. 下载后双击运行，首次启动保持联网。
 2. 安装器自动准备 Desktop 2.0.13 和当前兼容的最新版酒馆，无需另装 Node.js 或 DSH Desktop。

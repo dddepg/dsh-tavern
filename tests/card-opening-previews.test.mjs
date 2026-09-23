@@ -142,6 +142,8 @@ test('text fenced complete HTML from opening regex renders as HTML, ordinary tex
   for (const [body, language, expected] of [
     ['<!DOCTYPE html>\n<html lang="zh-CN"><head><title>接入协议</title></head><body><button>进入</button></body></html>', 'text', 'html'],
     ['<html><body>开场</body></html>', 'text', 'html'],
+    ['<body>\n<script>$("body").load("/status.html")</script>\n</body>', 'text', 'html'],
+    ['<body><p>只有文案</p></body>', 'text', 'markdown'],
     ['<thinking>分析</thinking>\n\n正文', 'text', 'markdown'],
     ['<div>代码示例</div>', 'text', 'markdown'],
     ['<!DOCTYPE html><html><body>尚未结束', 'text', 'markdown'],

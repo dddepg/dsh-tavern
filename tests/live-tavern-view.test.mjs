@@ -473,3 +473,85 @@ test('无订阅快照十分钟回收，返回取消回收；事件驱动视图�
   assert.equal(module.getSnapshot('A').view, null)
   assert.equal(watchdogs, 0)
 })
+
+test('冷启动 messagesPending 先发布骨架再补水，脚本门控前消息已满', async () => {
+  const timers = fakeTimers()
+  const phases = []
+  let hydrateCalls = 0
+  const module = createLiveTavernViewModule({
+    load: async function () {
+      return {
+        view: {
+          tavernHelper: {
+            messages: [{ message_id: 0, message: '', stub: true }, { message_id: 1, message: 'recent' }],
+            messagesPending: { from: 0, to: 0 }
+          }
+        }
+      }
+    },
+    hydrateHelperMessages: async function (_sessionId, view) {
+      hydrateCalls += 1
+      const messages = view.tavernHelper.messages.slice()
+      messages[0] = { message_id: 0, message: 'hydrated', variables: { hp: 1 } }
+      const next = Object.assign({}, view.tavernHelper, { messages })
+      delete next.messagesPending
+      return Object.assign({}, view, { tavernHelper: next })
+    },
+    shouldPoll() { return false },
+    pollWhileBusy: false,
+    schedule: timers.schedule,
+    cancel: timers.cancel
+  })
+  const stop = module.subscribe('session-hydrate', function (state) { phases.push({ phase: state.phase, pending: !!(state.view && state.view.tavernHelper && state.view.tavernHelper.messagesPending), message: state.view && state.view.tavernHelper && state.view.tavernHelper.messages[0].message }) })
+  await timers.runNext()
+  await new Promise(function (resolve) { setImmediate(resolve) })
+  stop()
+  assert.equal(hydrateCalls, 1)
+  assert.ok(phases.some(function (row) { return row.phase === 'ready' && row.pending === true && row.message === '' }))
+  assert.equal(phases.at(-1).phase, 'ready')
+  assert.equal(phases.at(-1).pending, false)
+  assert.equal(phases.at(-1).message, 'hydrated')
+  assert.equal(module.getSnapshot('session-hydrate').view.tavernHelper.messagesPending, undefined)
+})
+
+test('补水失败进入 retrying 并保留骨架，稍后可再试', async () => {
+  const timers = fakeTimers()
+  let hydrateCalls = 0
+  const module = createLiveTavernViewModule({
+    load: async function () {
+      return {
+        view: {
+          tavernHelper: {
+            messages: [{ message_id: 0, message: '', stub: true }],
+            messagesPending: { from: 0, to: 0 }
+          }
+        }
+      }
+    },
+    hydrateHelperMessages: async function () {
+      hydrateCalls += 1
+      throw new Error('补水失败')
+    },
+    shouldPoll() { return false },
+    pollWhileBusy: false,
+    schedule: timers.schedule,
+    cancel: timers.cancel
+  })
+  const stop = module.subscribe('session-hydrate-fail', function () {})
+  await timers.runNext()
+  await new Promise(function (resolve) { setImmediate(resolve) })
+  const snapshot = module.getSnapshot('session-hydrate-fail')
+  assert.equal(hydrateCalls, 1)
+  assert.equal(snapshot.phase, 'retrying')
+  assert.match(snapshot.error, /补水失败/)
+  assert.equal(snapshot.view.tavernHelper.messagesPending.from, 0)
+  assert.deepEqual(timers.activeDelays(), [1500])
+  stop()
+})
+
+test('脚本会话在 messagesPending 期间不同步 execution', async () => {
+  const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+  assert.match(source, /messagesPending/)
+  assert.match(source, /hydrateTavernHelperMessages/)
+  assert.match(source, /wait for hydration before scripts/)
+})

@@ -12,10 +12,38 @@ const ALLOWED_FORM = new Set(['instructions', 'catalog', 'snapshot', 'notice', '
 const TAVERN_SOURCE_KEYS = new Set(['kind', 'plugin', 'form', 'sections', 'summary'])
 const ZSTD_MAGIC = 0xFD2FB528
 const BACKUP_SUFFIX = '.bak-tavern-premigrate'
+// Keep each body frame under this uncompressed size so encode does not hold one
+// giant joined string for a whole archive (issue #84).
+const BODY_FRAME_TARGET = 512 * 1024
 
 export function decodeSessionLog(buffer) {
   const frames = scanZstdFrames(buffer)
-  return Buffer.concat(frames.map(frame => zstdDecompressSync(buffer.subarray(frame.start, frame.end)))).toString('utf8')
+  let text = ''
+  for (const frame of frames) text += zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+  return text
+}
+
+/** Parse header + events frame by frame without concatenating the whole archive. */
+export function parseSessionLog(buffer) {
+  const frames = scanZstdFrames(buffer)
+  let headerLine = null
+  let header = null
+  const events = []
+  for (const frame of frames) {
+    const text = zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const line = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!line) continue
+      if (headerLine === null) {
+        headerLine = line
+        header = JSON.parse(line)
+      } else events.push(JSON.parse(line))
+    }
+  }
+  return { headerLine, header, events }
 }
 
 export function prepareLegacySessionLog(text, catalog) {
@@ -26,13 +54,51 @@ export function prepareLegacySessionLog(text, catalog) {
   if (header?.version !== 0) return { ok: true, changed: false }
   let events
   try { events = lines.slice(1).map(line => JSON.parse(line)) } catch { return refuse('事件不是 JSON') }
-  const draft = structuredClone(events)
+  return prepareParsedLegacySession(header, events, lines[0], catalog, () => lines.slice(1).map(line => JSON.parse(line)))
+}
+
+function prepareLegacySessionBuffer(buffer, catalog) {
+  let frames
+  try { frames = scanZstdFrames(buffer) }
+  catch (error) { return refuse(error.message || String(error)) }
+  let headerLine = null
+  let header = null
+  const events = []
+  for (const frame of frames) {
+    const text = zstdDecompressSync(buffer.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const line = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!line) continue
+      if (headerLine === null) {
+        headerLine = line
+        try { header = JSON.parse(line) } catch { return refuse('文件头不是 JSON') }
+      } else {
+        try { events.push(JSON.parse(line)) } catch { return refuse('事件不是 JSON') }
+      }
+    }
+  }
+  if (!headerLine) return refuse('空日志')
+  if (header?.version !== 0) return { ok: true, changed: false }
+  return prepareParsedLegacySession(header, events, headerLine, catalog, () => parseSessionLog(buffer).events)
+}
+
+function prepareParsedLegacySession(header, events, headerLine, catalog, reparse) {
+  // Issue #71: stripping illegal source keys (fixedSystemText, …) alone is enough
+  // for the host to open many archives. Prefer that over leaving the raw v0 file
+  // when the fuller rewrite refuses.
+  // Issue #84: mutate the freshly parsed events in place; reparse() only if sanitize
+  // needs a pristine copy after a failed rewrite.
+  const sanitize = () => sanitizeLegacySessionLog(header, reparse(), catalog, headerLine)
+  const draft = events
   const prefix = prefixTexts(draft).join('\n\n')
   let cleaned = false
   for (const event of draft) if (cleanEvent(event)) cleaned = true
   let folded
   try { folded = foldTavernReplacements(draft) }
-  catch (error) { return refuse(error.message || String(error)) }
+  catch (error) { return sanitize() || refuse(error.message || String(error)) }
   const hoisted = hoistNestedTurns(folded.events)
   const coordinatesChanged = repairNonPositiveCoordinates(hoisted.events)
   const turnsChanged = assignTurnNumbers(hoisted.events) || coordinatesChanged
@@ -40,30 +106,262 @@ export function prepareLegacySessionLog(text, catalog) {
   const synthesized = synthesizeOpeningStep(moved.events)
   let placed
   try { placed = placeOpening(synthesized.events, prefix) }
-  catch (error) { return refuse(error.message || String(error)) }
+  catch (error) { return sanitize() || refuse(error.message || String(error)) }
   const dangling = dropDanglingPointers(placed.events)
   let next = dangling.events
   const originalStory = storyTexts(next)
   const changed = cleaned || folded.changed || hoisted.changed || turnsChanged || moved.changed || synthesized.changed || placed.changed || dangling.changed
   if (changed) {
     try { next = renumber(next) }
-    catch (error) { return refuse(error.message || String(error)) }
+    catch (error) { return sanitize() || refuse(error.message || String(error)) }
   }
   if (!changed) {
     const opened = openSession(catalog, header, events)
-    return opened.ok ? { ok: true, changed: false, artifact: opened.artifact } : opened
+    if (opened.ok) return { ok: true, changed: false, artifact: opened.artifact }
+    // Source already clean but host still rejects: leave bytes alone (#72 C follow-up).
+    return sanitize() || { ok: true, changed: false, reason: opened.reason }
   }
   const opened = openSession(catalog, header, next)
-  if (!opened.ok) return opened
+  if (!opened.ok) {
+    // Issue #73: structural rewrite (incl. placeOpening) is what fixes
+    // surface-before-step, but openSession may still reject for compaction /
+    // tool-result drift. Soften those conflicts until the host accepts, rather
+    // than discarding the rewrite and leaving the chronology broken.
+    const repaired = repairUntilOpenable(header, next, catalog)
+    if (repaired.ok) {
+      const migratedStory = storyTexts(repaired.artifact.events)
+      let reason = repaired.reason
+      if (!reason && !sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) {
+        reason = '可见正文不完全一致，已写出可打开版本'
+      } else if (!reason && prefix && !systemText(repaired.artifact.events).includes(prefix)) {
+        reason = '固定背景未完全进入 system 头，已写出可打开版本'
+      }
+      return { ok: true, changed: true, headerLine, events: repaired.events, artifact: repaired.artifact, reason }
+    }
+    return sanitize() || { ok: true, changed: false, reason: opened.reason }
+  }
   const migratedStory = storyTexts(opened.artifact.events)
-  if (!sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) return refuse('可见正文不一致')
-  if (prefix && !systemText(opened.artifact.events).includes(prefix)) return refuse('固定背景没有进入 system 头')
-  return { ok: true, changed: true, headerLine: lines[0], events: next, artifact: opened.artifact }
+  // Prefer a host-readable rewrite over leaving illegal source keys on disk
+  // (issue #71). Story/prefix checks stay as soft warnings via result.reason.
+  let reason
+  if (!sameTexts(originalStory, migratedStory) && !sameTexts(uniqueStory(originalStory), uniqueStory(migratedStory))) {
+    reason = '可见正文不完全一致，已写出可打开版本'
+  } else if (prefix && !systemText(opened.artifact.events).includes(prefix)) {
+    reason = '固定背景未完全进入 system 头，已写出可打开版本'
+  }
+  return { ok: true, changed: true, headerLine, events: next, artifact: opened.artifact, reason }
+}
+
+/** Drop only non-released source members, then open with the official catalog. */
+export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
+  // Caller owns `events` (fresh reparse or disposable draft); mutate in place.
+  const only = events
+  let changed = false
+  for (const event of only) if (cleanEvent(event)) changed = true
+  let next = only
+  // Issue #73: source-only cleanup still leaves surface events before the first
+  // step, which the host rejects at v2→v3. Apply placeOpening here too.
+  try {
+    const placed = placeOpening(next, prefixTexts(next).join('\n\n'))
+    if (placed.changed) {
+      next = dropDanglingPointers(placed.events).events
+      next = renumber(next)
+      changed = true
+    }
+  } catch {
+    // Keep source-cleaned events when chronology cannot be repaired here.
+  }
+  if (!changed) return null
+  let opened = openSession(catalog, header, next)
+  if (!opened.ok) {
+    const repaired = repairUntilOpenable(header, next, catalog)
+    if (repaired.ok) {
+      return {
+        ok: true,
+        changed: true,
+        headerLine: headerLine || JSON.stringify(header),
+        events: repaired.events,
+        artifact: repaired.artifact,
+        reason: repaired.reason,
+        sanitizedOnly: true,
+      }
+    }
+    // Issue #72 C / #73: even when the host still cannot open, write the cleaned
+    // (and chronology-fixed when possible) source so illegal fields and
+    // surface-before-step do not remain on disk forever.
+    return {
+      ok: true,
+      changed: true,
+      headerLine: headerLine || JSON.stringify(header),
+      events: next,
+      reason: opened.reason || '已清理非法字段，但宿主仍无法打开',
+      sanitizedOnly: true,
+    }
+  }
+  return {
+    ok: true,
+    changed: true,
+    headerLine: headerLine || JSON.stringify(header),
+    events: next,
+    artifact: opened.artifact,
+    sanitizedOnly: true,
+  }
+}
+
+/** Progressively drop conflicting rows until the host catalog accepts the log. */
+function repairUntilOpenable(header, events, catalog) {
+  // openSession clones per row; softenForOpenFailure clones before mutating.
+  let current = events
+  const notes = []
+  let cursor = 0
+  while (cursor < 8) {
+    const opened = openSession(catalog, header, current)
+    if (opened.ok) {
+      return {
+        ok: true,
+        events: current,
+        artifact: opened.artifact,
+        reason: notes.length ? '已丢弃冲突记录以完成迁移：' + notes.join('；') : undefined,
+      }
+    }
+    const step = softenForOpenFailure(current, cursor, opened.reason)
+    if (!step.changed) return { ok: false, reason: opened.reason }
+    notes.push(step.note)
+    cursor = step.nextAttempt
+    current = dropDanglingPointers(step.events).events
+    try { current = renumber(current) }
+    catch (error) { return { ok: false, reason: error.message || String(error) } }
+  }
+  const opened = openSession(catalog, header, current)
+  if (!opened.ok) return { ok: false, reason: opened.reason }
+  return {
+    ok: true,
+    events: current,
+    artifact: opened.artifact,
+    reason: notes.length ? '已丢弃冲突记录以完成迁移：' + notes.join('；') : undefined,
+  }
+}
+
+function softenForOpenFailure(events, startAttempt, reason) {
+  const preferred = preferredRepairAttempt(reason)
+  const order = []
+  if (preferred != null && preferred >= startAttempt) order.push(preferred)
+  for (let attempt = startAttempt; attempt < 8; attempt += 1) {
+    if (!order.includes(attempt)) order.push(attempt)
+  }
+  for (const attempt of order) {
+    const next = structuredClone(events)
+    const applied = applyOpenRepair(next, attempt)
+    if (applied) return { events: next, changed: true, note: applied, nextAttempt: Math.max(startAttempt, attempt) + 1 }
+  }
+  return { events, changed: false, nextAttempt: startAttempt }
+}
+
+function preferredRepairAttempt(reason) {
+  const text = String(reason || '')
+  if (/chunk provenance|complete ordered attempt/i.test(text)) return 4
+  if (/tool\/result/i.test(text)) return 2
+  if (/compaction/i.test(text)) return 0
+  if (/shadowedRange|shadowedSeqs|surface span|earlier event/i.test(text)) return 1
+  return null
+}
+
+function applyOpenRepair(events, attempt) {
+  if (attempt === 0) {
+    const before = events.length
+    const kept = events.filter(event => !String(event.type).startsWith('compaction/'))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'compaction'
+  }
+  if (attempt === 1) {
+    let changed = false
+    for (const event of events) {
+      if (!event.data || typeof event.data !== 'object') continue
+      for (const key of ['shadowedRange', 'shadowedSeqs', 'messageSeqs']) {
+        if (!Object.hasOwn(event.data, key)) continue
+        delete event.data[key]
+        changed = true
+      }
+    }
+    return changed ? 'shadowed 指针' : null
+  }
+  if (attempt === 2) {
+    const before = events.length
+    const kept = dropMismatchedToolResults(events)
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return '错位 tool/result'
+  }
+  if (attempt === 3) {
+    const before = events.length
+    const kept = events.filter(event => event.type !== 'assistant/chunk' && event.type !== 'reasoning/chunk' && !PACKED_ROWS.has(event.type))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'chunk 行'
+  }
+  if (attempt === 4) {
+    // Fold keeps chunk-swarm assistant replacements; those fail host provenance
+    // checks ("chunk provenance is not one complete ordered attempt").
+    const before = events.length
+    const kept = events.filter(event => !(event.type === 'assistant/message' && event.surfaceOp?.op === 'replace'))
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'assistant replace'
+  }
+  if (attempt === 5) {
+    // Host: "assistant/message N chunk provenance is not one complete ordered attempt"
+    let changed = false
+    for (const event of events) {
+      if (event.type !== 'assistant/message' || !event.data || typeof event.data !== 'object') continue
+      if (Array.isArray(event.data.stream) && event.data.stream.length) {
+        event.data.stream = []
+        changed = true
+      }
+      if (Array.isArray(event.sourceEventSeqs) && event.sourceEventSeqs.length) {
+        delete event.sourceEventSeqs
+        changed = true
+      }
+    }
+    return changed ? 'assistant stream/provenance' : null
+  }
+  if (attempt === 6) {
+    const before = events.length
+    const kept = events.filter(event => event.type !== 'tool/result')
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return '全部 tool/result'
+  }
+  if (attempt === 7) {
+    const before = events.length
+    const kept = events.filter(event => !String(event.type).startsWith('tool/') && event.type !== 'agent/inbox/spliced')
+    if (kept.length === before) return null
+    events.length = 0
+    events.push(...kept)
+    return 'tool/inbox 辅助事件'
+  }
+  return null
+}
+
+function dropMismatchedToolResults(events) {
+  let open = null
+  return events.filter(event => {
+    if (event.type === 'step/start') open = { turn: event.data?.turn, step: event.data?.step }
+    else if (event.type === 'step/end' || event.type === 'turn/end') open = null
+    if (event.type !== 'tool/result') return true
+    if (!open) return false
+    return open.turn === event.data?.turn && open.step === event.data?.step
+  })
 }
 
 export async function commitLegacySessionFile(file, catalog) {
   const original = await readFile(file)
-  const prepared = prepareLegacySessionLog(decodeSessionLog(original), catalog)
+  const prepared = prepareLegacySessionBuffer(original, catalog)
   if (!prepared.ok) return { ...prepared, written: false }
   let writtenSource = false
   if (prepared.changed) {
@@ -95,18 +393,28 @@ export async function commitLegacySessionFile(file, catalog) {
 }
 
 export function encodeMigratedSessionLog(headerLine, events) {
-  const header = compressFrame(Buffer.from(headerLine + '\n'))
-  if (!events.length) return header
-  const body = Buffer.from(events.map(event => JSON.stringify(event)).join('\n') + '\n')
-  return Buffer.concat([header, compressFrame(body)])
+  return encodeFramedSessionLog(headerLine + '\n', events, event => JSON.stringify(event) + '\n')
 }
 
 export function encodeCurrentGeneration(artifact, catalog) {
-  const header = compressFrame(Buffer.from(JSON.stringify(catalog.encodeCurrentHeader(artifact.header, artifact.inheritedEventCount)) + '\n'))
+  const headerLine = JSON.stringify(catalog.encodeCurrentHeader(artifact.header, artifact.inheritedEventCount)) + '\n'
   const events = Array.isArray(artifact.events) ? artifact.events : []
-  if (!events.length) return header
-  const body = Buffer.from(events.map(event => JSON.stringify(catalog.encodeCurrentEvent(event))).join('\n') + '\n')
-  return Buffer.concat([header, compressFrame(body)])
+  return encodeFramedSessionLog(headerLine, events, event => JSON.stringify(catalog.encodeCurrentEvent(event)) + '\n')
+}
+
+function encodeFramedSessionLog(headerLine, events, stringify) {
+  const parts = [compressFrame(Buffer.from(headerLine))]
+  if (!events.length) return parts[0]
+  let chunk = ''
+  for (const event of events) {
+    chunk += stringify(event)
+    if (chunk.length >= BODY_FRAME_TARGET) {
+      parts.push(compressFrame(Buffer.from(chunk)))
+      chunk = ''
+    }
+  }
+  if (chunk) parts.push(compressFrame(Buffer.from(chunk)))
+  return Buffer.concat(parts)
 }
 
 export function reframeConcatenatedSessionLog(buffer) {
@@ -151,10 +459,16 @@ export async function migrateLegacySessionDirectory(directory, catalog) {
     summary.seen += 1
     try {
       const result = await commitLegacySessionFile(file, catalog)
-      if (!result.ok) summary.refused += 1
+      if (!result.ok) {
+        summary.refused += 1
+        console.warn(`dsh-tavern: 旧档未迁移 ${file}: ${result.reason || '未知原因'}`)
+      }
       else if (result.written) summary.migrated += 1
       else summary.unchanged += 1
-    } catch { summary.refused += 1 }
+    } catch (error) {
+      summary.refused += 1
+      console.warn(`dsh-tavern: 旧档迁移异常 ${file}: ${error.message || error}`)
+    }
   }
   return summary
 }
@@ -191,7 +505,9 @@ function refuse(reason) {
 function openSession(catalog, header, events) {
   try {
     const restore = catalog.createRestore(header, { recovery: 'recoverable', validation: 'current' })
-    for (const event of structuredClone(events)) restore.decodeRow(event)
+    // Clone one row at a time so validation never doubles the whole object graph
+    // in memory (issue #84).
+    for (const event of events) restore.decodeRow(structuredClone(event))
     const artifact = restore.finish()
     if (artifact?.header?.version !== 3) return refuse('迁移后不是 v3')
     return { ok: true, artifact }
@@ -458,6 +774,12 @@ function foldTavernReplacements(events) {
     const target = assistantTarget(sources, bySeq, alias, drop)
     if (target?.data?.message && keepsAdvertisedTools(target.data.message, event.data?.message)) {
       target.data.message.content = structuredClone(event.data.message.content)
+      // Issue #72: Chat.bodyEdit points at the replacement message id. Keep that
+      // id on the folded target so synchronizeBodyEdits sees it as already recorded.
+      const replacementId = event.data?.message?.id
+      if (typeof replacementId === 'string' && replacementId.startsWith('tavern-body-edit:')) {
+        target.data.message.id = replacementId
+      }
       changed = true
     }
     if (typeof event.seq === 'number') {
@@ -558,8 +880,11 @@ function renumber(events) {
 function remapPointers(event, map) {
   if (Array.isArray(event.sourceEventSeqs)) event.sourceEventSeqs = remapSourceEventSeqs(event.sourceEventSeqs, map)
   if (event.surfaceOp && typeof event.surfaceOp === 'object') {
-    if (typeof event.surfaceOp.start === 'number') event.surfaceOp.start = takeSeq(map, event.surfaceOp.start, 'surfaceOp.start')
-    if (typeof event.surfaceOp.end === 'number') event.surfaceOp.end = takeSeq(map, event.surfaceOp.end, 'surfaceOp.end')
+    // Issue #72: soft-drop unmappable surface spans instead of refusing the whole log.
+    if (typeof event.surfaceOp.start === 'number' && !map.has(event.surfaceOp.start)) delete event.surfaceOp.start
+    else if (typeof event.surfaceOp.start === 'number') event.surfaceOp.start = map.get(event.surfaceOp.start)
+    if (typeof event.surfaceOp.end === 'number' && !map.has(event.surfaceOp.end)) delete event.surfaceOp.end
+    else if (typeof event.surfaceOp.end === 'number') event.surfaceOp.end = map.get(event.surfaceOp.end)
   }
   const data = event.data
   if (!data || typeof data !== 'object') return
@@ -572,19 +897,23 @@ function remapPointers(event, map) {
     data[key] = map.get(data[key])
   }
   if (data.shadowedRange && typeof data.shadowedRange === 'object') {
-    if (typeof data.shadowedRange.start === 'number') data.shadowedRange.start = takeSeq(map, data.shadowedRange.start, 'shadowedRange.start')
-    if (typeof data.shadowedRange.end === 'number') data.shadowedRange.end = takeSeq(map, data.shadowedRange.end, 'shadowedRange.end')
+    const start = typeof data.shadowedRange.start === 'number' ? map.get(data.shadowedRange.start) : undefined
+    const end = typeof data.shadowedRange.end === 'number' ? map.get(data.shadowedRange.end) : undefined
+    if (typeof start !== 'number' || typeof end !== 'number') delete data.shadowedRange
+    else {
+      data.shadowedRange.start = start
+      data.shadowedRange.end = end
+    }
   }
   for (const key of ['shadowedSeqs', 'messageSeqs']) {
-    if (Array.isArray(data[key])) data[key] = remapSeqList(data[key], map, key)
+    if (Array.isArray(data[key])) data[key] = remapSeqList(data[key], map)
   }
 }
 
-function remapSeqList(values, map, label) {
+function remapSeqList(values, map) {
   const next = []
   for (const seq of values) {
-    if (typeof seq !== 'number' || !map.has(seq)) throw new Error('旧序号无法对应到迁移后的事件：' + label)
-    next.push(map.get(seq))
+    if (typeof seq === 'number' && map.has(seq)) next.push(map.get(seq))
   }
   return next
 }
@@ -595,16 +924,12 @@ function remapSourceEventSeqs(values, map) {
     if (typeof entry === 'number') flat.push(entry)
     else if (Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'number' && typeof entry[1] === 'number' && entry[1] >= entry[0]) {
       for (let seq = entry[0]; seq <= entry[1]; seq += 1) flat.push(seq)
-    } else throw new Error('旧序号无法对应到迁移后的事件：sourceEventSeqs')
+    }
+    // Soft-skip malformed entries (issue #72) instead of refusing the archive.
   }
   const next = []
   for (const seq of flat) if (map.has(seq)) next.push(map.get(seq))
   return next
-}
-
-function takeSeq(map, seq, label) {
-  if (typeof seq !== 'number' || !map.has(seq)) throw new Error('旧序号无法对应到迁移后的事件：' + label)
-  return map.get(seq)
 }
 
 function cleanEvent(event) {
@@ -620,6 +945,10 @@ function cleanEvent(event) {
   }
   if (event.type === 'user/message' && event.data && Object.hasOwn(event.data, 'turn')) {
     delete event.data.turn
+    changed = true
+  }
+  if (event.type === 'user/message' && event.data && Object.hasOwn(event.data, 'step')) {
+    delete event.data.step
     changed = true
   }
   if (PACKED_ROWS.has(event.type) && Object.hasOwn(event, 'seq')) {
@@ -848,8 +1177,23 @@ export async function repairMigratedCurrentHeader(file, catalog) {
   const physical = catalog.encodeCurrentHeader(header, 0)
   if (catalog.readHeader(physical).status !== 'current') throw new Error('修复后的会话头仍无效')
   const restore = catalog.createRestore(physical, { recovery:'strict', validation:'current' })
-  const rows = decodeSessionLog(bytes).trimEnd().split('\n').slice(1)
-  for (const row of rows) restore.decodeRow(JSON.parse(row))
+  // Feed rows frame by frame; skip the first line of the archive (the bad header).
+  let skippedHeader = false
+  for (const frame of frames) {
+    const text = zstdDecompressSync(bytes.subarray(frame.start, frame.end)).toString('utf8')
+    let offset = 0
+    while (offset < text.length) {
+      const end = text.indexOf('\n', offset)
+      const row = end < 0 ? text.slice(offset) : text.slice(offset, end)
+      offset = end < 0 ? text.length : end + 1
+      if (!row) continue
+      if (!skippedHeader) {
+        skippedHeader = true
+        continue
+      }
+      restore.decodeRow(JSON.parse(row))
+    }
+  }
   restore.finish()
   const backup = file + '.bak-tavern-header'
   if (!(await exists(backup))) await copyFile(file, backup)

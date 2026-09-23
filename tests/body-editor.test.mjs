@@ -137,3 +137,29 @@ test('host rejection is checked before publishing an edit to the Chat journal', 
   Object.defineProperty(h.session, 'constructor', { value: originalConstructor, configurable: true })
   await h.editor.read(h.session.id)
 })
+
+test('issue #72: stale bodyEdit after migration clears instead of blocking turns', async () => {
+  const h = fixture('原正文')
+  h.change(chat => {
+    chat.messages.at(-1).text = '已编辑正文'
+    chat.messages.at(-1).bodyEdit = { id: 'tavern-body-edit:gone', seq: 99999, turn: 999 }
+  })
+  const cleared = []
+  await synchronizeBodyEdits(h.session, h.chat, h.options.sessions.flush, async (_chat, ids) => { cleared.push(...ids) })
+  assert.deepEqual(cleared, ['tavern-body-edit:gone'])
+  assert.equal(h.chat.messages.at(-1).bodyEdit, undefined)
+  assert.equal(h.session.deriveMessages().at(-1).content[0].text, '原正文')
+})
+
+test('issue #72: bodyEdit remaps by turn when seq was renumbered', async () => {
+  const h = fixture('原正文')
+  const assistant = sessionEvents(h.session).find(event => event.type === 'assistant/message')
+  h.change(chat => {
+    chat.messages.at(-1).text = '迁移后正文'
+    chat.messages.at(-1).bodyEdit = { id: 'tavern-body-edit:remap', seq: 99999, turn: assistant.data.turn }
+  })
+  await synchronizeBodyEdits(h.session, h.chat, h.options.sessions.flush)
+  assert.equal(h.session.deriveMessages().at(-1).content[0].text, '迁移后正文')
+  assert.equal(h.chat.messages.at(-1).bodyEdit.id, 'tavern-body-edit:remap')
+  assert.notEqual(h.chat.messages.at(-1).bodyEdit.seq, 99999)
+})

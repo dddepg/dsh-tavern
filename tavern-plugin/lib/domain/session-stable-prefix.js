@@ -33,13 +33,40 @@ export function createSessionStablePrefixStorage(directory) {
   }
 }
 
+function sectionText(message) {
+  if (!Array.isArray(message?.source?.sections)) return ''
+  return message.source.sections.map(section => typeof section?.text === 'string' ? section.text.trim() : '').filter(Boolean).join('\n\n')
+}
+
+function prefixRevision(message) {
+  const match = /:revision-(\d+)$/.exec(String(message?.id || ''))
+  if (match) return Number(match[1])
+  // Legacy archives may still carry this non-released key until migration strips it.
+  const legacy = Number(message?.source?.cardContextRevision || 0)
+  return Number.isFinite(legacy) ? legacy : 0
+}
+
+function hasReleasedSnapshot(message) {
+  return message?.source?.form === MESSAGE_FORM && Array.isArray(message.source.sections) && message.source.sections.length > 0
+}
+
 function messageRecord(event) {
   const message = event && event.type === 'user/message' ? event.data : null
   if (!str(message?.id).startsWith('tavern-session-prefix:') || message.role !== 'user' || message.source?.kind !== 'plugin' ||
       message.source?.plugin !== 'dsh-tavern' || ![MESSAGE_FORM, LEGACY_MESSAGE_FORM].includes(message.source?.form) || !Array.isArray(message.content)) return null
-  const text = typeof message.source.fixedSystemText === 'string' ? message.source.fixedSystemText : message.content.filter(block => block?.type === 'text').map(block => str(block.text)).join('').trim()
+  // Prefer released snapshot sections. fixedSystemText is legacy only (issue #71).
+  const text = typeof message.source.fixedSystemText === 'string' && message.source.fixedSystemText.trim()
+    ? message.source.fixedSystemText
+    : (sectionText(message) || message.content.filter(block => block?.type === 'text').map(block => str(block.text)).join('').trim())
   if (text === '') return null
-  return { version: typeof message.source.fixedSystemText === 'string' ? 3 : 2, id: message.id, text, message, event }
+  return {
+    version: hasReleasedSnapshot(message) || typeof message.source.fixedSystemText === 'string' ? 3 : 2,
+    id: message.id,
+    text,
+    revision: prefixRevision(message),
+    message,
+    event,
+  }
 }
 
 function sourceSections(text) {
@@ -71,8 +98,8 @@ export function readSessionStablePrefix(session) {
   for (const event of sessionEvents(session)) {
     const record = messageRecord(event)
     if (!record) continue
-    if (typeof record.message.source.fixedSystemText === 'string') {
-      if (!fixed || Number(record.message.source.cardContextRevision || 0) > Number(fixed.message.source.cardContextRevision || 0)) fixed = record
+    if (hasReleasedSnapshot(record.message) || typeof record.message.source.fixedSystemText === 'string') {
+      if (!fixed || record.revision > fixed.revision) fixed = record
       continue
     }
     legacy ||= record
@@ -86,6 +113,8 @@ function legacyEventText(session) {
 }
 
 function fixedContextMessage(session, text) {
+  // Only released plugin source members. fixedSystemText / cardContextRevision are
+  // rejected by DSH 0.1.5-rc.2 v0→v1 migration (issue #71).
   return {
     id: 'tavern-session-prefix:' + session.id,
     role: 'user',
@@ -94,7 +123,6 @@ function fixedContextMessage(session, text) {
       kind: 'plugin',
       plugin: 'dsh-tavern',
       form: MESSAGE_FORM,
-      fixedSystemText: text,
       sections: sourceSections(text)
     }
   }
@@ -104,15 +132,14 @@ function fixedContextMessage(session, text) {
 export async function ensureSessionStablePrefix(session, text, storage, revision = 0) {
   ensureSessionSystemHead(session)
   const existing = readSessionStablePrefix(session)
-  if (existing && revision > Number(existing.message.source.cardContextRevision || 0) && str(text).trim()) {
+  if (existing && revision > existing.revision && str(text).trim()) {
     const message = fixedContextMessage(session, str(text).trim())
     message.id += ':revision-' + revision
-    message.source.cardContextRevision = revision
     return messageRecord(appendSessionEvent(session, 'user/message', message, { surfaceOp: 'append' }))
   }
   if (existing) {
     const activeLegacy = sessionEvents(session).find(event => messageRecord(event)?.message.content.length && session.surface?.nodes.includes(event.seq))
-    const needsSnapshot = typeof existing.message.source.fixedSystemText !== 'string'
+    const needsSnapshot = !hasReleasedSnapshot(existing.message)
     if (needsSnapshot || activeLegacy) {
       // Old EJS prefixes used the saved play-card snapshot at the request boundary.
       // Freeze that same evaluated snapshot once when migrating, never reevaluate per turn.
@@ -132,7 +159,7 @@ export async function ensureSessionStablePrefix(session, text, storage, revision
     const context = (revision > 0 ? str(text).trim() : '') || legacyEventText(session) || str(saved && saved.text).trim() || str(text).trim()
     if (context === '') return null
     const message = fixedContextMessage(session, context)
-    if (revision > 0) message.source.cardContextRevision = revision
+    if (revision > 0) message.id += ':revision-' + revision
     const event = appendSessionEvent(session, 'user/message', message, { surfaceOp: 'append' })
     return messageRecord(event)
   })()

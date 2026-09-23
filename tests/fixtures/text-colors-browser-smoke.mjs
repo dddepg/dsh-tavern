@@ -17,7 +17,7 @@ const server=createServer((request,response)=>{
  response.end(`<!doctype html><meta charset="utf-8"><title>正文分色验证</title>
  <style>body{background:#f5f3ee;color:#252830;font:17px/1.8 sans-serif;max-width:1100px;margin:30px auto}h1{font-size:24px}main{display:grid;grid-template-columns:1fr 1fr;gap:24px}article{padding:20px;background:white;border-radius:12px}iframe{width:100%;height:390px;border:0}button{padding:4px 12px}code{font-size:13px}.own-color{color:#458270}pre{font-size:12px}#result{margin-top:20px}</style>
  <h1>正文分色</h1><p>普通文字保持原色 · 引号文字为金色 · 斜体为紫色</p>
- <p><label>对白颜色 <input id=quote type=color value="#edb75f"></label>　<label>斜体颜色 <input id=em type=color value="#bba4e3"></label>　<button id=reset>恢复默认配色</button></p><main><article><h2>普通正文 · 浅色</h2><div id="prose">${sample}</div></article><article style="background:#20212c;color:#d4d4d8"><h2>人物卡 HTML · 深色</h2><iframe id="frame" sandbox="allow-scripts"></iframe></article></main><pre id="result">RUNNING</pre>
+ <p><label>对白颜色 <input id=quote type=color value="#e8a882"></label>　<label>斜体颜色 <input id=em type=color value="#c4b5d4"></label>　<button id=reset>恢复默认配色</button></p><main><article><h2>普通正文 · 浅色</h2><div id="prose">${sample}</div></article><article style="background:#20212c;color:#d4d4d8"><h2>人物卡 HTML · 深色</h2><iframe id="frame" sandbox="allow-scripts"></iframe></article></main><pre id="result">RUNNING</pre>
  <script type="module">
  const create=${client.installTavernTextColors.toString()}, find=${client.findTavernQuoteRanges.toString()};
  const prose=document.querySelector('#prose'), original=prose.innerHTML, controls=create(prose,{enabled:true},find);
@@ -38,7 +38,7 @@ const server=createServer((request,response)=>{
   check(document.querySelector('style[data-dsh-tavern-text-colors]').textContent.includes('#445566'),'custom emphasis color');
   check(prose.innerHTML===original,'color change preserves DOM');
   controls.setColors({});
-  check(document.querySelector('style[data-dsh-tavern-text-colors]').textContent.includes('#875000'),'restore adaptive palette');
+  check(document.querySelector('style[data-dsh-tavern-text-colors]').textContent.includes('#a9583e'),'restore adaptive palette');
   controls.setEnabled(false);check(textRanges().length===0,'disable');controls.setEnabled(true);
   const stream=document.createElement('p');stream.textContent='“还没说完';prose.appendChild(stream);
   setTimeout(()=>{try{
@@ -57,7 +57,7 @@ const server=createServer((request,response)=>{
    }
   } catch(error){document.querySelector('#result').textContent='FAIL '+error.message}});
   for(const key of ['quote','em'])document.querySelector('#'+key).addEventListener('input',event=>{overrides={...overrides,[key]:event.target.value};controls.setColors(overrides);send(true);});
-  document.querySelector('#reset').onclick=()=>{overrides={};controls.setColors(overrides);send(true);document.querySelector('#quote').value='#edb75f';document.querySelector('#em').value='#bba4e3';};
+  document.querySelector('#reset').onclick=()=>{overrides={};controls.setColors(overrides);send(true);document.querySelector('#quote').value='#e8a882';document.querySelector('#em').value='#c4b5d4';};
   frame.srcdoc=${JSON.stringify(frame).replace(/</g,'\\u003c')};
  }catch(error){document.querySelector('#result').textContent='FAIL '+error.message}
  </script>`);

@@ -175,6 +175,16 @@ test('独立围栏 UI 不与正文共用 iframe，避免 body.load 清空正文'
   assert.doesNotMatch(projected.parts[1].content, /幽暗秘境深处/)
 })
 
+test('text 围栏的 body 根可执行 UI 也进入独立 HTML，纯文案 body 仍保持 Markdown', () => {
+  const executable = '```text\n<body>\n<script>$("body").load("/status.html")</script>\n</body>\n```'
+  const projected = projectDisplayParts('前文\n\n' + executable + '\n\n后文')
+  assert.deepEqual(projected.parts.map(part => part.kind), ['markdown', 'html', 'markdown'])
+  assert.match(projected.parts[1].content, /body.*load/s)
+  assert.deepEqual(projectDisplayParts('```text\n<body><p>只有文案</p></body>\n```').parts, [
+    { kind: 'markdown', text: '```text\n<body><p>只有文案</p></body>\n```' }
+  ])
+})
+
 test('混合内容拆开原生 Markdown、块级 HTML 与独立围栏 UI', () => {
   const source = '***索引页***\n\n**开局一·自定义**\n\n<details><summary>天道推演</summary></details>\n\n```html\n<body><script>$("body").load("/status.html")</script></body>\n```'
   const projected = projectDisplayParts(source)
@@ -432,6 +442,57 @@ test('已有模板展示时跳过不会使用的普通投影',()=>{
   const message={role:'assistant',turn:1,text:'原始正文',tavernPluginData:{template_display:{source:'原始正文',swipe:0,html:'已渲染',parts:[{kind:'html',content:'已渲染'}]}}}
   assert.equal(project([message]).projections[0].text,'已渲染')
   assert.equal(project.cacheStats().misses,0)
+})
+
+test('退化的 template_display（正文包 p、残留 mvu-status）回退到普通投影', () => {
+  const source = '开场正文\n<mvu-status/>'
+  const html = '<p>开场正文</p>\n<mvu-status></mvu-status>'
+  const message = {
+    role: 'assistant', turn: 1, greeting: true,
+    text: '开场正文', sourceText: source,
+    tavernPluginData: { template_display: { source, swipe: 0, html, parts: [{ kind: 'html', content: html }] } }
+  }
+  const rule = {
+    id: 'mvu-status-view', placement: [2], markdownOnly: true,
+    findRegex: '<mvu-status/>', replaceString: '```html\n<script>newStatus()</script>\n```'
+  }
+  const result = projectReplyHistory([message], { regexScripts: [rule] })
+  assert.deepEqual(result.projections[0].parts.map(part => part.kind), ['markdown', 'html'])
+  assert.match(result.projections[0].parts[0].text, /开场正文/)
+  assert.match(result.projections[0].parts[1].content, /newStatus/)
+})
+
+test('退化 template_display 会代入身份宏后再比较', () => {
+  const source = '{{user}}遇见{{char}}\n<mvu-status/>'
+  const html = '<p>旅人遇见鸣潮</p>\n<mvu-status></mvu-status>'
+  const message = {
+    role: 'assistant', turn: 1, text: '旅人遇见鸣潮', sourceText: source,
+    tavernPluginData: { template_display: { source, swipe: 0, html, parts: [{ kind: 'html', content: html }] } }
+  }
+  const result = projectReplyHistory([message], { charName: '鸣潮', macroState: { userName: '旅人' } })
+  assert.deepEqual(result.projections[0].parts.map(part => part.kind), ['markdown'])
+  assert.match(result.projections[0].parts[0].text, /旅人遇见鸣潮/)
+})
+
+test('带属性的真实模板 HTML 仍走 template_display', () => {
+  const source = '开场正文'
+  const html = '<p class="author">开场正文</p>'
+  const message = {
+    role: 'assistant', turn: 1, text: source, sourceText: source,
+    tavernPluginData: { template_display: { source, swipe: 0, html, parts: [{ kind: 'html', content: html }] } }
+  }
+  const result = projectReplyHistory([message])
+  assert.deepEqual(result.projections[0].parts, [{ kind: 'html', content: html }])
+})
+
+test('内容被替换的真实 EJS 展示仍走 template_display', () => {
+  const source = '原始正文'
+  const html = '<p>已渲染后缀</p>'
+  const message = {
+    role: 'assistant', turn: 1, text: source, sourceText: source,
+    tavernPluginData: { template_display: { source, swipe: 0, html, parts: [{ kind: 'html', content: html }] } }
+  }
+  assert.equal(projectReplyHistory([message]).projections[0].text, html)
 })
 
 for (const block of [

@@ -25,6 +25,7 @@
     "acorn": "8.15.0",
     "chevrotain": "^11.2.0",
     "dsh-better-sidebar": "0.17.1",
+    "dsh-pocket": "2.10.6",
     "dsh-tavern-plugin": "link:./tavern-plugin",
     "dsh-tavern-remote": "link:./tavern-plugin/packages/dsh-tavern-remote",
     "dsh-web-mobile": "2.3.0",

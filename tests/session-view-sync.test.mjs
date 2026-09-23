@@ -80,3 +80,22 @@ test('large unchanged history stays off the wire; changed message sends only tha
   assert.equal(changed.viewDelta.set.length, 1)
   assert.ok(JSON.stringify(changed).length < 400)
 })
+
+test('dirty message indices reuse hashes without re-serializing untouched history', () => {
+  const server = createSessionViewSync()
+  const view = sample()
+  view.tavernHelper.messages = Array.from({ length: 400 }, (_, index) => ({ mes: '楼层'.repeat(200), index }))
+  const full = server('one', view, undefined, { revision: 1 })
+  assert.ok(full.view)
+  const peek = server.peek(full.viewCursor)
+  assert.equal(peek.revision, 1)
+  const untouched = server('one', view, full.viewCursor, { revision: 1, dirtyMessageIndices: new Set() })
+  assert.ok(untouched.viewDelta)
+  assert.equal(untouched.viewDelta.set.length, 0)
+  assert.ok(JSON.stringify(untouched).length < 300)
+  view.tavernHelper.messages[399].mes = 'changed'
+  const changed = server('one', view, untouched.viewCursor, { revision: 2, dirtyMessageIndices: new Set([399]) })
+  assert.equal(changed.viewDelta.set.length, 1)
+  assert.deepEqual(changed.viewDelta.set[0][0], ['tavernHelper', 'messages', 399])
+  assert.equal(server.peek(changed.viewCursor).revision, 2)
+})
