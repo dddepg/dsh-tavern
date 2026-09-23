@@ -2804,21 +2804,31 @@ window.__ModuleLoader__.load({
 				STREAM_TOKEN_RECEIVED_INCREMENTALLY: "js_stream_token_received_incrementally",
 				GENERATION_ENDED: "js_generation_ended"
 			});
-			if (!officialMvuEnabled && state.mvuEnabled !== false) window.Mvu = {
+			// Opening UIs often sync-check window.Mvu while the official bundle is still
+			// downloading. Expose a writable bootstrap so those checks pass; waiters still
+			// block until initializeGlobal replaces it with the real module.
+			const mvuApi = {
 				events: { VARIABLE_INITIALIZED: "mag_variable_initialized", VARIABLE_UPDATE_STARTED: "mag_variable_update_started", COMMAND_PARSED: "mag_command_parsed", VARIABLE_UPDATE_ENDED: "mag_variable_update_ended", BEFORE_MESSAGE_UPDATE: "mag_before_message_update" },
 				getMvuData: function (option) { return getVariables(option); },
 				replaceMvuData: async function (value, option) { await window.updateVariablesWith(function () { return value; }, option); return copy(value); },
 				parseMessage: async function () { throw new Error("当前兼容层尚未开放脚本内手动 MVU 重算"); }
 			};
+			if (officialMvuEnabled) window.Mvu = Object.assign({ __dshBootstrap: true }, mvuApi);
+			else if (state.mvuEnabled !== false) window.Mvu = mvuApi;
 			window.initializeGlobal = function (name, value) {
 				window[name] = value;
 				return window.eventEmit("global_" + String(name) + "_initialized");
 			};
 			window.waitGlobalInitialized = async function (name) {
-				if (window[name] !== undefined) return window[name];
+				function settled(value) { return value !== undefined && !(value && value.__dshBootstrap === true); }
+				if (settled(window[name])) return window[name];
 				return await new Promise(function (resolve) {
 					const eventName = "global_" + String(name) + "_initialized";
-					const listener = function () { window.eventOff(eventName, listener); resolve(window[name]); };
+					const listener = function () {
+						if (!settled(window[name])) return;
+						window.eventOff(eventName, listener);
+						resolve(window[name]);
+					};
 					window.eventOn(eventName, listener);
 				});
 			};

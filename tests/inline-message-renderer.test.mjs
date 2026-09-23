@@ -2201,6 +2201,33 @@ test('initializeGlobal publishes the value before waking existing global waiters
   assert.equal(await window.waitGlobalInitialized('Controller'), value)
 })
 
+test('官方 MVU 下载前提供可写 bootstrap，waitGlobalInitialized 仍等真正模块', async () => {
+  const document = client.buildTavernHelperScriptDocument({
+    token: 'mvu-bootstrap-token',
+    scripts: [{ id: '__dsh_official_mvu__', name: '官方 MVU', system: 'official-mvu', assetUrl: '/api/dsh-tavern/vendor/magvarupdate/bundle.js', content: '', buttons: [] }],
+    context: { messages: [{ message_id: 0, variables: { stat_data: { hp: 3 }, schema: {} } }] }
+  })
+  assert.match(document, /__dshBootstrap:\s*true/)
+  assert.match(document, /officialMvuEnabled\) window\.Mvu = Object\.assign\(\{ __dshBootstrap: true \}/)
+  const source = clientSource.slice(clientSource.indexOf('window.initializeGlobal = function'), clientSource.indexOf('window.getTavernHelperVersion =', clientSource.indexOf('window.initializeGlobal = function')))
+  const events = client.createTavernHelperEventBus({ currentScript: () => ({ id: 'mvu' }), withScript: (_id, fn) => fn(), reportSubscriptions() {}, post() {} })
+  const window = {
+    Mvu: { __dshBootstrap: true, getMvuData() { return { ok: true } } },
+    eventOn: events.listen, eventOff: events.off, eventEmit: events.emit
+  }
+  vm.runInNewContext(source, { window })
+  let resolved = false
+  const waiting = window.waitGlobalInitialized('Mvu').then(value => { resolved = true; return value })
+  await Promise.resolve()
+  assert.equal(resolved, false)
+  assert.equal(window.Mvu.__dshBootstrap, true)
+  const real = { getMvuData() { return { ready: true } } }
+  await window.initializeGlobal('Mvu', real)
+  assert.equal(await waiting, real)
+  assert.equal(resolved, true)
+  assert.equal(await window.waitGlobalInitialized('Mvu'), real)
+})
+
 test('frame setinput updates the owning session draft without submitting', async () => {
   const writes = []
   const ctx = { sessions: { scope: id => ({ id }) }, get: () => ({ input: { for: scope => ({ setDraft: text => writes.push([scope.id, text]), submit: assert.fail }) } }) }
