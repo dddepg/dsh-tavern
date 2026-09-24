@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { presetSwitch } from './preset-switch.mjs'
 import { playControls } from './play-controls.mjs'
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, readdir, cp, access } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
@@ -86,6 +87,11 @@ try {
     await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'tavern-e2e', private: true,
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-web-mobile', 'dsh-better-sidebar', 'dsh-tavern-plugin', 'dsh-tavern-remote'] } } }))
     await writeFile(join(profile, 'cordis.patch.yml'), `- id: agent-default-model\n  config:\n    provider: tavern-e2e\n    model: fixed\n- insert:\n    - id: tavern-e2e-model\n      name: ${JSON.stringify(join(source, 'tests/e2e/model.mjs'))}\n`)
+    await mkdir(join(data, 'resources/presets'), { recursive: true })
+    for (const key of ['A', 'B']) await writeFile(join(data, `resources/presets/E2E-${key}.json`), JSON.stringify({
+      prompts: [{ identifier: 'main', name: `E2E ${key}`, role: 'system', content: `E2E_PRESET_${key}_ACTIVE`, enabled: true }],
+      prompt_order: [{ order: [{ identifier: 'main', enabled: true }] }]
+    }))
     await mkdir(join(data, 'resources/cards'), { recursive: true })
     // Deliberate continuous DOM updates: a real status card must receive new
     // variables even when it never reaches the frame's DOM-idle threshold.
@@ -103,6 +109,7 @@ try {
     const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
     child = spawn(process.execPath, [cli, '--profile', 'tavern', '--host', '127.0.0.1', '--port', '0', '--no-open'], {
       cwd: source, env: { ...env, DSH_HOME: root, DSH_CWD: root,
+        TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
         TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
         TAVERN_E2E_WRONG_GOLD: process.env.TAVERN_E2E_WRONG_GOLD || '' }, stdio: ['ignore', 'pipe', 'pipe']
     })
@@ -208,6 +215,7 @@ try {
     await inspectRound('after-rollback', 10, '你获得了十枚金币。', 1)
   })
   await playControls({ page, step, savedChat, inspectRound, output, report })
+  await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
   delete report.currentStep
