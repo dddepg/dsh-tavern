@@ -1599,7 +1599,7 @@ export async function apply(ctx) {
   async function projectDirtySessionView(chat, previous, dirtyMessageIndices, activity) {
     const mode = chat.mode || 'story'
     const previousMessages = previous.tavernHelper.messages
-    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity))
+    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity), { posture: chat.posture || '' })
     const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
       previousMessages,
       dirtyIndices: dirtyMessageIndices
