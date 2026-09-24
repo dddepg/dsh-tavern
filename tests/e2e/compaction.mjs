@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
-export async function compactionChecks({ page, step, savedChat, output, report, restartServer, scenario }) {
+export async function compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario }) {
   // Browser template bookkeeping may finish asynchronously; compare durable
   // business facts, not renderer cache metadata.
   const history = chat => chat.messages.map(({ role, turn, text, sourceText, swipes, swipeId, variables, mvu }) => ({ role, turn, text, sourceText, swipes, swipeId, variables, receipt: mvu?.receipt }))
@@ -99,6 +99,41 @@ export async function compactionChecks({ page, step, savedChat, output, report, 
       await control({})
       report.queuedDuringCompaction = result.value
     })
+  } else if (scenario === 'legacy') {
+    await step('关闭宿主，放入已编辑且压缩的 v0 旧档，再通过启动迁移打开', async () => {
+      const before = await savedChat()
+      await installLegacyFixture()
+      assert.deepEqual(history(await savedChat()), history(before))
+    })
+    await step('迁移后继续游玩，确认实际模型只读摘要、不复活已压缩原文', async () => {
+      const start = (await requests()).length
+      await play()
+      const next = (await requests()).slice(start).find(row => row.purpose === 'generation' && row.side === 'foreground')
+      assert.ok(next?.summaryPresent, '迁移后的真实请求必须携带旧摘要')
+      assert.ok(!JSON.stringify(next.messages).includes('OLD_STORY_SHOULD_STAY_ARCHIVED'))
+      report.legacyRecovery = { summaryPresent: next.summaryPresent, archivedTextInRequest: false }
+    })
+  } else if (scenario === 'overflow') {
+    await step('在较大窗口真实游玩三轮，再切换到 32K 窗口', async () => {
+      await play(); await play()
+      await control({ window: 32768 })
+    })
+    await step('从游玩菜单恢复超窗口历史，核对分段预算及原始剧情', async () => {
+      const before = await savedChat(), start = (await requests()).length
+      const operation = await compact()
+      assert.equal(operation.foreground.status, 'succeeded')
+      assert.equal(operation.background.status, 'succeeded')
+      assert.deepEqual(history(await savedChat()), history(before))
+      const chunks = (await requests()).slice(start).filter(row => row.purpose === 'compaction' && row.side === 'foreground')
+      assert.ok(chunks.length > 1, '必须分段调用，不能只更改成功提示')
+      assert.ok(chunks.every(row => row.inputTokens + row.outputReserve <= 32768))
+      const nextStart = (await requests()).length
+      await play()
+      const resumed = (await requests()).slice(nextStart).find(row => row.purpose === 'generation' && row.side === 'foreground')
+      assert.ok(resumed?.summaryPresent)
+      assert.ok(!resumed.rawRounds.includes(1))
+      report.overflowRecovery = { operation, chunks: chunks.map(({ messages, ...row }) => row) }
+    })
   } else {
     await step(`${scenario} 自动压缩，确认前后台仍能完成当前轮`, async () => {
       await control({ foregroundPadding: scenario === 'background' ? 0 : 1700, backgroundPadding: ['foreground', 'rounds'].includes(scenario) ? 0 : 4000 })
@@ -143,7 +178,7 @@ export async function compactionChecks({ page, step, savedChat, output, report, 
     const start = (await requests()).length
     await play()
     const resumed = (await requests()).slice(start).filter(row => row.purpose === 'generation')
-    if (scenario === 'manual') {
+    if (['manual', 'overflow', 'legacy'].includes(scenario)) {
       const foreground = resumed.find(row => row.side === 'foreground')
       assert.ok(foreground?.summaryPresent, '重启后下一轮请求仍须携带摘要')
       assert.ok(!foreground.rawRounds.includes(1), '重启后不能复活已总结的首轮正文')

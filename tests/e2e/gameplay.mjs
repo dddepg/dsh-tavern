@@ -1,3 +1,5 @@
+import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
+import { encodeMigratedSessionLog, parseSessionLog } from '../../tavern-plugin/lib/domain/legacy-session-migration.js'
 import { compactionChecks } from './compaction.mjs'
 import assert from 'node:assert/strict'
 import { presetSwitch } from './preset-switch.mjs'
@@ -72,8 +74,8 @@ try {
   await step('准备独立运行环境', async () => {
     if (compactionScenario) {
       await mkdir(data, { recursive: true })
-      await writeFile(join(data, 'tavern-settings.json'), JSON.stringify({ contextCompaction: { mode: compactionScenario === 'rounds' ? 'rounds' : compactionScenario === 'manual' ? 'manual' : 'percent', rounds: 2, percent: 50 } }))
-      await writeFile(join(output, 'model-control.json'), JSON.stringify({ foregroundPadding: 650, backgroundPadding: 0 }))
+      await writeFile(join(data, 'tavern-settings.json'), JSON.stringify({ contextCompaction: { mode: compactionScenario === 'rounds' ? 'rounds' : ['manual', 'overflow', 'legacy'].includes(compactionScenario) ? 'manual' : 'percent', rounds: 2, percent: 50 } }))
+      await writeFile(join(output, 'model-control.json'), JSON.stringify({ foregroundPadding: compactionScenario === 'overflow' ? 4000 : 650, backgroundPadding: 0, window: compactionScenario === 'overflow' ? 262144 : 32768 }))
     }
     await access(cli).catch(() => { throw Error('找不到 DSH runtime；先安装酒馆，或设置 TAVERN_E2E_RUNTIME。') })
     report.runtimeVersion = JSON.parse(await readFile(join(modules, '@deepseek-ai/dsh/package.json'), 'utf8')).version
@@ -139,11 +141,12 @@ try {
       return url
     }
     const url = await launchServer()
-    restartServer = async () => {
+    restartServer = async (whileStopped) => {
       const current = new URL(page.url())
       child.kill('SIGTERM')
       await Promise.race([new Promise(resolve => child.once('exit', resolve)), pause(5000)])
       assert.notEqual(child.exitCode, null, '旧服务必须退出后再重启')
+      await whileStopped?.()
       const next = new URL(await launchServer())
       current.host = next.host
       current.searchParams.set('token', next.searchParams.get('token'))
@@ -187,7 +190,57 @@ try {
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
   if (compactionScenario) {
-    await compactionChecks({ page, step, savedChat, output, report, restartServer, scenario: compactionScenario })
+    const installLegacyFixture = async () => {
+      const chat = await savedChat()
+      let directory, storedHeader
+      await restartServer(async () => {
+        const sessions = join(root, 'profile-data/tavern/sessions')
+        const files = (await readdir(sessions, { recursive: true })).filter(file => file.endsWith('session.v3.jsonl.zstd'))
+        for (const relative of files) {
+          const full = join(sessions, relative)
+          const saved = parseSessionLog(await readFile(full))
+          if (saved.header.id === chat.sessionId) { directory = dirname(full); storedHeader = saved.header; break }
+        }
+        assert.ok(directory, '找到本次临时游玩的原生会话')
+        const fixture = compactedEditedLegacySession()
+        fixture.header.id = chat.sessionId
+        fixture.header.cwd = storedHeader.cwd
+        // This is a versioned on-disk input fixture, not a mocked migration or
+        // compaction result. Production startup must migrate it itself.
+        let serialized = JSON.stringify(fixture.events).replaceAll('SUMMARY_TO_KEEP', 'E2E_MEMORY_ROUND_1 当前金币 10，人物站在柜台前。')
+          .replaceAll('"provider":"fixture"', '"provider":"tavern-e2e"').replaceAll('"model":"fixture"', '"model":"fixed"')
+        fixture.events = JSON.parse(serialized)
+        // Tavern's greeting already occupies turn 1. Keep the old Session's
+        // turn coordinates aligned with its paired Chat, so this fixture tests
+        // migration rather than an unrelated mismatched-archive restoration.
+        const opening = [
+          { type: 'turn/start', data: { turn: 1 } },
+          { type: 'step/start', data: { turn: 1, step: 1 } },
+          { type: 'step/end', data: { turn: 1, step: 1 } },
+          { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+        ].map((row, seq) => ({ ...row, seq, time: 1 }))
+        for (const event of fixture.events) {
+          event.seq += opening.length
+          if (event.data.turn === 1) event.data.turn = 2
+          if (event.surfaceOp?.op === 'replace') { event.surfaceOp.start += opening.length; event.surfaceOp.end += opening.length }
+          if (event.sourceEventSeqs) event.sourceEventSeqs = event.sourceEventSeqs.map(seq => seq + opening.length)
+          if (event.data.shadowedRange) { event.data.shadowedRange.start += opening.length; event.data.shadowedRange.end += opening.length }
+          if (event.data.shadowedSeqs) event.data.shadowedSeqs = event.data.shadowedSeqs.map(seq => seq + opening.length)
+        }
+        fixture.events.unshift(...opening)
+        const bytes = encodeMigratedSessionLog(JSON.stringify(fixture.header), fixture.events)
+        await writeFile(join(output, 'legacy-input.jsonl.zstd'), bytes)
+        await writeFile(join(directory, 'session.jsonl.zstd'), bytes)
+        await rm(join(directory, 'session.v3.jsonl.zstd'))
+      })
+      const migrated = await readFile(join(directory, 'session.v3.jsonl.zstd'))
+      await writeFile(join(output, 'legacy-migrated.jsonl.zstd'), migrated)
+      const rows = parseSessionLog(migrated).events
+      assert.ok(rows.some(row => row.type === 'compaction/summary'), '启动迁移保留压缩事件')
+      assert.ok(JSON.stringify(rows).includes('OLD_STORY_SHOULD_STAY_ARCHIVED'), '旧原文仍保存在历史中')
+      assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
+    }
+    await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
   } else {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()

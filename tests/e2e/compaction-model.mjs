@@ -3,6 +3,10 @@ import { readFile, appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 export const capacity = 32768
 const backgroundSteps = new Map()
+export async function modelCapacity() {
+  const directory = process.env.TAVERN_E2E_COMPACTION_DIR
+  return directory ? JSON.parse(await readFile(join(directory, 'model-control.json'), 'utf8')).window || capacity : capacity
+}
 export async function* compactionStream(input) {
   if (input.purpose === 'session-title') {
     yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -12,6 +16,7 @@ export async function* compactionStream(input) {
   }
   const directory = process.env.TAVERN_E2E_COMPACTION_DIR
   const control = JSON.parse(await readFile(join(directory, 'model-control.json'), 'utf8'))
+  const capacity = control.window || 32768
   const text = JSON.stringify(input.messages)
   const tools = new Set((input.tools || []).map(tool => tool.name))
   const background = tools.has('mvu_submit_update') || tools.has('posture_submit')
@@ -42,7 +47,7 @@ export async function* compactionStream(input) {
   })
   const done = new Set(input.messages.flatMap(message => message.content || []).filter(block => block.type === 'tool-result').map(block => block.toolCallId))
   const blocks = []
-  if (summary) blocks.push({ type: 'text', text: `E2E_MEMORY_ROUND_${round}。当前金币 ${gold}，人物站在柜台前。\n` + '剧情摘要保留人物关系和已完成事件。'.repeat(330) })
+  if (summary) blocks.push({ type: 'text', text: [...new Set(numbers)].map(n => `E2E_MEMORY_ROUND_${n}`).join(' ') + `。当前金币 ${gold}，人物站在柜台前。\n` + '剧情摘要保留人物关系和已完成事件。'.repeat(330) })
   else if (background) {
     const key = `${input.sessionId}:${round}`
     const stage = backgroundSteps.get(key) || 0

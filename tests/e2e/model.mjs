@@ -1,4 +1,4 @@
-import { compactionStream, capacity } from './compaction-model.mjs'
+import { compactionStream, modelCapacity } from './compaction-model.mjs'
 // The only substituted boundary: fixed provider output. Tools execute normally.
 import { appendFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
@@ -7,7 +7,7 @@ export const inject = ['llm']
 export function apply(ctx) {
   class Model extends LlmAdapter {
     async resolveModel(provider, id) {
-      return { provider, id, name: 'E2E fixed model', ...(process.env.TAVERN_E2E_COMPACTION_DIR ? { defaultMaxTokens: 8192 } : {}), context: { contextWindow: process.env.TAVERN_E2E_COMPACTION_DIR ? capacity : 64000 } }
+      return { provider, id, name: 'E2E fixed model', ...(process.env.TAVERN_E2E_COMPACTION_DIR ? { defaultMaxTokens: 8192 } : {}), context: { contextWindow: process.env.TAVERN_E2E_COMPACTION_DIR ? await modelCapacity() : 64000 } }
     }
     async *stream(input) {
       if (process.env.TAVERN_E2E_COMPACTION_DIR) { yield* compactionStream(input); return }
