@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -35,7 +35,7 @@ test('initial history is limited to 20, explicit loads append 20 and preserve lo
 })
 
 const dsh = process.env.DSH_BROWSER_ROOT || path.join(homedir(), '.dsh-tavern/runtime/lib/node_modules/@deepseek-ai/dsh')
-test('real React keeps 20 rounds while scrolling and appends history only after manual clicks', { skip: !existsSync(dsh) && 'Set DSH_BROWSER_ROOT for the browser integration test' }, async () => {
+test('real React loads older pages on upward input without remounting retained frames', { skip: !existsSync(dsh) && 'Set DSH_BROWSER_ROOT for the browser integration test' }, async () => {
   const require = createRequire(new URL('../package.json', import.meta.url))
   const names = ['react', 'scheduler', 'react-dom', 'react-dom/client']
   const files = ['react.production.js', 'scheduler.production.js', 'react-dom.production.js', 'react-dom-client.production.js']
@@ -50,7 +50,7 @@ test('real React keeps 20 rounds while scrolling and appends history only after 
   try {
     const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
     const errors = []; page.on('pageerror', e => errors.push(e.message))
-    await page.setContent('<div id="app"></div>')
+    await page.setContent('<div id="app" data-conversation-scroll style="height:600px;overflow:auto;overflow-anchor:none"></div>')
     await page.addScriptTag({content: bundle + `
       const React=modules.react;
       ${retention}\n${retained}\n${source}
@@ -71,11 +71,17 @@ test('real React keeps 20 rounds while scrolling and appends history only after 
     await page.waitForFunction(() => document.querySelectorAll('iframe').length === 20)
     assert.equal(await page.locator('iframe').count(), 20)
     await page.evaluate(() => { window.saved = document.querySelector('[data-tavern-history-turn="133"] iframe'); saved.contentDocument.querySelector('input').value = 'kept' })
-    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.evaluate(() => { document.querySelector('#app').scrollTop = 0 })
     await page.waitForTimeout(200)
-    assert.equal(await page.locator('iframe').count(), 20, 'scrolling alone must not expand history')
-    await page.getByRole('button', {name:'加载更多（20 轮）', exact:true}).click()
+    assert.equal(await page.locator('iframe').count(), 20, 'initial layout must not eagerly load all history')
+    const anchor = await page.locator('[data-tavern-history-turn="114"]').boundingBox()
+    await page.getByRole('button', {name:'加载更多（20 轮）', exact:true}).hover()
+    await page.mouse.wheel(0, -60)
     await page.waitForFunction(() => document.querySelectorAll('iframe').length === 40)
+    await page.waitForTimeout(100)
+    const anchored = await page.locator('[data-tavern-history-turn="114"]').boundingBox()
+    assert.ok(Math.abs(anchored.y - anchor.y) < 100, 'loading preserves the visible round position')
+    assert.equal(await page.locator('iframe').count(), 40, 'one upward input loads one page, not all history')
     await page.getByRole('button', {name:'加载更多（20 轮）', exact:true}).click()
     await page.waitForFunction(() => document.querySelectorAll('iframe').length === 60)
     assert.equal(await page.evaluate(() => saved === document.querySelector('[data-tavern-history-turn="133"] iframe') && saved.contentDocument.querySelector('input').value === 'kept'), true)
@@ -83,5 +89,9 @@ test('real React keeps 20 rounds while scrolling and appends history only after 
     await page.waitForFunction(() => document.querySelectorAll('iframe').length === 133)
     assert.equal(await page.getByRole('button', {name:'加载更多（20 轮）', exact:true}).count(), 0)
     assert.deepEqual(errors, [])
+    const artifacts = path.resolve('output/e2e-history-paging')
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: path.join(artifacts, 'history-loaded.png') })
+    await writeFile(path.join(artifacts, 'report.json'), JSON.stringify({ status: 'passed', initialRounds: 20, afterUpwardInput: 40, totalRounds: 133, preservedFrameState: true, anchored: true }, null, 2))
   } finally { await browser.close() }
 })

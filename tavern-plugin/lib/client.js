@@ -1137,6 +1137,7 @@ window.__ModuleLoader__.load({
 
         function TavernWindowedNode(props) {
             const ref = React.useRef(null);
+            const expanding = React.useRef(false);
             const turn = Number(props.node.location?.turn?.turn || 0);
             const key = tavernHistoryViewport.key(props.sessionId, turn);
             const active = React.useSyncExternalStore(tavernHistoryViewport.subscribe, tavernHistoryViewport.snapshot).has(key);
@@ -1145,14 +1146,49 @@ window.__ModuleLoader__.load({
             }), [key]);
             const earlier = props.node.kind !== "user" && tavernHistoryViewport.hasEarlier(props.sessionId, turn);
             function more() {
+                if (expanding.current) return;
+                expanding.current = true;
                 const node = ref.current, top = node?.getBoundingClientRect().top;
                 const scroller = node?.closest("[data-conversation-scroll]");
                 tavernHistoryViewport.more(props.sessionId);
                 // Keep the previously visible round anchored while older bodies mount.
                 requestAnimationFrame(() => {
                     if (node?.isConnected && scroller) scroller.scrollTop += node.getBoundingClientRect().top - top;
+                    expanding.current = false;
                 });
             }
+            React.useEffect(() => {
+                if (!active || !earlier) return;
+                const node = ref.current, scroller = node?.closest("[data-conversation-scroll]");
+                if (!scroller) return;
+                let previousTop = scroller.scrollTop, touchY = null;
+                function nearStart() {
+                    return node.isConnected && node.getBoundingClientRect().top - scroller.getBoundingClientRect().top >= -120
+                        && node.getBoundingClientRect().top - scroller.getBoundingClientRect().top <= 180;
+                }
+                function scroll() {
+                    const top = scroller.scrollTop;
+                    if (top < previousTop && nearStart()) more();
+                    previousTop = top;
+                }
+                function wheel(event) { if (event.deltaY < 0 && nearStart()) more(); }
+                function touchStart(event) { touchY = event.touches[0]?.clientY ?? null; }
+                function touchMove(event) {
+                    const nextY = event.touches[0]?.clientY;
+                    if (touchY !== null && nextY > touchY && nearStart()) more();
+                    touchY = nextY ?? null;
+                }
+                scroller.addEventListener("scroll", scroll, { passive: true });
+                scroller.addEventListener("wheel", wheel, { passive: true });
+                scroller.addEventListener("touchstart", touchStart, { passive: true });
+                scroller.addEventListener("touchmove", touchMove, { passive: true });
+                return () => {
+                    scroller.removeEventListener("scroll", scroll);
+                    scroller.removeEventListener("wheel", wheel);
+                    scroller.removeEventListener("touchstart", touchStart);
+                    scroller.removeEventListener("touchmove", touchMove);
+                };
+            }, [active, earlier, key]);
             return React.createElement("div", { ref, "data-tavern-history-turn": turn, hidden: !active },
                 active ? React.createElement(React.Fragment, null,
                     earlier ? React.createElement("div", { className: "dsh-tavern-history-controls" },
