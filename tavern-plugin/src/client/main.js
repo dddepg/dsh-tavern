@@ -1642,6 +1642,9 @@ window.__ModuleLoader__.load({
 				+ (input && input.helperContext && input.persistent === true && input.preserveInstance !== true ? '<script data-dsh-tavern-status-refresh>(' + installTavernStatusRefresh.toString() + ')(' + token + ');<\/script>' : '')
 				+ (input && input.openingPreview ? '<script data-dsh-tavern-opening-preview>(function(){const install=()=>(' + installOpeningPreviewBridge.toString() + ')(' + token + ',' + JSON.stringify(input.openingPreview).replace(/</g, '\\u003c') + ');if(window.__dshTavernHelperReady)window.__dshTavernHelperReady.then(install);else install();})();<\/script>' : '')
 				+ (preparationRuntime && input.trustedCardMode === true ? '<script data-dsh-tavern-opening-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,10);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
+				// Viewers without the execution lease still receive live variables. Legacy
+				// status panels read parent.Mvu; expose their Helper API below the executor.
+				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
 				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
@@ -3270,7 +3273,7 @@ window.__ModuleLoader__.load({
 			return script.tavernReady;
 		}
 
-		function installTavernTrustedHostFacade(host, frameWindow, priority) {
+		function installTavernTrustedHostFacade(host, frameWindow, priority, names) {
 			// A visible mount root supports legacy host detection and panel mounting.
 			// Never fake send_textarea: scripts must reach the real composer.
 			let chatRoot = host.document && host.document.getElementById('chat');
@@ -3299,7 +3302,7 @@ window.__ModuleLoader__.load({
 			const ownsSortControl = sortControl && typeof sortControl.tavernCompatibilityOwners === 'number';
 			if (ownsSortControl) sortControl.tavernCompatibilityOwners++;
 			const frameElement = frameWindow.frameElement, frameDocument = frameWindow.document;
-			const bindings = ["SillyTavern", "TavernHelper", "Mvu", "_", "toastr"].map(function (name) {
+			const bindings = (names || ["SillyTavern", "TavernHelper", "Mvu", "_", "toastr"]).map(function (name) {
 				const previous = Object.getOwnPropertyDescriptor(host, name);
 				if (previous && !previous.configurable) throw new Error("宿主接口不可替换：" + name);
 				const binding = { name: name, previous: previous, active: true, priority: Number(priority) || 0, frameWindow: frameWindow, frameElement: frameElement, frameDocument: frameDocument, toastr: name === "toastr" ? frameWindow.toastr : undefined, get: function () {
@@ -4722,6 +4725,7 @@ window.__ModuleLoader__.load({
 					key: documentKey(), token: nextTavernFrameToken(),
 					helperContext: helperContext, turn: props.turn,
 					heightKey: tavernFrameHeightKey(props), content: props.content,
+					sessionId: props.sessionId,
 					trustedCardMode: props.trustedCardMode, refreshRequested: false
 				};
 				document.html = buildTavernFrameDocument({ content: props.content, token: document.token, openingPreview: props.openingPreview, helperContext: helperContext, trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
@@ -4733,6 +4737,7 @@ window.__ModuleLoader__.load({
                     const previous = frameSizeObservers.get(document.token);
                     if (previous) { previous.disconnect(); frameSizeObservers.delete(document.token); }
 					touchRelay.stop();
+                    if (node) node.__dshTavernSessionId = document.sessionId;
                     channel.attach(node);
                     if (node && typeof hostWindow.IntersectionObserver === "function") {
                         let nearby = true;
