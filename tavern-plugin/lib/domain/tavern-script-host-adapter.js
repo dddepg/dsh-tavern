@@ -119,7 +119,19 @@ export function createTavernScriptHostAdapter(options = {}) {
       if (!mutateScriptPrompts(chat, operation)) return { updated: false, context: projectTavernHelperContext(chat) }
       const transactional = transactionResult(sessionId, { type: 'prompts' }, false, eventId)
       if (transactional !== null) return transactional
-      await options.writeChat(chat, { source: 'tavern-helper.prompts' })
+      let saved
+      if (options.patchChat && Number.isSafeInteger(chat._storageRevision) && chat._storageRevision > 0) {
+        saved = await options.patchChat(chat.id, chat._storageRevision, [
+          { op: 'set', path: ['tavernScriptPrompts'], value: chat.tavernScriptPrompts }
+        ], { source: 'tavern-helper.prompts' })
+      }
+      // A concurrent write must use the existing three-way merge, never retry
+      // this stale replacement against a newer revision.
+      if (!saved) await options.writeChat(chat, { source: 'tavern-helper.prompts' })
+      else {
+        chat._storageRevision = saved._storageRevision
+        chat.updatedAt = saved.updatedAt
+      }
       return { updated: true, context: projectTavernHelperContext(chat) }
     })
   }

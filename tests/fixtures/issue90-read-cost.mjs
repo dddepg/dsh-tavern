@@ -67,6 +67,13 @@ try {
       }
     })
   }
+  const promptDraft=await persistence.read('c')
+  promptDraft.tavernScriptPrompts=[{id:'benchmark',content:'prompt'}]
+  await measure('prompt full write',()=>persistence.write(promptDraft))
+  const promptRevision=(await persistence.readSessionState('c'))._storageRevision
+  await measure('prompt exact revision patch',()=>persistence.patch('c',promptRevision,[
+    {op:'set',path:['tavernScriptPrompts'],value:[{id:'benchmark',content:'next prompt'}]}
+  ]))
   await measure('forced GC after writes',()=>globalThis.gc?.())
   await writeFile(process.argv[2],JSON.stringify({node:process.version,platform:process.platform,bytes,messages:453,
     scope:'Warm synthetic cache/status RPC functions, volatile projection, reads and writes. GC events overlap wall time; RSS is endpoint, not peak.',results},null,2)+'\n')
