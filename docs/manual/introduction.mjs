@@ -1,4 +1,4 @@
-// Commands mirror README installation instructions; tests guard against drift.
+// Commands mirror docs/installation.md; tests guard against drift.
 export const installCommands = {
   desktopWindows: "$env:DSH_TAVERN_HOST='desktop'; $tavernInstaller=[Text.Encoding]::UTF8.GetString((New-Object Net.WebClient).DownloadData('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.ps1')); Invoke-Expression $tavernInstaller",
   desktopMac: 'curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=desktop sh',
@@ -81,7 +81,8 @@ export const installation = `
 | 纯小白一键安装 | 下载后直接运行，无需手动准备运行环境 | 仅 Windows x64 |
 | DSH Desktop 安装 | 先安装 Desktop，再通过 DSH 终端安装酒馆 | Windows x64、macOS |
 | 命令行版 | 希望通过浏览器访问、自己管理服务 | Windows、macOS、Linux / WSL2 |
-| Android 实验版 | 愿意自行排错的手机用户 | 通过 DSHA 尝试安装，不保证一定可用 |
+| Android 独立 APK | 下载应用，首次启动自动安装酒馆 | Android 11+、ARM64，实验性支持 |
+| DSHA 安装 | 已有 DSHA，或需要使用兼容包 | Android，实验性支持 |
 
 桌面版与命令行版选择一种即可，不要同时运行。下方命令会下载并执行本项目安装脚本，请在确认项目来源可信后运行；网页本身不会自动执行安装。
 
@@ -95,7 +96,38 @@ export const installation = `
 2. 安装器自动准备 Desktop 2.0.13 和当前兼容的最新版酒馆，无需另装 Node.js 或 DSH Desktop。
 3. 打开酒馆后，在“设置 → 模型”配置模型，再导入人物卡。
 
-已有安装和数据会保留，之后可在酒馆界面检查更新。这是在线安装程序，不是无需网络的离线整包。
+SHA-256：\`a21e2ea4bc7bb8d1154b6d133c3bd6c6ca139006c74140527925104731d02951\`
+
+下载后双击运行，**首次启动需要联网，自动安装当前兼容 Desktop 2.0.13 的最新版酒馆**，无需另外安装 Node.js 或 DSH Desktop。Desktop 固定为 2.0.13。重新运行安装包会关闭所选安装的旧进程，并联网更新已有 Tavern 插件；请先保存当前操作。人物卡、聊天和设置保留。平时从桌面快捷方式启动无需重复更新。
+
+若启动时报「安装或更新失败」或「对路径 DSH Desktop.exe 的访问被拒绝」，请重新下载上方安装包（勿用旧版 \`Setup.exe\`），关闭已打开的酒馆后再运行。
+
+首次安装可选择文件夹，例如 \`D:\\Apps\\DSH-Tavern\`。完成后自动创建**桌面和开始菜单的「DSH Tavern」快捷方式**，重启电脑后从这里打开即可；下载的安装包可以删除。完成提示和安装目录里的 \`如何启动.txt\` 会列出程序及数据位置。
+
+**旧便携版找不到入口？** 下载上面的新版安装包，运行后点击「修复并启动」，会在原位置更新运行时和插件、补建入口并保留原数据，不必重新导入人物卡或聊天。请不要直接运行 \`AppData\\Local\\DSH-Tavern-Portable\\runtime-…\` 内的 \`DSH Desktop.exe\`。详见[Windows 安装与启动入口](https://github.com/flizzywine/dsh-tavern/blob/main/docs/installation.md#windows-一键安装版)。
+
+**卸载后重装提示“已记录的安装目录暂时不可用”？** 上方下载已更新为修复版。重新下载并运行，选择「重新安装」后指定安装位置即可，无需手动清理注册表。若要继续使用旧聊天和人物卡，请先连接原磁盘或选择「使用原目录」；重新安装不会删除旧文件，也不能恢复已删除的数据。
+
+**更新一直停在“正在更新”？** Windows 一键版请下载上方修复版安装器，按原安装位置修复入口后重启，再检查更新。普通 Desktop 版可从 DSH 终端重新运行安装命令。新版会自动准备经过校验的独立包管理环境，修复依赖安装完成后进程不退出的问题；聊天、人物卡和适配的 DSH 版本保持不变。
+
+**为什么锁定 DSH 版本？** DSH 经常进行破坏性更新，DSH Desktop 和 DSHA 也会随之更新内置 DSH，可能导致原本能用的插件在宿主升级后无法运行。为避免用户更新后酒馆失效，本项目必须锁定已适配的 DSH 版本：安装器只接受适配版本，检测到非适配版本会停止安装。请使用下方列出的适配版本，等待本项目完成新版本适配后再升级宿主。
+
+首次安装、更新或重新安装使用同一条命令，保留人物卡、对话和配置。所有平台都要求实际运行的 DSH 为 **\`0.1.5-rc.2\`**；版本不匹配时停止安装，请使用下方适配版本。
+
+## Android 一键 APK（Android 11+ / ARM64）
+
+[下载 DSH Tavern Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk) · [下载 SHA-256 校验文件](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk.sha256)
+
+1. 下载 APK，按 Android 提示允许当前浏览器或文件管理器安装应用，然后安装。
+2. 打开「DSH Tavern」，点击启动；首次保持联网并等待运行环境与酒馆安装完成，无需另装 DSHA，也无需输入命令。
+3. 启动完成后点击进入，在酒馆设置中配置文字模型，再导入人物卡。
+4. 以后直接打开此应用并启动、进入；更新酒馆后返回应用的启动页重启。
+
+这是在线安装包，首次启动需要下载最新版酒馆；请保持应用运行。初始化失败时保留错误日志，再点击启动重试。安装日志位于容器内 /root/.dsh/logs/tavern-install.log。
+
+独立 APK 与原版 DSHA 可以同时安装，数据各自独立，不会自动迁移旧聊天。覆盖升级请安装本项目同签名的新 APK；不要为了更新先卸载应用，以免删除应用数据。
+
+Android 仍属实验性支持，不保证一定可用。本包要求 Android 11 及以上、ARM64；已在 MuMu Android 12 验证首次安装、启动、重启及覆盖安装，尚未完成实体手机测试。其他系统版本可参考下方 DSHA 方案。
 
 ## DSH Desktop 安装（Windows / macOS）
 
@@ -179,12 +211,22 @@ v2.1 要求宿主 DSH {{dshVersion}}。请安装 **[DSHA v0.1.5-rc2](https://git
 
 以后可使用“更新到最新版”；打不开时尝试 DSHA 酒馆工作台入口中的“更新/修复”。更新完成后，在 DSHA 底部“启动”页点“重启”，再进入酒馆，让新版入口生效；老用户无需卸载重装或单独安装窗口插件。窗口白屏时先点顶部“刷新”，仍不正常可点“直接打开”；“关闭”返回 DSHA 主界面。使用时请允许 DSHA 后台运行，避免系统省电策略中断服务。
 
+## 手机远程访问
+
+**版本提醒：酒馆当前适配 DSH \`0.1.5-rc.2\`。参考插件教程时，请勿重新安装或升级到其他 DSH 版本。**
+
+酒馆运行在电脑或服务器上，手机通过浏览器访问，可按场景选择：
+
+- **自己电脑运行，手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。Desktop 安装和更新会自动配置 Pocket，不再同时安装 \`dsh-web-mobile\`；DSHA 继续使用 \`dsh-web-mobile\`。重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码即可。
+- **服务器部署，手机远程登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)。为远程 WebUI 添加账号密码认证；服务器地址、监听与端口需先配置为可访问，插件本身不提供内网穿透。首次账号设置及配置方法见插件 README。
+
+
 ## 安装失败时
 
 - 先保留最前面的具体错误与文件路径，不要只截取最后一句“失败”。
 - 无法打开网页：检查服务是否运行，并使用含鉴权信息的完整地址。
 - 能打开但不能生成：先检查模型服务配置和服务返回的错误。
-- 一键命令仍无法使用：查看[手动安装说明](https://github.com/flizzywine/dsh-tavern#手动安装)。
+- 一键命令仍无法使用：查看[手动安装说明](https://github.com/flizzywine/dsh-tavern/blob/main/docs/installation.md)。
 
 更多说明见[常见问题](#n08)与[排错日志](#n04)。不要公开模型密钥、鉴权链接或私人剧情。
 `

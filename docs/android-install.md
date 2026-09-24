@@ -1,5 +1,21 @@
 # Android 实验性安装
 
+## Android 一键 APK（Android 11+ / ARM64）
+
+[下载 DSH Tavern Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk) · [下载 SHA-256 校验文件](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk.sha256)
+
+1. 下载 APK，按 Android 提示允许当前浏览器或文件管理器安装应用，然后安装。
+2. 打开「DSH Tavern」，点击启动；首次保持联网并等待运行环境与酒馆安装完成，无需另装 DSHA，也无需输入命令。
+3. 启动完成后点击进入，在酒馆设置中配置文字模型，再导入人物卡。
+4. 以后直接打开此应用并启动、进入；更新酒馆后返回应用的启动页重启。
+
+这是在线安装包，首次启动需要下载最新版酒馆；请保持应用运行。初始化失败时保留错误日志，再点击启动重试。安装日志位于容器内 /root/.dsh/logs/tavern-install.log。
+
+独立 APK 与原版 DSHA 可以同时安装，数据各自独立，不会自动迁移旧聊天。覆盖升级请安装本项目同签名的新 APK；不要为了更新先卸载应用，以免删除应用数据。
+
+Android 仍属实验性支持，不保证一定可用。本包要求 Android 11 及以上、ARM64；已在 MuMu Android 12 验证首次安装、启动、重启及覆盖安装，尚未完成实体手机测试。其他系统版本可参考下方 DSHA 方案。
+
+
 > **Android 属于实验性支持，不保证一定可用。** 不同手机系统、DSHA 版本、网络和后台限制都可能导致安装或运行失败；当前安装脚本只能修复项目已知问题。
 
 > v2.1 要求宿主 DSH `0.1.5-rc.2`。请安装 **[DSHA v0.1.5-rc2](https://github.com/DSH-APP/DSHA/releases/tag/v0.1.5-rc2)**（内置这个版本）。Android 11 及以上用标准包 `dsha-0.1.5-rc2.apk`，更早的系统用兼容包 `dsha-0.1.5-rc2low.apk`。旧的 DSHA 1.2.0-rc1.4 内置的不是这个版本，安装会停止。历史包见 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)。
