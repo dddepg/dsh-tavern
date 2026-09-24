@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "ffba9e8d4c6b3399a56668e09308476661fa3971",
-  "releaseSequence": 367,
+  "revision": "eeb79bd9c5bca74c99e4490fe93891570d923e4a",
+  "releaseSequence": 368,
   "version": "2.1.0",
   "files": [
     {
@@ -171,8 +171,8 @@
     },
     {
       "path": "presets/tavern-background/agent.cordis.yml",
-      "sha256": "009beb5b556c3d48d029d24f7c4ed334c049f8c8ac9a3c91125ee59407ef9275",
-      "size": 809
+      "sha256": "36777ce45873c965cb1f4df4902e3aba8e4dc4cd1d7021691dca358d948deb99",
+      "size": 851
     },
     {
       "path": "presets/tavern-background/skills/character-design/SKILL.md",
@@ -181,8 +181,8 @@
     },
     {
       "path": "presets/tavern/agent.cordis.yml",
-      "sha256": "c8a089b4eee432db1307db7e82e4fa7998b72ae1b5647f35ebee738941b7fc49",
-      "size": 2067
+      "sha256": "a34c97751876c57334b02ce37890f942516e8cbec28b4d5d466eff5d9b4d0fb1",
+      "size": 2109
     },
     {
       "path": "presets/tavern/preset.yml",
@@ -756,8 +756,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-settlement-reconciler.js",
-      "sha256": "e41b2de30d77b74410d4a81b31a38c5ee7a3321d998a7a310738f07a897c13cc",
-      "size": 2660
+      "sha256": "137eb5c63b8c98003260abbfbf0568d3a249b6533ec31a3dbe4965419c8f2b8f",
+      "size": 3054
     },
     {
       "path": "tavern-plugin/lib/domain/native-turn-result.js",
