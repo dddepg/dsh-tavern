@@ -12,44 +12,24 @@ import { resolveRuntimeMacroText } from './runtime-content-projection.js'
 
 export const MVU_SUBMIT_UPDATE_TOOL_NAME = 'mvu_submit_update'
 
-const jsonValueSchema = {
-  anyOf: [
-    { type: 'null' },
-    { type: 'boolean' },
-    { type: 'number' },
-    { type: 'string' },
-    { type: 'array', items: {} },
-    { type: 'object', additionalProperties: true }
-  ]
+// Keep the provider-facing schema flat: some OpenAI-compatible gateways narrow
+// arbitrary JSON unions to a single primitive type. Decode values at our boundary.
+const operationSchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    op: { type: 'string', enum: ['replace', 'insert', 'add', 'delta', 'remove', 'move'] },
+    path: { type: 'string' },
+    valueJson: { type: 'string', description: 'replace/insert/add/delta 必填：实际值的 JSON 编码字符串。例如数字编码为 999995，布尔编码为 false，对象编码为 {"名称":"长剑"}；字符串值须包含 JSON 双引号。delta 必须编码有限数字。remove/move 不需要此字段。' },
+    from: { type: 'string', description: '仅 move 必填：来源绝对路径。' }
+  },
+  required: ['op', 'path']
 }
-
-const operationSchemas = [
-  {
-    type: 'object', additionalProperties: false,
-    properties: { op: { type: 'string', enum: ['replace', 'insert', 'add'] }, path: { type: 'string' }, value: jsonValueSchema },
-    required: ['op', 'path', 'value']
-  },
-  {
-    type: 'object', additionalProperties: false,
-    properties: { op: { type: 'string', const: 'delta' }, path: { type: 'string' }, value: { type: 'number' } },
-    required: ['op', 'path', 'value']
-  },
-  {
-    type: 'object', additionalProperties: false,
-    properties: { op: { type: 'string', const: 'remove' }, path: { type: 'string' } },
-    required: ['op', 'path']
-  },
-  {
-    type: 'object', additionalProperties: false,
-    properties: { op: { type: 'string', const: 'move' }, from: { type: 'string' }, path: { type: 'string' } },
-    required: ['op', 'from', 'path']
-  }
-]
 
 export const MVU_SUBMIT_UPDATE_TOOL = Object.freeze({
   name: MVU_SUBMIT_UPDATE_TOOL_NAME,
   description: [
     '提交本轮正文确认的变量变化，以返回的实际执行校验结果为准。变量通过本工具提交，不在回复中输出 XML 变量协议；人物卡中的变量含义、更新条件和校验规则仍须遵守。',
+    '所有写入值使用 valueJson 提交 JSON 编码字符串，不使用 value；对象必须编码完整对象，数字不能用布尔值代替。',
     '最多提交三次。若 ok=false 且 retryable=true，读取 error、failures 和 runtimeDiagnostics，根据 currentVariables 与变量结构修正完整 operations 后重试，不要原样反复提交。',
     'rolledBack=true 表示整批修改未保存，可以基于原快照重新提交完整更新；不得用空 operations 掩盖尚未修复的失败。',
     '返回 ok=true 或 retryable=false 后停止调用本工具，不能重复执行已成功的变量更新，也不能绕过人物卡校验。'
@@ -61,7 +41,7 @@ export const MVU_SUBMIT_UPDATE_TOOL = Object.freeze({
       operations: {
         type: 'array',
         description: '官方 MVU JSON Patch 方言。path/from 使用完整变量快照中的绝对路径（例如 /stat_data/角色/好感度）；有变化时提交完整 operations，没有变化时提交空数组。',
-        items: { oneOf: operationSchemas }
+        items: operationSchema
       }
     },
     required: ['operations']
@@ -249,11 +229,27 @@ function normalizeOperation(raw, index) {
     return normalized
   }
   if (op === 'remove') return normalized
-  if (!Object.prototype.hasOwnProperty.call(operation, 'value')) throw new Error(label + ' 缺少 value')
-  if (op === 'delta' && (typeof operation.value !== 'number' || !Number.isFinite(operation.value))) {
+  let value
+  if (Object.hasOwn(operation, 'valueJson')) {
+    if (Object.hasOwn(operation, 'value')) throw new Error(label + ' 不得同时提交 valueJson 和 value')
+    if (typeof operation.valueJson !== 'string') throw new Error(label + ' 的 valueJson 必须是 JSON 编码字符串')
+    try {
+      value = JSON.parse(operation.valueJson, (_key, item) => {
+        if (typeof item === 'number' && !Number.isFinite(item)) throw new Error('非有限数字')
+        return item
+      })
+    } catch {
+      throw new Error(label + ' 的 valueJson 不是有效 JSON（数字必须有限）')
+    }
+  } else {
+    // Pending deliveries and older in-flight callers already store decoded values.
+    if (!Object.hasOwn(operation, 'value')) throw new Error(label + ' 缺少 valueJson（旧格式 value）')
+    value = operation.value
+  }
+  if (op === 'delta' && (typeof value !== 'number' || !Number.isFinite(value))) {
     throw new Error(label + ' 的 delta value 必须是有限数字')
   }
-  normalized.value = clone(operation.value)
+  normalized.value = clone(value)
   return normalized
 }
 
