@@ -65,7 +65,3 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 ## 压缩专项
 
 运行 `pnpm test:e2e:compaction`，执行 32K 窗口下的五组前后台压缩验收。场景、模型边界与未覆盖范围见 [压缩专项 E2E](COMPACTION.md)。
-
-## 卡片调试侧聊
-
-运行 `node tests/e2e/gameplay.mjs --debug-sidechat`：新开一局并游玩后，从“交给卡片 Agent 调试”打开原生侧聊，验证卡片工具真实读取关联诊断、正文和变量保持不变、服务重启后继续对话、关闭重开复用同一会话，以及 700px 窄屏输入框。产物包含 `debug-sidechat.png`、恢复和窄屏截图、报告及 trace。模型回复固定；不代表真实模型的诊断或修卡质量，也不覆盖 Android APK。

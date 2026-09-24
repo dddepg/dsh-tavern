@@ -15,17 +15,6 @@ export function apply(ctx) {
       const done = new Set(input.messages.flatMap(message => message.content || [])
         .filter(block => block.type === 'tool-result').map(block => block.toolCallId))
       const text = JSON.stringify(input.messages)
-      if (text.includes('E2E 卡片侧聊')) {
-        if (!tools.has('tavern_read_play_chat') || !tools.has('tavern_read_card_raw')) throw new Error('侧聊缺少卡片 Agent 工具')
-        const read = done.has('e2e-debug-read')
-        const block = read
-          ? { type: 'text', text: text.includes('游玩记录第') ? '调试已读取本局记录。' : '调试工具读取失败。' }
-          : { type: 'tool-call', id: 'e2e-debug-read', name: 'tavern_read_play_chat', arguments: JSON.stringify({ layer: 'overview' }) }
-        yield { type: 'block-start', index: 0, blockType: block.type }
-        yield { type: 'block-end', index: 0, block }
-        yield { type: 'finish', reason: { kind: read ? 'stop' : 'tool-calls' } }
-        return
-      }
       const presetRound = [70, 60, 50].find(value => text.includes(`E2E 预设验收 ${value}`) || text.includes(`预设切换后继续游玩，金币 ${value}。`))
       const gold = presetRound || (text.includes('E2E 修正金币为四十') ? 40 : (text.includes('雨夜重写') || text.includes('雨夜里')) ? 30 : (text.includes('再次领取奖励') || text.includes('金币累计二十枚')) ? 20 : 10)
       const goldId = 'e2e-gold-' + gold, postureId = 'e2e-posture-' + gold
