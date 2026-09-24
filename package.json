@@ -19,7 +19,8 @@
     "restart:tavern": "node ./bin/dsh-tavern.mjs restart",
     "status:tavern": "node ./bin/dsh-tavern.mjs status",
     "test": "node bin/test-tavern.mjs",
-    "test:play": "node testsets/test-play.mjs"
+    "test:play": "node testsets/test-play.mjs",
+    "test:e2e": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs"
   },
   "dependencies": {
     "acorn": "8.15.0",
