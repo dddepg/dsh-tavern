@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "eeb79bd9c5bca74c99e4490fe93891570d923e4a",
-  "releaseSequence": 368,
+  "revision": "ba8eadb906b859c0231e7ed86e55138eb8a72e42",
+  "releaseSequence": 369,
   "version": "2.1.0",
   "files": [
     {
@@ -336,8 +336,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/background-task-coordinator.js",
-      "sha256": "d50fca9d058d229edf357b09a731115f4e1a1fa994f1e8974007474624cdbcb1",
-      "size": 10840
+      "sha256": "1b65386fbaedb74030af57f646744c29660b418ea5b5ae1ac1a22b9ed5234381",
+      "size": 13391
     },
     {
       "path": "tavern-plugin/lib/domain/body-editor.js",
@@ -456,18 +456,18 @@
     },
     {
       "path": "tavern-plugin/lib/domain/chat-journal-store.js",
-      "sha256": "2f452d74419eb4ce88cf1e58632c2397df9a34046e758a6dc6088f0573a83c6f",
-      "size": 27730
+      "sha256": "29254f677828299f05cc72c655265f77d80ff956b8366107c01189538b1a0df3",
+      "size": 28869
     },
     {
       "path": "tavern-plugin/lib/domain/chat-persistence.js",
-      "sha256": "29aa2afc0b560ea7f6a2f0b42b20b5cb2096e747dd2d1e7facf491dfd300b280",
-      "size": 12946
+      "sha256": "ceda674f1418e2a070492a8ccee10ac9c84c7fc9b43f74131e5115d3acb2d56e",
+      "size": 13167
     },
     {
       "path": "tavern-plugin/lib/domain/chat-session-state.js",
-      "sha256": "c510e373a676c194b0afb56abfafb7695f005e2c24d267ed169e10b4ac020f31",
-      "size": 1994
+      "sha256": "dd42bf3db90e44ecf89ce8baf81b63e437859b81e335bfe7e7c018c461b1aff8",
+      "size": 6582
     },
     {
       "path": "tavern-plugin/lib/domain/compaction-failure.js",
@@ -656,8 +656,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/json-mutation.js",
-      "sha256": "9a6c2a54abf97355d17a90cc4689612f594e76f2d29dabfd9dd2c0cc39ea028c",
-      "size": 6561
+      "sha256": "1d6735396dbc5419684add921a72c90f7052f5c09650ff700fcb4e1a4dd104e2",
+      "size": 7191
     },
     {
       "path": "tavern-plugin/lib/domain/last-round-replacement.js",
@@ -751,13 +751,13 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-settlement-effect.js",
-      "sha256": "c4c44d6744ca90cb66b4060543b70070b5bb833c69718e8582e49a2b69b8732c",
-      "size": 2689
+      "sha256": "8304db729c95ae4d5c165481d0bab1c9587ad0a95001d3b2e35f86946f95c98a",
+      "size": 2805
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-settlement-reconciler.js",
-      "sha256": "137eb5c63b8c98003260abbfbf0568d3a249b6533ec31a3dbe4965419c8f2b8f",
-      "size": 3054
+      "sha256": "5c4746624bda5af7d3d77795020ee45fb1efb03dd99110bfd42bdfb7e832f355",
+      "size": 3685
     },
     {
       "path": "tavern-plugin/lib/domain/native-turn-result.js",
@@ -1105,9 +1105,19 @@
       "size": 1573
     },
     {
+      "path": "tavern-plugin/lib/domain/session-view-reader.js",
+      "sha256": "a20a638850fe3002eeae12900871712260aad23e7ca8aaef760075abb262820d",
+      "size": 5966
+    },
+    {
       "path": "tavern-plugin/lib/domain/session-view-sync.js",
       "sha256": "4fc3ebaebd948e1b28eb36774cfa057b793abc05062db30385ea6af6754672c6",
       "size": 3224
+    },
+    {
+      "path": "tavern-plugin/lib/domain/settlement-jobs.js",
+      "sha256": "a9ab89bdbf7de818869b35451034a4ecf90059cb0e23d824c8b55320fb1aa03c",
+      "size": 1461
     },
     {
       "path": "tavern-plugin/lib/domain/sillytavern-compatibility.js",
@@ -1256,8 +1266,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-script-host-adapter.js",
-      "sha256": "6f84d5a26061b058fe8eb4da8f96af253308c139cee11a38a9fbb03f1698108c",
-      "size": 46464
+      "sha256": "51b5d73dcd4ffe8d01f6a05234ef22469286e2477a8535515fabcfdc830bf97a",
+      "size": 47071
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-script-prompts.js",
@@ -1421,8 +1431,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "ce65d570094435160f54cec878721f0fcde86f9ad41cd171a95605dec2f0f4c4",
-      "size": 310471
+      "sha256": "8f9f9d9188eeb04fc51997c074dfa9553a9702ced7ba59329b11340a78ec28d2",
+      "size": 301267
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
