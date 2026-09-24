@@ -1,4 +1,3 @@
-import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
 import { createSessionStateView, settlementTurn } from './domain/chat-session-state.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
@@ -1113,68 +1112,6 @@ export async function apply(ctx) {
     const exported = await createMvuDiagnosticExport({ presetDiagnostics, cardDiagnostics, performanceDiagnostics: { ...performanceDiagnostics.read(), requests: requestPerformance.read(), replyProjection: incrementalReplyView.stats() }, updateDiagnostics: applicationUpdater.diagnostics(), sessionId, backgroundSessionIds, displayDiagnostics: { version: 1, frames: (chat.messages || []).filter(message => message.displayRuntime).slice(-20).flatMap(message => (message.displayRuntime.frames || []).map(frame => ({ turn: message.turn, partIndex: frame.partIndex, panelId: frame.panelId, placement: frame.placement, capturedAt: frame.capturedAt, console: frame.console, errors: frame.errors, network: frame.network }))) }, apiDiagnostics: await apiDiagnostics.read(sessionId).catch(() => null), compatibilityDiagnostics: compatibilityDiagnostic, store: mvuDiagnostics, sceneDiagnostics: imageDiagnostic, sessions: sessionStore, persistence: ctx.get('sessionPersistence'), query: ctx.get('sessionQuery'), attachments: ctx.get('attachments'), environment: { templateRuntime: await fullTemplateRuntime.inspect(sessionId), mvu: OFFICIAL_MVU_VERSION, mvuAsset: inspectOfficialMvuAsset(), runtime: { hostCompatibility, generation: runtimeGeneration, platform: process.platform, arch: process.arch, nodeVersion: process.version } } })
     return { filename: exported.filename, base64: exported.buffer.toString('base64') }
   }
-  // A debug side chat has its own card workspace. Never fork the play log:
-  // its roleplay prompt, tools and pending actions are not debugging context.
-  const debugSidechatStarts = new Map()
-  const debugSidechatHandles = new Map()
-  ctx.effect(() => () => Promise.all([...debugSidechatHandles.values()].map(handle => handle.dispose())))
-  async function closePlayChatDebugSidechat(childId) {
-    const handle = debugSidechatHandles.get(str(childId))
-    debugSidechatHandles.delete(str(childId))
-    if (handle) await handle.dispose()
-    return { closed: true }
-  }
-  function openPlayChatDebugSidechat(sourceSessionId, turn) {
-    const key = str(sourceSessionId)
-    if (debugSidechatStarts.has(key)) return debugSidechatStarts.get(key)
-    const operation = (async () => {
-      const source = await chatForSession(key)
-      if (!source || !['story', 'script'].includes(source.mode || 'story')) throw new Error('当前对话不是游玩对话')
-      let childId = source.debugSidechatSessionId
-      const existing = childId ? await chatForSession(childId) : null
-      if (!existing || existing.mode !== 'card' || existing.debugSourceSessionId !== key) {
-        const presets = ctx.get('agentPresets')
-        if (!presets) throw new Error('卡片 Agent 预设服务不可用')
-        const preset = await presets.resolve('tavern')
-        childId = 'session-' + randomUUID()
-        const parent = agentRegistry.get(key)
-        const agentOptions = { ...(parent?.options.provider ? { provider: parent.options.provider } : {}),
-          ...(parent?.options.model ? { model: parent.options.model } : {}) }
-        const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'sidechat', label: 'Side: 卡片调试',
-          ...(agentOptions.provider ? { agentProvider: agentOptions.provider } : {}),
-          ...(agentOptions.model ? { agentModel: agentOptions.model } : {}) })
-        const handle = await agentRegistry.create({ sessionId: childId,
-          meta: { cwd: dataRoot + '/resources', parentSession: key, origin: 'subagent', agentPreset: preset.id, seedLength: 1, delegationDepth: 1 },
-          seed: [{ type: 'subagent/descriptor', seq: 0, time: Date.now(), data: descriptor }],
-          agentOptions, setup: async agentCtx => { await presets.mount(agentCtx, preset.id) }, signal: AbortSignal.timeout(15000) })
-        try {
-          await startChat(source.cardPath, childId, 'card', '', source.macroState?.userName || '你', 'dsh', '', 'debug-play')
-          const editor = await chatForSession(childId)
-          editor.debugSourceSessionId = key
-          editor.debugModelSelection = agentOptions
-          await writeChat(editor, { source: 'play-chat.debug-source' })
-          ctx.get('sessionTitle')?.rename(handle.agent.session, 'Side: 卡片调试')
-          await sessionStore.flush(handle.agent.session)
-          // Re-read after initialization so unrelated gameplay updates survive.
-          const latest = await chatForSession(key)
-          latest.debugSidechatSessionId = childId
-          await writeChat(latest, { source: 'play-chat.debug-sidechat' })
-        } catch (error) { await handle.dispose(); throw error }
-        debugSidechatHandles.set(childId, handle)
-      }
-      if (!agentRegistry.get(childId)) {
-        const presets = ctx.get('agentPresets')
-        const handle = await agentRegistry.resume({ resumeSessionId: childId, agentOptions: existing?.debugModelSelection || {},
-          setup: async agentCtx => { await presets.mount(agentCtx, 'tavern') } })
-        debugSidechatHandles.set(childId, handle)
-      }
-      const reference = await attachPlayChatDebug(childId, key, turn)
-      return { childId, reference }
-    })().finally(() => debugSidechatStarts.delete(key))
-    debugSidechatStarts.set(key, operation)
-    return operation
-  }
-
   async function attachPlayChatDebug(targetSessionId, sourceSessionId, turn) {
     const editorChat = await chatForSession(str(targetSessionId))
     const sourceChat = await chatForSession(str(sourceSessionId))
@@ -3313,8 +3250,6 @@ export async function apply(ctx) {
         const card = await readChatCard(sourceChat)
         return { card: { path: sourceChat.cardPath, name: card.name }, chatId: sourceChat.id }
       }
-      case 'closePlayChatDebugSidechat': return await closePlayChatDebugSidechat(args && args.childId)
-      case 'openPlayChatDebugSidechat': return await openPlayChatDebugSidechat(args && args.sessionId, args && args.turn)
       case 'attachPlayChatDebug': return { reference: await attachPlayChatDebug(args && args.targetSessionId, args && args.sourceSessionId, args && args.turn) }
       case 'captureDisplayRuntime': return await captureDisplayRuntime(args && args.sessionId, args && args.turn, args && args.partIndex, args && args.runtime)
 	      case 'getTavernHelperContext': return { context: await tavernScriptHostAdapter.context(args && args.sessionId) }

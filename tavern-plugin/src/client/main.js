@@ -6436,9 +6436,8 @@ window.__ModuleLoader__.load({
 				function onDebugPlayChat(event) {
 					const detail = event && event.detail ? event.detail : {};
 					Promise.resolve().then(async function () {
-                        if (!props.openDebugSidechat) throw new Error("当前侧边栏不支持卡片调试，请更新酒馆");
-                        const result = await call("openPlayChatDebugSidechat", { sessionId: detail.sourceSessionId, turn: detail.turn });
-                        props.openDebugSidechat(detail.sourceSessionId, result.childId);
+						const target = await call("getPlayChatDebugTarget", { sessionId: detail.sourceSessionId });
+						await newCardConversation(target.card, "debug-play", "调试游玩对话", [], { sourceSessionId: detail.sourceSessionId, turn: detail.turn });
 						if (typeof detail.resolve === "function") detail.resolve();
 					}).catch(function (error) {
 						setError("打开卡片调试失败：" + String(error && error.message || error));
@@ -6859,36 +6858,6 @@ window.__ModuleLoader__.load({
 			const ctx = input.ctx;
 			const slots = input.slots;
 			const uiConversation = ctx.get("uiConversation") || ctx.get("conversation");
-            ctx.effect(() => ctx.betterSidebar.registerTab({
-                id: "dsh-tavern:debug-chat", title: "卡片调试", hidden: true, single: true,
-                component: function (props) {
-                    const [ready, setReady] = React.useState(false);
-                    const [failure, setFailure] = React.useState("");
-                    const childId = props.tab.meta?.threadId;
-                    React.useEffect(function () {
-                        let active = true;
-                        setReady(false); setFailure("");
-                        // Fixed DSH hosts lack the native sidechat cold-resume API.
-                        // Mount the saved card preset before the native view can send.
-                        rpc("openPlayChatDebugSidechat", {}, props.scope.sessionId).then(function (result) {
-                            if (!active) return;
-                            if (result.childId !== childId) ctx.betterSidebar.updateTab(props.tab.id, { meta: { threadId: result.childId } });
-                            else setReady(true);
-                        }, function (error) { if (active) setFailure(String(error.message || error)); });
-                        return function () { active = false; };
-                    }, [props.scope.sessionId, childId]);
-                    const native = ctx.betterSidebar.getTabs().find(tab => tab.id === "sidechat");
-                    if (!native) return React.createElement("p", null, "当前侧边栏没有侧边对话功能，请更新酒馆。");
-                    if (!ready) return React.createElement("p", { className: "dsh-tavern-settings-desc" }, failure || "正在恢复卡片调试…");
-                    return React.createElement(React.Fragment, null,
-                        React.createElement("p", { className: "dsh-tavern-settings-desc", style: { padding: "8px 12px", margin: 0 } }, "已关联当前人物卡和游玩记录。描述遇到的问题，让卡片 Agent 帮你排查。修改后可在酒馆状态中应用变化。"),
-                        React.createElement(native.component, props));
-                },
-                onClose: function (tab, scope) {
-                    if (tab.meta?.threadId) void rpc("closePlayChatDebugSidechat", { childId: tab.meta.threadId }, scope.sessionId).catch(error => tavernErrorHub.report("关闭卡片调试", error));
-                }
-            }), "dsh-tavern: debug side chat");
-
 			ctx.effect(function () {
 				document.body.classList.add("dsh-tavern-shell-active");
 				const releaseLandingStyles = installTavernLandingStyles(document);
@@ -6914,10 +6883,6 @@ window.__ModuleLoader__.load({
 					archiveSession: function (sessionId) { return ctx.workspaces.archiveSession(sessionId); },
 					toggleSidebar: function () { if (props.wide) ctx.layout.toggleSidebar(); else props.expandSidebar(); },
 					openConversationSettingsTab: async function (sessionId) { await ctx.betterSidebar.openTab({ type: "dsh-tavern:conversation-settings" }, { sessionId: sessionId }); await ctx.betterSidebar.openTab({ type: "dsh-tavern:status" }, { sessionId: sessionId }); },
-                    openDebugSidechat: function (sessionId, childId) {
-                        if (!ctx.betterSidebar.getTabs().some(tab => tab.id === "sidechat")) throw new Error("当前侧边栏没有侧边对话功能，请更新酒馆。");
-                        ctx.betterSidebar.openTab({ type: "dsh-tavern:debug-chat", meta: { threadId: childId } }, { sessionId });
-                    },
 					openCardLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:cards" }, { sessionId: sessionId }); ctx.betterSidebar.updateTab("dsh-tavern:cards", { meta: null }); },
 					openPresetLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:presets" }, { sessionId: sessionId }); },
 					openWorldBookLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:worldbooks" }, { sessionId: sessionId }); },
