@@ -4955,20 +4955,35 @@ window.__ModuleLoader__.load({
 			}
 			const ownsSortControl = sortControl && typeof sortControl.tavernCompatibilityOwners === 'number';
 			if (ownsSortControl) sortControl.tavernCompatibilityOwners++;
+			const frameElement = frameWindow.frameElement, frameDocument = frameWindow.document;
 			const bindings = ["SillyTavern", "TavernHelper", "Mvu", "_", "toastr"].map(function (name) {
 				const previous = Object.getOwnPropertyDescriptor(host, name);
 				if (previous && !previous.configurable) throw new Error("宿主接口不可替换：" + name);
-				const binding = { name: name, previous: previous, active: true, priority: Number(priority) || 0, frameWindow: frameWindow, toastr: name === "toastr" ? frameWindow.toastr : undefined, get: function () {
+				const binding = { name: name, previous: previous, active: true, priority: Number(priority) || 0, frameWindow: frameWindow, frameElement: frameElement, frameDocument: frameDocument, toastr: name === "toastr" ? frameWindow.toastr : undefined, get: function () {
                     function rank(owner) {
                         const sessionId = owner.frameWindow.frameElement && owner.frameWindow.frameElement.__dshTavernSessionId;
                         return owner.priority + (host.__dshTavernSelectedSessionId && sessionId ? (sessionId === host.__dshTavernSelectedSessionId ? 1 : -1) : 0);
                     }
-                    let selected = binding, descriptor = binding.previous;
+                    // document.open() removes the frame's unload listeners. Do
+                    // not rely on those listeners to retire its host APIs.
+                    let selected = null, newer = null, descriptor = { get: binding.get };
                     while (descriptor && descriptor.get && descriptor.get.tavernHostBinding) {
-                        const older = descriptor.get.tavernHostBinding;
-                        if (older.active && rank(older) > rank(selected)) selected = older;
-                        descriptor = older.previous;
+                        const owner = descriptor.get.tavernHostBinding;
+                        let live = owner.active;
+                        try {
+                            if (owner.frameElement && owner.frameElement.isConnected === false) live = false;
+                            if (owner.frameDocument && owner.frameWindow.document !== owner.frameDocument) live = false;
+                        } catch (_) { live = false; }
+                        if (live) {
+                            if (!selected || rank(owner) > rank(selected)) selected = owner;
+                            newer = owner;
+                        } else {
+                            if (owner.release) owner.release();
+                            if (newer) newer.previous = owner.previous;
+                        }
+                        descriptor = owner.previous;
                     }
+                    if (!selected) return descriptor && (descriptor.get ? descriptor.get.call(host) : descriptor.value);
                     return name === "toastr" ? selected.toastr : selected.frameWindow[name];
                 } };
 				binding.get.tavernHostBinding = binding;
@@ -4976,7 +4991,7 @@ window.__ModuleLoader__.load({
 			});
 			for (const binding of bindings) Object.defineProperty(host, binding.name, { configurable: true, get: binding.get });
 			let released = false;
-			return function () {
+			function release() {
 				if (released) return;
 				released = true;
 				if (ownsSortControl && --sortControl.tavernCompatibilityOwners === 0) sortControl.remove();
@@ -4989,7 +5004,9 @@ window.__ModuleLoader__.load({
 					if (previous) Object.defineProperty(host, binding.name, previous);
 					else delete host[binding.name];
 				}
-			};
+			}
+			for (const binding of bindings) binding.release = release;
+			return release;
 		}
 
 		function releaseTavernHostJQueryHandlers(host, frameWindow) {
