@@ -56,6 +56,17 @@ try {
   await measure('isolated writable read x20',async()=>{for(let i=0;i<20;i++)await persistence.read('c')})
   await measure('no-op update',()=>persistence.update('c',()=>undefined))
   await measure('metadata update',()=>persistence.update('c',current=>{current.counter=1;return current}))
+  for (const mode of ['full', 'delta']) {
+    let revision=(await persistence.readSessionState('c'))._storageRevision
+    await measure('changing revision ' + mode + ' x10',async()=>{
+      for(let i=0;i<10;i++) {
+        await persistence.patch('c',revision,[{op:'set',path:['messages',452,'text'],value:mode+i}])
+        const selected=mode==='delta' ? await persistence.readViewDelta('c',revision) : {chat:await persistence.read('c')}
+        assert.equal(selected.chat.messages[452].text,mode+i)
+        revision++
+      }
+    })
+  }
   await measure('forced GC after writes',()=>globalThis.gc?.())
   await writeFile(process.argv[2],JSON.stringify({node:process.version,platform:process.platform,bytes,messages:453,
     scope:'Warm synthetic cache/status RPC functions, volatile projection, reads and writes. GC events overlap wall time; RSS is endpoint, not peak.',results},null,2)+'\n')

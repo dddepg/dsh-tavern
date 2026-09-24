@@ -24,7 +24,7 @@ function canProjectDirty(previous, chat, indices) {
 /** Own snapshot selection, projection cache and transport revision pairing.
  * Projections consume detached inputs; callers never receive a partial Chat.
  */
-export function createSessionViewReader({ readState, readChat, readChanges, project, activity,
+export function createSessionViewReader({ readState, readChat, readChanges, readViewDelta, project, activity,
   trace, foregroundRunning, synchronize }) {
   const cache = new Map()
   async function changes(chat, revision) {
@@ -39,6 +39,15 @@ export function createSessionViewReader({ readState, readChat, readChanges, proj
       if (state === undefined) return { chat: undefined }
       const cached = cache.get(state.id), next = identity(state)
       if (matches(cached, next) && cached.revision === next.revision) return { chat: state, cached }
+      if (matches(cached, next) && cached.revision < next.revision && readViewDelta) {
+        const delta = await trace.stage('readViewDelta', () => readViewDelta(state.id, cached.revision))
+        const dirty = delta && new Set(delta.indices)
+        if (delta?.baseRevision === cached.revision && delta.chat?.id === state.id
+          && delta.revision === next.revision && identity(delta.chat).revision === next.revision
+          && matches(cached, identity(delta.chat)) && canProjectDirty(cached.view, delta.chat, dirty)) {
+          return { chat: delta.chat, cached, dirty }
+        }
+      }
       const chat = await trace.stage('readFullChat', () => readChat(sessionId))
       return { chat, cached: chat && cache.get(chat.id) }
     })
@@ -51,7 +60,7 @@ export function createSessionViewReader({ readState, readChat, readChanges, proj
       view = await trace.stage('projectViewCached', () => project.cached(chat, cached.view, currentActivity))
       rebuild = 'cache'
     } else {
-      const dirty = matches(cached, next) && cached.revision < next.revision ? await changes(chat, cached.revision) : null
+      const dirty = selected.dirty ?? (matches(cached, next) && cached.revision < next.revision ? await changes(chat, cached.revision) : null)
       if (canProjectDirty(cached?.view, chat, dirty)) {
         view = await trace.stage('projectViewDirty', () => project.dirty(chat, cached.view, dirty, currentActivity))
         rebuild = 'dirty'

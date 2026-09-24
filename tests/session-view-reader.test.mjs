@@ -13,7 +13,7 @@ function fixture() {
     activity:()=>({busy:false}),foregroundRunning:()=>false,trace:{stage:(_name,fn)=>fn(),state:state=>states.push(state)},
     synchronize:(_id,view,_cursor,options)=>({view,...options})}
   // Closures let the tests replace adapters at the actual asynchronous seam.
-  const reader=createSessionViewReader({...deps,readChat:(...args)=>deps.readChat(...args),readChanges:(...args)=>deps.readChanges(...args)})
+  const reader=createSessionViewReader({...deps,readChat:(...args)=>deps.readChat(...args),readChanges:(...args)=>deps.readChanges(...args),readViewDelta:(...args)=>deps.readViewDelta?.(...args)})
   return {reader,deps,calls,states,get chat(){return chat},set chat(value){chat=value}}
 }
 for (const changes of [undefined,{revision:99,indices:[0]}]) test(`missing or mismatched change coverage rebuilds the full view: ${JSON.stringify(changes)}`,async()=>{
@@ -49,4 +49,11 @@ test('cold skeleton is not cached as a complete projection',async()=>{
 test('deletion between metadata and full read returns a missing view',async()=>{
   const f=fixture();f.deps.readChat=async()=>undefined
   assert.equal(await f.reader.read('s'),null)
+})
+
+for (const kind of ['revision', 'resource', 'missing']) test(`invalid delta ${kind} falls back before rendering`,async()=>{
+  const f=fixture();await f.reader.read('s');f.chat={...f.chat,_storageRevision:2}
+  f.deps.readViewDelta=async()=>kind==='missing'?undefined:{baseRevision:1,revision:kind==='revision'?3:2,indices:[0],chat:{...f.chat,cardPath:kind==='resource'?'other':'card'}}
+  await f.reader.read('s')
+  assert.equal(f.calls.fullRead,2)
 })

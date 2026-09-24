@@ -413,6 +413,23 @@ export function createChatJournalStore(options = {}) {
     const changed = changedIndices(chatId,state,revision)
     return changed ? {...slice(state.chat,changed.indices),indices:changed.indices,baseRevision:revision} : undefined
   }
+  /** Detached display input: unchanged Helper variables come from the cached view.
+   * Never use this projection as a writable Chat or for a full Helper rebuild. */
+  async function readViewDelta(chatId, revision) {
+    const state = await cachedState(chatId)
+    const changed = changedIndices(chatId, state, revision)
+    if (!changed || revision === state.revision
+      || Object.values(state.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+      || !Array.isArray(state.chat.messages)
+      || !state.chat.messages.every(row => row && typeof row === 'object' && !Array.isArray(row))) return undefined
+    const dirty = new Set(changed.indices)
+    const messages = state.chat.messages.map((row, index) => {
+      if (dirty.has(index)) return row
+      const { variables, ...display } = row
+      return display
+    })
+    return { ...changed, chat: structuredClone({ ...state.chat, messages }) }
+  }
   /** Exact-version internal commit; stale callers must use their existing merge path. */
   async function patch(chatId, expectedRevision, changes, metadata={}) {
     return serialize(chatId,async()=>{
@@ -546,5 +563,5 @@ export function createChatJournalStore(options = {}) {
 
   // update() owns both boundaries: updater drafts and returned values are
   // detached from cached state and from each other, including aborted writes.
-  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, update, version, remove })
+  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, update, version, remove })
 }

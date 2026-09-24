@@ -127,7 +127,12 @@ export function applyJsonChangesShared(input, changes) {
     assertPath(change.path)
     if (change.path.includes('__proto__')) throw new Error('Invalid mutation path')
     const visit = (value, depth) => {
-      if (depth === change.path.length) return applyJsonChanges(value, [{...change,path:[]}])
+      if (depth === change.path.length) {
+        // A splice changes array membership, not the untouched elements. Keep
+        // internal immutable rows shared and detach only newly supplied items.
+        if (change.op === 'splice' && Array.isArray(value)) return spliceValue(value.slice(), { ...change, path: [] })
+        return applyJsonChanges(value, [{...change,path:[]}])
+      }
       if (!value || typeof value !== 'object') throw new Error('Missing mutation parent')
       const key=change.path[depth], next=Array.isArray(value)?value.slice():{...value}
       if(depth===change.path.length-1) {

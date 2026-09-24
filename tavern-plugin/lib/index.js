@@ -1650,6 +1650,7 @@ export async function apply(ctx) {
   const sessionViews = createSessionViewReader({
     readState: sessionStateForSession, readChat: chatForSession,
     readChanges: chatPersistence.readChangedIndices,
+    readViewDelta: chatPersistence.readViewDelta,
     project: { cached: projectCachedSessionView, dirty: projectDirtySessionView, full: projectFullSessionView },
     activity: chat => backgroundTasks.activity(chat), trace: requestPerformance,
     foregroundRunning: sessionId => agentRegistry.get(str(sessionId))?.phase?.kind === 'running',
