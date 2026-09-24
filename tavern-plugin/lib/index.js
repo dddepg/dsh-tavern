@@ -358,12 +358,12 @@ export async function apply(ctx) {
     const sessionId = agent?.session?.id
     if (!sessionId) return null
     if (backgroundAgentRunner.owns(sessionId)) return backgroundAgentRunner.requestContext(sessionId)?.task === 'image' ? 'image' : 'background'
-    const chat = await chatForSession(sessionId)
+    const chat = await sessionStateForSession(sessionId)
     return chat ? (chat.mode === 'card' ? 'card' : 'foreground') : null
   }
   async function skillEnabledFor(skill, agent) {
     if (await skillRoleFor(agent) !== 'foreground') return true
-    const chat = await chatForSession(agent?.session?.id)
+    const chat = await sessionStateForSession(agent?.session?.id)
     return !(chat?.disabledWritingSkills || []).map(canonicalTavernSkillName).includes(skill.name)
   }
   let invalidateTavernSkills = () => {}
@@ -3395,7 +3395,7 @@ export async function apply(ctx) {
         const result = await withCompactionSession(id, async agent => (await agentCompaction(agent)).compactNow(agent, compactionAbort.signal))
         return { result: { status: 'completed', foreground: { status: 'succeeded', message: result ? '压缩完成' : '没有可压缩的历史' }, background: { status: 'skipped' } } }
       }
-      case 'compactionStatus': return { state: (await chatForSession(args && args.sessionId))?.contextCompaction || null }
+      case 'compactionStatus': return { state: (await sessionStateForSession(args && args.sessionId))?.contextCompaction || null }
       case 'prepareCompaction': return { plan: await tavernCompaction.prepare(args && args.sessionId) }
       case 'compactBackground': return { result: await compactBackground(args && args.sessionId, args && args.operationId) }
       case 'completeCompaction': return { result: await tavernCompaction.complete(args && args.sessionId, args) }
@@ -3965,7 +3965,7 @@ export async function apply(ctx) {
     owns: async function (agent) {
       const sessionId = agent && agent.session ? agent.session.id : ''
       if (sessionId === '') return false
-      return backgroundAgentRunner.owns(sessionId) || await chatForSession(sessionId) !== undefined
+      return backgroundAgentRunner.owns(sessionId) || await sessionStateForSession(sessionId) !== undefined
     }
   })
 
@@ -4103,11 +4103,11 @@ export async function apply(ctx) {
   const fullTemplateRequests = new WeakMap()
   installWorkspaceInstructionPresentation(ctx, async sessionId => {
     if (backgroundAgentRunner.owns(sessionId)) return true
-    const chat = await chatForSession(sessionId)
+    const chat = await sessionStateForSession(sessionId)
     // Card agents work with files and Skills, so keep the host's workspace guidance.
     return Boolean(chat) && (chat.mode || 'story') !== 'card'
   })
-  installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await chatForSession(sessionId)))
+  installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)))
 
   ctx.on('llm/stream', function (options, next) {
     const sessionId = str(options && options.sessionId)

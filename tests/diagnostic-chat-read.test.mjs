@@ -137,3 +137,48 @@ test('background task configuration keeps model overrides without copying archiv
   assert.deepEqual(await callbacks.resolveBackgroundTasks(input), normalizeBackgroundTasks({ variables: false, posture: false }))
   assert.equal((await store.read('chat')).messages.length, 459, 'archive remains complete')
 })
+
+test('skill visibility and compaction polling preserve settings without cloning full history', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'metadata-chat-read-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = createChatJournalStore({ dataRoot: root })
+  const compaction = { phase: 'running', foreground: { status: 'pending' } }
+  await store.update('chat', () => ({ id: 'chat', sessionId: 's', mode: 'story',
+    disabledWritingSkills: ['disabled'], contextCompaction: compaction,
+    messages: Array.from({ length: 459 }, (_, turn) => ({ role: 'assistant', turn,
+      variables: [{ stat_data: { payload: 'historical variable'.repeat(1000) } }] })) }))
+  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const start = source.indexOf('  async function skillRoleFor(')
+  const end = source.indexOf('  let invalidateTavernSkills', start)
+  const statusStart = source.indexOf("case 'compactionStatus':")
+  const statusEnd = source.indexOf('\n      case ', statusStart + 1)
+  let fullCopies = 0
+  const clone = globalThis.structuredClone
+  t.mock.method(globalThis, 'structuredClone', value => {
+    if (value?.messages?.some(message => message.variables)) fullCopies++
+    return clone(value)
+  })
+  const api = vm.runInNewContext(`(function(){${source.slice(start, end)}
+    return { skillRoleFor, skillEnabledFor, status: async args => {
+      switch ('compactionStatus') { ${source.slice(statusStart, statusEnd)} }
+    } } })()`, {
+    chatForSession: id => id === 's' ? store.read('chat') : undefined,
+    sessionStateForSession: id => id === 's' ? store.readSessionState('chat') : undefined,
+    backgroundAgentRunner: { owns: id => id === 'background', requestContext: () => ({ task: 'variables' }) },
+    canonicalTavernSkillName: value => value
+  })
+  const agent = { session: { id: 's' } }
+  for (let i = 0; i < 10; i++) {
+    assert.equal(await api.skillRoleFor(agent), 'foreground')
+    assert.equal(await api.skillEnabledFor({ name: 'disabled' }, agent), false)
+    assert.equal(await api.skillEnabledFor({ name: 'enabled' }, agent), true)
+    assert.deepEqual((await api.status({ sessionId: 's' })).state, compaction)
+  }
+  const detached = (await api.status({ sessionId: 's' })).state
+  detached.phase = 'corrupted'
+  assert.deepEqual((await api.status({ sessionId: 's' })).state, compaction)
+  assert.equal(await api.skillRoleFor({ session: { id: 'background' } }), 'background')
+  assert.equal(await api.skillRoleFor({ session: { id: 'missing' } }), null)
+  assert.equal((await api.status({ sessionId: 'missing' })).state, null)
+  assert.equal(fullCopies, 0, 'enumerating skills and polling compression must not clone variable history')
+})
