@@ -58,20 +58,24 @@ test('cache miss reads full history and uses the full-read revision after a conc
   assert.ok(stages.includes('projectView'))
 })
 
-test('concurrent cache replacement cannot rebuild a view from compact state',async t=>{
+test('concurrent cache replacement keeps the old response paired with its revision',async t=>{
   const {persistence,chat}=await setup(t)
   const app=await sessionHarness(persistence,chat)
   app.context.synchronizeSessionView.peek=()=>({sessionId:'s',revision:0})
-  const readChanged=persistence.readChangedIndices
+  let replace=true
   app.context.chatPersistence={...persistence,readChangedIndices:async(id,revision)=>{
-    app.context.sessionViewProjectionCache.set('c',{revision:2,view:{chatId:'wrong'}})
-    return readChanged(id,revision)
+    if(replace){
+      replace=false
+      await persistence.update('c',value=>{value.messages[1].turn=2;return value})
+      await app.get()
+    }
+    return persistence.readChangedIndices(id,revision)
   }}
   const result=await app.get()
   assert.equal(result.revision,1)
-  assert.equal(result.view.chatId,'c')
   assert.equal(result.view.settlementTurn,1)
-  assert.equal(app.fullReads(),0)
+  assert.equal((await app.get()).view.settlementTurn,2)
+  assert.equal(app.fullReads(),1)
 })
 
 test('compact state observes external writes, deletion, and recreated chat',async t=>{

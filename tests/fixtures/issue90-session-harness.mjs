@@ -1,50 +1,40 @@
-// Execute the production RPC/view functions with the real registry and storage.
-import { readFile } from 'node:fs/promises'
-import vm from 'node:vm'
+// Real production read/state modules and storage. Rendering and transport are adapters.
 import { createTavernConversationRegistry } from '../../tavern-plugin/lib/domain/tavern-conversation-registry.js'
 import { createBackgroundTaskCoordinator } from '../../tavern-plugin/lib/domain/background-task-coordinator.js'
 import { createStoryTimeline } from '../../tavern-plugin/lib/domain/story-timeline.js'
-import { rollbackAvailability, hasRollbackMessages } from '../../tavern-plugin/lib/domain/rollback-surface.js'
-import { canUndoRollback } from '../../tavern-plugin/lib/domain/surface-restoration.js'
+import { createSessionViewReader, createSessionChatReader } from '../../tavern-plugin/lib/domain/session-view-reader.js'
+import { createSessionStateView } from '../../tavern-plugin/lib/domain/chat-session-state.js'
 
 export async function sessionHarness(persistence, initial, overrides = {}) {
-  const source = await readFile(new URL('../../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
-  const section = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)))
-  let fullReads = 0
+  let fullReads = 0, links = { s: initial.id }
   const readChat = async id => { fullReads++; return persistence.read(id) }
-  let links = {s: initial.id}
   const registry = createTavernConversationRegistry({store:{
-    readLinks:async()=>links, updateLinks:async fn=>{links = await fn(links) || links},
-    readIndex:async()=>({chats:[{id:initial.id}]}), writeIndex:async()=>{},
-    readChat, readChatState:id=>persistence.readSessionState(id), writeChat:async()=>{}, removeChat:async()=>{}
+    readLinks:async()=>links, updateLinks:async fn=>{links=await fn(links)||links},
+    readIndex:async()=>({chats:[{id:initial.id}]}),writeIndex:async()=>{},
+    readChat,readChatState:id=>persistence.readSessionState(id),writeChat:async()=>{},removeChat:async()=>{}
   }})
-  const sync = (_id, view, _cursor, options) => ({view, revision:options.revision})
-  sync.peek = () => ({sessionId:'s', revision:initial._storageRevision})
-  const timeline = createStoryTimeline()
-  const {activity} = createBackgroundTaskCoordinator({timeline,store:{
-    readChat,writeChat:persistence.write,updateChat:persistence.update
-  }})
-  const context = {structuredClone, Set, Object, Number, Array, Map, Boolean,
-    args:{sessionId:'s',viewSync:1,viewCursor:'cursor'}, str:value=>String(value ?? ''),
-    conversationRegistry:registry, chatPersistence:persistence,
-    groupOfMode:mode=>['story','script'].includes(mode)?'play':'card',
-    sceneIllustrations:null, updateChat:async()=>{throw Error('unexpected migration')},
+  const sync = (_id,view,_cursor,options)=>({view,revision:options.revision})
+  sync.peek=()=>({sessionId:'s',revision:initial._storageRevision})
+  const {activity}=createBackgroundTaskCoordinator({timeline:createStoryTimeline(),store:{readChat,writeChat:persistence.write,updateChat:persistence.update}})
+  const context={args:{sessionId:'s',viewSync:1,viewCursor:'cursor'},chatPersistence:persistence,
     sessionDebugEvidence:()=>({events:[],session:{surface:{nodes:[]}}}),
-    rollbackAvailability, hasRollbackMessages, canUndoRollback,
     requestPerformance:{stage:(_name,fn)=>fn(),state(){}},
-    backgroundTasks:{activity},agentRegistry:new Map(),
-    readScript:async()=>({chunks:[]}),scriptContinuity:{inspect:()=>({progress:1})},
-    sessionViewProjectionCache:new Map([[initial.id,{revision:initial._storageRevision,
-      cardPath:initial.cardPath || '',cardContextRevision:0,isCard:false,mode:initial.mode || 'story',view:{chatId:initial.id}}]]),
-    synchronizeSessionView:sync, ...overrides}
-  // mvuReceiptsOf ends immediately before the next function; avoid unrelated closures.
-  const receiptStart=source.indexOf('  function mvuReceiptsOf(')
-  const receiptEnd=source.indexOf('\n  }',receiptStart)+4
-  const code = section('  async function chatForSession(', '  const historyRecall')
-    + source.slice(receiptStart,receiptEnd)
-    + section('  function settlementTurn(', '  function pendingMvuTarget(')
-    + section('  async function sessionActivity(', '  async function ensureNativeOpening(').replace('  const synchronizeSessionView = createSessionViewSync()','').replace('  const sessionViewProjectionCache = new Map()','')
-  const dispatch=section("      case 'getSession': {", "      case 'hydrateTavernHelperMessages':")
-  const runtime=vm.runInNewContext(`(()=>{${code}\nreturn {get:async()=>{switch('getSession'){${dispatch}}}, activity:()=>sessionActivity('s'), volatile:chat=>volatileSessionViewFields(chat,backgroundTasks.activity(chat))}})()`,context)
-  return {...runtime,context,fullReads:()=>fullReads}
+    view:async chat=>({chatId:chat.id,tavernHelper:{messages:chat.messages.map(m=>({role:m.role,text:m.text}))}}),
+    synchronizeSessionView:sync,...overrides}
+  const chats=createSessionChatReader({registry,
+    needsAdoption:chat=>['story','script'].includes(chat.mode||'story') && (chat.backgroundConfigVersion!==1||chat.conversationFeaturesVersion!==1),
+    adopt:chat=>context.updateChat(chat.id,current=>context.adoptConversationFeatures(context.adoptConversationBackground(current)))})
+  const fields=createSessionStateView({activity,evidence:id=>context.sessionDebugEvidence(id)})
+  const reader=createSessionViewReader({readState:chats.readState,readChat:chats.read,
+    readChanges:(...args)=>context.chatPersistence.readChangedIndices(...args),
+    project:{cached:(chat,previous,state)=>({...previous,...fields.volatile(chat,state)}),
+      dirty:(chat)=>context.requestPerformance.stage('projectView',()=>context.view(chat)),
+      full:(chat)=>context.requestPerformance.stage('projectView',()=>context.view(chat))},
+    activity,trace:context.requestPerformance,foregroundRunning:()=>false,synchronize:sync})
+  // Warm through the public interface; no access to the reader's private cache.
+  await reader.read('s')
+  fullReads=0
+  return {context,get:()=>reader.response(context.args),read:()=>reader.read('s'),
+    activity:async()=>fields.status(await chats.readState('s')),
+    volatile:chat=>fields.volatile(chat,activity(chat)),fullReads:()=>fullReads}
 }

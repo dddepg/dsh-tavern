@@ -1,3 +1,5 @@
+import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
+import { createSessionStateView, settlementTurn } from './domain/chat-session-state.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
@@ -15,7 +17,6 @@ import { createRequestPerformance } from './domain/request-performance.js'
 import { scriptChunkLayout } from './domain/script-chunks.js'
 import { createScriptNavigation } from './domain/script-navigation.js'
 import { createSessionInventory } from './domain/session-inventory.js'
-import { canUndoRollback } from './domain/surface-restoration.js'
 import { createSessionViewSync } from './domain/session-view-sync.js'
 import { setFailedErrorVisibility, setAllFailedErrorVisibility } from './domain/failed-error-visibility.js'
 import { createManualCharacterDesign } from './domain/manual-character-design.js'
@@ -115,7 +116,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
 import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
-import { rollbackAvailability, foregroundSuppressedTurns, clearFailedTurnSurface, hasRollbackMessages, supersededRegenerationErrorTurns, replayableFailedTurn } from './domain/rollback-surface.js'
+import { hasRollbackMessages, foregroundSuppressedTurns, clearFailedTurnSurface, supersededRegenerationErrorTurns, replayableFailedTurn } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
@@ -763,18 +764,18 @@ export async function apply(ctx) {
     }
   })
   async function readSessionMap() { return await conversationRegistry.links() }
-  async function chatForSession(sessionId) {
-    const chat = await conversationRegistry.resolve(sessionId)
-    if (!chat || groupOfMode(chat.mode) !== 'play' || chat.backgroundConfigVersion === 1 && chat.conversationFeaturesVersion === 1) return chat
-    const legacyImageEnabled = sceneIllustrations ? (await sceneIllustrations.settings()).enabled === true : false
-    return await updateChat(chat.id, current => adoptConversationFeatures(adoptConversationBackground(current, tavernSettingsDocument), tavernSettingsDocument, legacyImageEnabled), { source: 'background-config.adopt' })
-  }
-  async function sessionStateForSession(sessionId) {
-    const state = await requestPerformance.stage('readSessionState', () => conversationRegistry.resolveState(sessionId))
-    // Adoption is a write and must receive a complete draft, never a projection.
-    if (state && groupOfMode(state.mode) === 'play'
-      && (state.backgroundConfigVersion !== 1 || state.conversationFeaturesVersion !== 1)) return chatForSession(sessionId)
-    return state
+  const sessionChats = createSessionChatReader({
+    registry: conversationRegistry,
+    needsAdoption: chat => groupOfMode(chat.mode) === 'play'
+      && (chat.backgroundConfigVersion !== 1 || chat.conversationFeaturesVersion !== 1),
+    adopt: async function (chat) {
+      const legacyImageEnabled = sceneIllustrations ? (await sceneIllustrations.settings()).enabled === true : false
+      return updateChat(chat.id, current => adoptConversationFeatures(adoptConversationBackground(current, tavernSettingsDocument), tavernSettingsDocument, legacyImageEnabled), { source: 'background-config.adopt' })
+    }
+  })
+  function chatForSession(sessionId) { return sessionChats.read(sessionId) }
+  function sessionStateForSession(sessionId) {
+    return requestPerformance.stage('readSessionState', () => sessionChats.readState(sessionId))
   }
   const historyRecall = createHistoryRecall()
   const foregroundRecallScopes = new WeakMap()
@@ -1509,42 +1510,6 @@ export async function apply(ctx) {
     }
     return projections
   }
-  function mvuReceiptsOf(chat) {
-    const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
-    const receipts = []
-    const activity = backgroundTasks.activity(chat)
-    const latest = messages.findLast(function (message) { return message && message.role === 'assistant' })
-    for (const message of messages) {
-      if (!message || message.role !== 'assistant' || !message.mvu) continue
-      const turn = Math.max(0, Number(message.turn) || (message.greeting === true ? 1 : 0))
-      if (turn === 0) continue
-      const stored = message.mvu.receipt
-      const diagnostics = Array.isArray(message.mvu.diagnostics) ? message.mvu.diagnostics : []
-      const receipt = stored && typeof stored === 'object' ? structuredClone(stored) : {
-        version: 1,
-        status: message.mvu.pending === true ? 'pending' : (diagnostics.length > 0 ? 'error' : (message.mvu.modified === true ? 'updated' : 'unchanged')),
-        summary: '',
-        changes: [],
-        failures: diagnostics.map(function (item) { return { command: str(item.command), message: str(item.message) } })
-      }
-      if (message === latest && activity.reason === 'interrupted' && activity.role === 'settlement') {
-        receipt.status = 'interrupted'
-        receipt.summary = '后台结算因服务重启或异常退出而中断，请重试结算；正文和已保存变量保留。'
-      }
-      receipts.push({ turn, receipt })
-    }
-    // Keep recent history short on the wire; always retain actionable statuses.
-    const notable = new Set(['pending', 'error', 'interrupted', 'partial', 'stale'])
-    const notableRows = []
-    const quietRows = []
-    for (const row of receipts) {
-      if (notable.has(str(row.receipt && row.receipt.status))) notableRows.push(row)
-      else quietRows.push(row)
-    }
-    const byTurn = new Map()
-    for (const row of notableRows.concat(quietRows.slice(-3))) byTurn.set(row.turn, row)
-    return [...byTurn.values()].sort((left, right) => left.turn - right.turn)
-  }
   function withLegacyPresentationProjection(chat, projections) {
     const result = Array.isArray(projections) ? projections.slice() : []
     const legacy = chat && chat.presentation
@@ -1595,17 +1560,9 @@ export async function apply(ctx) {
   async function sessionActivity(sessionId) {
     const chat = await sessionStateForSession(sessionId)
     if (chat === undefined) return null
-    const activity = backgroundTasks.activity(chat)
-    return {
-      chatId: chat.id,
-      phase: activity.phase,
-      busy: activity.busy,
-      role: activity.role,
-      operationId: activity.operationId,
-      basedOn: activity.basedOn,
-      updatedAt: activity.updatedAt || chat.updatedAt || 0
-    }
+    return sessionStateView.status(chat)
   }
+
   async function sessionOperation(sessionId, operationId) {
     const chat = await chatForSession(sessionId)
     if (chat === undefined) return null
@@ -1615,163 +1572,66 @@ export async function apply(ctx) {
     if (candidates === null || candidates.operationId !== operation.operationId || candidates.requestId !== operation.requestId) return operation
     return Object.assign({}, operation, { result: { candidates } })
   }
-  const synchronizeSessionView = createSessionViewSync()
-  const sessionViewProjectionCache = new Map()
-  const sessionStateViewCache = new WeakMap()
+  const sessionStateView = createSessionStateView({
+    activity: chat => backgroundTasks.activity(chat),
+    evidence: sessionId => sessionDebugEvidence(sessionId, true)
+  })
+  function mvuReceiptsOf(chat) { return sessionStateView.receipts(chat) }
+  function rollbackViewFields(chat, evidence) { return sessionStateView.rollback(chat, evidence) }
+  function volatileSessionViewFields(chat, activity) { return sessionStateView.volatile(chat, activity) }
 
-  function rollbackViewFields(chat, evidence = sessionDebugEvidence(chat.sessionId, true)) {
-    const nodes = evidence.session?.surface?.nodes
-    const rollbackState = Array.isArray(nodes) ? rollbackAvailability(chat, { events: evidence.events, nodes }) : {
-      canRollback: false, canClearIncompleteReply: false,
-      reason: '当前会话的消息流尚未加载，请重新打开对话后重试；历史正文仍保留。'
-    }
-    return {
-      canRollback: rollbackState.canRollback,
-      canClearIncompleteReply: rollbackState.canClearIncompleteReply,
-      undoRollbackTurn: canUndoRollback(chat, evidence.session) ? chat.rollbackUndo.turn : null,
-      rollbackUnavailableReason: hasRollbackMessages(chat.messages) ? rollbackState.reason : ''
-    }
-  }
-
-  // Cache hits receive projectChatSessionState; keep its inputs in sync with
-  // these readers (including rollback and MVU receipts), not full history.
-  function volatileSessionViewFields(chat, activity) {
-    let scriptProgress = null
-    return {
-      ...rollbackViewFields(chat),
-      activity,
-      settleStatus: activity.busy ? 'running' : (activity.phase === 'failed' && activity.role === 'settlement' ? 'error' : 'done'),
-      settleError: activity.reason === 'interrupted' ? '后台结算已中断，请重试结算。' : (chat.settleError || null),
-      settlementTurn: settlementTurn(chat),
-      scriptProgress,
-      updatedAt: chat.updatedAt || 0,
-      mvuReceipts: mvuReceiptsOf(chat)
-    }
-  }
-
-  async function chatForSessionView(sessionId) {
-    const state = await sessionStateForSession(sessionId)
-    if (state === undefined) return undefined
-    const cached = sessionViewProjectionCache.get(state.id)
-    if (cached && cached.revision === (Number(state._storageRevision) || 0)
-      && cached.cardPath === str(state.cardPath)
-      && cached.cardContextRevision === (Number(state.cardContextRevision) || 0)
-      && cached.mode === (state.mode || 'story') && cached.isCard === ((state.mode || 'story') === 'card')) {
-      // Pin the matching projection for this read. Another request may replace
-      // the global cache while getSession awaits transport dirty indices.
-      sessionStateViewCache.set(state, cached)
-      return state
-    }
-    return requestPerformance.stage('readFullChat', () => chatForSession(sessionId))
-  }
-
-  async function sessionView(sessionId, options = {}) {
-    const chat = Object.hasOwn(options, 'chat') ? options.chat : await requestPerformance.stage('readChat', () => chatForSessionView(sessionId))
-    if (chat === undefined) return null
-    const activity = backgroundTasks.activity(chat)
-    const isCard = (chat.mode || 'story') === 'card'
-    const revision = Number(chat._storageRevision) || 0
-    const cardPath = str(chat.cardPath)
-    const cardContextRevision = Number(chat.cardContextRevision) || 0
+  async function projectCachedSessionView(chat, previous, activity) {
     const mode = chat.mode || 'story'
-    const cached = sessionStateViewCache.get(chat) || sessionViewProjectionCache.get(chat.id)
-    // Projection cache and transport cursor may represent different revisions.
-    // Compute changes against the projection actually reused here.
-    let dirtyMessageIndices = null
-    if (cached && cached.revision < revision) {
-      const changed = await chatPersistence.readChangedIndices(chat.id, cached.revision)
-      if (changed?.revision === revision) dirtyMessageIndices = new Set(changed.indices)
-    }
-    const windowHelperMessages = options.windowHelperMessages === true
-    function cacheIdentityMatches() {
-      return cached
-        && cached.cardPath === cardPath
-        && cached.cardContextRevision === cardContextRevision
-        && cached.isCard === isCard
-        && cached.mode === mode
-    }
-    function finish(view, rebuild) {
-      requestPerformance.state({
-        foregroundRunning: agentRegistry.get(str(sessionId))?.phase?.kind === 'running',
-        backgroundBusy: activity.busy,
-        backgroundRole: activity.role,
-        viewRebuild: rebuild,
-        helperMessageCount: Array.isArray(view?.tavernHelper?.messages) ? view.tavernHelper.messages.length : 0
+    const reused = Object.assign({}, previous, volatileSessionViewFields(chat, activity))
+    if (mode === 'script') {
+      reused.scriptProgress = await requestPerformance.stage('scriptProgress', async () => {
+        const script = await readScript(chat.cardPath)
+        return script !== undefined && Array.isArray(script.chunks)
+          ? scriptContinuity.inspect({ script: script, state: chat.scriptState, request: { kind: 'progress' } })
+          : null
       })
-      return view
     }
-    if (cached && cached.revision === revision && cacheIdentityMatches()) {
-      const reused = Object.assign({}, cached.view, await requestPerformance.stage('projectViewCached', () => volatileSessionViewFields(chat, activity)))
-      if (mode === 'script') {
-        reused.scriptProgress = await requestPerformance.stage('scriptProgress', async () => {
-          const script = await readScript(chat.cardPath)
-          return script !== undefined && Array.isArray(script.chunks)
-            ? scriptContinuity.inspect({ script: script, state: chat.scriptState, request: { kind: 'progress' } })
-            : null
-        })
-      }
-      return finish(reused, 'cache')
+    return reused
+  }
+  async function projectDirtySessionView(chat, previous, dirtyMessageIndices, activity) {
+    const mode = chat.mode || 'story'
+    const previousMessages = previous.tavernHelper.messages
+    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity))
+    const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
+      previousMessages,
+      dirtyIndices: dirtyMessageIndices
+    }))
+    next.tavernHelper = Object.assign({}, previous.tavernHelper, helperCore, {
+      openingHost: previous.tavernHelper.openingHost,
+      worldbook: previous.tavernHelper.worldbook,
+      globalVariables: previous.tavernHelper.globalVariables,
+      characterVariables: previous.tavernHelper.characterVariables,
+      compatibilityCapabilities: previous.tavernHelper.compatibilityCapabilities,
+      extensionSettings: previous.tavernHelper.extensionSettings,
+      regexScripts: previous.tavernHelper.regexScripts
+    })
+    delete next.tavernHelper.messagesPending
+    if (mode === 'story' || mode === 'script') {
+      let cardExtensions = { regexScripts: [], helperScripts: [] }
+      try { cardExtensions = await readCardExtensions(chat.cardPath) || cardExtensions } catch (_error) { cardExtensions = { regexScripts: [], helperScripts: [] } }
+      const activePresetSnapshot = groupOfMode(chat.mode) === 'play' && chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object'
+        ? chat.runtimePresetSnapshot : null
+      const presetRegexScripts = Array.isArray(activePresetSnapshot && activePresetSnapshot.regexScripts) ? activePresetSnapshot.regexScripts : []
+      const replyDisplay = await requestPerformance.stage('historyProjection', () => incrementalReplyView.project(chat, {
+        charName: chat.cardName, macroState: chat.macroState,
+        regexScripts: composeTavernRegexScripts(cardExtensions, presetRegexScripts),
+        placement: 2, isMarkdown: true, isEdit: false, depth: 0
+      }, { charName: chat.cardName, macroState: chat.macroState, regexScripts: cardExtensions.regexScripts }))
+      replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
+      next.replyProjections = replyDisplay.projections
+      next.tavernStatusView = replyDisplay.statusView || null
+      next.tavernStatusViews = replyDisplay.statusViews || []
     }
-    if (cached && dirtyMessageIndices && cacheIdentityMatches() && cached.view && cached.view.tavernHelper
-      && Array.isArray(cached.view.tavernHelper.messages) && Array.isArray(chat.messages)) {
-      const previousMessages = cached.view.tavernHelper.messages
-      const nextMessages = chat.messages
-      let structural = previousMessages.length > nextMessages.length
-        || previousMessages.some(function (message) { return message && message.stub === true })
-      if (!structural) {
-        for (const index of dirtyMessageIndices) {
-          if (!Number.isSafeInteger(index) || index < 0 || index >= nextMessages.length) { structural = true; break }
-          if (index >= previousMessages.length) continue
-          const previousRole = previousMessages[index] && previousMessages[index].role
-          const source = nextMessages[index]
-          const nextRole = source && source.role === 'user' ? 'user' : 'assistant'
-          if (previousRole && previousRole !== 'assistant' && previousRole !== 'user' && previousRole !== 'system') continue
-          if (previousRole && source && previousRole !== nextRole && source.role !== 'tavern-helper') { structural = true; break }
-        }
-      }
-      if (!structural) {
-        const result = await requestPerformance.stage('projectViewDirty', async () => {
-          const next = Object.assign({}, cached.view, volatileSessionViewFields(chat, activity))
-          const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
-            previousMessages,
-            dirtyIndices: dirtyMessageIndices
-          }))
-          next.tavernHelper = Object.assign({}, cached.view.tavernHelper, helperCore, {
-            openingHost: cached.view.tavernHelper.openingHost,
-            worldbook: cached.view.tavernHelper.worldbook,
-            globalVariables: cached.view.tavernHelper.globalVariables,
-            characterVariables: cached.view.tavernHelper.characterVariables,
-            compatibilityCapabilities: cached.view.tavernHelper.compatibilityCapabilities,
-            extensionSettings: cached.view.tavernHelper.extensionSettings,
-            regexScripts: cached.view.tavernHelper.regexScripts
-          })
-          delete next.tavernHelper.messagesPending
-          if (mode === 'story' || mode === 'script') {
-            let cardExtensions = { regexScripts: [], helperScripts: [] }
-            try { cardExtensions = await readCardExtensions(chat.cardPath) || cardExtensions } catch (_error) { cardExtensions = { regexScripts: [], helperScripts: [] } }
-            const activePresetSnapshot = groupOfMode(chat.mode) === 'play' && chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object'
-              ? chat.runtimePresetSnapshot : null
-            const presetRegexScripts = Array.isArray(activePresetSnapshot && activePresetSnapshot.regexScripts) ? activePresetSnapshot.regexScripts : []
-            const replyDisplay = await requestPerformance.stage('historyProjection', () => incrementalReplyView.project(chat, {
-              charName: chat.cardName, macroState: chat.macroState,
-              regexScripts: composeTavernRegexScripts(cardExtensions, presetRegexScripts),
-              placement: 2, isMarkdown: true, isEdit: false, depth: 0
-            }, { charName: chat.cardName, macroState: chat.macroState, regexScripts: cardExtensions.regexScripts }))
-            replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
-            next.replyProjections = replyDisplay.projections
-            next.tavernStatusView = replyDisplay.statusView || null
-            next.tavernStatusViews = replyDisplay.statusViews || []
-          }
-          next.mvuReceipts = mvuReceiptsOf(chat)
-          return next
-        })
-        sessionViewProjectionCache.set(chat.id, {
-          revision, cardPath, cardContextRevision, isCard, mode, view: result
-        })
-        while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
-        return finish(result, 'dirty')
-      }
-    }
+    next.mvuReceipts = mvuReceiptsOf(chat)
+    return next
+  }
+  async function projectFullSessionView(chat, { windowHelperMessages = false } = {}) {
+    const mode = chat.mode || 'story', isCard = mode === 'card', cardPath = str(chat.cardPath)
     let card = null, cardReadError = null
     try { card = isCard && cardPath === '' ? null : await requestPerformance.stage('readCard', () => readChatCard(chat)) }
     catch (error) {
@@ -1785,14 +1645,17 @@ export async function apply(ctx) {
     if (cardReadError) result.cardReadError = cardReadError
     if (isCard) result.workspace = workspaceViewOf(chat)
     if (mode === 'script') result.scriptPreview = await requestPerformance.stage('scriptPreview', () => scriptPreviewOf(chat))
-    if (!(result.tavernHelper && result.tavernHelper.messagesPending)) {
-      sessionViewProjectionCache.set(chat.id, {
-        revision, cardPath, cardContextRevision, isCard, mode, view: result
-      })
-      while (sessionViewProjectionCache.size > 8) sessionViewProjectionCache.delete(sessionViewProjectionCache.keys().next().value)
-    }
-    return finish(result, 'full')
+    return result
   }
+  const sessionViews = createSessionViewReader({
+    readState: sessionStateForSession, readChat: chatForSession,
+    readChanges: chatPersistence.readChangedIndices,
+    project: { cached: projectCachedSessionView, dirty: projectDirtySessionView, full: projectFullSessionView },
+    activity: chat => backgroundTasks.activity(chat), trace: requestPerformance,
+    foregroundRunning: sessionId => agentRegistry.get(str(sessionId))?.phase?.kind === 'running',
+    synchronize: createSessionViewSync()
+  })
+  function sessionView(sessionId, options) { return sessionViews.read(sessionId, options) }
   async function ensureNativeOpening(sessionId) {
     return await conversationInitialization.ensureOpening(sessionId)
   }
@@ -2363,14 +2226,6 @@ export async function apply(ctx) {
       postureUpdated = true
     }
     return { postureUpdated: postureUpdated }
-  }
-  function settlementTurn(chat) {
-    const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index]
-      if (message && message.role === 'assistant' && Number.isFinite(Number(message.turn))) return Number(message.turn)
-    }
-    return 0
   }
   function pendingMvuTarget(chat) {
     const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
@@ -3478,26 +3333,7 @@ export async function apply(ctx) {
       }
       case 'getEjsEditorInfo': return await fullPromptTemplateRuntimeInfo()
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
-      case 'getSession': {
-        const sessionId = args && args.sessionId
-        const chat = await requestPerformance.stage('readChat', () => chatForSessionView(sessionId))
-        const revision = Number(chat && chat._storageRevision) || 0
-        let dirtyMessageIndices = null
-        const previous = args?.viewSync === 1 ? synchronizeSessionView.peek?.(args.viewCursor) : null
-        if (previous && previous.sessionId === str(sessionId) && Number.isSafeInteger(previous.revision)) {
-          if (previous.revision === revision) dirtyMessageIndices = new Set()
-          else {
-            const changed = chat && chat.id ? await chatPersistence.readChangedIndices(chat.id, previous.revision) : undefined
-            if (changed?.revision === revision) dirtyMessageIndices = new Set(changed.indices)
-          }
-        }
-        const view = await sessionView(sessionId, {
-          chat,
-          windowHelperMessages: args?.viewSync === 1 && (args.viewCursor === undefined || args.viewCursor === null || args.viewCursor === '')
-        })
-        if (args?.viewSync !== 1) return { view }
-        return synchronizeSessionView(str(sessionId), view, args.viewCursor, { revision, dirtyMessageIndices })
-      }
+      case 'getSession': return sessionViews.response(args || {})
       case 'hydrateTavernHelperMessages': {
         const chat = await chatForSession(args && args.sessionId)
         if (!chat) throw new Error('请先打开游玩会话')
