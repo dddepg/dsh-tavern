@@ -90,3 +90,47 @@ test('retry flags select the latest pending assistant without copying its payloa
   chat.messages.forEach(message => { message.mvu.pending = false })
   assert.equal(projectChatSessionState(chat).pendingMvuSettlement, null)
 })
+
+test('background task configuration keeps model overrides without copying archived variables', async t => {
+  const { resolveChatBackgroundModel } = await import('../tavern-plugin/lib/domain/background-model-selection.js')
+  const { normalizeBackgroundTasks } = await import('../tavern-plugin/lib/domain/tavern-settings.js')
+  const root = await mkdtemp(join(tmpdir(), 'background-config-read-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = createChatJournalStore({ dataRoot: root })
+  const selection = { provider: 'custom', model: 'background', reasoningEffort: 'high' }
+  await store.update('chat', () => ({ id: 'chat', sessionId: 's', _storageRevision: 1,
+    backgroundModelSelection: selection, webSearchEnabled: true, cardContextRevision: 7,
+    backgroundTasks: { variables: false, posture: false },
+    timeline: { participants: { background: { status: 'needs-session' } } },
+    messages: Array.from({ length: 459 }, (_, turn) => ({ role: 'assistant', turn,
+      variables: { stat_data: { payload: 'historical state'.repeat(1000) } } })) }))
+  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const names = ['resolveModelSelection', 'resolveWebSearch', 'resolveBackgroundTasks', 'resolveStablePrefixRevision']
+  const options = names.map(name => source.split('\n').find(line => line.trim().startsWith(name + ':'))).join('\n')
+  const callbacks = vm.runInNewContext(`({${options}})`, {
+    chatForSession: () => store.read('chat'),
+    sessionStateForSession: () => store.readSessionState('chat'),
+    backgroundModelSelection: chat => resolveChatBackgroundModel(chat, { provider: 'default', model: 'foreground' }),
+    normalizeBackgroundTasks
+  })
+  let historicalCopies = 0
+  const clone = globalThis.structuredClone
+  t.mock.method(globalThis, 'structuredClone', value => {
+    if (value?.messages?.some(message => message.variables)) historicalCopies++
+    return clone(value)
+  })
+  const input = { sessionId: 's' }
+  assert.deepEqual(await callbacks.resolveModelSelection(input), selection)
+  assert.equal(await callbacks.resolveWebSearch(input), true)
+  assert.equal(await callbacks.resolveStablePrefixRevision(input), 7)
+  assert.deepEqual(await callbacks.resolveBackgroundTasks(input), normalizeBackgroundTasks({ variables: false, posture: false }))
+  const override = { variables: true }
+  assert.equal(await callbacks.resolveBackgroundTasks({ ...input, backgroundTasks: override }), override)
+  assert.equal(historicalCopies, 0)
+  const state = await store.readSessionState('chat')
+  state.backgroundModelSelection.model = 'accidental mutation'
+  state.backgroundTasks.variables = true
+  assert.deepEqual(await callbacks.resolveModelSelection(input), selection)
+  assert.deepEqual(await callbacks.resolveBackgroundTasks(input), normalizeBackgroundTasks({ variables: false, posture: false }))
+  assert.equal((await store.read('chat')).messages.length, 459, 'archive remains complete')
+})

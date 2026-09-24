@@ -24,7 +24,8 @@ export function projectChatSessionState(chat) {
     operation?.kind === 'body' && operation.status === 'foreground-completed')) return { ...structuredClone(chat), pendingMvuSettlement }
   const selected = { pendingMvuSettlement }
   for (const key of ['id', 'sessionId', '_storageRevision', 'mode', 'cardPath', 'cardContextRevision',
-    'backgroundConfigVersion', 'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
+    'backgroundConfigVersion', 'backgroundModelSelection', 'backgroundModelRevision', 'backgroundTasks', 'webSearchEnabled',
+    'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
     'settleError', 'scriptState', 'hiddenDshErrorTurns', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {
     if (Object.hasOwn(chat, key)) selected[key] = chat[key]
   }

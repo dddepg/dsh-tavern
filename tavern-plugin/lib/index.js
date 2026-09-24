@@ -1799,9 +1799,9 @@ export async function apply(ctx) {
   const backgroundAgentRunner = createBackgroundAgentRunner({
     systemAppend: () => runtimePrompt('system-append'),
     imageSystemPrompt: () => runtimePrompt('scene-image-system'),
-    resolveModelSelection: async input => backgroundModelSelection(await chatForSession(input.sessionId)) || input.selection,
-    resolveWebSearch: async input => (await chatForSession(input.sessionId))?.webSearchEnabled === true,
-    resolveBackgroundTasks: async input => input.backgroundTasks || normalizeBackgroundTasks((await chatForSession(input.sessionId))?.backgroundTasks),
+    resolveModelSelection: async input => backgroundModelSelection(await sessionStateForSession(input.sessionId)) || input.selection,
+    resolveWebSearch: async input => (await sessionStateForSession(input.sessionId))?.webSearchEnabled === true,
+    resolveBackgroundTasks: async input => input.backgroundTasks || normalizeBackgroundTasks((await sessionStateForSession(input.sessionId))?.backgroundTasks),
     backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL],
     sharedTools: [sharedWorldbookSearch(searchWorldbook), {
       tool: HISTORY_RECALL_TOOL,
@@ -1813,7 +1813,7 @@ export async function apply(ctx) {
     agents: agentRegistry,
     agentPreset: 'tavern-background',
     needsNewBackgroundSession: async sessionId => {
-      const chat = await chatForSession(sessionId)
+      const chat = await sessionStateForSession(sessionId)
       return chat?.timeline?.participants?.background?.status === 'needs-session'
     },
     resolveForegroundWorldbookReads: async input => {
@@ -1828,7 +1828,7 @@ export async function apply(ctx) {
       const chat = await chatForSession(input.sessionId)
       return chat ? await nativeWorldBookTemplateContext(chat, await readChatCard(chat)) : undefined
     },
-    resolveStablePrefixRevision: async input => Number((await chatForSession(input.sessionId))?.cardContextRevision) || 0,
+    resolveStablePrefixRevision: async input => Number((await sessionStateForSession(input.sessionId))?.cardContextRevision) || 0,
     resolveStablePrefix: async function (input) {
       // Image tasks share the opening snapshot; current-worldbook replacement stays disabled above
       // because a requested illustration may target an earlier story turn.
@@ -2115,7 +2115,7 @@ export async function apply(ctx) {
     }
   }
   const candidateGenerator = createCandidateGenerator({
-    backgroundTasks: async chat => normalizeBackgroundTasks((await chatForSession(chat.sessionId))?.backgroundTasks),
+    backgroundTasks: async chat => normalizeBackgroundTasks((await sessionStateForSession(chat.sessionId))?.backgroundTasks),
     store: {
       chatForSession: chatForSession,
       readChat: readChat,
