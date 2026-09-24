@@ -12,7 +12,7 @@ export function apply(ctx) {
       const done = new Set(input.messages.flatMap(message => message.content || [])
         .filter(block => block.type === 'tool-result').map(block => block.toolCallId))
       const text = JSON.stringify(input.messages)
-      const gold = (text.includes('雨夜重写') || text.includes('雨夜里')) ? 30 : (text.includes('再次领取奖励') || text.includes('金币累计二十枚')) ? 20 : 10
+      const gold = text.includes('E2E 修正金币为四十') ? 40 : (text.includes('雨夜重写') || text.includes('雨夜里')) ? 30 : (text.includes('再次领取奖励') || text.includes('金币累计二十枚')) ? 20 : 10
       const goldId = 'e2e-gold-' + gold, postureId = 'e2e-posture-' + gold
       const blocks = []
       if (tools.has('candidate_submit_choices')) blocks.push({ type: 'tool-call', id: 'e2e-choices', name: 'candidate_submit_choices', arguments: JSON.stringify({ actions: ['再次领取奖励', '向店主道谢', '查看任务告示', '清点背包'], scene: '夜幕降临酒馆' }) })

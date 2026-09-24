@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { playControls } from './play-controls.mjs'
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, readdir, cp, access } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -206,6 +207,7 @@ try {
     assert.equal(await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).count(), 0)
     await inspectRound('after-rollback', 10, '你获得了十枚金币。', 1)
   })
+  await playControls({ page, step, savedChat, inspectRound, output, report })
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
   delete report.currentStep
