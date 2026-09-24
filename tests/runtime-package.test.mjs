@@ -42,7 +42,7 @@ for (const [name, paths] of [
 test('CDN 清单生成器包含全部依赖补丁及其校验值', async t => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), 'tavern-runtime-package-'))
   t.after(() => rm(fixture, { recursive: true, force: true }))
-  for (const directory of ['bin', 'config', 'presets', 'tavern-plugin', 'patches']) await mkdir(path.join(fixture, directory))
+  for (const directory of ['bin', 'config', 'presets', 'tavern-plugin']) await mkdir(path.join(fixture, directory))
   for (const file of new Set([...required, 'cordis.patch.yml', 'install.sh', 'install.ps1'])) {
     await mkdir(path.dirname(path.join(fixture, file)), { recursive: true })
     await writeFile(path.join(fixture, file), await readFile(path.join(root, file)))

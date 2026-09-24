@@ -47,7 +47,7 @@ test('Git 导出的 tar 和 ZIP 排除 README 及子包宣传图，保留运行�
 test('运行清单不列入子包文档图片，继续校验运行图片', t => {
   const root = fixture(t)
   for (const name of ['pnpm-lock.yaml', 'pnpm-workspace.yaml', 'cordis.patch.yml', 'install.ps1', 'install.sh']) writeFileSync(path.join(root, name), '')
-  for (const name of ['bin', 'config', 'presets', 'patches']) mkdirSync(path.join(root, name))
+  for (const name of ['bin', 'config', 'presets']) mkdirSync(path.join(root, name))
   command(root, process.execPath, [fileURLToPath(new URL('../.github/scripts/write-runtime-manifest.mjs', import.meta.url)), 'a'.repeat(40), '1'])
   const manifest = JSON.parse(readFileSync(path.join(root, 'dsh-tavern-runtime.json'), 'utf8'))
   assert.ok(manifest.files.some(file => file.path === icon && file.sha256.length === 64))

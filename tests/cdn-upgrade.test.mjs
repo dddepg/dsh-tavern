@@ -14,18 +14,18 @@ const execute = promisify(execFile)
 const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
 const windows = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')
 const workspace = parse(await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8'))
-const patches = Object.values(workspace.patchedDependencies).map(value => typeof value === 'string' ? value : value.path)
+const patches = Object.values(workspace.patchedDependencies || {}).map(value => typeof value === 'string' ? value : value.path)
 
-test('两平台 CDN 下载过滤器允许依赖补丁', () => {
+test('两平台 CDN 下载过滤器允许运行文件并排除文档', () => {
   const unixPattern = new RegExp(unix.match(/^const allowed = \/(.+)\/$/m)[1])
   const windowsPattern = new RegExp(windows.match(/\$RuntimePattern = '([^']+)'/)[1])
   for (const pattern of [unixPattern, windowsPattern]) {
-    for (const file of patches) assert.ok(pattern.test(file), `下载器过滤了 ${file}`)
+    for (const file of [...patches, 'config/dsh-compatibility.json']) assert.ok(pattern.test(file), `下载器过滤了 ${file}`)
     assert.equal(pattern.test('docs/private.md'), false)
   }
 })
 
-test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：补丁落盘、用户数据不变、失败不误报成功', async t => {
+test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：运行文件落盘、用户数据不变、失败不误报成功', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-cdn-upgrade-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const isWindows = process.platform === 'win32'
@@ -52,14 +52,15 @@ test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：补丁落盘、
   manifest.files.push({ path: 'docs/do-not-download.txt', size: 0, sha256: 'a'.repeat(64) })
   manifest.files.push({ path: 'patches/../escape.txt', size: 0, sha256: 'a'.repeat(64) })
   const requests = []
-  let corruptPatch = false
+  const integrityFile = 'config/dsh-compatibility.json'
+  let corruptFile = false
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(req.url)
     requests.push(url)
     if (url === '/manifest') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(manifest)); return }
     const file = url.startsWith(`/source@${revision}/`) ? url.slice(`/source@${revision}/`.length) : ''
     const bytes = files.get(file)
-    if (bytes) { res.end(corruptPatch && patches.includes(file) ? 'corrupt patch' : bytes); return }
+    if (bytes) { res.end(corruptFile && file === integrityFile ? 'corrupt runtime file' : bytes); return }
     res.writeHead(404); res.end('unexpected download')
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -106,7 +107,7 @@ test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：补丁落盘、
   assert.equal(await readFile(path.join(app, 'installed.txt'), 'utf8'), 'install --host desktop')
   assert.deepEqual(JSON.parse(await readFile(path.join(app, 'dsh-tavern-runtime.json'), 'utf8')), manifest)
   assert.equal(await readFile(path.join(app, installerName), 'utf8'), downloaded)
-  for (const file of patches) assert.deepEqual(await readFile(path.join(app, file)), files.get(file))
+  for (const file of [...patches, integrityFile]) assert.deepEqual(await readFile(path.join(app, file)), files.get(file))
   for (const [file, content] of protectedFiles) assert.equal(await readFile(file, 'utf8'), content)
   assert.ok(!requests.includes('/forbidden-archive'), 'CDN success must not fall back to archive')
   assert.ok(!requests.some(url => /escape|do-not-download/.test(url)))
@@ -117,8 +118,8 @@ test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：补丁落盘、
     return true
   })
   // Failed CDN verification must not overwrite installed resources or report success.
-  corruptPatch = true
+  corruptFile = true
   await assert.rejects(run())
-  for (const file of patches) assert.deepEqual(await readFile(path.join(app, file)), files.get(file))
+  for (const file of [...patches, integrityFile]) assert.deepEqual(await readFile(path.join(app, file)), files.get(file))
   for (const [file, content] of protectedFiles) assert.equal(await readFile(file, 'utf8'), content)
 })

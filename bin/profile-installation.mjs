@@ -259,7 +259,9 @@ export async function installProfile(host = RUNTIME_HOST) {
       const workspaceText = readFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), 'utf8')
       copyFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), path.join(PROFILE_DIR, 'pnpm-workspace.yaml'))
       syncProfileDependencyPatches({ sourceRoot: SOURCE_ROOT, profileDir: PROFILE_DIR, workspaceText })
-      run('pnpm', ['install'], { cwd: PROFILE_DIR })
+      // This generated profile changes dependencies and patch settings on upgrade.
+      // Its previous lockfile is not the source repository's frozen lockfile.
+      run('pnpm', ['install', '--no-frozen-lockfile'], { cwd: PROFILE_DIR })
       runDsh(dsh, ['--profile', PROFILE, '--dump-config'], { host })
       ensureSidebarDefaults()
       const [theme] = resolveHostDependencies({ dsh, host, requiredExports: { '@deepseek-ai/dsh-client-ui-theme': null } })

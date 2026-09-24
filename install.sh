@@ -75,7 +75,7 @@ RUNTIME_BIN=${RUNTIME_ROOT}/bin
 PNPM_VERSION=11.25.0
 COMMAND_BIN=${HOME}/.local/bin
 SOURCE_CACHE=${DSH_ROOT}/source-cache/dsh-tavern.git
-RUNTIME_PATHS='package.json pnpm-lock.yaml pnpm-workspace.yaml cordis.patch.yml install.ps1 install.sh bin config presets tavern-plugin patches'
+RUNTIME_PATHS='package.json pnpm-lock.yaml pnpm-workspace.yaml cordis.patch.yml install.ps1 install.sh bin config presets tavern-plugin'
 TMP_BASE=${TMPDIR:-/tmp}
 TMP_BASE=${TMP_BASE%/}
 TEMP_DIR=$(mktemp -d "${TMP_BASE}/dsh-tavern-install.XXXXXX")
@@ -194,7 +194,7 @@ if [ "${USED_GIT}" -eq 0 ]; then
 const { createHash } = require('node:crypto')
 const { mkdir, writeFile } = require('node:fs/promises')
 const path = require('node:path')
-const allowed = /^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|cordis\.patch\.yml|install\.ps1|install\.sh|bin\/|config\/|presets\/|tavern-plugin\/|patches\/)/
+const allowed = /^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|cordis\.patch\.yml|install\.ps1|install\.sh|bin\/|config\/|presets\/|tavern-plugin\/)/
 async function get(url, timeout = 30000) {
   const response = await fetch(url, { signal: AbortSignal.timeout(timeout) })
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
