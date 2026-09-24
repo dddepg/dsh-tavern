@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "cda6cb3aae76ee722b4e07df6df567070170b75a",
-  "releaseSequence": 366,
+  "revision": "ffba9e8d4c6b3399a56668e09308476661fa3971",
+  "releaseSequence": 367,
   "version": "2.1.0",
   "files": [
     {
@@ -456,13 +456,18 @@
     },
     {
       "path": "tavern-plugin/lib/domain/chat-journal-store.js",
-      "sha256": "41f2e873b6ae7ef52d32015a45dabc7ec9a78fb953e42c7468a43f08ebae78f4",
-      "size": 27311
+      "sha256": "2f452d74419eb4ce88cf1e58632c2397df9a34046e758a6dc6088f0573a83c6f",
+      "size": 27730
     },
     {
       "path": "tavern-plugin/lib/domain/chat-persistence.js",
-      "sha256": "39f8761c47c3c4abfff1c7391bd39a2a28a01881f51a2ee85095c61a4971d195",
-      "size": 12320
+      "sha256": "29aa2afc0b560ea7f6a2f0b42b20b5cb2096e747dd2d1e7facf491dfd300b280",
+      "size": 12946
+    },
+    {
+      "path": "tavern-plugin/lib/domain/chat-session-state.js",
+      "sha256": "c510e373a676c194b0afb56abfafb7695f005e2c24d267ed169e10b4ac020f31",
+      "size": 1994
     },
     {
       "path": "tavern-plugin/lib/domain/compaction-failure.js",
@@ -1181,8 +1186,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-conversation-registry.js",
-      "sha256": "062276b4278a557c72bba6406072f006055a908678f75a153aa5585b99839c04",
-      "size": 8911
+      "sha256": "63c4f790f5f572b016cde5a51ba7076e0354feeb91c99e7e8e5671221cf86b1c",
+      "size": 9283
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-data.js",
@@ -1416,8 +1421,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "8e3c605fdefbda0d3b5b8f064cb3619452635336595536cecdbb5ec1005c2ac5",
-      "size": 308805
+      "sha256": "ce65d570094435160f54cec878721f0fcde86f9ad41cd171a95605dec2f0f4c4",
+      "size": 310471
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
