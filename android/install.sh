@@ -60,7 +60,33 @@ INSTALLED_PNPM_VERSION=$("${PNPM_COMMAND}" --version 2>/dev/null || :)
 if [ "${INSTALLED_PNPM_VERSION}" != "${PNPM_VERSION}" ]; then
   require_command npm
   printf '\n正在安装 Tavern 专用 pnpm %s……\n' "${PNPM_VERSION}"
-  npm install --global --prefix "${PNPM_ROOT}" "pnpm@${PNPM_VERSION}"
+  # Restored backups can contain ordinary bin files without node_modules.
+  # Build and verify a fresh prefix before replacing the version-owned runtime.
+  (
+    mkdir -p "$(dirname -- "${PNPM_ROOT}")"
+    pnpm_stage=$(mktemp -d "${PNPM_ROOT}.install.XXXXXX")
+    pnpm_backup="${pnpm_stage}.previous"
+    pnpm_committed=0
+    cleanup_pnpm_install() {
+      rm -rf -- "${pnpm_stage}"
+      if [ -e "${pnpm_backup}" ] || [ -L "${pnpm_backup}" ]; then
+        if [ "${pnpm_committed}" = 1 ]; then
+          rm -rf -- "${pnpm_backup}"
+        elif [ ! -e "${PNPM_ROOT}" ] && [ ! -L "${PNPM_ROOT}" ]; then
+          mv -- "${pnpm_backup}" "${PNPM_ROOT}"
+        fi
+      fi
+    }
+    trap cleanup_pnpm_install EXIT
+    npm install --global --prefix "${pnpm_stage}" "pnpm@${PNPM_VERSION}"
+    staged_version=$("${pnpm_stage}/bin/pnpm" --version 2>/dev/null || :)
+    [ "${staged_version}" = "${PNPM_VERSION}" ] || fail "新 pnpm 安装后校验失败，原目录未修改。"
+    if [ -e "${PNPM_ROOT}" ] || [ -L "${PNPM_ROOT}" ]; then
+      mv -- "${PNPM_ROOT}" "${pnpm_backup}"
+    fi
+    mv -- "${pnpm_stage}" "${PNPM_ROOT}"
+    pnpm_committed=1
+  )
 fi
 INSTALLED_PNPM_VERSION=$("${PNPM_COMMAND}" --version 2>/dev/null || :)
 [ "${INSTALLED_PNPM_VERSION}" = "${PNPM_VERSION}" ] || fail "Tavern 专用 pnpm ${PNPM_VERSION} 安装后校验失败（当前：${INSTALLED_PNPM_VERSION:-不可用}）。"

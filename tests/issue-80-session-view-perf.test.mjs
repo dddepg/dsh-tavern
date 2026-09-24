@@ -1,3 +1,4 @@
+import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -119,19 +120,10 @@ test('compact variable writes during init do not invalidate; later writes coales
   run.runtime.dispose()
 })
 
-test('mvuReceiptsOf keeps notable statuses and only a short quiet tail', () => {
-  assert.match(serverSource, /quietRows\.slice\(-3\)/)
-  assert.match(serverSource, /notable\.has\(str\(row\.receipt && row\.receipt\.status\)\)/)
-})
-
-test('session view projection cache reuses unchanged revisions', () => {
-  assert.match(serverSource, /sessionViewProjectionCache/)
-  assert.match(serverSource, /volatileSessionViewFields/)
-  assert.match(serverSource, /dirtyMessageIndices/)
-  assert.match(serverSource, /viewRebuild/)
-  assert.match(serverSource, /helperMessagesProjection/)
-  assert.match(serverSource, /windowHelperMessages/)
-  assert.match(serverSource, /hydrateTavernHelperMessages/)
+test('mvu receipts keep notable statuses and only a short quiet tail', () => {
+  const fields=createSessionStateView({activity:()=>({busy:false}),evidence:()=>({})})
+  const chat={messages:Array.from({length:10},(_,i)=>({role:'assistant',turn:i+1,mvu:{receipt:{status:i===0?'pending':'updated'}}}))}
+  assert.deepEqual(fields.receipts(chat).map(row=>row.turn),[1,8,9,10])
 })
 
 test('api diagnostics record request and response byte sizes', async () => {

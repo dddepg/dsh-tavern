@@ -1,32 +1,28 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
-import vm from 'node:vm'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { createSessionViewReader } from '../tavern-plugin/lib/domain/session-view-reader.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createChatJournalStore } from '../tavern-plugin/lib/domain/chat-journal-store.js'
 import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persistence.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
 
-test('production getSession cache hit resolves the chat once and returns that revision', async () => {
-  const source=await readFile(new URL('../tavern-plugin/lib/index.js',import.meta.url),'utf8')
-  const viewSource=source.slice(source.indexOf('  async function sessionView('),source.indexOf('  async function ensureNativeOpening('))
-  const dispatchSource=source.slice(source.indexOf("      case 'getSession': {"),source.indexOf("      case 'hydrateTavernHelperMessages':"))
+test('production view reader cache hit reads state once without a full chat read', async () => {
   const chat={id:'c',sessionId:'s',mode:'story',cardPath:'card',_storageRevision:5,messages:[]}
-  let reads=0
+  let stateReads=0,fullReads=0
   const sync=(_id,view,_cursor,options)=>({view,revision:options.revision})
   sync.peek=()=>({sessionId:'s',revision:5})
-  const context={Set,Object,Number,Array,Map,Boolean,
-    args:{sessionId:'s',viewSync:1,viewCursor:'cursor'},
-    chatForSession:async()=>{reads++;return chat},str:String,
-    requestPerformance:{stage:(_name,fn)=>fn(),state(){}},
-    backgroundTasks:{activity:()=>({busy:false})},agentRegistry:new Map(),
-    sessionViewProjectionCache:new Map([['c',{revision:5,cardPath:'card',cardContextRevision:0,isCard:false,mode:'story',view:{chatId:'c'}}]]),
-    volatileSessionViewFields:()=>({}),synchronizeSessionView:sync}
-  const result=await vm.runInNewContext(`(async()=>{${viewSource}\nswitch('getSession'){${dispatchSource}}})()`,context)
-  assert.equal(reads,1)
-  assert.equal(result.revision,5)
-  assert.equal(result.view.chatId,'c')
+  const reader=createSessionViewReader({
+    readState:async()=>{stateReads++;return chat},readChat:async()=>{fullReads++;return chat},
+    readChanges:async()=>{throw Error('unexpected changed query')},
+    project:{full:async()=>({chatId:'c'}),cached:async(_chat,previous)=>previous},
+    activity:()=>({busy:false}),trace:{stage:(_name,fn)=>fn(),state(){}},foregroundRunning:()=>false,synchronize:sync
+  })
+  await reader.read('s');stateReads=0;fullReads=0
+  const result=await reader.response({sessionId:'s',viewSync:1,viewCursor:'cursor'})
+  assert.equal(stateReads,1);assert.equal(fullReads,0)
+  assert.equal(result.revision,5);assert.equal(result.view.chatId,'c')
 })
 
 test('timeline inspection never traverses story data and returns isolated participants', () => {
@@ -41,30 +37,19 @@ test('timeline inspection never traverses story data and returns isolated partic
 })
 
 test('projection cache and browser cursor use their own change baselines', async () => {
-  const source=await readFile(new URL('../tavern-plugin/lib/index.js',import.meta.url),'utf8')
-  const viewSource=source.slice(source.indexOf('  async function sessionView('),source.indexOf('  async function ensureNativeOpening('))
-  const dispatchSource=source.slice(source.indexOf("      case 'getSession': {"),source.indexOf("      case 'hydrateTavernHelperMessages':"))
-  const chat={id:'c',mode:'card',cardPath:'',_storageRevision:5,messages:[{role:'user',text:'new0'},{role:'assistant',text:'new1'}]}
+  let chat={id:'c',mode:'card',cardPath:'',_storageRevision:3,messages:[{role:'user',text:'old0'},{role:'assistant',text:'old1'}]}
   const queries=[]
-  const sync=(_id,view,_cursor,options)=>{
-    assert.deepEqual([...options.dirtyMessageIndices],[1])
-    return view
-  }
+  const sync=(_id,view,_cursor,options)=>{assert.deepEqual([...options.dirtyMessageIndices],[1]);return view}
   sync.peek=()=>({sessionId:'s',revision:4})
-  const context={Set,Object,Number,Array,Map,Boolean,args:{sessionId:'s',viewSync:1,viewCursor:'cursor'},
-    chatForSession:async()=>chat,str:String,
-    requestPerformance:{stage:(_name,fn)=>fn(),state(){}},
-    chatPersistence:{readChangedIndices:async(_id,revision)=>{
-      queries.push(revision)
-      return {revision:5,indices:revision===3?[0,1]:[1]}
-    }},
-    backgroundTasks:{activity:()=>({busy:false})},agentRegistry:new Map(),
-    sessionViewProjectionCache:new Map([['c',{revision:3,cardPath:'',cardContextRevision:0,isCard:true,mode:'card',
-      view:{tavernHelper:{messages:[{role:'user',text:'old0'},{role:'assistant',text:'old1'}]}}}]]),
-    volatileSessionViewFields:()=>({}),mvuReceiptsOf:()=>[],synchronizeSessionView:sync,
-    projectTavernHelperContext:(value,{previousMessages,dirtyIndices})=>({messages:previousMessages.map((row,i)=>dirtyIndices.has(i)?value.messages[i]:row)})}
-  const result=await vm.runInNewContext(`(async()=>{${viewSource}\nswitch('getSession'){${dispatchSource}}})()`,context)
-  assert.deepEqual(queries,[4,3])
+  const reader=createSessionViewReader({readState:async()=>chat,readChat:async()=>chat,
+    readChanges:async(_id,revision)=>{queries.push(revision);return {revision:5,indices:revision===3?[0,1]:[1]}},
+    project:{full:async value=>({tavernHelper:{messages:structuredClone(value.messages)}}),
+      dirty:async(value,previous,indices)=>({tavernHelper:{messages:previous.tavernHelper.messages.map((row,i)=>indices.has(i)?value.messages[i]:row)}})},
+    activity:()=>({busy:false}),trace:{stage:(_name,fn)=>fn(),state(){}},foregroundRunning:()=>false,synchronize:sync})
+  await reader.read('s')
+  chat={...chat,_storageRevision:5,messages:[{role:'user',text:'new0'},{role:'assistant',text:'new1'}]}
+  const result=await reader.response({sessionId:'s',viewSync:1,viewCursor:'cursor'})
+  assert.deepEqual(queries,[3,4])
   assert.equal(result.tavernHelper.messages[0].text,'new0')
   assert.equal(result.tavernHelper.messages[1].text,'new1')
 })

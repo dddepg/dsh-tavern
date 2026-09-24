@@ -13,6 +13,8 @@
   config:
     - id: compaction-basic
       name: '@deepseek-ai/dsh-compaction-basic'
+      config:
+        thresholdRatio: 0.5
 
     - id: tavern-compaction
       name: dsh-tavern-plugin/compaction

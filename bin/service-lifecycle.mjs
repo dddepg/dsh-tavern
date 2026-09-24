@@ -1,3 +1,4 @@
+import { inspectRecordedProcess as inspectProcess, processStartToken } from './service-process-identity.mjs'
 import { startupTimeoutMs, waitForServiceStartup, stopStartupChild } from './service-startup.mjs'
 import { spawn, spawnSync } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -109,7 +110,7 @@ function readPidRecord() {
 }
 
 function writePidRecord(pid, port, logOffset) {
-  writeFileSync(PID_FILE, `${JSON.stringify({ pid, port, logOffset, profile: PROFILE, source: SOURCE_ROOT, startedAt: new Date().toISOString() }, null, 2)}\n`)
+  writeFileSync(PID_FILE, `${JSON.stringify({ pid, port, logOffset, profile: PROFILE, source: SOURCE_ROOT, ...(RUNTIME_HOST === 'android' && process.platform === 'linux' ? { startToken: processStartToken(pid) } : {}), startedAt: new Date().toISOString() }, null, 2)}\n`)
 }
 
 function removePidRecord() {
@@ -149,14 +150,23 @@ export async function isServiceReady(port, request = fetch, host = process.env.D
   }
 }
 
+function inspectRecordedProcess(record) {
+  return inspectProcess(record, { host: RUNTIME_HOST, home: DSH_ROOT })
+}
+
 async function serviceState() {
   const port = CLI_PORT
   const record = readPidRecord()
-  const pidAlive = Boolean(record && isProcessAlive(record.pid))
+  const identity = record ? inspectRecordedProcess(record) : 'gone'
+  const pidAlive = identity === 'owned'
   const portOpen = await isPortOpen(port)
   const ready = portOpen && await isServiceReady(port)
-  if (record && !pidAlive) removePidRecord()
-  const legacyRecord = !pidAlive && portOpen ? findLegacyService(port) : null
+  if (record && !pidAlive && (identity !== 'unknown' || !portOpen)) {
+    removePidRecord()
+    console.log(`已清理陈旧或无法确认且端口未监听的服务记录：PID ${record.pid}`)
+  }
+  // Never adopt another Android process by port/profile alone.
+  const legacyRecord = !pidAlive && portOpen && RUNTIME_HOST !== 'android' ? findLegacyService(port) : null
   return { port, record: pidAlive ? record : legacyRecord, portOpen, ready }
 }
 
@@ -235,15 +245,24 @@ export async function stopService() {
       throw new Error(`无法停止 DSH Tavern 进程：PID ${state.record.pid}。`)
     }
   } else {
-    try {
-      process.kill(state.record.pid, 'SIGTERM')
-    } catch (error) {
-      if (error?.code !== 'ESRCH') throw error
+    // Recheck immediately before signaling; the PID may have been reused.
+    if (inspectRecordedProcess(state.record) === 'owned') {
+      try {
+        process.kill(state.record.pid, 'SIGTERM')
+      } catch (error) {
+        if (error?.code !== 'ESRCH') {
+          if (error?.code !== 'EPERM' || RUNTIME_HOST !== 'android' || process.platform !== 'linux') throw error
+          const identity = inspectRecordedProcess(state.record)
+          if (identity === 'owned' || await isPortOpen(state.port)) {
+            throw new Error(`无法停止 DSH Tavern：PID ${state.record.pid} 权限不足；请从 Android 宿主停止服务后重试。`)
+          }
+        }
+      }
     }
   }
 
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (!(await isPortOpen(state.port)) && !isProcessAlive(state.record.pid)) {
+    if (!(await isPortOpen(state.port)) && inspectRecordedProcess(state.record) !== 'owned') {
       removePidRecord()
       console.log('DSH Tavern 已停止。')
       return

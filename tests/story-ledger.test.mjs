@@ -76,7 +76,7 @@ test('普通卡结算忽略旧的自动台账开关，只提交姿势并保留�
   }
   const start = source.indexOf('  async function runSettlement(chatId, signal)')
   const applyStart = source.indexOf('  function applySettlement(chat, result)')
-  vm.runInNewContext(source.slice(applyStart, source.indexOf('  function settlementTurn(', applyStart)), ctx)
+  vm.runInNewContext(source.slice(applyStart, source.indexOf('  function pendingMvuTarget(', applyStart)), ctx)
   // Extract by braces through the next top-level function, not a duplicate implementation.
   const next = source.indexOf('\n  async function ', start + 10)
   const nextSync = source.indexOf('\n  function ', start + 10)

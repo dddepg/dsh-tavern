@@ -384,3 +384,43 @@ test('failed background rewind retains its boundary through binding and retries'
   assert.equal(h.current().timeline.participants.background.status, 'current')
   assert.equal(h.current().timeline.participants.background.rewindTo, null)
 })
+
+for (const conflict of [false,true,'cancel']) test(`narrow background mutations preserve concurrent history: ${conflict}`,async t=>{
+  const {mkdtemp,rm}=await import('node:fs/promises')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
+  const root=await mkdtemp(join(tmpdir(),'background-patch-'))
+  t.after(()=>rm(root,{recursive:true,force:true}))
+  const p=createChatPersistence({store:createChatJournalStore({dataRoot:root})})
+  const timeline=createStoryTimeline()
+  await p.write(timeline.apply({chat:{id:'c',messages:[{role:'assistant',text:'keep',variables:[{hp:1}]}]},intent:{kind:'ensure'}}).chat)
+  let patches=0,updates=0
+  const coordinator=createBackgroundTaskCoordinator({timeline,store:{readChat:p.read,writeChat:p.write,
+    readState:p.readSessionState,readSlice:p.readSlice,
+    updateChat:(...args)=>{updates++;return p.update(...args)},
+    patchChat:async(...args)=>{
+      patches++
+      if(conflict)await p.update('c',chat=>{chat.messages[0].text='concurrent';if(conflict==='cancel')Object.values(chat.timeline.operations).forEach(op=>{op.status='cancelled'});return chat})
+      return p.patch(...args)
+    }}})
+  const task=await coordinator.begin(await p.read('c'),'settlement')
+  if(conflict==='cancel') {
+    await assert.rejects(task.bindSession('background'),/过期/)
+    assert.equal((await p.read('c')).timeline.operations[task.operationId].startedSessionId,undefined)
+    return
+  }
+  await task.bindSession('background')
+  await task.checkpointMessage(0,(_chat,message)=>{message.mvu={pendingSubmission:[1]}})
+  const saved=await p.read('c')
+  assert.equal(saved.timeline.operations[task.operationId].startedSessionId,'background')
+  assert.deepEqual(saved.messages[0].variables,[{hp:1}])
+  assert.equal(saved.messages[0].text,conflict?'concurrent':'keep')
+  assert.deepEqual(saved.messages[0].mvu.pendingSubmission,[1])
+  assert.equal(patches,2)
+  assert.equal(updates,conflict?2:0)
+  await task.commit()
+  await assert.rejects(task.checkpointMessage(0,(_chat,message)=>{message.text='stale'}),/过期/)
+  const restarted=createChatJournalStore({dataRoot:root})
+  assert.equal((await restarted.read('c')).messages[0].text,conflict?'concurrent':'keep')
+})

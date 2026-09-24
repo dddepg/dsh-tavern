@@ -1,3 +1,4 @@
+import { projectChatSessionState } from './chat-session-state.js'
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual, promisify } from 'node:util'
@@ -356,6 +357,10 @@ export function createChatJournalStore(options = {}) {
     const state = await cachedState(chatId)
     return state ? structuredClone(state.chat) : undefined
   }
+  async function readSessionState(chatId) {
+    const state = await cachedState(chatId)
+    return state ? projectChatSessionState(state.chat) : undefined
+  }
   function slice(chat, indices) {
     const {messages:rawMessages,...head}=chat
     const messages=Array.isArray(rawMessages)?rawMessages:[]
@@ -408,6 +413,23 @@ export function createChatJournalStore(options = {}) {
     const changed = changedIndices(chatId,state,revision)
     return changed ? {...slice(state.chat,changed.indices),indices:changed.indices,baseRevision:revision} : undefined
   }
+  /** Detached display input: unchanged Helper variables come from the cached view.
+   * Never use this projection as a writable Chat or for a full Helper rebuild. */
+  async function readViewDelta(chatId, revision) {
+    const state = await cachedState(chatId)
+    const changed = changedIndices(chatId, state, revision)
+    if (!changed || revision === state.revision
+      || Object.values(state.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+      || !Array.isArray(state.chat.messages)
+      || !state.chat.messages.every(row => row && typeof row === 'object' && !Array.isArray(row))) return undefined
+    const dirty = new Set(changed.indices)
+    const messages = state.chat.messages.map((row, index) => {
+      if (dirty.has(index)) return row
+      const { variables, ...display } = row
+      return display
+    })
+    return { ...changed, chat: structuredClone({ ...state.chat, messages }) }
+  }
   /** Exact-version internal commit; stale callers must use their existing merge path. */
   async function patch(chatId, expectedRevision, changes, metadata={}) {
     return serialize(chatId,async()=>{
@@ -448,6 +470,8 @@ export function createChatJournalStore(options = {}) {
       const current = currentState == null ? undefined : currentState.chat
       const produced = await updater(jsonClone(current))
       if (produced === undefined) return jsonClone(current)
+      // Normalize once before persistence. The already-JSON result can be
+      // detached with structuredClone without another full JSON string.
       const next = jsonClone(produced)
       if (next === undefined || next === null || typeof next !== 'object' || Array.isArray(next)) throw new Error('Chat Journal 只能保存 JSON object')
       if (currentState == null) {
@@ -457,7 +481,7 @@ export function createChatJournalStore(options = {}) {
         rememberState(chatId, await version(chatId), { chat: next, revision, legacy: false,
           snapshot: { path: snapshotPath, name: path.basename(snapshotPath), revision },
           open: null, openFrameCount: 0, openValidBytes: 0, openInvalidLine: 0 })
-        return jsonClone(next)
+        return structuredClone(next)
       }
       const baseRevision = currentState.revision
       const revision = revisionOf(next)
@@ -490,7 +514,7 @@ export function createChatJournalStore(options = {}) {
         snapshot: rotated || currentState.snapshot, open: rotated ? null : open,
         openFrameCount: rotated ? 0 : currentState.openFrameCount + 1, openInvalidLine: 0 },
         rememberChanges(recentChanges, revision, changes))
-      return jsonClone(next)
+      return structuredClone(next)
     })
   }
 
@@ -539,5 +563,7 @@ export function createChatJournalStore(options = {}) {
     })
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, update, version, remove })
+  // update() owns both boundaries: updater drafts and returned values are
+  // detached from cached state and from each other, including aborted writes.
+  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, update, version, remove })
 }

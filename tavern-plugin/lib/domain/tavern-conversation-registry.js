@@ -46,12 +46,18 @@ export function createTavernConversationRegistry(options = {}) {
     return normalizeLinks(await store.readLinks())
   }
 
-  async function resolve(sessionId) {
+  async function resolve(sessionId) { return resolveUsing(sessionId, id => store.readChat(id)) }
+  // Same alias/recovery rules, with a detached read-only projection when supported.
+  async function resolveState(sessionId) {
+    return resolveUsing(sessionId, id => typeof store.readChatState === 'function' ? store.readChatState(id) : store.readChat(id))
+  }
+
+  async function resolveUsing(sessionId, readChat) {
     const id = str(sessionId)
     if (id === '') return undefined
     const links = normalizeLinks(await store.readLinks())
     if (typeof links[id] === 'string') {
-      const mapped = await store.readChat(links[id])
+      const mapped = await readChat(links[id])
       if (mapped !== undefined) return mapped
     }
     let found
@@ -59,7 +65,7 @@ export function createTavernConversationRegistry(options = {}) {
       const current = Object.assign({}, normalizeLinks(value))
       let changed = false
       if (typeof current[id] === 'string') {
-        const mapped = await store.readChat(current[id])
+        const mapped = await readChat(current[id])
         if (mapped !== undefined) {
           found = mapped
           return undefined
@@ -74,7 +80,7 @@ export function createTavernConversationRegistry(options = {}) {
       const linkedChatIds = new Set(Object.values(current).filter(value => typeof value === 'string'))
       for (const item of chatRows(index)) {
         if (linkedChatIds.has(item.id)) continue
-        const chat = await store.readChat(item.id)
+        const chat = await readChat(item.id)
         if (chat !== undefined && str(chat.sessionId) === id) {
           current[id] = chat.id
           found = chat
@@ -188,5 +194,5 @@ export function createTavernConversationRegistry(options = {}) {
     return { deleted: true }
   }
 
-  return { links, resolve, publish, sync, list, touch, remove }
+  return { links, resolve, resolveState, publish, sync, list, touch, remove }
 }

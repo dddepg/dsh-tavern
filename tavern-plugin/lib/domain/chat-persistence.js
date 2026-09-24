@@ -167,6 +167,17 @@ export function createChatPersistence(options = {}) {
     return remember(normalize(value))
   }
 
+  // Detached read-only projection; never remember it as a stale-write baseline.
+  async function readSessionState(chatId) {
+    if (typeof records.readSessionState !== 'function') return read(chatId)
+    const value = await records.readSessionState(chatId)
+    return value === undefined ? undefined : normalize(value)
+  }
+
+  // Only adapters explicitly guaranteeing detached updater input AND output can
+  // skip this layer's copies. Journal still clones at its ownership boundaries.
+  function updateValue(value) { return records.detachedUpdate === true ? value : clone(value) }
+
   async function write(input, metadata = {}) {
     if (!input || typeof input !== 'object' || String(input.id || '') === '') throw new Error('不能保存没有 id 的 Tavern Chat')
     const desired = clone(input)
@@ -181,7 +192,7 @@ export function createChatPersistence(options = {}) {
         desired.updatedAt = touchUpdatedAt ? Math.max(Number(desired.updatedAt) || 0, now()) : Math.max(0, Number(desired.updatedAt) || 0)
         return desired
       }
-      const latest = normalize(clone(stored))
+      const latest = normalize(updateValue(stored))
       const latestRevision = Math.max(0, Number(latest[STORAGE_REVISION]) || 0)
       let next
       if (latestRevision === basedOn) {
@@ -201,7 +212,7 @@ export function createChatPersistence(options = {}) {
         : Math.max(Number(latest.updatedAt) || 0, Number(desired.updatedAt) || 0)
       return next
     }, metadata)
-    const normalized = remember(normalize(clone(saved)))
+    const normalized = remember(normalize(updateValue(saved)))
     refreshDraft(input, desired, normalized)
     input[STORAGE_REVISION] = normalized[STORAGE_REVISION]
     input.updatedAt = normalized.updatedAt
@@ -213,7 +224,7 @@ export function createChatPersistence(options = {}) {
     const touchUpdatedAt = metadata.touchUpdatedAt !== false
     const saved = await records.update(chatId, async function (stored) {
       if (stored === undefined) return undefined
-      const latest = normalize(clone(stored))
+      const latest = normalize(updateValue(stored))
       const currentRevision = Math.max(0, Number(latest[STORAGE_REVISION]) || 0)
       const result = await mutation(latest)
       if (result === undefined) return undefined
@@ -222,7 +233,7 @@ export function createChatPersistence(options = {}) {
       next.updatedAt = touchUpdatedAt ? Math.max(Number(next.updatedAt) || 0, now()) : Math.max(0, Number(next.updatedAt) || 0)
       return next
     }, metadata)
-    return saved === undefined ? undefined : remember(normalize(clone(saved)))
+    return saved === undefined ? undefined : remember(normalize(updateValue(saved)))
   }
 
   async function readRevision(chatId, revision) {
@@ -247,6 +258,10 @@ export function createChatPersistence(options = {}) {
   async function readChangedIndices(chatId, revision) {
     return await records.readChangedIndices?.(chatId, revision)
   }
+  async function readViewDelta(chatId, revision) {
+    const selected = await records.readViewDelta?.(chatId, revision)
+    return selected ? { ...selected, chat: normalize(selected.chat) } : undefined
+  }
   // Returns metadata only. Callers cannot accidentally retain another complete history.
   async function patch(chatId, revision, changes, metadata={}) {
     if(!records.patch)return undefined
@@ -260,5 +275,5 @@ export function createChatPersistence(options = {}) {
     await records.remove(chatId)
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, write, update, version, remove })
+  return Object.freeze({ read, readSessionState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
 }

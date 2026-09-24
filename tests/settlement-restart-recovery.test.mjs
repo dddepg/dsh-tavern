@@ -1,3 +1,5 @@
+import { createSettlementJobs } from '../tavern-plugin/lib/domain/settlement-jobs.js'
+import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import { collectMvuHelperContext, createMvuSettlementModule } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
 import { createTavernScriptHostAdapter } from '../tavern-plugin/lib/domain/tavern-script-host-adapter.js'
 import { createTavernScriptDispatch } from '../tavern-plugin/lib/domain/tavern-script-dispatch.js'
@@ -44,7 +46,7 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
   const sandbox = vm.createContext({
     collectMvuHelperContext, normalizeBackgroundTasks, structuredClone, Date, AbortController, console: { log() {}, error() {} },
     str: value => value == null ? '' : String(value),
-    backgroundTasks: tasks, storyTimeline: timeline, settlementJobs: new Map(),
+    backgroundTasks: tasks, storyTimeline: timeline,
     readChat: store.readChat, chatForSession: store.readChat, writeChat: store.writeChat,
     prepareNextWorldBookContext: async chat => chat, readChatCard: async () => ({}),
     view: async chat => chat, settlementTurn: () => 2,
@@ -61,9 +63,10 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
     conversationRegistry: { list: async () => [] }, ctx: { effect() {} },
     mvuSettlement: { settleVariables: async () => ({ receipt: { version: 1, status: 'unchanged', changes: [] } }) }
   })
-  vm.runInContext(section('  function mvuReceiptsOf(', '  function withLegacyPresentationProjection('), sandbox)
+  sandbox.mvuReceiptsOf = createSessionStateView({activity:chat=>tasks.activity(chat),evidence:()=>({})}).receipts
   vm.runInContext(section('  function pendingMvuTarget(', '  async function mvuUpdateRules('), sandbox)
   vm.runInContext(section('  async function runSettlement(', '  const mvuSettlementReconciler'), sandbox)
+  sandbox.settlementJobs = createSettlementJobs({run:(...args)=>sandbox.runSettlement(...args),onSettled:(...args)=>sandbox.onSettlementSettled(...args)})
   vm.runInContext(section('  async function retrySettlement(', '  async function pullBackgroundCycle('), sandbox)
   let onReady
   sandbox.tavernScriptDispatch = { subscribeSettled(fn) { onReady = fn }, status() { return { ready: true } } }
@@ -448,7 +451,8 @@ for (const prepared of [false, true]) test(`进程在${prepared ? '结果保存�
   assert.equal(persisted.messages[1].mvu.delivery.version, 1)
   await run.tasks.recover(persisted)
   assert.equal(run.tasks.activity(run.get()).phase, 'pending')
-  run.sandbox.settlementJobs.clear()
+  run.sandbox.settlementJobs.dispose()
+  run.sandbox.settlementJobs = createSettlementJobs({run:(...args)=>run.sandbox.runSettlement(...args),onSettled:(...args)=>run.sandbox.onSettlementSettled(...args)})
   run.sandbox.mvuSettlement.resumeVariables = async input => { executions++; return resultFor(input) }
   await run.sandbox.queueSettlement('chat')
   assert.equal(run.get().messages[1].variables[0].stat_data.hp, 9)
@@ -586,4 +590,25 @@ test('正式结算入口将当前正文之前的建角 Helper 消息交给 MVU',
   await run.sandbox.queueSettlement('chat')
   assert.deepEqual(received, [setup])
   assert.equal(run.get().settleStatus, 'done')
+})
+
+for (const stage of ['read', 'prepare']) test(`销毁期间结束的 ${stage} 不能再启动后台结算`, async () => {
+  const run = await harness({ beginRunning: false })
+  let release, entered
+  const held = new Promise(resolve => { release = resolve })
+  const reading = new Promise(resolve => { entered = resolve })
+  run.sandbox[stage === 'read' ? 'readChat' : 'prepareNextWorldBookContext'] = async () => {
+    const snapshot = await run.store.readChat()
+    entered(); await held; return snapshot
+  }
+  let begins = 0
+  const begin = run.tasks.begin
+  run.sandbox.backgroundTasks = { ...run.tasks, begin: (...args) => { begins++; return begin(...args) } }
+  const pending = run.sandbox.queueSettlement('chat')
+  await reading
+  run.sandbox.settlementJobs.dispose()
+  release()
+  await pending.catch(error => { assert.equal(error.name, 'AbortError') })
+  assert.equal(begins, 0)
+  run.reconciler.dispose()
 })
