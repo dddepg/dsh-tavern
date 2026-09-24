@@ -399,14 +399,18 @@ export function createReplyHistoryProjector({ maxCacheBytes = 16 * 1024 * 1024, 
         : sourceText
 
       const templateDisplay = message.tavernPluginData?.template_display
-      if (templateDisplay && templateDisplay.source === sourceText && templateDisplay.swipe === (message.swipeId || 0)
+      const validDisplay = templateDisplay && templateDisplay.source === sourceText && templateDisplay.swipe === (message.swipeId || 0)
+      const ordinaryDisplay = validDisplay && typeof templateDisplay.formattingText === 'string'
+      if (validDisplay && !ordinaryDisplay
         && !isDegenerateTemplateDisplay(templateDisplay.html, sourceText, options)) {
         const visible = visibleTemplateDisplay(templateDisplay)
         projections.push({ version: 2, turn, text: visible.html, mode: 'html', parts: Array.isArray(visible.parts) ? structuredClone(visible.parts) : [{ kind: 'html', content: visible.html }], warnings: [] })
         latestSourceBacked = hasSource
         continue
       }
-      const projected = projectCached(sourceText, projectionText, options, signature)
+      const projected = ordinaryDisplay
+        ? projectCached(sourceText, templateDisplay.formattingText, { ...options, regexScripts: [] }, signatureOf({ ...options, regexScripts: [] }))
+        : projectCached(sourceText, projectionText, options, signature)
       const sessionText = str(message.text)
       if (message.bodyEdit || !isNativeMarkdownProjection(projected.displayParts, sessionText) || (Array.isArray(message.swipes) && message.swipes.length > 1)) {
         // Copy only emitted projections; callers must never mutate cached parts.

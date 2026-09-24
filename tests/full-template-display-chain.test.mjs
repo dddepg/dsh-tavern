@@ -115,3 +115,22 @@ test('转换卡开场 initvar 经真实模板渲染后不进入正文，源初�
  assert.deepEqual(result.first.chat[0].template_display,saved)
  assert.deepEqual(display(result.second,regexScripts).projections,view.projections)
 })
+
+ test('普通代码块与显示正则不接管整段正文，显示 EJS 仍执行', async()=>{
+  const settings={preload_worldinfo_enabled:false,render_enabled:true,raw_message_evaluation_enabled:false}
+  const plain='正文\n\n```js\nconst n = 1\n```'
+  const a=await runtime.lifecycle({settings,charName:'普通格式',transcript:[{role:'assistant',content:plain}]})
+  assert.equal(a.first.chat[0].template_display,undefined)
+  assert.deepEqual(display(a.first,[]).projections,[])
+  const rule={enabled:true,placement:[2],markdownOnly:true,findRegex:'/标记/g',replaceString:'**替换结果**'}
+  const b=await runtime.lifecycle({settings,charName:'普通正则',regexScripts:[rule],transcript:[{role:'assistant',content:'正文 标记'}]})
+  const projection=display(b.first,[rule]).projections[0]
+  assert.equal(projection.mode,'markdown')
+  assert.equal(projection.text,'正文 **替换结果**')
+  const restored=await runtime.lifecycle({settings,charName:'普通正则',regexScripts:[{...rule,replaceString:'错误的新值'}],transcript:transcript(b.first)})
+  assert.equal(display(restored.first,[rule]).projections[0].text,'正文 **替换结果**')
+  const c=await runtime.lifecycle({settings,charName:'真正模板',transcript:[{role:'assistant',content:'结果：<%= 1+2 %>'}]})
+  assert.match(c.first.chat[0].template_display.html,/3/)
+  assert.doesNotMatch(c.first.chat[0].template_display.html,/<%|&lt;%/)
+  assert.equal(display(c.first,[]).projections[0].mode,'html')
+ })
