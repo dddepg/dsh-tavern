@@ -470,6 +470,8 @@ export function createChatJournalStore(options = {}) {
       const current = currentState == null ? undefined : currentState.chat
       const produced = await updater(jsonClone(current))
       if (produced === undefined) return jsonClone(current)
+      // Normalize once before persistence. The already-JSON result can be
+      // detached with structuredClone without another full JSON string.
       const next = jsonClone(produced)
       if (next === undefined || next === null || typeof next !== 'object' || Array.isArray(next)) throw new Error('Chat Journal 只能保存 JSON object')
       if (currentState == null) {
@@ -479,7 +481,7 @@ export function createChatJournalStore(options = {}) {
         rememberState(chatId, await version(chatId), { chat: next, revision, legacy: false,
           snapshot: { path: snapshotPath, name: path.basename(snapshotPath), revision },
           open: null, openFrameCount: 0, openValidBytes: 0, openInvalidLine: 0 })
-        return jsonClone(next)
+        return structuredClone(next)
       }
       const baseRevision = currentState.revision
       const revision = revisionOf(next)
@@ -512,7 +514,7 @@ export function createChatJournalStore(options = {}) {
         snapshot: rotated || currentState.snapshot, open: rotated ? null : open,
         openFrameCount: rotated ? 0 : currentState.openFrameCount + 1, openInvalidLine: 0 },
         rememberChanges(recentChanges, revision, changes))
-      return jsonClone(next)
+      return structuredClone(next)
     })
   }
 

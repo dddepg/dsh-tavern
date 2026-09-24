@@ -71,8 +71,11 @@ try {
   await writeFile(process.argv[2],JSON.stringify({node:process.version,platform:process.platform,bytes,messages:453,
     scope:'Warm synthetic cache/status RPC functions, volatile projection, reads and writes. GC events overlap wall time; RSS is endpoint, not peak.',results},null,2)+'\n')
   if(process.argv.includes('--assert-optimized')) {
-    for(const name of ['getSession cache hit x20','sessionActivity x20','no-op update','metadata update']) {
+    for(const name of ['getSession cache hit x20','sessionActivity x20','no-op update']) {
       assert.equal(results.find(row=>row.name===name).fullChatStructuredClones,0,name)
     }
+    const write = results.find(row=>row.name==='metadata update')
+    assert.equal(write.fullChatStructuredClones,1,'detached normalized result')
+    assert.equal(write.fullChatJsonParses,2,'only draft and normalization JSON copies')
   }
 } finally {observer.disconnect();JSON.parse=originalParse;globalThis.structuredClone=originalClone;await rm(root,{recursive:true,force:true})}

@@ -317,3 +317,28 @@ test('压缩快照膨胀超过上限时明确失败，保留原文件', async t 
   await assert.rejects(store.read('chat'), { code: 'ERR_BUFFER_TOO_LARGE' })
   assert.deepEqual(await readFile(file), bytes)
 })
+
+test('normalized update returns stay detached from drafts and durable state', async t => {
+  const root=await temporary()
+  t.after(()=>rm(root,{recursive:true,force:true}))
+  const store=createChatJournalStore({dataRoot:root})
+  let draft
+  const created=await store.update('normalized',()=>({id:'normalized',_storageRevision:1,
+    values:{missing:undefined,nan:NaN,date:new Date('2020-01-01T00:00:00Z')},rows:[undefined,Infinity]}))
+  assert.deepEqual(created.values,{nan:null,date:'2020-01-01T00:00:00.000Z'})
+  assert.deepEqual(created.rows,[null,null])
+  created.values.nan=100
+  const saved=await store.update('normalized',current=>{
+    draft=current;current._storageRevision++
+    current.values.extra={toJSON(){return {normalized:true}}}
+    return current
+  })
+  assert.deepEqual(saved.values.extra,{normalized:true})
+  assert.equal(saved.values.nan,null)
+  draft.values.nan=200
+  saved.values.extra.normalized=false
+  const expected=await store.read('normalized')
+  assert.equal(expected.values.nan,null)
+  assert.deepEqual(expected.values.extra,{normalized:true})
+  assert.deepEqual(await createChatJournalStore({dataRoot:root}).read('normalized'),expected)
+})
