@@ -404,7 +404,7 @@ export function createTavernScriptHostAdapter(options = {}) {
   }
 
   async function readFullPromptTemplateState(sessionId, cursor) {
-    const selected=await options.resolveChatSlice?.(sessionId,[])
+    const selected=await (options.resolveChatMetadataSlice?.(sessionId) ?? options.resolveChatSlice?.(sessionId,[]))
     const reuse=selected?.denseMessages && syncTemplateState.matches(cursor,selected.chat)
     const reader = syncTemplateState.reader(cursor)
     let changed = !reuse && selected?.denseMessages && reader?.chatId === selected.chat.id

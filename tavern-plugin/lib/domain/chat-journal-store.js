@@ -373,16 +373,33 @@ export function createChatJournalStore(options = {}) {
     const state = await cachedState(chatId)
     return state ? projectDisplayRuntimeState(state.chat, turn) : undefined
   }
-  function slice(chat, indices) {
-    const {messages:rawMessages,...head}=chat
+  function slice(chat, indices, fields) {
+    const {messages:rawMessages,...allHead}=chat
     const messages=Array.isArray(rawMessages)?rawMessages:[]
     if(indices.some(i=>!Number.isSafeInteger(i)||i<0||i>=messages.length))throw new Error('消息楼层不存在')
+    let head=allHead
+    if (Array.isArray(fields)) {
+      head = {}
+      for (const field of fields) {
+        const parts = String(field).split('.').filter(Boolean)
+        if (!parts.length || parts[0] === 'messages' || parts.some(part => ['__proto__', 'prototype', 'constructor'].includes(part))) continue
+        let source = chat
+        for (const part of parts) source = source && Object.hasOwn(source, part) ? source[part] : undefined
+        if (source === undefined) continue
+        let target = head
+        for (const part of parts.slice(0, -1)) {
+          if (!Object.hasOwn(target, part) || !target[part] || typeof target[part] !== 'object') target[part] = {}
+          target = target[part]
+        }
+        target[parts.at(-1)] = source
+      }
+    }
     return {chat:structuredClone({...head,messages:indices.map(i=>messages[i])}),messageCount:messages.length,denseMessages:Array.isArray(rawMessages) && messages.every(m=>m && typeof m==='object' && !Array.isArray(m))}
   }
   /** Detached metadata and selected native rows, never an editable full-chat snapshot. */
-  async function readSlice(chatId, indices=[]) {
+  async function readSlice(chatId, indices=[], fields) {
     const state=await cachedState(chatId)
-    return state && !indices.some(i=>i>=(state.chat.messages?.length||0)) ? slice(state.chat,indices) : undefined
+    return state && !indices.some(i=>i>=(state.chat.messages?.length||0)) ? slice(state.chat,indices,fields) : undefined
   }
   function rememberChanges(previous, revision, changes) {
     const indices = new Set()

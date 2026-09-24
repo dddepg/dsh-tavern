@@ -260,9 +260,9 @@ export function createChatPersistence(options = {}) {
     const chat = await read(chatId)
     return chat ? projectDisplayRuntimeState(chat, turn) : undefined
   }
-  async function readSlice(chatId, indices=[]) {
+  async function readSlice(chatId, indices=[], fields) {
     if(!records.readSlice)return undefined
-    const selected=await records.readSlice(chatId,indices)
+    const selected=await records.readSlice(chatId,indices,fields)
     return selected ? {...selected,chat:normalize(selected.chat)} : undefined
   }
   async function readChangedSlice(chatId, revision) {

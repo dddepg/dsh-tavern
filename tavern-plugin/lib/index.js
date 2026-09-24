@@ -1254,6 +1254,17 @@ export async function apply(ctx) {
       if(!selected || selected.chat.sessionId!==sessionId || selected.chat.backgroundConfigVersion!==1 || selected.chat.conversationFeaturesVersion!==1)return undefined
       return selected
     },
+    resolveChatMetadataSlice: async sessionId => {
+      const chatId=(await readSessionMap())[sessionId]
+      if(!chatId)return undefined
+      const selected=await chatPersistence.readSlice(chatId,[],[
+        'id','sessionId','_storageRevision','tavernHelperLifecycleRevision',
+        'backgroundConfigVersion','conversationFeaturesVersion','mode','cardPath',
+        'macroState.userName','settleStatus'
+      ])
+      if(!selected || selected.chat.sessionId!==sessionId || selected.chat.backgroundConfigVersion!==1 || selected.chat.conversationFeaturesVersion!==1)return undefined
+      return selected
+    },
     resolveChangedChatSlice: async (sessionId,revision) => {
       const chatId=(await readSessionMap())[sessionId]
       if(!chatId)return undefined
