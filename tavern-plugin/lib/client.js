@@ -12168,9 +12168,9 @@ window.__ModuleLoader__.load({
 				),
 					h("div", { className: "dsh-tavern-status-body" },
 					view.requestMode !== "sillytavern" && view.cardUpdate?.available ? h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡与世界书已有更新" : "世界书已有更新") : "人物卡已有修改"),
-						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用到当前游戏，下一轮生效，无需重开。保留剧情和变量；更新可能使缓存失效，增加 Token 费用和等待时间。"),
-						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用…" : "应用到当前游戏")
+						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : "人物卡信息已变化"),
+						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用变化后，当前游戏将使用最新的人物卡信息和世界书，下一轮生效，无需重新开局。已有剧情和变量保留。更新可能使缓存失效，增加 Token 费用和等待时间。"),
+						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用变化…" : "应用变化到当前游戏")
 					) : null,
 					h(TavernCardAppDock, { sessionId: props.sessionId }),
 					view.settleStatus === "error" ? h("div", { className: "dsh-card-error" },
