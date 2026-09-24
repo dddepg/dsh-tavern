@@ -104,3 +104,30 @@ test('任务已持久化但全部就绪通知丢失时仍自动接续', async ()
   assert.equal(resumed, 1)
   reconciler.dispose()
 })
+
+test('读取旧状态期间到达的持久待办唤醒不会被吞掉', async () => {
+  const readStarted = deferred(), releaseRead = deferred()
+  const scheduled = []
+  let pending = false, reads = 0, resumes = 0
+  const reconciler = createMvuSettlementReconciler({
+    list: async () => [],
+    resolve: async () => {
+      const snapshot = { id: 'c', pending }
+      if (++reads === 1) { readStarted.resolve(); await releaseRead.promise }
+      return snapshot
+    },
+    shouldResume: chat => chat.pending, isReady: () => true,
+    resume: async () => { resumes++; pending = false },
+    schedule: fn => { scheduled.push(fn); return scheduled.length }, cancel() {}
+  })
+  const first = reconciler.wake('s')
+  await readStarted.promise
+  pending = true
+  const second = reconciler.wake('s')
+  releaseRead.resolve()
+  await Promise.all([first, second])
+  assert.equal(scheduled.length, 1, 'new wake must recheck after the stale in-flight read')
+  await scheduled.shift()()
+  assert.equal(resumes, 1)
+  reconciler.dispose()
+})

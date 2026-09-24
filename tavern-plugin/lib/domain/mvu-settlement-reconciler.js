@@ -19,6 +19,7 @@ export function createMvuSettlementReconciler(options = {}) {
   const retryDelayMs = Math.max(10, Number(options.retryDelayMs) || 1000)
   const inFlight = new Map()
   const retries = new Map()
+  const wakeAgain = new Set()
   let disposed = false
 
   function retry(key, callback, error) {
@@ -54,8 +55,17 @@ export function createMvuSettlementReconciler(options = {}) {
   function wake(sessionId) {
     const id = String(sessionId || '')
     if (disposed || id === '') return Promise.resolve(false)
-    if (inFlight.has(id)) return inFlight.get(id)
-    const running = attempt(id).finally(function () { inFlight.delete(id) })
+    if (inFlight.has(id)) {
+      wakeAgain.add(id)
+      return inFlight.get(id)
+    }
+    const running = attempt(id).finally(function () {
+      inFlight.delete(id)
+      // The running attempt may have read before a pending commit or ready
+      // transition. Coalesce signals, but never lose the obligation to re-read.
+      // Use the existing delay so completion signals cannot cause a hot loop.
+      if (wakeAgain.delete(id)) retry(id, () => wake(id))
+    })
     inFlight.set(id, running)
     return running
   }
@@ -74,6 +84,7 @@ export function createMvuSettlementReconciler(options = {}) {
     disposed = true
     for (const timer of retries.values()) cancel(timer)
     retries.clear()
+    wakeAgain.clear()
   }
 
   return Object.freeze({ wake, scan, dispose })
