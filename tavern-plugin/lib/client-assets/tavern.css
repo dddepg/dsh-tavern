@@ -1244,15 +1244,6 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-preset-regex-head .dsh-tavern-prompt-title span { margin-top: 1px; }
 .dsh-tavern-prompt-row:has(> .dsh-tavern-preset-regex-head) { margin-bottom: 4px; }
 
-/* dsh-better-sidebar 0.17.1 centers its resize handles across the panel edge.
-   Their transparent hit areas steal the conversation scrollbar's pointer events.
-   Keep the full handles inside the sidebar, including the bottom-panel corner.
-   Scope to the panel's direct children; CSS-module hashes may change on rebuild. */
-[data-dsh-panel] > [class*="_panelResize"],
-[data-dsh-panel] > [class*="_cornerHandle"] {
-  left: 0;
-}
-
 /* Full-width request inspection has no chat-column resize target. */
 [data-phase="active"]:has(.dsh-tavern-full-context) [data-width-handle] {
   display: none;

@@ -268,7 +268,7 @@ test('Tavern no longer bundles dsh-codex-connect and removes it from existing pr
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {
-  assert.equal(rootManifest.dependencies['dsh-better-sidebar'], '0.17.1')
+  assert.equal(rootManifest.dependencies['dsh-better-sidebar'], '0.19.1')
   assert.ok(rootManifest.dsh.profile.bundles.includes('dsh-better-sidebar'))
   assert.match(profileConfigurationSource, /managedDependencies/)
 })
@@ -306,7 +306,7 @@ test('Tavern sidebar defaults enable resource tabs, Files and text previews', ()
 
   assert.deepEqual(settings['unrelated-plugin'], { enabled: true })
   assert.equal(settings['dsh-better-sidebar'].openByDefault, false)
-  assert.equal(settings['dsh-better-sidebar'].defaultWidthPercent, 30)
+  assert.equal(settings['dsh-better-sidebar'].defaultWidthPercent, undefined)
   assert.deepEqual(settings['dsh-better-sidebar'].tabsEnabled, {
     editor: true,
     git: false,

@@ -65,3 +65,7 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 ## 压缩专项
 
 运行 `pnpm test:e2e:compaction`，执行 32K 窗口下的五组前后台压缩验收。场景、模型边界与未覆盖范围见 [压缩专项 E2E](COMPACTION.md)。
+
+## better-sidebar 升级验收
+
+`node tests/e2e/gameplay.mjs --sidebar` 在完整游玩验收后，继续检查原生侧栏重复打开不增加标签、完整卡片调试入口预填 `/debug-card` 和游玩引用、从卡片工作台返回原游戏并刷新。可用 `TAVERN_E2E_SIDEBAR=/绝对路径/已解包插件` 在隔离环境验证待升级版本，不修改正在使用的 Profile。输出增加 `sidebar-card-debug.png` 与 `sidebar-return-to-play.png`；模型仍为固定测试模型。

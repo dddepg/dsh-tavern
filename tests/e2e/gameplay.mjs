@@ -1,3 +1,4 @@
+import { sidebarUpgrade } from './sidebar-upgrade.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
 import { encodeMigratedSessionLog, parseSessionLog } from '../../tavern-plugin/lib/domain/legacy-session-migration.js'
 import { compactionChecks } from './compaction.mjs'
@@ -36,8 +37,11 @@ async function step(name, action) {
 }
 async function savedChat() {
   const ids = await readdir(join(data, 'chats'))
-  assert.equal(ids.length, 1, '本次只应创建一局游戏')
-  return createChatJournalStore({ dataRoot: data }).read(ids[0])
+  const store = createChatJournalStore({ dataRoot: data })
+  const chats = await Promise.all(ids.map(id => store.read(id)))
+  const games = chats.filter(chat => chat.mode !== 'card')
+  assert.equal(games.length, 1, '本次只应创建一局游戏')
+  return games[0]
 }
 function inspectSaved(chat) {
   const replies = chat.messages.filter(message => message.role === 'assistant' && !message.greeting)
@@ -87,7 +91,7 @@ try {
     })) await symlink(target, join(profile, 'node_modules', name))
     // This package resolves DSH imports relative to its directory, so give it
     // the isolated profile's runtime scope rather than the development scope.
-    await cp(join(source, 'node_modules/dsh-better-sidebar'), join(profile, 'node_modules/dsh-better-sidebar'), { recursive: true, dereference: true })
+    await cp(process.env.TAVERN_E2E_SIDEBAR || join(source, 'node_modules/dsh-better-sidebar'), join(profile, 'node_modules/dsh-better-sidebar'), { recursive: true, dereference: true })
     await symlink(join(modules, '@deepseek-ai'), join(profile, 'node_modules/@deepseek-ai'))
     for (const name of await readdir(join(source, 'node_modules'))) {
       if (name.startsWith('.') || ['@deepseek-ai', 'dsh-tavern-plugin', 'dsh-tavern-remote', 'dsh-web-mobile', 'dsh-better-sidebar'].includes(name)) continue
@@ -241,7 +245,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else {
+  } else if (!process.argv.includes('--sidebar-only')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
@@ -299,6 +303,7 @@ try {
     await playControls({ page, step, savedChat, inspectRound, output, report })
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   }
+  if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
   delete report.currentStep
