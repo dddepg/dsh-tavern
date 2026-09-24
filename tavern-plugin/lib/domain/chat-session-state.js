@@ -158,3 +158,24 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
   }
   return Object.freeze({ status, receipts: mvuReceiptsOf, rollback: rollbackViewFields, volatile: volatileSessionViewFields })
 }
+
+// Read-only capture input. Locate legacy turns with the same inferred-turn rule
+// as assistantMessageAtTurn, but detach only the selected diagnostic payload.
+export function projectDisplayRuntimeState(chat, requestedTurn) {
+  let inferred = 1, messageIndex = -1, latestTurn = 1
+  const messages = Array.isArray(chat.messages) ? chat.messages : []
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index]
+    if (message?.role === 'user') inferred++
+    if (message?.role !== 'assistant') continue
+    latestTurn = Math.max(latestTurn, Math.max(1, Number(message.turn) || 1))
+    if (messageIndex < 0 && Math.max(1, Number(message.turn) || (message.greeting === true ? 1 : inferred)) === requestedTurn) messageIndex = index
+  }
+  return structuredClone({
+    id: chat.id, sessionId: chat.sessionId, mode: chat.mode, _storageRevision: chat._storageRevision,
+    backgroundConfigVersion: chat.backgroundConfigVersion, conversationFeaturesVersion: chat.conversationFeaturesVersion,
+    updatedAt: chat.updatedAt, messageIndex, latestTurn,
+    displayRuntime: messageIndex < 0 ? undefined : messages[messageIndex].displayRuntime,
+    rollbackUndo: chat.rollbackUndo ? { ready: chat.rollbackUndo.ready, storageRevision: chat.rollbackUndo.storageRevision } : undefined
+  })
+}

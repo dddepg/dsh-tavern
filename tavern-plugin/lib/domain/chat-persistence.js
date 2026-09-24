@@ -1,3 +1,4 @@
+import { projectDisplayRuntimeState } from './chat-session-state.js'
 import { isDeepStrictEqual } from 'node:util'
 
 const STORAGE_REVISION = '_storageRevision'
@@ -246,6 +247,11 @@ export function createChatPersistence(options = {}) {
     return typeof records.version === 'function' ? await records.version(chatId) : ''
   }
 
+  async function readDisplayRuntimeState(chatId, turn) {
+    if (records.readDisplayRuntimeState) return records.readDisplayRuntimeState(chatId, turn)
+    const chat = await read(chatId)
+    return chat ? projectDisplayRuntimeState(chat, turn) : undefined
+  }
   async function readSlice(chatId, indices=[]) {
     if(!records.readSlice)return undefined
     const selected=await records.readSlice(chatId,indices)
@@ -276,5 +282,5 @@ export function createChatPersistence(options = {}) {
     await records.remove(chatId)
   }
 
-  return Object.freeze({ read, readSessionState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
+  return Object.freeze({ read, readSessionState, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
 }

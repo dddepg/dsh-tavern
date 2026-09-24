@@ -1,6 +1,6 @@
 import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
-import { createSessionStateView, settlementTurn, pendingMvuSettlementState } from './domain/chat-session-state.js'
+import { createSessionStateView, settlementTurn, pendingMvuSettlementState, projectDisplayRuntimeState } from './domain/chat-session-state.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
@@ -1195,19 +1195,22 @@ export async function apply(ctx) {
   }
 
   async function captureDisplayRuntime(sessionId, requestedTurn, partIndex, runtime) {
-    const chat = await chatForSession(str(sessionId))
-    if (chat === undefined || groupOfMode(chat.mode) !== 'play') throw new Error('当前 Session 没有绑定游玩对话')
-    let result
-    await updateChat(chat.id, currentChat => {
-      const chat = currentChat
-      const turn = Math.max(1, Number(requestedTurn) || 0)
-      const message = assistantMessageAtTurn(chat, turn)
-      if (message === null) throw new Error('游玩记录中不存在第 ' + turn + ' 轮回复')
+    const turn = Math.max(1, Number(requestedTurn) || 0)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const chatId = (await readSessionMap())[str(sessionId)]
+      let chat = chatId ? await chatPersistence.readDisplayRuntimeState(chatId, turn) : undefined
+      // Preserve registry recovery, aliases and one-time legacy adoption.
+      if (!chat || chat.backgroundConfigVersion !== 1 || chat.conversationFeaturesVersion !== 1) {
+        const full = await chatForSession(str(sessionId))
+        chat = full ? projectDisplayRuntimeState(full, turn) : undefined
+      }
+      if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('当前 Session 没有绑定游玩对话')
+      if (chat.messageIndex < 0) throw new Error('游玩记录中不存在第 ' + turn + ' 轮回复')
       const index = Math.max(0, Math.min(100, Number(partIndex) || 0))
       let capture = sanitizeDisplayRuntime(runtime)
-      const existingRuntime = message.displayRuntime && typeof message.displayRuntime === 'object' ? message.displayRuntime : null
+      const existingRuntime = chat.displayRuntime && typeof chat.displayRuntime === 'object' ? chat.displayRuntime : null
       const sourceActivityAt = Math.max(0, Number(existingRuntime && existingRuntime.sourceActivityAt) || Number(chat.updatedAt) || 0)
-      const latestTurn = Math.max.apply(null, (chat.messages || []).filter(function (item) { return item && item.role === 'assistant' }).map(function (item) { return Math.max(1, Number(item.turn) || 1) }).concat([1]))
+      const latestTurn = chat.latestTurn
       capture.captureKind = turn === latestTurn && Date.now() - sourceActivityAt < 300000 ? 'live' : 'replay'
       const current = existingRuntime || { frames: [] }
       const currentFrames = Array.isArray(current.frames) ? current.frames : []
@@ -1220,17 +1223,19 @@ export async function apply(ctx) {
           mvuViewUsed: true
         })
       }
-      if (existingFrame && sameDisplayRuntimeCapture(existingFrame, capture)) { result = { captured: false, turn, partIndex: index, captureKind: capture.captureKind }; return undefined }
+      if (existingFrame && sameDisplayRuntimeCapture(existingFrame, capture)) return { captured: false, turn, partIndex: index, captureKind: capture.captureKind }
       const frames = currentFrames.filter(function (item) { return Number(item && item.partIndex) !== index || str(item.panelId) !== capture.panelId })
       frames.push(Object.assign({ partIndex: index }, capture))
-      message.displayRuntime = { version: 1, sourceActivityAt, frames: frames.sort(function (a, b) { return a.partIndex - b.partIndex }) }
-      // Diagnostic captures must not expire an otherwise valid undo point.
-      // Do not revive one invalidated by an earlier gameplay write.
-      if (chat.rollbackUndo?.ready && chat.rollbackUndo.storageRevision === chat._storageRevision) chat.rollbackUndo.storageRevision = chat._storageRevision + 1
-      result = { captured: true, turn, partIndex: index, captureKind: capture.captureKind }
-      return chat
-    }, { source: 'display.capture', touchUpdatedAt: false })
-    return result
+      const changes = [{ op: 'set', path: ['messages', chat.messageIndex, 'displayRuntime'],
+        value: { version: 1, sourceActivityAt, frames: frames.sort(function (a, b) { return a.partIndex - b.partIndex }) } }]
+      // Diagnostic captures preserve a valid undo point, never revive a stale one.
+      if (chat.rollbackUndo?.ready && chat.rollbackUndo.storageRevision === chat._storageRevision) {
+        changes.push({ op: 'set', path: ['rollbackUndo', 'storageRevision'], value: chat._storageRevision + 1 })
+      }
+      const saved = await patchChat(chat.id, chat._storageRevision, changes, { source: 'display.capture', touchUpdatedAt: false })
+      if (saved) return { captured: true, turn, partIndex: index, captureKind: capture.captureKind }
+    }
+    throw new Error('状态栏诊断保存时对话持续变化，请稍后重试')
   }
   const tavernScriptHostAdapter = createTavernScriptHostAdapter({
     recordResourceSave: (sessionId, summary) => apiDiagnostics.recordResourceSave(sessionId, summary),
