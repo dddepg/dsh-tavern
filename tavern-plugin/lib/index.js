@@ -44,7 +44,7 @@ import { createPerformanceDiagnostics } from './domain/performance-diagnostics.j
 import { createBackgroundSuppressionReader } from './domain/background-surface.js'
 import { ensureCardWorkspaceMessage } from './domain/card-workspace-message.js'
 import { createPromptTemplateGlobalVariables } from './domain/prompt-template-global-variables.js'
-import { FULL_PROMPT_TEMPLATE_ASSET_PREFIX, readFullPromptTemplateAsset, fullPromptTemplateRuntimeInfo } from './domain/full-prompt-template-assets.js'
+import { FULL_PROMPT_TEMPLATE_ASSET_PREFIX, readFullPromptTemplateAsset } from './domain/full-prompt-template-assets.js'
 import { createTavernApiDiagnostics } from './domain/tavern-api-diagnostics.js'
 import { generateHelperRaw } from './domain/helper-generation.js'
 import { createBodyEditor, synchronizeBodyEdits } from './domain/body-editor.js'
@@ -3337,7 +3337,6 @@ export async function apply(ctx) {
         }, { source: 'card-context.apply-update' })
         return { view: await view(saved, card) }
       }
-      case 'getEjsEditorInfo': return await fullPromptTemplateRuntimeInfo()
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': return sessionViews.response(args || {})
       case 'hydrateTavernHelperMessages': {

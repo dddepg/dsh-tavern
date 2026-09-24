@@ -1301,13 +1301,10 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-ejs-editor { box-sizing:border-box; width:min(1100px,calc(100vw - 32px)); height:min(800px,90vh); padding:0; border:1px solid var(--dsw-alias-border-l2); border-radius:14px; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary); box-shadow:0 18px 54px #0005; }
 .dsh-ejs-editor[open] { display:flex; flex-direction:column; }
 .dsh-ejs-editor::backdrop { background:#0007; }
-.dsh-ejs-editor-head,.dsh-ejs-editor-footer { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; }
+.dsh-ejs-editor-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; }
 .dsh-ejs-editor-head { border-bottom:1px solid var(--dsw-alias-border-l2); }
 .dsh-ejs-editor h2 { margin:0; font-size:17px; }
 .dsh-ejs-editor p { margin:5px 0 0; color:var(--dsw-alias-label-secondary); font-size:12px; }
-.dsh-ejs-editor iframe { flex:1; width:100%; min-height:0; border:0; }
-.dsh-ejs-editor-footer { border-top:1px solid var(--dsw-alias-border-l2); font-size:12px; }
-.dsh-ejs-editor-footer .dsh-tavern-btn { flex-shrink:0; }
 
 .dsh-template-panel-body { flex:1; min-height:0; overflow:auto; padding:20px; }
 .dsh-template-section + .dsh-template-section { margin-top:24px; padding-top:20px; border-top:1px solid var(--dsw-alias-border-l2); }
