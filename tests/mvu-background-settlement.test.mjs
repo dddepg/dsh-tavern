@@ -420,3 +420,41 @@ test('本轮 Helper 建角要求交给结算，后续回合不重放初始化', 
   assert.equal(next.system, request.system, '稳定 system 前缀不随建角上下文变化')
   assert.deepEqual(collectMvuHelperContext([{role:'user',text:setup},{role:'assistant',text:'正文'}],1),[])
 })
+
+test('JSON wire values reach runtime decoded; malformed submissions never dispatch', async () => {
+  const variables = { stat_data: { 金币: 1000000, 装备: {} } }
+  const operations = [
+    { op: 'replace', path: '/stat_data/金币', valueJson: '999995' },
+    { op: 'add', path: '/stat_data/装备/长剑', valueJson: '{"名称":"长剑","等级":1}' }
+  ]
+  let dispatched = 0
+  const module = createMvuSettlementModule({
+    model: { async run(request) {
+      await request.onToolCall({ name: 'posture_submit', arguments: { posture: '站立' } })
+      const rejected = JSON.parse(await request.onToolCall({ name: 'mvu_submit_update', arguments: {
+        operations: [{ ...operations[0], valueJson: false }]
+      } }))
+      assert.equal(rejected.ok, false)
+      assert.equal(rejected.rolledBack, true)
+      assert.equal(dispatched, 0)
+      const accepted = JSON.parse(await request.onToolCall({ name: 'mvu_submit_update', arguments: { operations } }))
+      assert.equal(accepted.ok, true)
+      return {}
+    } },
+    runtime: { async settleMvuUpdate(request) {
+      dispatched++
+      const patch = JSON.parse(request.command.match(/<JSONPatch>\s*([\s\S]*?)\s*<\/JSONPatch>/)[1])
+      assert.deepEqual(patch, [
+        { op: 'replace', path: '/金币', value: 999995 },
+        { op: 'add', path: '/装备/长剑', value: { 名称: '长剑', 等级: 1 } }
+      ])
+      return { context: { messages: [{ variables: { stat_data: { 金币: 999995, 装备: { 长剑: { 名称: '长剑', 等级: 1 } } } } }] } }
+    } }
+  })
+  const result = await module.settleVariables({ operationId: 'json-wire', chatId: 'c', branchId: 'b', basedOnRevision: 1,
+    sessionId: 's', messageId: 0, swipeId: 0, storyText: '支付五枚金币，获得长剑。', currentVariables: variables })
+  assert.equal(dispatched, 1)
+  assert.equal(result.receipt.status, 'updated')
+  assert.equal(result.variables.stat_data.金币, 999995)
+  assert.equal(variables.stat_data.金币, 1000000)
+})
