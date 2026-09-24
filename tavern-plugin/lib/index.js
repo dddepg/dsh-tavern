@@ -2253,7 +2253,7 @@ export async function apply(ctx) {
       return []
     }
   }
-  async function prepareNextWorldBookContext(snapshot) {
+  async function prepareNextWorldBookContext(snapshot, signal) {
     const turn = settlementTurn(snapshot)
     const inspected = storyTimeline.inspect({ chat: snapshot })
     if (snapshot.preparedWorldBook && Number(snapshot.preparedWorldBook.revision) === Number(inspected.revision)) return snapshot
@@ -2289,6 +2289,7 @@ export async function apply(ctx) {
     }
     latest.worldBookError = error
     latest.lastWorldBookRecall = Object.assign({}, latest.preparedWorldBook)
+    signal?.throwIfAborted()
     await writeChat(latest, { source: 'worldbook.projection' })
     return latest
   }
@@ -2296,15 +2297,19 @@ export async function apply(ctx) {
     while (true) {
       signal?.throwIfAborted()
       let snapshot = await readChat(chatId)
+      signal?.throwIfAborted()
       if (snapshot === undefined) return
-      snapshot = await prepareNextWorldBookContext(snapshot)
+      snapshot = await prepareNextWorldBookContext(snapshot, signal)
+      signal?.throwIfAborted()
       if (snapshot === null) return
       const taskRun = await backgroundTasks.begin(snapshot, 'settlement')
       snapshot = taskRun.chat
       let backgroundSessionId = str(taskRun.participantRequest.sessionId)
       let backgroundBoundary = null
       try {
+        signal?.throwIfAborted()
         const card = await readChatCard(snapshot)
+        signal?.throwIfAborted()
         const variableRetry = snapshot.messages?.some(message => message.mvu?.pending && message.mvu?.variableRetry === true)
         const backgroundTasksSettings = normalizeBackgroundTasks(variableRetry ? { variables: true, posture: false, characterDesign: false } : snapshot.backgroundTasks)
         const mvuTarget = snapshot.mvu && snapshot.mvu.enabled === true && snapshot.mvu.owner === 'official'

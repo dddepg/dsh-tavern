@@ -591,3 +591,24 @@ test('正式结算入口将当前正文之前的建角 Helper 消息交给 MVU',
   assert.deepEqual(received, [setup])
   assert.equal(run.get().settleStatus, 'done')
 })
+
+for (const stage of ['read', 'prepare']) test(`销毁期间结束的 ${stage} 不能再启动后台结算`, async () => {
+  const run = await harness({ beginRunning: false })
+  let release, entered
+  const held = new Promise(resolve => { release = resolve })
+  const reading = new Promise(resolve => { entered = resolve })
+  run.sandbox[stage === 'read' ? 'readChat' : 'prepareNextWorldBookContext'] = async () => {
+    const snapshot = await run.store.readChat()
+    entered(); await held; return snapshot
+  }
+  let begins = 0
+  const begin = run.tasks.begin
+  run.sandbox.backgroundTasks = { ...run.tasks, begin: (...args) => { begins++; return begin(...args) } }
+  const pending = run.sandbox.queueSettlement('chat')
+  await reading
+  run.sandbox.settlementJobs.dispose()
+  release()
+  await pending.catch(error => { assert.equal(error.name, 'AbortError') })
+  assert.equal(begins, 0)
+  run.reconciler.dispose()
+})
