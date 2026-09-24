@@ -439,6 +439,22 @@ export function createChatJournalStore(options = {}) {
       // Check the exact revision and transaction guard under the same lock.
       if(changes.length===0){metadata.assertCurrent?.();return slice(state.chat,[]).chat}
       const paths=layout(chatId)
+      // Cache and disk must contain the same JSON. Canonicalize only changed
+      // payloads, never copy the complete chat on this fast path.
+      const normalized = []
+      for (const change of changes) {
+        if (change.op === 'set' && change.value === undefined) {
+          if (!change.path.length) throw new Error('Journal root cannot be undefined')
+          const current = applyJsonChangesShared(state.chat, normalized)
+          let parent = current
+          for (const key of change.path.slice(0,-1)) parent = parent?.[key]
+          if (!parent || typeof parent !== 'object') throw new Error('Missing mutation parent')
+          const key = change.path.at(-1)
+          if (Array.isArray(parent)) normalized.push({...change,value:null})
+          else if (Object.hasOwn(parent,key)) normalized.push({op:'delete',path:change.path})
+        } else normalized.push(jsonClone(change))
+      }
+      changes = normalized
       const next=applyJsonChangesShared(state.chat,changes)
       if(next.id!==chatId || revisionOf(next)!==expectedRevision+1)throw new Error('Invalid journal patch revision')
       if(state.legacy)await migrateLegacy(paths,state.chat)
