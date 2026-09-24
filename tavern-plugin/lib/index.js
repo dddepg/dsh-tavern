@@ -1931,7 +1931,7 @@ export async function apply(ctx) {
   }
   let tavernCompaction = null
   const backgroundTasks = createBackgroundTaskCoordinator({
-    store: { readChat, writeChat, updateChat, patchChat, readState: chatPersistence.readSessionState, readSlice: chatPersistence.readSlice },
+    store: { readChat, writeChat, updateChat, patchChat, readState: chatPersistence.readSessionState, readSlice: chatPersistence.readSlice, readSettlementCheckpoint: chatPersistence.readSettlementCheckpoint },
     timeline: storyTimeline,
     blocked: function (chat) { return (tavernCompaction !== null && tavernCompaction.blocked(chat)) || Boolean(autoCompaction?.blocked(chat)) }
   })
@@ -2351,7 +2351,11 @@ export async function apply(ctx) {
         if (mvuTarget !== null && (backgroundTasksSettings.variables !== false || mvuTarget.message.mvu.pendingSubmission)) {
           if (!mvuTarget.message.mvuBaseline || mvuTarget.message.mvuBaseline.swipeId !== mvuTarget.swipeId) {
             mvuTarget.message.mvuBaseline = { swipeId: mvuTarget.swipeId, variables: structuredClone(mvuTarget.variables) }
-            await writeChat(snapshot, { source: 'settlement.baseline' })
+            await taskRun.checkpointMessage(mvuTarget.messageId, function (draft, target) {
+              if (!target || Number(target.swipeId || 0) !== mvuTarget.swipeId
+                || Number(draft.tavernHelperLifecycleRevision || 0) !== Number(snapshot.tavernHelperLifecycleRevision || 0)) throw new Error('MVU 任务目标已过期')
+              target.mvuBaseline = structuredClone(mvuTarget.message.mvuBaseline)
+            })
           }
           const saveDelivery = async function (submission, prepared) {
             signal?.throwIfAborted()

@@ -200,7 +200,8 @@ export function createBackgroundTaskCoordinator(options = {}) {
           }
           const metadata = { source: 'background.' + str(role) + '.checkpoint', operationId: begun.value.operationId }
           if (store.readSlice && store.patchChat) {
-            const selected = await store.readSlice(chatId, [messageId])
+            const selected = await store.readSettlementCheckpoint?.(chatId, messageId, begun.value.operationId)
+              || await store.readSlice(chatId, [messageId])
             const legacy = Object.values(selected?.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
             if (selected?.chat.timeline?.schemaVersion === 1 && !legacy) {
               const before = selected.chat, after = structuredClone(before)

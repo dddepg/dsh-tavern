@@ -189,3 +189,19 @@ export function projectChatBackgroundConfig(chat) {
   selected.backgroundSessionStatus = chat.timeline?.participants?.background?.status
   return structuredClone(selected)
 }
+
+// A checkpoint callback may edit its target message, never unrelated history.
+// Legacy foreground migration requires the full Chat and uses the old path.
+export function projectSettlementCheckpoint(chat, messageId, operationId) {
+  if (chat.timeline?.schemaVersion !== 1 || !Number.isSafeInteger(messageId) || messageId < 0
+    || !chat.messages?.[messageId] || Object.values(chat.timeline.operations || {}).some(operation =>
+      operation?.kind === 'body' && operation.status === 'foreground-completed')) return undefined
+  const operation = chat.timeline.operations?.[operationId]
+  return { chat: structuredClone({
+    id: chat.id, sessionId: chat.sessionId, _storageRevision: chat._storageRevision,
+    tavernHelperLifecycleRevision: chat.tavernHelperLifecycleRevision,
+    timeline: { schemaVersion: 1, branchId: chat.timeline.branchId, revision: chat.timeline.revision,
+      operations: operation ? { [operationId]: operation } : {} },
+    messages: [chat.messages[messageId]]
+  }) }
+}

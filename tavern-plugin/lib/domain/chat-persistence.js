@@ -247,6 +247,9 @@ export function createChatPersistence(options = {}) {
     return typeof records.version === 'function' ? await records.version(chatId) : ''
   }
 
+  async function readSettlementCheckpoint(chatId, messageId, operationId) {
+    return records.readSettlementCheckpoint?.(chatId, messageId, operationId)
+  }
   async function readBackgroundConfig(chatId) {
     if (records.readBackgroundConfig) return records.readBackgroundConfig(chatId)
     const chat = await read(chatId)
@@ -287,5 +290,5 @@ export function createChatPersistence(options = {}) {
     await records.remove(chatId)
   }
 
-  return Object.freeze({ read, readSessionState, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
+  return Object.freeze({ read, readSessionState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
 }
