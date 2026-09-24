@@ -82,9 +82,15 @@
 
 安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。Android 仍属实验性支持，不保证一定可用。
 
-### macOS / 已有 DSH Desktop
+### 借助 DSH Desktop（Windows / macOS）
 
-安装 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**，在 **设置 → 通用设置 → 打开 DSH 终端**中运行对应命令，重启后选择 **tavern** Profile。命令与截图见[桌面安装指南](https://flizzywine.github.io/dsh-tavern/#a02)。
+安装 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**，在 **设置 → 通用设置 → 打开 DSH 终端**中运行对应命令，重启后选择 **tavern** Profile。
+
+### 借助 DSHA（Android）
+
+安装适配版本的 **[DSHA](https://github.com/DSH-APP/DSHA/releases)**，在 DSHA 中按指南安装并启动 Tavern。
+
+命令、截图和详细步骤见[桌面安装指南](https://flizzywine.github.io/dsh-tavern/#a02)及 [DSHA 安装指南](https://flizzywine.github.io/dsh-tavern/#a03)。
 
 ### 命令行（Windows / macOS / Linux）
 
