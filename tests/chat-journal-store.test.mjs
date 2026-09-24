@@ -342,3 +342,28 @@ test('normalized update returns stay detached from drafts and durable state', as
   assert.deepEqual(expected.values.extra,{normalized:true})
   assert.deepEqual(await createChatJournalStore({dataRoot:root}).read('normalized'),expected)
 })
+
+test('增量写入的 undefined 与磁盘 JSON 一致，后续完整保存和冷读取不会损坏存档', async t => {
+  const root = await temporary()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = createChatJournalStore({ dataRoot: root })
+  await bump(store, 'chat', chat => { chat.delivery = {}; chat.flags = [1] })
+  await store.patch('chat', 1, [
+    {op:'set',path:['delivery'],value:{taskId:'task',posture:undefined}},
+    {op:'set',path:['_storageRevision'],value:2}
+  ])
+  // Mirrors a full display capture after a fast background checkpoint.
+  await bump(store, 'chat', chat => { chat.caption='rendered' })
+  const cold = createChatJournalStore({ dataRoot: root })
+  assert.deepEqual((await cold.read('chat')).delivery,{taskId:'task'})
+  await store.patch('chat',3,[
+    {op:'set',path:['delivery','posture'],value:undefined},
+    {op:'set',path:['delivery','taskId'],value:undefined},
+    {op:'set',path:['flags',0],value:undefined},
+    {op:'set',path:['_storageRevision'],value:4}
+  ])
+  const hot=await store.read('chat'), restored=await createChatJournalStore({dataRoot:root}).read('chat')
+  assert.deepEqual(restored,hot)
+  assert.deepEqual(restored.delivery,{})
+  assert.deepEqual(restored.flags,[null])
+})
