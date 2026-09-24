@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "d90225ab6f1868f6dcc759c698659c7efac1e62b",
-  "releaseSequence": 365,
+  "revision": "cda6cb3aae76ee722b4e07df6df567070170b75a",
+  "releaseSequence": 366,
   "version": "2.1.0",
   "files": [
     {
@@ -81,8 +81,13 @@
     },
     {
       "path": "bin/service-lifecycle.mjs",
-      "sha256": "6d9a8a0b2d0d72763ac1298f01ce745a3864615432dbd9abc3b191963b508637",
-      "size": 13359
+      "sha256": "d11234840b0e99db3ce78d1efba5655da4e184d635451eff3d44c0987b60c97e",
+      "size": 14554
+    },
+    {
+      "path": "bin/service-process-identity.mjs",
+      "sha256": "78d93bf54acf107facd84c7f91c35b2e8ce6326d0b634e0e3aaeaa17345d083e",
+      "size": 1948
     },
     {
       "path": "bin/service-startup.mjs",
