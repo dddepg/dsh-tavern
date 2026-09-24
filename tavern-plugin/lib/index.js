@@ -273,6 +273,8 @@ export async function apply(ctx) {
   ctx.effect(() => () => mvuDiagnostics.dispose(), 'dsh-tavern: flush diagnostic logs')
   const apiDiagnostics = createTavernApiDiagnostics(profileData)
   const compatibilityDiagnostics = createTavernCompatibilityDiagnosticStore(profileData)
+  const requestPerformance = createRequestPerformance()
+  const performanceDiagnostics = createPerformanceDiagnostics()
   const tavernRemoteAssets = createTavernRemoteAssetPinStore({
     onDiagnostic: row => performanceDiagnostics.opening(row),
     readJson: async function (path) { return await profileData.readJson(path) },
@@ -2854,8 +2856,6 @@ export async function apply(ctx) {
   })
 
   // ---------- HTTP RPC（客户端同源 fetch） ----------
-  const requestPerformance = createRequestPerformance()
-  const performanceDiagnostics = createPerformanceDiagnostics()
   async function dispatch(method, args) {
     performanceDiagnostics.browser(args?._performance)
     const started = performance.now()
