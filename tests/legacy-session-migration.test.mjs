@@ -75,6 +75,10 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
     if (readable(copied + '.bak-tavern-premigrate')) await cp(copied + '.bak-tavern-premigrate', copied)
     await rm(path.join(path.dirname(copied), 'session.v3.jsonl.zstd'), { force: true })
   }
+  const copyHashes = new Map(await Promise.all(sources.map(async source => {
+    const file = path.join(copyRoot, path.relative(archiveRoot, source))
+    return [file, hash(await readFile(file))]
+  })))
   const summary = await migrateLegacySessionDirectory(copyRoot, sessionFormatCatalog)
   assert.ok(summary.migrated > 0, '没有任何副本完成迁移')
   const copies = (await walk(copyRoot)).filter(file => path.basename(file) === 'session.jsonl.zstd')
@@ -84,8 +88,9 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
     const bytes = await readFile(file)
     const prepared = prepareLegacySessionLog(decodeSessionLog(bytes), sessionFormatCatalog)
     if (!prepared.ok) {
-      const backup = file + '.bak-tavern-premigrate'
-      assert.equal(readable(backup), false)
+      assert.equal(hash(bytes), copyHashes.get(file), 'refused archive must retain its exact original bytes')
+      assert.equal(readable(path.join(path.dirname(file), 'session.v3.jsonl.zstd')), false, 'unsafe current generation must not be published')
+      assert.match(prepared.reason, /压缩摘要和上下文边界/)
       continue
     }
     assert.equal(prepared.changed, false)
@@ -231,13 +236,15 @@ test('issue #71: 含 fixedSystemText 的真实旧档清理后可被宿主打开�
 function mockCatalog(openOk = true) {
   return {
     createRestore(header) {
+      const rows = []
       return {
-        decodeRow() {
+        decodeRow(row) {
           if (!openOk) throw new Error('host rejects archive')
+          rows.push(row)
         },
         finish() {
           if (!openOk) throw new Error('host rejects archive')
-          return { header: { ...header, version: 3 }, events: [], inheritedEventCount: 0 }
+          return { header: { ...header, version: 3 }, events: rows, inheritedEventCount: 0 }
         },
       }
     },
@@ -329,7 +336,7 @@ function chronologyCatalog() {
   }
 }
 
-test('issue #73: surface-before-step rewrite survives by dropping compaction conflicts', () => {
+test('issue #94: unsafe compaction conflicts refuse migration instead of resurrecting history', () => {
   const text = v0Log([
     { type: 'permission/preset', seq: 0, time: 1, data: {} },
     { type: 'user/message', seq: 1, time: 1, surfaceOp: { op: 'append' }, data: { id: 'u0', role: 'user', content: [{ type: 'text', text: '开场' }], source: { kind: 'user', fixedSystemText: 'illegal' } } },
@@ -343,14 +350,9 @@ test('issue #73: surface-before-step rewrite survives by dropping compaction con
     { type: 'turn/end', seq: 9, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
   ])
   const prepared = prepareLegacySessionLog(text, chronologyCatalog())
-  assert.equal(prepared.ok, true)
-  assert.equal(prepared.changed, true)
-  assert.equal(prepared.artifact?.header?.version, 3)
-  const step = prepared.events.findIndex(event => event.type === 'step/start')
-  assert.ok(step >= 0)
-  assert.equal(prepared.events.slice(0, step).some(event => ['user/message', 'assistant/message'].includes(event.type)), false)
-  assert.equal(prepared.events.some(event => String(event.type).startsWith('compaction/')), false)
-  assert.equal(JSON.stringify(prepared.events).includes('fixedSystemText'), false)
+  assert.equal(prepared.ok, false)
+  assert.equal(prepared.changed, false)
+  assert.match(prepared.reason, /压缩摘要和上下文边界/)
 })
 
 test('issue #73: chunk-swarm assistant replaces are dropped so open can finish', () => {
@@ -370,12 +372,12 @@ test('issue #73: chunk-swarm assistant replaces are dropped so open can finish',
   assert.equal(prepared.events.some(event => event.type === 'assistant/message' && event.surfaceOp?.op === 'replace'), false)
 })
 
-test('issue #73: local surface-before-step archives open to v3', { skip: !hostReady || !archiveReady, timeout: 120000 }, async () => {
+test('legacy archives either open safely or refuse without publishing lost compaction boundaries', { skip: !hostReady || !archiveReady, timeout: 120000 }, async () => {
   const require = createRequire(path.join(hostRoot, 'dsh-session/package.json'))
   const { sessionFormatCatalog: catalog } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
   const surface = new Set(['system/message', 'user/message', 'assistant/message', 'tool/result'])
   const sources = (await walk(archiveRoot)).filter(file => path.basename(file) === 'session.jsonl.zstd')
-  let seen = 0, opened = 0
+  let seen = 0, opened = 0, safelyRefused = 0
   for (const file of sources) {
     const candidate = readable(file + '.bak-tavern-premigrate') ? file + '.bak-tavern-premigrate' : file
     let text
@@ -388,7 +390,15 @@ test('issue #73: local surface-before-step archives open to v3', { skip: !hostRe
     seen += 1
     const prepared = prepareLegacySessionLog(text, catalog)
     if (prepared.artifact?.header?.version === 3) opened += 1
+    else {
+      assert.equal(prepared.ok, false)
+      assert.equal(prepared.changed, false)
+      assert.equal(prepared.artifact, undefined)
+      assert.match(prepared.reason, /压缩摘要和上下文边界/)
+      assert.ok(rows.some(row => row.type === 'compaction/summary'))
+      safelyRefused += 1
+    }
   }
   assert.ok(seen > 0, '本地没有 surface-before-step 旧档样本')
-  assert.equal(opened, seen)
+  assert.equal(opened + safelyRefused, seen)
 })
