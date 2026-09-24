@@ -206,7 +206,7 @@ try {
       $Metadata = Invoke-RestMethod -UseBasicParsing -Uri $CdnMetadataUrl -TimeoutSec 15
       if ([string]$Metadata.revision -notmatch '^[0-9a-fA-F]{40}$') { throw 'jsDelivr 运行清单缺少有效提交号。' }
       $RuntimePattern = '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|cordis\.patch\.yml|install\.ps1|install\.sh|bin/|config/|presets/|tavern-plugin/|patches/)'
-      $Files = @($Metadata.files | Where-Object { $_.path -match $RuntimePattern -and $_.path -notmatch '(^|/)(\.\.|docs)(/|$)' -and $_.sha256 -match '^[0-9a-fA-F]{64}$' })
+      $Files = @($Metadata.files | Where-Object { $_.path -match $RuntimePattern -and $_.path -notmatch '(^|/)(\.\.|docs|tests|__tests__|testsets)(/|$)' -and $_.sha256 -match '^[0-9a-fA-F]{64}$' })
       if ($Files.Count -eq 0) { throw 'jsDelivr 未返回运行文件清单。' }
       foreach ($File in $Files) {
         $RelativePath = $File.path.Replace('/', [IO.Path]::DirectorySeparatorChar)
@@ -225,11 +225,11 @@ try {
       $CdnErrorFile = Join-Path $TempDir 'cdn.error'
       [IO.File]::WriteAllText($CdnErrorFile, $_.Exception.ToString(), (New-Object Text.UTF8Encoding($false)))
       Write-UpdateLog 'installer.stage.failed' 'source.jsdelivr' '1' '' $CdnErrorFile
-      Write-Warning ("jsDelivr 备用源不可用，将回退到完整 ZIP：" + $_.Exception.Message)
+      Write-Warning ("jsDelivr 备用源不可用，将回退到精简运行压缩包：" + $_.Exception.Message)
     }
   }
   if (-not $UsedGit -and -not $UsedCdn) {
-    Write-Host '正在下载完整 ZIP……'
+    Write-Host '正在下载精简运行压缩包……'
     $PreviousProgressPreference = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
     try {

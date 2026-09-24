@@ -396,13 +396,13 @@ test('installers default to codeload archives while allowing an override', () =>
   assert.match(unixInstaller, /https:\/\/codeload\.github\.com\/\$\{REPOSITORY\}\/tar\.gz\/refs\/heads\/main/)
 })
 
-test('安装器优先使用 Git 稀疏缓存，再用 jsDelivr 校验下载和完整 ZIP 回退', () => {
+test('安装器优先使用 Git 稀疏缓存，再用 jsDelivr 校验下载和精简运行压缩包 回退', () => {
   assert.match(windowsInstaller, /source-cache\\dsh-tavern\.git/)
   assert.match(windowsInstaller, /'clone', '--bare', '--filter=blob:none', '--depth', '1'/)
   assert.match(windowsInstaller, /'archive', '--format=zip'/)
   assert.match(windowsInstaller, /jsDelivr 备用源下载运行代码/)
   assert.match(windowsInstaller, /SHA256/)
-  assert.match(windowsInstaller, /正在下载完整 ZIP/)
+  assert.match(windowsInstaller, /正在下载精简运行压缩包/)
   assert.match(unixInstaller, /source-cache\/dsh-tavern\.git/)
   assert.match(unixInstaller, /clone --bare --filter=blob:none --depth 1/)
   assert.match(unixInstaller, /archive --format=tar/)
@@ -410,7 +410,7 @@ test('安装器优先使用 Git 稀疏缓存，再用 jsDelivr 校验下载和�
   assert.match(unixInstaller, /createHash\('sha256'\)/)
   assert.match(windowsInstaller, /\$Metadata\.revision/)
   assert.match(unixInstaller, /metadata\.revision/)
-  assert.match(unixInstaller, /正在下载完整 ZIP/)
+  assert.match(unixInstaller, /正在下载精简运行压缩包/)
 
   const windowsRuntimePaths = windowsInstaller.match(/\$RuntimePaths = @\(([\s\S]*?)\)/)?.[1] || ''
   const unixRuntimePaths = unixInstaller.match(/RUNTIME_PATHS='([^']+)'/)?.[1] || ''

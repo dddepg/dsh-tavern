@@ -3,3 +3,20 @@ tavern-plugin/lib/vendor/magvarupdate/host-build/artifact/bundle.js -text
 
 # Documentation and promotional images are published on the website, not shipped.
 docs export-ignore
+
+# Keep development material in Git/CI, but out of ZIP/tar source downloads.
+# Runtime images and vendor artifacts remain included.
+/tests export-ignore
+/testsets export-ignore
+/examples export-ignore
+/references export-ignore
+/.github export-ignore
+/claude export-ignore
+/scripts export-ignore
+/packaging export-ignore
+/android export-ignore
+/CONTEXT.md export-ignore
+/DESIGN.md export-ignore
+# Bundled plugins also carry development-only material.
+**/tests export-ignore
+**/__tests__ export-ignore

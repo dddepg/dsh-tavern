@@ -204,7 +204,7 @@ async function get(url, timeout = 30000) {
   const metadata = await (await get(process.env.CDN_METADATA_URL, 15000)).json()
   if (!/^[0-9a-f]{40}$/i.test(String(metadata.revision || ''))) throw new Error('jsDelivr 运行清单缺少有效提交号')
   const files = (metadata.files || []).map((file) => ({ ...file, path: String(file.path || '').replace(/^\/+/, '') }))
-    .filter((file) => allowed.test(file.path) && !file.path.split('/').some(part => part === '..' || part === 'docs') && /^[0-9a-f]{64}$/i.test(String(file.sha256 || '')))
+    .filter((file) => allowed.test(file.path) && !file.path.split('/').some(part => ['..', 'docs', 'tests', '__tests__', 'testsets'].includes(part)) && /^[0-9a-f]{64}$/i.test(String(file.sha256 || '')))
   if (files.length === 0) throw new Error('jsDelivr 未返回运行文件清单')
   for (const file of files) {
     const bytes = Buffer.from(await (await get(`${process.env.CDN_ROOT_URL}@${metadata.revision}/${file.path}`)).arrayBuffer())
@@ -226,13 +226,13 @@ NODE
   else
     update_log installer.stage.failed source.jsdelivr 1 '' "${TEMP_DIR}/cdn.stderr"
     cat "${TEMP_DIR}/cdn.stderr" >&2
-    echo "jsDelivr 备用源不可用，将回退到完整 ZIP。" >&2
+    echo "jsDelivr 备用源不可用，将回退到精简运行压缩包。" >&2
   fi
 fi
 
 if [ "${USED_GIT}" -eq 0 ] && [ "${USED_CDN}" -eq 0 ]; then
-  command -v curl >/dev/null 2>&1 || fail "Git 不可用且未找到 curl，无法下载完整 ZIP。"
-  echo "正在下载完整 ZIP……"
+  command -v curl >/dev/null 2>&1 || fail "Git 不可用且未找到 curl，无法下载精简运行压缩包。"
+  echo "正在下载精简运行压缩包……"
   if [ -z "${TARGET_COMMIT}" ]; then
     TARGET_COMMIT=$(curl -fsSL --connect-timeout 10 "${COMMIT_URL}" | sed -n 's/^[[:space:]]*"sha":[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | head -n 1 || true)
   fi

@@ -47,9 +47,14 @@ test('CDN 清单生成器包含全部依赖补丁及其校验值', async t => {
     await mkdir(path.dirname(path.join(fixture, file)), { recursive: true })
     await writeFile(path.join(fixture, file), await readFile(path.join(root, file)))
   }
+  for (const directory of ['docs', 'tests', '__tests__', 'testsets']) {
+    await mkdir(path.join(fixture, 'tavern-plugin', directory))
+    await writeFile(path.join(fixture, 'tavern-plugin', directory, 'unused.txt'), 'development only')
+  }
   execFileSync(process.execPath, [path.join(root, '.github/scripts/write-runtime-manifest.mjs'), 'a'.repeat(40), '42'], { cwd: fixture })
   const manifest = JSON.parse(await readFile(path.join(fixture, 'dsh-tavern-runtime.json'), 'utf8'))
   assert.equal(manifest.schemaVersion, 2)
+  assert.ok(!manifest.files.some(file => file.path.endsWith('/unused.txt')), 'CDN 也不应下载嵌套的测试或文档')
   assert.equal(manifest.releaseSequence, 42)
   assert.equal(manifest.version, JSON.parse(await readFile(path.join(fixture, 'package.json'), 'utf8')).version)
   for (const file of required) {
@@ -80,3 +85,26 @@ test('Git 增量归档在用户开启 CRLF 转换时仍保持运行文件原始�
     assert.deepEqual(execFileSync('tar', ['-xOf', '-', 'install.sh'], { input: archive }), source)
   }
 })
+
+// Exercise the actual fallback archive, not just the installer's path allowlist.
+// Both formats must retain every runtime byte while excluding development data.
+for (const format of ['tar', 'zip']) {
+  test(`兜底 ${format} 下载包只移除开发资料，保留完整运行文件`, async t => {
+    const archive = execFileSync('git', ['archive', `--format=${format}`, process.env.DSH_TEST_ARCHIVE_TREE || 'HEAD'], { cwd: root, maxBuffer: 100 * 1024 * 1024 })
+    let listing
+    if (format === 'zip' && process.platform === 'linux') {
+      const directory = await mkdtemp(path.join(os.tmpdir(), 'tavern-archive-'))
+      t.after(() => rm(directory, { recursive: true, force: true }))
+      const file = path.join(directory, 'app.zip')
+      await writeFile(file, archive)
+      listing = execFileSync('unzip', ['-Z1', file], { encoding: 'utf8' })
+    } else listing = execFileSync('tar', ['-tf', '-'], { input: archive, encoding: 'utf8' })
+    const files = listing.split(/\r?\n/)
+    for (const file of required) assert.ok(files.includes(file), `运行包遗漏：${file}`)
+    assert.ok(files.includes('LICENSE'), '保留许可文件')
+    assert.ok(!files.some(file => /(^|\/)(docs|tests|__tests__|testsets)(\/|$)/.test(file)), '下载包不应包含文档、图片或测试目录')
+    for (const directory of ['examples', 'references', '.github', 'claude', 'scripts', 'packaging', 'android']) {
+      assert.ok(!files.some(file => file.startsWith(directory + '/')), `开发资料未排除：${directory}`)
+    }
+  })
+}
