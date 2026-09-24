@@ -737,6 +737,17 @@ export async function apply(ctx) {
     }
     return saved
   }
+  async function patchChat(chatId, revision, changes, metadata) {
+    if (deletedChatIds.has(chatId)) throw new Error('对话已删除')
+    const saved = await chatPersistence.patch(chatId, revision, changes, metadata)
+    if (saved) {
+      await syncChatSummary(saved)
+      void coordinationEvents?.publish(saved.sessionId)
+      templateSync.schedule(saved.sessionId, saved._storageRevision)
+      queueAutoCompaction(saved.sessionId)
+    }
+    return saved
+  }
   async function persistClearedBodyEdits(chat, cleared) {
     const drop = new Set(cleared || [])
     if (!chat?.id || !drop.size) return
@@ -1227,17 +1238,7 @@ export async function apply(ctx) {
       if(!selected || selected.chat.sessionId!==sessionId || selected.chat.backgroundConfigVersion!==1 || selected.chat.conversationFeaturesVersion!==1)return undefined
       return selected
     },
-    patchChat: async (chatId,revision,changes,metadata) => {
-      if(deletedChatIds.has(chatId))throw new Error('对话已删除')
-      const saved=await chatPersistence.patch(chatId,revision,changes,metadata)
-      if(saved) {
-        await syncChatSummary(saved)
-        void coordinationEvents?.publish(saved.sessionId)
-        templateSync.schedule(saved.sessionId, saved._storageRevision)
-        queueAutoCompaction(saved.sessionId)
-      }
-      return saved
-    },
+    patchChat,
     writeChat,
     updateChat,
     readChatRevision,
@@ -1902,7 +1903,7 @@ export async function apply(ctx) {
   }
   let tavernCompaction = null
   const backgroundTasks = createBackgroundTaskCoordinator({
-    store: { readChat, writeChat, updateChat },
+    store: { readChat, writeChat, updateChat, patchChat, readState: chatPersistence.readSessionState, readSlice: chatPersistence.readSlice },
     timeline: storyTimeline,
     blocked: function (chat) { return (tavernCompaction !== null && tavernCompaction.blocked(chat)) || Boolean(autoCompaction?.blocked(chat)) }
   })
@@ -2326,8 +2327,7 @@ export async function apply(ctx) {
           }
           const saveDelivery = async function (submission, prepared) {
             signal?.throwIfAborted()
-            await taskRun.checkpoint(function (draft) {
-              const target = draft.messages[mvuTarget.messageId]
+            await taskRun.checkpointMessage(mvuTarget.messageId, function (draft, target) {
               if (!target || Number(target.swipeId || 0) !== mvuTarget.swipeId
                 || Number(draft.tavernHelperLifecycleRevision || 0) !== Number(snapshot.tavernHelperLifecycleRevision || 0)) throw new Error('MVU 任务目标已过期')
               target.mvu.pendingSubmission = structuredClone(submission)

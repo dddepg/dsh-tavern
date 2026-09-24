@@ -47,11 +47,12 @@ try{
  initial=null
  let body=await stage('foreground.commit',async()=>p.update('audit',chat=>timeline.complete({chat,operationId:begun.value.operationId,basedOn:begun.value.basedOn,outcome:{status:'success'},apply(draft){draft.messages.push({role:'user',turn,text:'continue'},{role:'assistant',turn,text:'synthetic reply',variables:[{stat_data:{value:0}}],mvu:{pending:true}})}}).chat))
  begun=null
- const coordinator=createBackgroundTaskCoordinator({timeline,store:{readChat:p.read,writeChat:p.write,updateChat:p.update}})
+ const coordinator=createBackgroundTaskCoordinator({timeline,store:{readChat:p.read,writeChat:p.write,updateChat:p.update,readState:p.readSessionState,readSlice:p.readSlice,patchChat:p.patch}})
  const task=await stage('background.begin',()=>coordinator.begin(body,'settlement'))
+ const bodyMessageId=body.messages.length-1
  body=null
  await stage('background.bind',()=>task.bindSession('synthetic-background'))
- await stage('background.checkpoint',()=>task.checkpoint(chat=>{chat.messages.at(-1).mvu.pendingSubmission=[{op:'replace',path:'/stat_data/value',value:1}]}))
+ await stage('background.checkpoint',()=>task.checkpointMessage(bodyMessageId,(chat,target)=>{target.mvu.pendingSubmission=[{op:'replace',path:'/stat_data/value',value:1}]}))
  let before=await stage('mvu.read',()=>p.read('audit'))
  const effect=await stage('mvu.effect',()=>{const after=structuredClone(before);after.messages.at(-1).variables[0].stat_data.value=1;return createMvuSettlementEffect({before,after,operationId:task.operationId,branchId:before.timeline.branchId,basedOnRevision:before.timeline.revision,chatId:'audit',sessionId:'synthetic',messageId:before.messages.length-1,swipeId:0})})
  before=null
