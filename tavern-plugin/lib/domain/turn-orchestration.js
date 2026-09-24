@@ -300,11 +300,11 @@ export function createTurnOrchestrator(options) {
     const cardPath = cardPathOf(chat)
     if ((mode === 'story' || mode === 'script') && cardPath === '') throw new Error('当前游玩缺少人物卡绑定，无法继续本轮。请先恢复人物卡或救援存档。')
     // Workbench tools must remain available when the file being repaired is invalid.
-    const card = cardPath === '' ? null : mode === 'card' ? { name: chat.cardName } : await store.readCard(cardPath)
+    const card = cardPath === '' ? null : mode === 'card' ? { name: chat.cardName } : await store.readCard(cardPath, chat)
     if (cardPath !== '' && card === undefined) throw new Error('人物卡不存在: ' + cardPath)
     if ((mode === 'story' || mode === 'script') && !reusedRuntimeInput) {
       const extensions = typeof store.readCardExtensions === 'function'
-        ? await store.readCardExtensions(cardPath)
+        ? await store.readCardExtensions(cardPath, chat)
         : null
       const presetRegexScripts = await resolvePresetRegexScripts(chat)
       const regexScripts = composeTavernRegexScripts(extensions, presetRegexScripts)
@@ -426,14 +426,14 @@ export function createTurnOrchestrator(options) {
     chat = begun.chat
     const operation = chat.timeline.operations[begun.value.operationId]
     if (operation && !Object.hasOwn(operation, 'sceneWorldbook') && typeof options.captureSceneWorldbook === 'function') {
-      operation.sceneWorldbook = await options.captureSceneWorldbook(chat, await store.readCard(cardPathOf(chat)))
+      operation.sceneWorldbook = await options.captureSceneWorldbook(chat, await store.readCard(cardPathOf(chat), chat))
     }
     chat.foregroundError = null
     let projectedText = runtimeInputFor(chat, turn, userText)
     if (projectedText === null) {
       projectedText = userText
       if (typeof options.projectUserTemplate === 'function' && userText !== '') {
-        const projected = await options.projectUserTemplate({chat,card:await store.readCard(cardPathOf(chat)),turn,text:userText})
+        const projected = await options.projectUserTemplate({chat,card:await store.readCard(cardPathOf(chat), chat),turn,text:userText})
         projectedText = projected.message.text
         chat.promptTemplateInput = {turn,source:userText,message:projected.message}
         chat.variables = projected.scopes.local
@@ -498,7 +498,7 @@ export function createTurnOrchestrator(options) {
         sourcePaths: state.sourcePaths || state.sourceIds || []
       })
     } else {
-      const card = await store.readCard(cardPath)
+      const card = await store.readCard(cardPath, chat)
       if (card === undefined) throw new Error('人物卡不存在: ' + cardPath)
       preview = cards.update({ kind: 'card', card, patch: combined.fields, rawOperations: combined.rawOperations })
     }
@@ -543,7 +543,7 @@ export function createTurnOrchestrator(options) {
       if (renderMacros !== null && assistantText.includes('{{')) assistantText = renderMacros(assistantText, chat)
       previousMvuVariables = chat.promptTemplateInput?.turn === turn ? lastTavernHelperVariables([chat.promptTemplateInput.message]) : lastTavernHelperVariables(chat.messages)
       const extensions = typeof store.readCardExtensions === 'function'
-        ? await store.readCardExtensions(cardPathOf(chat))
+        ? await store.readCardExtensions(cardPathOf(chat), chat)
         : null
       const presetRegexScripts = await resolvePresetRegexScripts(chat)
       const projectionText = assistantText

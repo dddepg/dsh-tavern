@@ -69,3 +69,7 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 ## better-sidebar 升级验收
 
 `node tests/e2e/gameplay.mjs --sidebar` 在完整游玩验收后，继续检查原生侧栏重复打开不增加标签、完整卡片调试入口预填 `/debug-card` 和游玩引用、从卡片工作台返回原游戏并刷新。可用 `TAVERN_E2E_SIDEBAR=/绝对路径/已解包插件` 在隔离环境验证待升级版本，不修改正在使用的 Profile。输出增加 `sidebar-card-debug.png` 与 `sidebar-return-to-play.png`；模型仍为固定测试模型。
+
+## 人物卡原存档更新
+
+`node tests/e2e/gameplay.mjs --card-update`：真实浏览器在已玩一轮的存档中，修改状态栏、EJS、世界书和变量定义，再通过“应用变化”继续游玩。检查初始值不覆盖进度、EJS 预览副作用隔离、坏模板不改存档、改名缺少迁移时拒绝、声明迁移的改名/转换/删除、前后台模型实际收到新世界书，以及回退和刷新后仍能使用新版状态栏。产物包括 `card-update-*.png`、`saved-state.json`、`preset-requests.jsonl` 和 `trace.zip`。模型输出固定，存储、模板、MVU、界面和结算执行真实链路。

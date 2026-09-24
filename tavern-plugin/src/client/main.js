@@ -9533,6 +9533,7 @@ window.__ModuleLoader__.load({
 			const [debugBusy, setDebugBusy] = React.useState(false);
 			const [settlementRetryBusy, setSettlementRetryBusy] = React.useState(false);
 			const [cardUpdateBusy, setCardUpdateBusy] = React.useState(false);
+            const [cardUpdateError, setCardUpdateError] = React.useState("");
 			const running = props.useSession(function (snapshot) { return snapshot.running; });
 			const latestMessageId = props.useChat(latestTavernAssistantMessageId);
 			const stateKey = String(running) + ":" + String(latestMessageId || "");
@@ -9573,10 +9574,10 @@ window.__ModuleLoader__.load({
 			}
 			async function applyUpdatedCard() {
 				if (cardUpdateBusy || !view?.cardUpdate || view.cardUpdate.error) return;
-				if (!await askConfirm("将最新人物卡和世界书应用到当前游戏，下一轮生效，无需重开。已有剧情和变量保留；更新可能使提示词缓存失效，增加 Token 费用和等待时间。是否继续？")) return;
-				setCardUpdateBusy(true);
+				if (!await askConfirm("将预检最新状态栏、EJS、世界书与变量结构，再应用到当前游戏。已有剧情和数值保留，新增变量补默认值；人物卡声明的字段迁移会同步到历史快照，以便回退后继续玩。预检失败不修改存档。更新可能增加 Token 费用和等待时间。是否继续？" + (view.cardUpdate.migrations?.length ? "\n\n声明的变量迁移：\n" + view.cardUpdate.migrations.join("\n") : ""))) return;
+				setCardUpdateBusy(true); setCardUpdateError("");
 				try { await rpc("applyUpdatedCard", { digest: view.cardUpdate.digest }, props.sessionId); liveTavernView.invalidate(props.sessionId); }
-				catch (error) { tavernErrorHub.report("应用人物卡与世界书更新", error); }
+				catch (error) { setCardUpdateError(String(error.message || error)); }
 				finally { setCardUpdateBusy(false); }
 			}
 			async function retrySettlement() {
@@ -9623,7 +9624,8 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-tavern-status-body" },
 					view.requestMode !== "sillytavern" && view.cardUpdate?.available ? h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : "人物卡信息已变化"),
-						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用变化后，当前游戏将使用最新的人物卡信息和世界书，下一轮生效，无需重新开局。已有剧情和变量保留。更新可能使缓存失效，增加 Token 费用和等待时间。"),
+						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用前会预检状态栏、EJS、世界书与变量结构。保留剧情和已有数值，补齐新增变量；字段改名或类型变化需在人物卡声明迁移。成功后可继续当前游戏，无需重开。"),
+						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null,
 						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用变化…" : "应用变化到当前游戏")
 					) : null,
 					h(TavernCardAppDock, { sessionId: props.sessionId }),

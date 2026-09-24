@@ -1,3 +1,4 @@
+import { cardUpdateChecks } from './card-update.mjs'
 import { sidebarUpgrade } from './sidebar-upgrade.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
 import { encodeMigratedSessionLog, parseSessionLog } from '../../tavern-plugin/lib/domain/legacy-session-migration.js'
@@ -245,7 +246,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else if (!process.argv.includes('--sidebar-only')) {
+  } else if (!process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
@@ -279,6 +280,7 @@ try {
       const editor = page.getByRole('region', { name: '编辑正文' })
       await editor.getByRole('textbox', { name: '正文文本 1' }).fill('手工编辑：你把奖励放进了背包。')
       await editor.getByRole('button', { name: '保存', exact: true }).click()
+      await editor.waitFor({state:'hidden'})
       await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).filter({ visible: true }).first().waitFor()
       await inspectRound('edited', 30, '手工编辑：你把奖励放进了背包。')
       await page.reload()
@@ -303,6 +305,7 @@ try {
     await playControls({ page, step, savedChat, inspectRound, output, report })
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   }
+  if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
@@ -315,7 +318,7 @@ try {
   }
 } finally {
   // Read-only evidence, independent of the status iframe and its UI assertions.
-  const chat = await savedChat().catch(() => null)
+  const chat = await savedChat().catch(error => { report.savedStateError = String(error.message || error); return null })
   if (chat) await writeFile(join(output, 'saved-state.json'), JSON.stringify({ id: chat.id, posture: chat.posture, contextCompaction: chat.contextCompaction, timeline: chat.timeline,
     messages: chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text, turn: message.turn, variables: message.variables, mvu: message.mvu })) }, null, 2))
   await context?.tracing.stop({ path: join(output, 'trace.zip') }).catch(() => {})
