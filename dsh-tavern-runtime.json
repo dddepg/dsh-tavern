@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "revision": "01d10e3918e21ed7f0706f73b2ea6b86193e9552",
-  "releaseSequence": 364,
+  "revision": "d90225ab6f1868f6dcc759c698659c7efac1e62b",
+  "releaseSequence": 365,
   "version": "2.1.0",
   "files": [
     {
       "path": "bin/application-update.mjs",
-      "sha256": "9f9dc481d6df8b6320e162bf959f0552a5ead3f61532fd3476e1905fa5dc9bcc",
-      "size": 8914
+      "sha256": "9ce230a6d7449887e03c88777cd7aa99ce5f2208f4a9eebe2a9cf6226c86d728",
+      "size": 9005
     },
     {
       "path": "bin/benchmark-chat-snapshots.mjs",
