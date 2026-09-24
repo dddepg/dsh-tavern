@@ -45,6 +45,17 @@ function inspectSaved(chat) {
   return { chatId: chat.id, sessionId: chat.sessionId, userMessages: 1, replies: 1,
     gold: variables.stat_data.gold, receipt: reply.mvu.receipt.status, posture: chat.posture }
 }
+async function inspectRound(name, gold, text, rounds = 2) {
+  const chat = await savedChat()
+  const replies = chat.messages.filter(message => message.role === 'assistant' && !message.greeting)
+  assert.equal(chat.messages.filter(message => message.role === 'user').length, rounds)
+  assert.equal(replies.length, rounds, '替换或编辑不能新增轮次')
+  const last = replies.at(-1)
+  assert.ok((last.sourceText ?? last.text).includes(text), '存档正文必须与界面一致')
+  assert.equal(last.variables[last.swipeId || 0].stat_data.gold, gold)
+  report[name] = { chatId: chat.id, rounds, gold, text }
+  await page.screenshot({ path: join(output, name + '.png'), fullPage: true })
+}
 async function inspectScreen() {
   await page.getByText('你获得了十枚金币。', { exact: false }).filter({ visible: true }).first().waitFor()
   await page.getByText(/变量已更新/).filter({ visible: true }).first().waitFor()
@@ -141,6 +152,61 @@ try {
     assert.deepEqual(errors, [], '浏览器不得出现未捕获异常')
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
+  await step('生成候选项并选择行动，再玩一轮', async () => {
+    await page.getByRole('button', { name: '生成候选项', exact: true }).click()
+    await page.getByText('5 个候选项', { exact: true }).waitFor()
+    assert.deepEqual(inspectSaved(await savedChat()), report.afterReload, '生成候选不能修改正文或金币')
+    const candidates = page.locator('.dsh-tavern-candidate-question')
+    if (await candidates.getByTitle('展开', { exact: true }).isVisible()) await candidates.getByTitle('展开', { exact: true }).click()
+    await page.getByRole('button', { name: /再次领取奖励/ }).click()
+    assert.equal(await candidates.locator('.dsh-tavern-question-option').count(), 5)
+    await page.getByRole('button', { name: '追加到输入框', exact: true }).click()
+    const composer = page.getByRole('textbox', { name: /发消息|Message/ })
+    assert.equal(await composer.innerText(), '再次领取奖励')
+    await composer.press('Enter')
+    await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).waitFor()
+    await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：20$/ }).waitFor()
+    await inspectRound('second-turn', 20, '你再次领取了奖励，金币累计二十枚。')
+  })
+  await step('重新生成最新正文', async () => {
+    await page.getByRole('button', { name: '重新生成正文', exact: true }).click()
+    await page.getByPlaceholder('指导意见（可选）：例如“写得更长，侧重心理描写”').fill('雨夜重写')
+    await page.getByRole('button', { name: '生成并替换正文', exact: true }).click()
+    await page.getByText('雨夜里，你重新领取了奖励。', { exact: true }).filter({ visible: true }).first().waitFor()
+    await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
+    assert.equal(await page.getByText('雨夜里，你重新领取了奖励。', { exact: true }).filter({ visible: true }).count(), 1)
+    await inspectRound('regenerated', 30, '雨夜里，你重新领取了奖励。')
+    assert.equal(await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).filter({ visible: true }).count(), 0)
+  })
+  await step('编辑正文并刷新', async () => {
+    const beforeEdit = (await savedChat()).messages.at(-1)
+    await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
+    await page.getByRole('menuitem', { name: '编辑正文', exact: true }).click()
+    const editor = page.getByRole('region', { name: '编辑正文' })
+    await editor.getByRole('textbox', { name: '正文文本 1' }).fill('手工编辑：你把奖励放进了背包。')
+    await editor.getByRole('button', { name: '保存', exact: true }).click()
+    await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).filter({ visible: true }).first().waitFor()
+    await inspectRound('edited', 30, '手工编辑：你把奖励放进了背包。')
+    await page.reload()
+    await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).filter({ visible: true }).first().waitFor()
+    await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
+    const afterEdit = (await savedChat()).messages.at(-1)
+    assert.deepEqual(afterEdit.variables, beforeEdit.variables, '编辑正文不能重新结算或修改变量')
+    assert.deepEqual(afterEdit.mvu.receipt, beforeEdit.mvu.receipt)
+    await inspectRound('edited-after-reload', 30, '手工编辑：你把奖励放进了背包。')
+  })
+  await step('回退最新一轮，恢复上一轮金币', async () => {
+    await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
+    await page.getByRole('menuitem', { name: /回退第.*轮|回退本轮/ }).click()
+    await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：10$/ }).waitFor()
+    inspectSaved(await savedChat())
+    await page.reload()
+    await inspectScreen()
+    inspectSaved(await savedChat())
+    assert.equal(await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).count(), 0)
+    await inspectRound('after-rollback', 10, '你获得了十枚金币。', 1)
+  })
+  assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
   delete report.currentStep
 } catch (error) {
@@ -153,7 +219,7 @@ try {
   // Read-only evidence, independent of the status iframe and its UI assertions.
   const chat = await savedChat().catch(() => null)
   if (chat) await writeFile(join(output, 'saved-state.json'), JSON.stringify({ id: chat.id, posture: chat.posture,
-    messages: chat.messages.map(message => ({ role: message.role, variables: message.variables, mvu: message.mvu })) }, null, 2))
+    messages: chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text, turn: message.turn, variables: message.variables, mvu: message.mvu })) }, null, 2))
   await context?.tracing.stop({ path: join(output, 'trace.zip') }).catch(() => {})
   await browser?.close()
   if (child && child.exitCode === null) {
