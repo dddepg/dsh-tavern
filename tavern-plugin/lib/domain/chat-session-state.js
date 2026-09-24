@@ -2,13 +2,26 @@ import { rollbackAvailability, hasRollbackMessages } from './rollback-surface.js
 import { canUndoRollback } from './surface-restoration.js'
 const str = value => String(value ?? '')
 
-// Detached inputs for session activity and cache-hit volatile view fields only.
+export function pendingMvuSettlementState(chat) {
+  if (Object.hasOwn(chat, 'pendingMvuSettlement')) return chat.pendingMvuSettlement
+  // Retry eligibility needs only the newest pending assistant and two flags,
+  // never the saved command, prepared effect, or historical variable snapshots.
+  const pending = (Array.isArray(chat.messages) ? chat.messages : []).findLast(message =>
+    message?.role === 'assistant' && message.mvu?.pending === true)
+  return pending ? {
+    hasSubmission: Boolean(pending.mvu.pendingSubmission),
+    prepared: Boolean(pending.mvu.delivery?.prepared)
+  } : null
+}
+
+// Detached inputs for session activity, retry eligibility and cache-hit view fields.
 // This is not a writable Chat or a source for rebuilding history projections.
 export function projectChatSessionState(chat) {
+  const pendingMvuSettlement = pendingMvuSettlementState(chat)
   // Legacy timeline inspection migrates a foreground body using its full text.
   if (Object.values(chat.timeline?.operations || {}).some(operation =>
-    operation?.kind === 'body' && operation.status === 'foreground-completed')) return structuredClone(chat)
-  const selected = {}
+    operation?.kind === 'body' && operation.status === 'foreground-completed')) return { ...structuredClone(chat), pendingMvuSettlement }
+  const selected = { pendingMvuSettlement }
   for (const key of ['id', 'sessionId', '_storageRevision', 'mode', 'cardPath', 'cardContextRevision',
     'backgroundConfigVersion', 'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
     'settleError', 'scriptState', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {

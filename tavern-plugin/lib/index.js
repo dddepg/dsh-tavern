@@ -1,5 +1,5 @@
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
-import { createSessionStateView, settlementTurn } from './domain/chat-session-state.js'
+import { createSessionStateView, settlementTurn, pendingMvuSettlementState } from './domain/chat-session-state.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
@@ -245,7 +245,7 @@ export async function apply(ctx) {
   const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData, rpc: (method, args) => dispatchMethod(method, args, true) })
   const templateSync = createServerTemplateSync({
     run: async sessionId => {
-      const chat = await chatForSession(sessionId)
+      const chat = await sessionStateForSession(sessionId)
       if (chat && groupOfMode(chat.mode || 'story') === 'play') return fullTemplateRuntime.synchronize(sessionId)
     },
     onError: error => console.warn('dsh-tavern: 服务端模板显示处理失败:', str(error.message || error))
@@ -2575,14 +2575,13 @@ export async function apply(ctx) {
   function cancelSettlement(chatId, options) { return settlementJobs.cancel(chatId, options) }
   const mvuSettlementReconciler = createMvuSettlementReconciler({
     list: () => conversationRegistry.list(),
-    resolve: sessionId => chatForSession(sessionId),
+    resolve: sessionId => sessionStateForSession(sessionId),
     shouldResume: function (chat) {
-      const target = pendingMvuTarget(chat)
-      return Boolean(target && target.message.mvu && target.message.mvu.pendingSubmission
+      return Boolean(pendingMvuSettlementState(chat)?.hasSubmission
         && backgroundTasks.activity(chat).phase === 'pending')
     },
     isReady: function (sessionId, chat) {
-      if (pendingMvuTarget(chat)?.message.mvu?.delivery?.prepared) return true
+      if (pendingMvuSettlementState(chat)?.prepared) return true
       const state = tavernScriptDispatch.status(sessionId)
       return state.ready === true || Boolean(state.initializationError)
     },
@@ -3220,13 +3219,13 @@ export async function apply(ctx) {
       case 'exportConversation': return await exportConversation(args && args.chatId, args && args.sessionId, args && args.title)
       case 'exportTavernLogs': return await exportTavernLogs(args && args.sessionId)
       case 'recordTavernCompatibilityCalls': {
-        const chat = await chatForSession(str(args && args.sessionId))
+        const chat = await sessionStateForSession(str(args && args.sessionId))
         if (!chat) throw new Error('当前 Session 没有绑定 Tavern 对话')
         await compatibilityDiagnostics.record(chat.sessionId, args && args.runtimeId, args && args.calls)
         return { recorded: true }
       }
       case 'recordMvuRuntimeDiagnostic': {
-        const chat = await chatForSession(str(args && args.sessionId))
+        const chat = await sessionStateForSession(str(args && args.sessionId))
         if (!chat) throw new Error('当前 Session 没有绑定 Tavern 对话')
         const diagnostic = args && args.diagnostic || {}
         if (diagnostic.kind === 'mvu-load') {
