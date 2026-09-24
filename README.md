@@ -108,6 +108,15 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 [完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。
 
+### 手机远程访问
+
+酒馆运行在电脑或服务器上，也可以用手机浏览器远程游玩：
+
+- **电脑运行、手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)，Desktop 安装时自动配置，可从 **设置 → 手机访问** 选择局域网或公网访问。
+- **服务器部署、账号密码登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)，为远程 WebUI 添加登录认证；需自行配置可访问的服务器地址，插件不提供内网穿透。
+
+详细配置见[安装指南中的「手机远程访问」](https://flizzywine.github.io/dsh-tavern/#a02)。
+
 ## 开始游玩
 
 1. 在 **设置 → 模型** 中配置模型服务和 API 密钥。
