@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "34a288697ed24dcd9e386f14a22c24be08bfdb75",
-  "releaseSequence": 363,
+  "revision": "01d10e3918e21ed7f0706f73b2ea6b86193e9552",
+  "releaseSequence": 364,
   "version": "2.1.0",
   "files": [
     {
@@ -691,8 +691,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-background-settlement.js",
-      "sha256": "9630937fe597fb0f42a1ccdcba1d79fc885d9bb5be447aecf5074754ae383f29",
-      "size": 31971
+      "sha256": "07f9b397bfc97fdc65bcc4bf8371da741a1faf7a8b9c605d6b9e9e04f8bf20b5",
+      "size": 32563
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion-appearance.js",
