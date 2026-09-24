@@ -756,6 +756,7 @@ export async function apply(ctx) {
       readIndex,
       writeIndex,
       readChat,
+      readChatState: chatPersistence.readSessionState,
       writeChat: rawWriteChat,
       removeChat: async function (chatId) { await chatPersistence.remove(chatId) }
     }
@@ -766,6 +767,13 @@ export async function apply(ctx) {
     if (!chat || groupOfMode(chat.mode) !== 'play' || chat.backgroundConfigVersion === 1 && chat.conversationFeaturesVersion === 1) return chat
     const legacyImageEnabled = sceneIllustrations ? (await sceneIllustrations.settings()).enabled === true : false
     return await updateChat(chat.id, current => adoptConversationFeatures(adoptConversationBackground(current, tavernSettingsDocument), tavernSettingsDocument, legacyImageEnabled), { source: 'background-config.adopt' })
+  }
+  async function sessionStateForSession(sessionId) {
+    const state = await requestPerformance.stage('readSessionState', () => conversationRegistry.resolveState(sessionId))
+    // Adoption is a write and must receive a complete draft, never a projection.
+    if (state && groupOfMode(state.mode) === 'play'
+      && (state.backgroundConfigVersion !== 1 || state.conversationFeaturesVersion !== 1)) return chatForSession(sessionId)
+    return state
   }
   const historyRecall = createHistoryRecall()
   const foregroundRecallScopes = new WeakMap()
@@ -1584,7 +1592,7 @@ export async function apply(ctx) {
     return scriptContinuity.inspect({ script: script, state: chat.scriptState, request: { kind: 'preview' } })
   }
   async function sessionActivity(sessionId) {
-    let chat = await chatForSession(sessionId)
+    const chat = await sessionStateForSession(sessionId)
     if (chat === undefined) return null
     const activity = backgroundTasks.activity(chat)
     return {
@@ -1608,6 +1616,7 @@ export async function apply(ctx) {
   }
   const synchronizeSessionView = createSessionViewSync()
   const sessionViewProjectionCache = new Map()
+  const sessionStateViewCache = new WeakMap()
 
   function rollbackViewFields(chat, evidence = sessionDebugEvidence(chat.sessionId, true)) {
     const nodes = evidence.session?.surface?.nodes
@@ -1623,6 +1632,8 @@ export async function apply(ctx) {
     }
   }
 
+  // Cache hits receive projectChatSessionState; keep its inputs in sync with
+  // these readers (including rollback and MVU receipts), not full history.
   function volatileSessionViewFields(chat, activity) {
     let scriptProgress = null
     return {
@@ -1637,8 +1648,24 @@ export async function apply(ctx) {
     }
   }
 
+  async function chatForSessionView(sessionId) {
+    const state = await sessionStateForSession(sessionId)
+    if (state === undefined) return undefined
+    const cached = sessionViewProjectionCache.get(state.id)
+    if (cached && cached.revision === (Number(state._storageRevision) || 0)
+      && cached.cardPath === str(state.cardPath)
+      && cached.cardContextRevision === (Number(state.cardContextRevision) || 0)
+      && cached.mode === (state.mode || 'story') && cached.isCard === ((state.mode || 'story') === 'card')) {
+      // Pin the matching projection for this read. Another request may replace
+      // the global cache while getSession awaits transport dirty indices.
+      sessionStateViewCache.set(state, cached)
+      return state
+    }
+    return requestPerformance.stage('readFullChat', () => chatForSession(sessionId))
+  }
+
   async function sessionView(sessionId, options = {}) {
-    const chat = Object.hasOwn(options, 'chat') ? options.chat : await requestPerformance.stage('readChat', () => chatForSession(sessionId))
+    const chat = Object.hasOwn(options, 'chat') ? options.chat : await requestPerformance.stage('readChat', () => chatForSessionView(sessionId))
     if (chat === undefined) return null
     const activity = backgroundTasks.activity(chat)
     const isCard = (chat.mode || 'story') === 'card'
@@ -1646,7 +1673,7 @@ export async function apply(ctx) {
     const cardPath = str(chat.cardPath)
     const cardContextRevision = Number(chat.cardContextRevision) || 0
     const mode = chat.mode || 'story'
-    const cached = sessionViewProjectionCache.get(chat.id)
+    const cached = sessionStateViewCache.get(chat) || sessionViewProjectionCache.get(chat.id)
     // Projection cache and transport cursor may represent different revisions.
     // Compute changes against the projection actually reused here.
     let dirtyMessageIndices = null
@@ -1673,7 +1700,7 @@ export async function apply(ctx) {
       return view
     }
     if (cached && cached.revision === revision && cacheIdentityMatches()) {
-      const reused = Object.assign({}, cached.view, volatileSessionViewFields(chat, activity))
+      const reused = Object.assign({}, cached.view, await requestPerformance.stage('projectViewCached', () => volatileSessionViewFields(chat, activity)))
       if (mode === 'script') {
         reused.scriptProgress = await requestPerformance.stage('scriptProgress', async () => {
           const script = await readScript(chat.cardPath)
@@ -3465,7 +3492,7 @@ export async function apply(ctx) {
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': {
         const sessionId = args && args.sessionId
-        const chat = await requestPerformance.stage('readChat', () => chatForSession(sessionId))
+        const chat = await requestPerformance.stage('readChat', () => chatForSessionView(sessionId))
         const revision = Number(chat && chat._storageRevision) || 0
         let dirtyMessageIndices = null
         const previous = args?.viewSync === 1 ? synchronizeSessionView.peek?.(args.viewCursor) : null

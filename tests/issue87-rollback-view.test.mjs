@@ -1,3 +1,4 @@
+import { projectChatSessionState } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
@@ -20,7 +21,8 @@ test('cached rollback controls follow the stored Session surface without resumin
   const context={Array,Object,Number,Set,Map,Boolean,str:String,sessionEvents,rollbackAvailability,hasRollbackMessages,canUndoRollback,
     ctx:{get:()=>({get:()=>loaded?session:undefined})},
     agentRegistry:{get:()=>undefined,resume:()=>{throw Error('view must not resume')}},
-    requestPerformance:{stage:(_name,fn)=>fn(),state(){}},chatForSession:async()=>chat,
+    requestPerformance:{stage:(_name,fn)=>fn(),state(){}},chatForSession:async()=>chat,sessionStateForSession:async()=>projectChatSessionState(chat),
+    sessionStateViewCache:new WeakMap(),
     backgroundTasks:{activity:()=>({busy:false})},settlementTurn:()=>2,mvuReceiptsOf:()=>[],
     sessionViewProjectionCache:new Map([['c',{revision:1,cardPath:'card',cardContextRevision:0,isCard:false,mode:'story',view:{canRollback:false}}]])}
   const run=vm.runInNewContext(`(()=>{${evidence}\n${fields}\n${view}\nreturn sessionView})()`,context)

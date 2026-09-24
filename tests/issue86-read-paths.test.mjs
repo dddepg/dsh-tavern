@@ -18,9 +18,10 @@ test('production getSession cache hit resolves the chat once and returns that re
   sync.peek=()=>({sessionId:'s',revision:5})
   const context={Set,Object,Number,Array,Map,Boolean,
     args:{sessionId:'s',viewSync:1,viewCursor:'cursor'},
-    chatForSession:async()=>{reads++;return chat},str:String,
+    chatForSessionView:async()=>{reads++;return chat},str:String,
     requestPerformance:{stage:(_name,fn)=>fn(),state(){}},
     backgroundTasks:{activity:()=>({busy:false})},agentRegistry:new Map(),
+    sessionStateViewCache:new WeakMap(),
     sessionViewProjectionCache:new Map([['c',{revision:5,cardPath:'card',cardContextRevision:0,isCard:false,mode:'story',view:{chatId:'c'}}]]),
     volatileSessionViewFields:()=>({}),synchronizeSessionView:sync}
   const result=await vm.runInNewContext(`(async()=>{${viewSource}\nswitch('getSession'){${dispatchSource}}})()`,context)
@@ -52,13 +53,14 @@ test('projection cache and browser cursor use their own change baselines', async
   }
   sync.peek=()=>({sessionId:'s',revision:4})
   const context={Set,Object,Number,Array,Map,Boolean,args:{sessionId:'s',viewSync:1,viewCursor:'cursor'},
-    chatForSession:async()=>chat,str:String,
+    chatForSessionView:async()=>chat,str:String,
     requestPerformance:{stage:(_name,fn)=>fn(),state(){}},
     chatPersistence:{readChangedIndices:async(_id,revision)=>{
       queries.push(revision)
       return {revision:5,indices:revision===3?[0,1]:[1]}
     }},
     backgroundTasks:{activity:()=>({busy:false})},agentRegistry:new Map(),
+    sessionStateViewCache:new WeakMap(),
     sessionViewProjectionCache:new Map([['c',{revision:3,cardPath:'',cardContextRevision:0,isCard:true,mode:'card',
       view:{tavernHelper:{messages:[{role:'user',text:'old0'},{role:'assistant',text:'old1'}]}}}]]),
     volatileSessionViewFields:()=>({}),mvuReceiptsOf:()=>[],synchronizeSessionView:sync,

@@ -1,3 +1,4 @@
+import { projectChatSessionState } from './chat-session-state.js'
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual, promisify } from 'node:util'
@@ -356,6 +357,10 @@ export function createChatJournalStore(options = {}) {
     const state = await cachedState(chatId)
     return state ? structuredClone(state.chat) : undefined
   }
+  async function readSessionState(chatId) {
+    const state = await cachedState(chatId)
+    return state ? projectChatSessionState(state.chat) : undefined
+  }
   function slice(chat, indices) {
     const {messages:rawMessages,...head}=chat
     const messages=Array.isArray(rawMessages)?rawMessages:[]
@@ -539,5 +544,7 @@ export function createChatJournalStore(options = {}) {
     })
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, update, version, remove })
+  // update() owns both boundaries: updater drafts and returned values are
+  // detached from cached state and from each other, including aborted writes.
+  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSlice, readChangedSlice, readChangedIndices, patch, readRevision, update, version, remove })
 }
