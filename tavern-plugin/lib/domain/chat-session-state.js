@@ -1,4 +1,5 @@
-import { rollbackAvailability, hasRollbackMessages } from './rollback-surface.js'
+import { rollbackAvailability, hasRollbackMessages, replayableFailedTurn } from './rollback-surface.js'
+import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
 const str = value => String(value ?? '')
 
@@ -91,7 +92,14 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
       canRollback: false, canClearIncompleteReply: false,
       reason: '当前会话的消息流尚未加载，请重新打开对话后重试；历史正文仍保留。'
     }
+    const replayTarget = replayableFailedTurn({ events: evidence.events || [] })
+    const hasRound = hasRollbackMessages(chat.messages)
     return {
+      canRegenerate: hasRound && !isRescuedHistoryMessage(chat, chat.messages?.findLast(message => message.role === 'assistant')),
+      canEditBody: hasRound,
+      rollbackTargetTurn: settlementTurn(chat),
+      canReplayFailedTurn: replayTarget !== null,
+      replayFailedTurn: replayTarget === null ? null : replayTarget.turn,
       canRollback: rollbackState.canRollback,
       canClearIncompleteReply: rollbackState.canClearIncompleteReply,
       undoRollbackTurn: canUndoRollback(chat, evidence.session) ? chat.rollbackUndo.turn : null,

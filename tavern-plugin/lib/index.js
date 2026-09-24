@@ -3,7 +3,7 @@ import { createSessionStateView, settlementTurn } from './domain/chat-session-st
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
-import { isRescuedHistoryMessage, rescueHistoryNotice } from './domain/chat-history-rescue.js'
+import { rescueHistoryNotice } from './domain/chat-history-rescue.js'
 import { readHostCompatibility } from './domain/host-compatibility.js'
 import { installHostSessionPatch } from './domain/host-session-patch.js'
 import { installHostSubprocessPatch } from './domain/host-subprocess-patch.js'
@@ -116,7 +116,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
 import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
-import { hasRollbackMessages, foregroundSuppressedTurns, clearFailedTurnSurface, supersededRegenerationErrorTurns, replayableFailedTurn } from './domain/rollback-surface.js'
+import { foregroundSuppressedTurns, clearFailedTurnSurface, supersededRegenerationErrorTurns } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
@@ -1418,7 +1418,6 @@ export async function apply(ctx) {
     const projectionEvents = rollbackEvidence.events
     const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
     const rollbackFields = rollbackViewFields(chat, rollbackEvidence)
-    const replayTarget = replayableFailedTurn({ events: projectionEvents })
     return {
       chatId: chat.id,
       contextCompaction: chat.contextCompaction || null,
@@ -1446,11 +1445,6 @@ export async function apply(ctx) {
       inputSources,
       inputTemplateDisplays,
       ...rollbackFields,
-      canReplayFailedTurn: replayTarget !== null,
-      replayFailedTurn: replayTarget === null ? null : replayTarget.turn,
-      canRegenerate: hasRollbackMessages(chat.messages) && !isRescuedHistoryMessage(chat, chat.messages?.findLast(m => m.role === 'assistant')),
-      canEditBody: hasRollbackMessages(chat.messages),
-      rollbackTargetTurn: latestStoryTurn,
       presentation: null,
       replyProjections: replyDisplay.projections,
       tavernStatusView: replyDisplay.statusView || null,
