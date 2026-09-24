@@ -116,7 +116,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
 import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
-import { foregroundSuppressedTurns, clearFailedTurnSurface, supersededRegenerationErrorTurns } from './domain/rollback-surface.js'
+import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
@@ -1415,8 +1415,6 @@ export async function apply(ctx) {
       ? await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, { skeletonUntil }))
       : null
     const rollbackEvidence = sessionDebugEvidence(chat.sessionId, true)
-    const projectionEvents = rollbackEvidence.events
-    const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
     const rollbackFields = rollbackViewFields(chat, rollbackEvidence)
     return {
       chatId: chat.id,
@@ -1456,15 +1454,6 @@ export async function apply(ctx) {
         commit: OFFICIAL_MVU_VERSION.commit,
         assetUrl: OFFICIAL_MVU_VERSION.assetUrl
       } : null,
-      hiddenDshErrorTurns: chat.hiddenDshErrorTurns || [],
-      suppressedDshTurns,
-      regeneratedDshTurns: Object.fromEntries(Object.entries(chat.regeneratedDshTurns && typeof chat.regeneratedDshTurns === 'object' && !Array.isArray(chat.regeneratedDshTurns)
-        ? chat.regeneratedDshTurns : {}).map(function ([turn, visibleTurn]) { return [String(Number(turn)), Number(visibleTurn)] })
-        .filter(function ([turn, visibleTurn]) { return Number.isSafeInteger(Number(turn)) && Number(turn) > 0 && Number.isSafeInteger(visibleTurn) && visibleTurn > 0 })),
-      suppressedDshErrorTurns: supersededRegenerationErrorTurns({
-        events: projectionEvents,
-        suppressedDshTurns: chat.suppressedDshTurns
-      }),
       tavernHelperScripts: helperRuntime.scripts,
       tavernHelperScriptDiagnostics: helperRuntime.diagnostics,
       tavernRemoteAssetPins: Array.isArray(cardExtensions.remoteAssetPins) ? cardExtensions.remoteAssetPins : [],
@@ -1593,7 +1582,10 @@ export async function apply(ctx) {
   async function projectDirtySessionView(chat, previous, dirtyMessageIndices, activity) {
     const mode = chat.mode || 'story'
     const previousMessages = previous.tavernHelper.messages
-    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity), { posture: chat.posture || '' })
+    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity), {
+      posture: chat.posture || '',
+      guides: Array.isArray(chat.guides) ? chat.guides : []
+    })
     const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
       previousMessages,
       dirtyIndices: dirtyMessageIndices

@@ -1,4 +1,4 @@
-import { rollbackAvailability, hasRollbackMessages, replayableFailedTurn } from './rollback-surface.js'
+import { rollbackAvailability, hasRollbackMessages, replayableFailedTurn, foregroundSuppressedTurns, supersededRegenerationErrorTurns } from './rollback-surface.js'
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
 const str = value => String(value ?? '')
@@ -12,7 +12,7 @@ export function projectChatSessionState(chat) {
   const selected = {}
   for (const key of ['id', 'sessionId', '_storageRevision', 'mode', 'cardPath', 'cardContextRevision',
     'backgroundConfigVersion', 'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
-    'settleError', 'scriptState', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {
+    'settleError', 'scriptState', 'hiddenDshErrorTurns', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {
     if (Object.hasOwn(chat, key)) selected[key] = chat[key]
   }
   if (chat.importHistory) selected.importHistory = {
@@ -95,6 +95,12 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
     const replayTarget = replayableFailedTurn({ events: evidence.events || [] })
     const hasRound = hasRollbackMessages(chat.messages)
     return {
+      hiddenDshErrorTurns: chat.hiddenDshErrorTurns || [],
+      suppressedDshTurns: foregroundSuppressedTurns(chat, evidence.events || []),
+      regeneratedDshTurns: Object.fromEntries(Object.entries(chat.regeneratedDshTurns && typeof chat.regeneratedDshTurns === 'object' && !Array.isArray(chat.regeneratedDshTurns) ? chat.regeneratedDshTurns : {})
+        .map(([turn, visibleTurn]) => [String(Number(turn)), Number(visibleTurn)])
+        .filter(([turn, visibleTurn]) => Number.isSafeInteger(Number(turn)) && Number(turn) > 0 && Number.isSafeInteger(visibleTurn) && visibleTurn > 0)),
+      suppressedDshErrorTurns: supersededRegenerationErrorTurns({ events: evidence.events || [], suppressedDshTurns: chat.suppressedDshTurns }),
       canRegenerate: hasRound && !isRescuedHistoryMessage(chat, chat.messages?.findLast(message => message.role === 'assistant')),
       canEditBody: hasRound,
       rollbackTargetTurn: settlementTurn(chat),
