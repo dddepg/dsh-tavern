@@ -1,3 +1,4 @@
+import { debugSidechat } from './debug-sidechat.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
 import { encodeMigratedSessionLog, parseSessionLog } from '../../tavern-plugin/lib/domain/legacy-session-migration.js'
 import { compactionChecks } from './compaction.mjs'
@@ -36,8 +37,11 @@ async function step(name, action) {
 }
 async function savedChat() {
   const ids = await readdir(join(data, 'chats'))
-  assert.equal(ids.length, 1, '本次只应创建一局游戏')
-  return createChatJournalStore({ dataRoot: data }).read(ids[0])
+  const store = createChatJournalStore({ dataRoot: data })
+  const chats = await Promise.all(ids.map(id => store.read(id)))
+  const games = chats.filter(chat => chat.mode !== 'card')
+  assert.equal(games.length, 1, '本次只应创建一局游戏')
+  return games[0]
 }
 function inspectSaved(chat) {
   const replies = chat.messages.filter(message => message.role === 'assistant' && !message.greeting)
@@ -189,7 +193,9 @@ try {
     assert.deepEqual(errors, [], '浏览器不得出现未捕获异常')
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
-  if (compactionScenario) {
+  if (process.argv.includes('--debug-sidechat')) {
+    await debugSidechat({ page, step, savedChat, output, report, restartServer })
+  } else if (compactionScenario) {
     const installLegacyFixture = async () => {
       const chat = await savedChat()
       let directory, storedHeader
