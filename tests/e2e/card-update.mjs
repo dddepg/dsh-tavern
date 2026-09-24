@@ -9,6 +9,12 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
   const prose = chat => chat.messages.map(message => [message.role,message.sourceText ?? message.text])
   const current = chat => chat.messages.at(-1).variables[chat.messages.at(-1).swipeId || 0].stat_data
   const status = () => page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])')
+  async function noRawTemplate() {
+    for (const frame of page.frames()) {
+      const text = await frame.locator('body').innerText().catch(() => '')
+      assert.ok(!text.includes('<%'), '正文和状态栏均不能露出原始 EJS 模板')
+    }
+  }
   async function save() {
     await writeFile(path,JSON.stringify(document)); await page.reload({waitUntil:'domcontentloaded'})
     await page.getByText('酒馆状态',{exact:true}).filter({visible:true}).first().click()
@@ -49,6 +55,7 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
     assert.deepEqual((await savedChat()).messages.map(message=>message.variables),beforeVariables,'只改展示不能重写历史变量快照')
     await page.reload(); await status().locator('#ejs-current').filter({hasText:/^EJS 金币：10$/}).waitFor()
     assert.equal((await savedChat()).variables?.updateSideEffect,undefined)
+    await noRawTemplate()
     await page.screenshot({path:join(output,'card-update-ejs.png')})
   })
   await step('无效 EJS 更新失败：旧模板和存档仍可使用',async()=>{
@@ -122,6 +129,7 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
     await status().locator('#ejs-current').filter({hasText:/^EJS 金币：20$/}).waitFor()
     assert.equal(current(await savedChat()).coins,20)
     assert.equal((await savedChat()).sessionId,initial.sessionId)
+    await noRawTemplate()
     await page.screenshot({path:join(output,'card-update-continued.png')})
   })
   report.cardUpdate={static:true,ejs:true,isolatedSideEffects:true,failedUpdatePreserved:true,structureMigration:true,worldbookRequest:true,continue:true,rollback:true}

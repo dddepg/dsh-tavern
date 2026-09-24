@@ -236,7 +236,10 @@ export function createLiveCardUpdate({readGlobals = async () => ({})} = {}) {
       while(cache.size > 8) cache.delete(cache.keys().next().value)
     }
     const rendered = await pending
-    return {...display,...projectPersistentStatusView(chat.messages, display.projections, {...options,regexScripts:rendered,allowStaticStatus:true})}
+    // Remove the authored status fragment before projecting its rendered form.
+    // Their contents differ for EJS; matching only rendered HTML leaks raw EJS into prose.
+    const cleaned = projectPersistentStatusView(chat.messages, display.projections, {...options,allowStaticStatus:true})
+    return {...display,...projectPersistentStatusView(chat.messages, cleaned.projections, {...options,regexScripts:rendered,allowStaticStatus:true})}
   }
   return {prepare,project,dispose:()=>runtime.dispose()}
 }
