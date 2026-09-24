@@ -9,12 +9,15 @@ export function formatTemplateSource(text) {
   return template.innerHTML
 }
 
-export function formatTemplateMessage(text, _name, isSystem = false, isUser = false, index = chat.length - 1) {
+function formatDisplayText(text, isSystem, isUser, index) {
   const source = isSystem ? text : getRegexedString(String(text ?? ''), isUser ? 1 : 2,
     { isMarkdown: true, depth: Math.max(0, chat.length - index - 1), statusBoundaries: true })
-  // Upstream's render evaluator uses HTML-escaped EJS delimiters, including
-  // inside raw script/style text where the DOM would not escape them for us.
-  return formatTemplateSource(String(source ?? '').replace(/\{\{\s*(user|char)\s*\}\}/gi, (token, name) => name.toLowerCase() === 'user' ? name1 || '你' : name2 || token).replace(/<%/g, '&lt;%').replace(/%>/g, '%&gt;'))
+  return String(source ?? '').replace(/\{\{\s*(user|char)\s*\}\}/gi, (token, name) => name.toLowerCase() === 'user' ? name1 || '你' : name2 || token)
+}
+
+export function formatTemplateMessage(text, _name, isSystem = false, isUser = false, index = chat.length - 1) {
+  // Upstream evaluates HTML-escaped delimiters, including in script/style text.
+  return formatTemplateSource(formatDisplayText(text, isSystem, isUser, index).replace(/<%/g, '&lt;%').replace(/%>/g, '%&gt;'))
 }
 
 export function captureTemplateDisplay(message, index) {
@@ -22,6 +25,18 @@ export function captureTemplateDisplay(message, index) {
   if (html === formatTemplateSource(message.mes)) return undefined
   const parsed = document.createElement('template'); parsed.innerHTML = html
   const root = parsed.content
+  // Host decorations are not template output. Compare against ordinary display
+  // formatting, not raw Markdown (which excludes display regexes and macros).
+  for (const button of root.querySelectorAll('button[data-template-copy]')) button.remove()
+  const formattingText = formatDisplayText(message.mes, message.is_system, message.is_user, index)
+  const formatted = formatTemplateMessage(message.mes, message.name, message.is_system, message.is_user, index)
+  if (parsed.innerHTML === formatted && !root.querySelector('[data-dsh-template-status]')) {
+    if (formattingText === message.mes) return undefined
+    // Freeze ordinary formatting too, without making the whole reply an HTML frame.
+    return {source:message.mes,swipe:message.swipe_id || 0,html:formatted,formattingText}
+  }
+  // Preserve decorations in real template output.
+  parsed.innerHTML = html
   const parts = []
   const append = content => { if (content.trim()) parts.push({kind:'html',content}) }
   // Keep declared status panels and fenced HTML separate from surrounding prose.
