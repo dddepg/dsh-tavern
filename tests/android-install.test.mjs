@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -172,11 +172,11 @@ test('Android 安装脚本增量配置两个 Profile，失败不会伪装成成�
   assert.match(installer, /install --host android/)
   assert.match(installer, /DSH_TAVERN_RUNTIME_HOST="android"/)
   assert.doesNotMatch(installer, /dsh-cost-meter/)
-  assert.doesNotMatch(installer, /rm -rf|\|\| true/)
+  assert.doesNotMatch(installer, /rm -rf -- \"\$\{DSH_ROOT\}/)
   assert.doesNotMatch(installer, /tavern-plugin\/lib\/client\.js/)
 })
 
-for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed', 'standalone']) {
+for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed', 'standalone', 'restored', 'restored-failed', 'invalid-install', 'swap-failed']) {
 test(`Android 安装固定 pnpm 并先安装依赖再停止旧服务：${initialVersion}`, async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dsh-android-install-order-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -215,13 +215,25 @@ fi
     await mkdir(path.dirname(managedPnpm), { recursive: true })
     await writeFile(managedPnpm, await readFile(fixturePnpm), { mode: 0o755 })
   }
+  if (initialVersion.startsWith('restored') || ['invalid-install', 'swap-failed'].includes(initialVersion)) {
+    await mkdir(path.dirname(managedPnpm), { recursive: true })
+    await writeFile(managedPnpm, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    await writeFile(path.join(pnpmRoot, 'bin/pn'), 'restored ordinary file')
+  }
   await writeFile(path.join(mockBin, 'npm'), `#!/usr/bin/env bash
 set -euo pipefail
 printf 'npm %s\\n' "\$*" >> "${events}"
-[ "${initialVersion}" != install-failed ] || exit 1
-[ "\$*" = "install --global --prefix ${pnpmRoot} pnpm@11.25.0" ] || exit 92
-mkdir -p "${path.dirname(managedPnpm)}"
-cp "${fixturePnpm}" "${managedPnpm}"
+[ "${initialVersion}" != install-failed ] && [ "${initialVersion}" != restored-failed ] || exit 1
+[ "\$1 \$2 \$3 \$5" = "install --global --prefix pnpm@11.25.0" ] || exit 92
+prefix="\$4"
+[ ! -f "\$prefix/bin/pn" ] || { echo EEXIST >&2; exit 1; }
+mkdir -p "\$prefix/bin"
+cp "${fixturePnpm}" "\$prefix/bin/pnpm"
+if [ "${initialVersion}" = invalid-install ]; then printf 'missing' > "${versionFile}"; fi
+`, { mode: 0o755 })
+  if (initialVersion === 'swap-failed') await writeFile(path.join(mockBin, 'mv'), `#!/usr/bin/env bash
+if [[ "\$2" == *.install.* ]] && [[ "\$2" != *.previous ]] && [ "\$3" = "${pnpmRoot}" ]; then exit 1; fi
+exec /bin/mv "\$@"
 `, { mode: 0o755 })
   await writeFile(path.join(mockBin, 'dsh'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 })
   await writeFile(path.join(mockBin, 'node'), `#!/usr/bin/env bash
@@ -248,9 +260,12 @@ esac
     env: { ...process.env, DSH_HOME: dshHome, DSH_TAVERN_ANDROID_STANDALONE: initialVersion === 'standalone' ? '1' : '0', PATH: `${mockBin}${path.delimiter}${process.env.PATH}` },
     encoding: 'utf8',
   })
-  const recorded = (await readFile(events, 'utf8')).trim().split('\n')
-  if (initialVersion === 'install-failed') {
+  const recorded = (await readFile(events, 'utf8')).replace(/11\.25\.0\.install\.[^ \n]+/g, '11.25.0').trim().split('\n')
+  if (['install-failed', 'restored-failed', 'invalid-install', 'swap-failed'].includes(initialVersion)) {
+    if (['restored-failed', 'invalid-install', 'swap-failed'].includes(initialVersion)) assert.equal(await readFile(path.join(pnpmRoot, 'bin/pn'), 'utf8'), 'restored ordinary file')
     assert.notEqual(result.status, 0)
+    const siblings = await readdir(path.dirname(pnpmRoot)).catch(() => [])
+    assert.equal(siblings.some(name => name.includes('.install.')), false, 'temporary prefixes must be cleaned')
     assert.deepEqual(recorded, [`npm install --global --prefix ${pnpmRoot} pnpm@11.25.0`])
     return
   }
