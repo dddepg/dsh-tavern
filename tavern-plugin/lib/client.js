@@ -1955,7 +1955,8 @@ window.__ModuleLoader__.load({
             function capture() {
                 for (const entry of baselines) for (const node of Array.from(entry.root.childNodes || entry.root.children || [])) {
                     if (entry.nodes.has(node) || owned.has(node) || node.hasAttribute?.("data-tavern-retained-frames")) continue;
-                    owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: entry.root === hostDocument.body });
+                    owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: entry.root === hostDocument.body,
+                        root: entry.root, nextSibling: node.nextSibling, parked: false });
                 }
             }
             baseline();
@@ -1965,8 +1966,25 @@ window.__ModuleLoader__.load({
                     if (visible) capture();
                     visible = next;
                     for (const [node, previous] of owned) {
+                        // Hidden nodes still match the fixed IDs used by card scripts
+                        // to detect an existing panel. Remove inactive artifacts from
+                        // the shared document so another conversation can initialize.
+                        // Use native DOM removal: jQuery.remove() discards handlers.
+                        if (!next && node.parentNode === previous.root) {
+                            previous.nextSibling = node.nextSibling;
+                            previous.root.removeChild(node);
+                            previous.parked = true;
+                        }
                         if (previous.body) node.hidden = next ? previous.hidden : true;
                         else if (node.tagName === "STYLE" || node.tagName === "LINK") node.disabled = next ? previous.disabled : true;
+                    }
+                    if (next) for (const [node, previous] of Array.from(owned).reverse()) {
+                        if (!previous.parked) continue;
+                        previous.parked = false;
+                        if (node.parentNode) continue;
+                        if (previous.nextSibling && previous.nextSibling.parentNode === previous.root) {
+                            previous.root.insertBefore(node, previous.nextSibling);
+                        } else previous.root.append(node);
                     }
                     if (next) baseline();
                 },
