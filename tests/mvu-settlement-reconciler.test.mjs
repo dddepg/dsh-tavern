@@ -131,3 +131,41 @@ test('读取旧状态期间到达的持久待办唤醒不会被吞掉', async ()
   assert.equal(resumes, 1)
   reconciler.dispose()
 })
+
+test('dispose during a pending read prevents resume and retry', async () => {
+  const gate = deferred(), started = deferred(), scheduled = []
+  let resumes = 0
+  const reconciler = createMvuSettlementReconciler({list:async()=>[],
+    resolve:async()=>{started.resolve();await gate.promise;return {id:'c',pending:true}},
+    shouldResume:chat=>chat.pending,isReady:()=>true,resume:async()=>{resumes++},
+    schedule:fn=>{scheduled.push(fn);return 1},cancel(){}})
+  const running=reconciler.wake('s')
+  await started.promise
+  reconciler.dispose();gate.resolve();await running
+  assert.equal(resumes,0)
+  assert.equal(scheduled.length,0)
+})
+
+test('dispose aborts resume adapter and suppresses the post-resume read',async()=>{
+  const entered=deferred(),end=deferred();let reads=0,signal
+  const r=createMvuSettlementReconciler({list:async()=>[],resolve:async()=>{reads++;return {id:'c',pending:true}},
+    shouldResume:c=>c.pending,isReady:()=>true,resume:async(_id,context)=>{signal=context.signal;entered.resolve();await end.promise}})
+  const running=r.wake('s');await entered.promise;r.dispose();end.resolve();await running
+  assert.equal(signal.aborted,true);assert.equal(reads,1)
+})
+test('cancelled timer callbacks cannot start another check after a ready wake',async()=>{
+  const timers=[];let ready=false,pending=true,reads=0,resumes=0
+  const r=createMvuSettlementReconciler({list:async()=>[],resolve:async()=>{reads++;return {id:'c',pending}},
+    shouldResume:c=>c.pending,isReady:()=>ready,resume:async()=>{resumes++;pending=false},
+    schedule:fn=>{timers.push(fn);return timers.length},cancel(){}})
+  await r.wake('s');ready=true;await r.wake('s')
+  const before=reads;await timers[0]()
+  assert.equal(reads,before);assert.equal(resumes,1);r.dispose()
+})
+test('startup scans coalesce and do not wake sessions after disposal',async()=>{
+  const entered=deferred(),end=deferred();let lists=0,reads=0
+  const r=createMvuSettlementReconciler({list:async()=>{lists++;entered.resolve();await end.promise;return [{sessionId:'s'}]},
+    resolve:async()=>{reads++;return null},shouldResume:()=>false,isReady:()=>true,resume:async()=>{}})
+  const a=r.scan(),b=r.scan();await entered.promise;r.dispose();end.resolve();await Promise.all([a,b])
+  assert.equal(lists,1);assert.equal(reads,0)
+})

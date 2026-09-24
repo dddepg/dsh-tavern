@@ -3,88 +3,107 @@ function required(options, name) {
   return options[name]
 }
 
-/**
- * Reconciles durable pending MVU submissions with the browser runtime.
- * Signals are hints: every attempt re-reads authoritative chat state.
- */
+/** Durable state decides eligibility; notifications only request a fresh check. */
 export function createMvuSettlementReconciler(options = {}) {
   const list = required(options, 'list')
   const resolve = required(options, 'resolve')
   const shouldResume = required(options, 'shouldResume')
   const isReady = required(options, 'isReady')
   const resume = required(options, 'resume')
-  const schedule = typeof options.schedule === 'function' ? options.schedule : setTimeout
-  const cancel = typeof options.cancel === 'function' ? options.cancel : clearTimeout
-  const onError = typeof options.onError === 'function' ? options.onError : function () {}
+  const schedule = options.schedule || setTimeout
+  const cancel = options.cancel || clearTimeout
+  const onError = options.onError || function () {}
   const retryDelayMs = Math.max(10, Number(options.retryDelayMs) || 1000)
-  const inFlight = new Map()
-  const retries = new Map()
-  const wakeAgain = new Set()
+  const entries = new Map()
+  const scanKey = Symbol('startup-scan')
   let disposed = false
 
-  function retry(key, callback, error) {
-    if (disposed || retries.has(key)) return
-    try { if (error) onError(error, key === '@scan' ? '' : key) } catch {}
-    const timer = schedule(async function () {
-      retries.delete(key)
-      if (!disposed) await callback()
-    }, retryDelayMs)
-    timer?.unref?.()
-    retries.set(key, timer)
+  function current(key, entry) {
+    return !disposed && entries.get(key) === entry && !entry.controller.signal.aborted
   }
 
-  async function attempt(sessionId) {
-    if (disposed) return false
-    try {
-      const chat = await resolve(sessionId)
-      if (!chat || !shouldResume(chat)) return false
-      if (!isReady(sessionId, chat)) {
-        retry(sessionId, () => wake(sessionId))
-        return false
-      }
-      await resume(chat.id)
-      const latest = await resolve(sessionId)
-      if (latest && shouldResume(latest)) retry(sessionId, () => wake(sessionId))
-      return true
-    } catch (error) {
-      retry(sessionId, () => wake(sessionId), error)
-      return false
+  function arm(key, entry) {
+    if (!current(key, entry) || entry.timer) return
+    const timer = { handle: null }
+    entry.timer = timer
+    timer.handle = schedule(async () => {
+      // A cancelled callback may already be queued by the host event loop.
+      if (!current(key, entry) || entry.timer !== timer) return
+      entry.timer = null
+      return start(key, entry.work)
+    }, retryDelayMs)
+    timer.handle?.unref?.()
+  }
+
+  function start(key, work) {
+    if (disposed) return Promise.resolve(false)
+    let entry = entries.get(key)
+    if (entry?.promise) {
+      entry.dirty = true
+      return entry.promise
     }
+    if (!entry) {
+      entry = { controller: new AbortController(), promise: null, timer: null, dirty: false, work }
+      entries.set(key, entry)
+    }
+    if (entry.timer) {
+      cancel(entry.timer.handle)
+      entry.timer = null
+    }
+    entry.dirty = false
+    const alive = () => current(key, entry)
+    const signal = entry.controller.signal
+    // Publish the promise before entering injected adapters (including sync ones).
+    entry.promise = Promise.resolve().then(() => alive() ? work({ alive, signal, retry() { entry.dirty = true } }) : false)
+      .catch(error => {
+        if (alive()) {
+          entry.dirty = true
+          try { onError(error, key === scanKey ? '' : key) } catch {}
+        }
+        return false
+      }).finally(() => {
+        entry.promise = null
+        if (!alive()) return
+        if (entry.dirty) arm(key, entry)
+        else entries.delete(key)
+      })
+    return entry.promise
   }
 
   function wake(sessionId) {
     const id = String(sessionId || '')
-    if (disposed || id === '') return Promise.resolve(false)
-    if (inFlight.has(id)) {
-      wakeAgain.add(id)
-      return inFlight.get(id)
-    }
-    const running = attempt(id).finally(function () {
-      inFlight.delete(id)
-      // The running attempt may have read before a pending commit or ready
-      // transition. Coalesce signals, but never lose the obligation to re-read.
-      // Use the existing delay so completion signals cannot cause a hot loop.
-      if (wakeAgain.delete(id)) retry(id, () => wake(id))
+    if (!id) return Promise.resolve(false)
+    return start(id, async ({ alive, signal, retry }) => {
+      const chat = await resolve(id, { signal })
+      if (!alive() || !chat || !shouldResume(chat)) return false
+      if (!isReady(id, chat)) { retry(); return false }
+      if (!alive()) return false
+      await resume(chat.id, { signal })
+      if (!alive()) return false
+      const latest = await resolve(id, { signal })
+      if (!alive()) return false
+      if (latest && shouldResume(latest)) retry()
+      return true
     })
-    inFlight.set(id, running)
-    return running
   }
 
-  async function scan() {
-    if (disposed) return
-    try {
-      const rows = await list()
+  function scan() {
+    return start(scanKey, async ({ alive, signal }) => {
+      const rows = await list({ signal })
+      if (!alive()) return false
       await Promise.all(rows.map(row => wake(row.sessionId)))
-    } catch (error) {
-      retry('@scan', scan, error)
-    }
+      return alive()
+    })
   }
 
   function dispose() {
+    if (disposed) return
     disposed = true
-    for (const timer of retries.values()) cancel(timer)
-    retries.clear()
-    wakeAgain.clear()
+    for (const entry of entries.values()) {
+      if (entry.timer) cancel(entry.timer.handle)
+      entry.controller.abort()
+    }
+    entries.clear()
   }
 
   return Object.freeze({ wake, scan, dispose })

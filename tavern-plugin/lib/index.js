@@ -1,3 +1,4 @@
+import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
 import { isRescuedHistoryMessage, rescueHistoryNotice } from './domain/chat-history-rescue.js'
@@ -442,7 +443,7 @@ export async function apply(ctx) {
     return result.renderedText
   }
 
-  const settlementJobs = new Map()
+  const settlementJobs = createSettlementJobs({ run: runSettlement, onSettled: onSettlementSettled })
   const scriptContinuity = createScriptContinuity()
   const storyTimeline = createStoryTimeline({ id: uid, now: Date.now })
   const cardPreparation = createCardPreparation({ id: function () { return uid('card') }, now: Date.now })
@@ -2699,30 +2700,16 @@ export async function apply(ctx) {
       }
     }
   }
-  function queueSettlement(chatId) {
-    const existing = settlementJobs.get(chatId)
-    if (existing !== undefined) return existing.promise
-    const job = { controller: new AbortController(), promise: null }
-    job.promise = runSettlement(chatId, job.controller.signal).finally(async function () {
-      if (settlementJobs.get(chatId) === job) settlementJobs.delete(chatId)
-      // Reconcile the durable queue even if the ready notification raced with defer.
-      try {
-        const latest = await readChat(chatId)
-        if (latest) void mvuSettlementReconciler.wake(latest.sessionId)
-      } catch { void mvuSettlementReconciler.scan() }
-    })
-    settlementJobs.set(chatId, job)
-    return job.promise
+  async function onSettlementSettled(chatId, signal) {
+    try {
+      const latest = await readChat(chatId)
+      if (!signal.aborted && latest) void mvuSettlementReconciler.wake(latest.sessionId)
+    } catch {
+      if (!signal.aborted) void mvuSettlementReconciler.scan()
+    }
   }
-  async function cancelSettlement(chatId, options = {}) {
-    const job = settlementJobs.get(chatId)
-    if (job === undefined) return false
-    job.controller.abort()
-    if (options.wait === false) {
-      if (settlementJobs.get(chatId) === job) settlementJobs.delete(chatId)
-    } else await job.promise.catch(function () {})
-    return true
-  }
+  function queueSettlement(chatId) { return settlementJobs.start(chatId) }
+  function cancelSettlement(chatId, options) { return settlementJobs.cancel(chatId, options) }
   const mvuSettlementReconciler = createMvuSettlementReconciler({
     list: () => conversationRegistry.list(),
     resolve: sessionId => chatForSession(sessionId),
@@ -2748,6 +2735,7 @@ export async function apply(ctx) {
   ctx.effect(() => function () {
     unsubscribeMvuRuntimeReady()
     mvuSettlementReconciler.dispose()
+    settlementJobs.dispose()
   }, 'dsh-tavern: reconcile deferred MVU settlement')
   async function stopBackground(sessionId, operationId) {
     const chat = await chatForSession(sessionId)
