@@ -1,9 +1,10 @@
+import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
 import { createSessionStateView, settlementTurn, pendingMvuSettlementState } from './domain/chat-session-state.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
-import { isRescuedHistoryMessage, rescueHistoryNotice } from './domain/chat-history-rescue.js'
+import { rescueHistoryNotice } from './domain/chat-history-rescue.js'
 import { readHostCompatibility } from './domain/host-compatibility.js'
 import { installHostSessionPatch } from './domain/host-session-patch.js'
 import { installHostSubprocessPatch } from './domain/host-subprocess-patch.js'
@@ -116,7 +117,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
 import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
-import { hasRollbackMessages, foregroundSuppressedTurns, clearFailedTurnSurface, supersededRegenerationErrorTurns, replayableFailedTurn } from './domain/rollback-surface.js'
+import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
@@ -568,11 +569,15 @@ export async function apply(ctx) {
     const normalized = str(cardPath) === '' ? '' : normalizeResourcePath(cardPath, 'card')
     const workspace = await readCardWorkspace(normalized)
     const card = workspace === undefined ? undefined : cardPreparation.project(workspace)
-    if (card !== undefined) card.path = normalized
+    if (card !== undefined) {
+      card.path = normalized
+      const raw = workspace.raw?.data || workspace.raw || {}
+      card.extensions = structuredClone(raw.extensions || {})
+    }
     return card
   }
-  async function readCardExtensions(cardPath) {
-    const workspace = await readCardWorkspace(cardPath)
+  async function readCardExtensions(cardPath, chat) {
+    const workspace = chat?.cardDefinitionSnapshot || await readCardWorkspace(cardPath)
     if (workspace === undefined) return undefined
     const extensions = cardPreparation.present({ card: workspace, as: 'card-extensions' })
     return withGlobalRegexScripts(extensions, await tavernExtensionSettings.read())
@@ -817,6 +822,7 @@ export async function apply(ctx) {
     }
   })
   async function readChatCard(chat) {
+    if (chat.mode !== 'card' && chat.cardDefinitionSnapshot) return structuredClone(chat.cardDefinitionSnapshot)
     const card = await readCard(chat.cardPath)
     if (card === undefined) throw new Error('人物卡不存在: ' + chat.cardPath)
     return card
@@ -1094,7 +1100,7 @@ export async function apply(ctx) {
     const cardDiagnostics = { version: 1, capturedAt: Date.now(), source: 'export-time', cardPath: chat.cardPath, errors: [] }
     try { cardDiagnostics.card = await readChatCard(chat) }
     catch { cardDiagnostics.errors.push('人物卡读取失败') }
-    try { cardDiagnostics.extensions = await readCardExtensions(chat.cardPath) }
+    try { cardDiagnostics.extensions = await readCardExtensions(chat.cardPath, chat) }
     catch { cardDiagnostics.errors.push('脚本与正则配置读取失败') }
     try {
       const worldbook = cardDiagnostics.card ? await worldBooks.bound(chat.cardPath, cardDiagnostics.card, chat) : null
@@ -1191,32 +1197,40 @@ export async function apply(ctx) {
   async function captureDisplayRuntime(sessionId, requestedTurn, partIndex, runtime) {
     const chat = await chatForSession(str(sessionId))
     if (chat === undefined || groupOfMode(chat.mode) !== 'play') throw new Error('当前 Session 没有绑定游玩对话')
-    const turn = Math.max(1, Number(requestedTurn) || 0)
-    const message = assistantMessageAtTurn(chat, turn)
-    if (message === null) throw new Error('游玩记录中不存在第 ' + turn + ' 轮回复')
-    const index = Math.max(0, Math.min(100, Number(partIndex) || 0))
-    let capture = sanitizeDisplayRuntime(runtime)
-    const existingRuntime = message.displayRuntime && typeof message.displayRuntime === 'object' ? message.displayRuntime : null
-    const sourceActivityAt = Math.max(0, Number(existingRuntime && existingRuntime.sourceActivityAt) || Number(chat.updatedAt) || 0)
-    const latestTurn = Math.max.apply(null, (chat.messages || []).filter(function (item) { return item && item.role === 'assistant' }).map(function (item) { return Math.max(1, Number(item.turn) || 1) }).concat([1]))
-    capture.captureKind = turn === latestTurn && Date.now() - sourceActivityAt < 300000 ? 'live' : 'replay'
-    const current = existingRuntime || { frames: [] }
-    const currentFrames = Array.isArray(current.frames) ? current.frames : []
-    const existingFrame = currentFrames.find(function (item) { return Number(item && item.partIndex) === index && str(item.panelId) === capture.panelId })
-    if (existingFrame && existingFrame.mvuViewUsed === true) capture.mvuViewUsed = true
-    if (existingFrame && capture.mvuViewUsed === true && capture.dom === '' && capture.console.length === 0 && capture.network.length === 0 && capture.errors.length === 0) {
-      capture = Object.assign({}, existingFrame, {
-        capturedAt: capture.capturedAt,
-        captureKind: capture.captureKind,
-        mvuViewUsed: true
-      })
-    }
-    if (existingFrame && sameDisplayRuntimeCapture(existingFrame, capture)) return { captured: false, turn, partIndex: index, captureKind: capture.captureKind }
-    const frames = currentFrames.filter(function (item) { return Number(item && item.partIndex) !== index || str(item.panelId) !== capture.panelId })
-    frames.push(Object.assign({ partIndex: index }, capture))
-    message.displayRuntime = { version: 1, sourceActivityAt, frames: frames.sort(function (a, b) { return a.partIndex - b.partIndex }) }
-    await writeChat(chat, { source: 'display.capture', touchUpdatedAt: false })
-    return { captured: true, turn, partIndex: index, captureKind: capture.captureKind }
+    let result
+    await updateChat(chat.id, currentChat => {
+      const chat = currentChat
+      const turn = Math.max(1, Number(requestedTurn) || 0)
+      const message = assistantMessageAtTurn(chat, turn)
+      if (message === null) throw new Error('游玩记录中不存在第 ' + turn + ' 轮回复')
+      const index = Math.max(0, Math.min(100, Number(partIndex) || 0))
+      let capture = sanitizeDisplayRuntime(runtime)
+      const existingRuntime = message.displayRuntime && typeof message.displayRuntime === 'object' ? message.displayRuntime : null
+      const sourceActivityAt = Math.max(0, Number(existingRuntime && existingRuntime.sourceActivityAt) || Number(chat.updatedAt) || 0)
+      const latestTurn = Math.max.apply(null, (chat.messages || []).filter(function (item) { return item && item.role === 'assistant' }).map(function (item) { return Math.max(1, Number(item.turn) || 1) }).concat([1]))
+      capture.captureKind = turn === latestTurn && Date.now() - sourceActivityAt < 300000 ? 'live' : 'replay'
+      const current = existingRuntime || { frames: [] }
+      const currentFrames = Array.isArray(current.frames) ? current.frames : []
+      const existingFrame = currentFrames.find(function (item) { return Number(item && item.partIndex) === index && str(item.panelId) === capture.panelId })
+      if (existingFrame && existingFrame.mvuViewUsed === true) capture.mvuViewUsed = true
+      if (existingFrame && capture.mvuViewUsed === true && capture.dom === '' && capture.console.length === 0 && capture.network.length === 0 && capture.errors.length === 0) {
+        capture = Object.assign({}, existingFrame, {
+          capturedAt: capture.capturedAt,
+          captureKind: capture.captureKind,
+          mvuViewUsed: true
+        })
+      }
+      if (existingFrame && sameDisplayRuntimeCapture(existingFrame, capture)) { result = { captured: false, turn, partIndex: index, captureKind: capture.captureKind }; return undefined }
+      const frames = currentFrames.filter(function (item) { return Number(item && item.partIndex) !== index || str(item.panelId) !== capture.panelId })
+      frames.push(Object.assign({ partIndex: index }, capture))
+      message.displayRuntime = { version: 1, sourceActivityAt, frames: frames.sort(function (a, b) { return a.partIndex - b.partIndex }) }
+      // Diagnostic captures must not expire an otherwise valid undo point.
+      // Do not revive one invalidated by an earlier gameplay write.
+      if (chat.rollbackUndo?.ready && chat.rollbackUndo.storageRevision === chat._storageRevision) chat.rollbackUndo.storageRevision = chat._storageRevision + 1
+      result = { captured: true, turn, partIndex: index, captureKind: capture.captureKind }
+      return chat
+    }, { source: 'display.capture', touchUpdatedAt: false })
+    return result
   }
   const tavernScriptHostAdapter = createTavernScriptHostAdapter({
     recordResourceSave: (sessionId, summary) => apiDiagnostics.recordResourceSave(sessionId, summary),
@@ -1270,7 +1284,7 @@ export async function apply(ctx) {
       }
     },
     diagnostics: mvuDiagnostics,
-    hasScripts: async function (chat) { return hasTavernScriptRuntime(chat, (await readCardExtensions(chat.cardPath))?.helperScripts) },
+    hasScripts: async function (chat) { return hasTavernScriptRuntime(chat, (await readCardExtensions(chat.cardPath, chat))?.helperScripts) },
     isPlayChat: function (chat) { return groupOfMode(chat.mode) === 'play' }
   })
 
@@ -1315,6 +1329,12 @@ export async function apply(ctx) {
     }
     return Object.assign(cardPreparation.present({ card: card, as: 'view' }), { path: str(card.path || chat.cardPath) })
   }
+  async function cardUpdateStatus(chat) {
+    try { return await playCardSnapshots.updateStatus(chat, await readCard(chat.cardPath)) }
+    catch (error) { return {available:true,error:String(error.message || error)} }
+  }
+  const liveCardUpdate = createLiveCardUpdate({readGlobals:readPromptTemplateGlobalVariables})
+  ctx.effect(() => () => liveCardUpdate.dispose())
   const incrementalReplyView = createIncrementalReplyView({ readChanges: (id, revision) => chatPersistence.readChangedSlice(id, revision) })
   async function view(chat, card, persistedProjection = false, options = {}) {
     templateSync.schedule(chat.sessionId, chat._storageRevision)
@@ -1332,7 +1352,7 @@ export async function apply(ctx) {
     let replyDisplay = { projections: replyProjectionsOf(chat), presentation: null, latestSourceBacked: false }
     let cardExtensions = { regexScripts: [], helperScripts: [] }
     if ((chat.mode || 'story') === 'story' || (chat.mode || 'story') === 'script') {
-      cardExtensions = await requestPerformance.stage('cardExtensions', () => readCardExtensions(chat.cardPath)) || cardExtensions
+      cardExtensions = await requestPerformance.stage('cardExtensions', () => readCardExtensions(chat.cardPath, chat)) || cardExtensions
       const pinnedExtensions = await requestPerformance.stage('remoteAssets', () => tavernRemoteAssets.pinExtensions(cardExtensions))
       cardExtensions = Object.assign({}, cardExtensions, {
         helperScripts: pinnedExtensions.helperScripts,
@@ -1346,6 +1366,7 @@ export async function apply(ctx) {
         regexScripts: composeTavernRegexScripts(cardExtensions, presetRegexScripts),
         placement: 2, isMarkdown: true, isEdit: false, depth: 0
       }, { charName: chat.cardName, macroState: chat.macroState, regexScripts: cardExtensions.regexScripts }))
+      replyDisplay = await liveCardUpdate.project(chat, card, replyDisplay, {charName:chat.cardName,macroState:chat.macroState,regexScripts:cardExtensions.regexScripts})
       replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
     }
     const activity = backgroundTasks.activity(chat)
@@ -1392,7 +1413,7 @@ export async function apply(ctx) {
       if (message.templateHistoryEdit || message.templateInputSource) inputSources[inputTurn] = message.sourceText ?? message.text
     }
     const cardUpdate = ['story', 'script'].includes(chat.mode || 'story') && chat.requestMode !== 'sillytavern'
-      ? await playCardSnapshots.updateStatus(chat, card) : { available: false }
+      ? await cardUpdateStatus(chat) : { available: false }
     const helperEnabled = hasTavernScriptRuntime(chat, cardExtensions.helperScripts)
     const helperRuntime = helperEnabled
       ? projectTavernHelperScripts(cardExtensions.helperScripts, chat.tavernHelperScriptVariables)
@@ -1415,10 +1436,7 @@ export async function apply(ctx) {
       ? await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, { skeletonUntil }))
       : null
     const rollbackEvidence = sessionDebugEvidence(chat.sessionId, true)
-    const projectionEvents = rollbackEvidence.events
-    const suppressedDshTurns = foregroundSuppressedTurns(chat, projectionEvents)
     const rollbackFields = rollbackViewFields(chat, rollbackEvidence)
-    const replayTarget = replayableFailedTurn({ events: projectionEvents })
     return {
       chatId: chat.id,
       contextCompaction: chat.contextCompaction || null,
@@ -1446,11 +1464,6 @@ export async function apply(ctx) {
       inputSources,
       inputTemplateDisplays,
       ...rollbackFields,
-      canReplayFailedTurn: replayTarget !== null,
-      replayFailedTurn: replayTarget === null ? null : replayTarget.turn,
-      canRegenerate: hasRollbackMessages(chat.messages) && !isRescuedHistoryMessage(chat, chat.messages?.findLast(m => m.role === 'assistant')),
-      canEditBody: hasRollbackMessages(chat.messages),
-      rollbackTargetTurn: latestStoryTurn,
       presentation: null,
       replyProjections: replyDisplay.projections,
       tavernStatusView: replyDisplay.statusView || null,
@@ -1462,15 +1475,6 @@ export async function apply(ctx) {
         commit: OFFICIAL_MVU_VERSION.commit,
         assetUrl: OFFICIAL_MVU_VERSION.assetUrl
       } : null,
-      hiddenDshErrorTurns: chat.hiddenDshErrorTurns || [],
-      suppressedDshTurns,
-      regeneratedDshTurns: Object.fromEntries(Object.entries(chat.regeneratedDshTurns && typeof chat.regeneratedDshTurns === 'object' && !Array.isArray(chat.regeneratedDshTurns)
-        ? chat.regeneratedDshTurns : {}).map(function ([turn, visibleTurn]) { return [String(Number(turn)), Number(visibleTurn)] })
-        .filter(function ([turn, visibleTurn]) { return Number.isSafeInteger(Number(turn)) && Number(turn) > 0 && Number.isSafeInteger(visibleTurn) && visibleTurn > 0 })),
-      suppressedDshErrorTurns: supersededRegenerationErrorTurns({
-        events: projectionEvents,
-        suppressedDshTurns: chat.suppressedDshTurns
-      }),
       tavernHelperScripts: helperRuntime.scripts,
       tavernHelperScriptDiagnostics: helperRuntime.diagnostics,
       tavernRemoteAssetPins: Array.isArray(cardExtensions.remoteAssetPins) ? cardExtensions.remoteAssetPins : [],
@@ -1597,9 +1601,13 @@ export async function apply(ctx) {
     return reused
   }
   async function projectDirtySessionView(chat, previous, dirtyMessageIndices, activity) {
+    const card = await readChatCard(chat)
     const mode = chat.mode || 'story'
     const previousMessages = previous.tavernHelper.messages
-    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity))
+    const next = Object.assign({}, previous, volatileSessionViewFields(chat, activity), {
+      posture: chat.posture || '',
+      guides: Array.isArray(chat.guides) ? chat.guides : []
+    })
     const helperCore = await requestPerformance.stage('helperMessagesProjection', () => projectTavernHelperContext(chat, {
       previousMessages,
       dirtyIndices: dirtyMessageIndices
@@ -1616,15 +1624,18 @@ export async function apply(ctx) {
     delete next.tavernHelper.messagesPending
     if (mode === 'story' || mode === 'script') {
       let cardExtensions = { regexScripts: [], helperScripts: [] }
-      try { cardExtensions = await readCardExtensions(chat.cardPath) || cardExtensions } catch (_error) { cardExtensions = { regexScripts: [], helperScripts: [] } }
+      try { cardExtensions = await readCardExtensions(chat.cardPath, chat) || cardExtensions } catch (_error) { cardExtensions = { regexScripts: [], helperScripts: [] } }
       const activePresetSnapshot = groupOfMode(chat.mode) === 'play' && chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object'
         ? chat.runtimePresetSnapshot : null
+      next.runtimePreset = activePresetSnapshot === null ? null : { id: activePresetSnapshot.presetPath, name: activePresetSnapshot.presetName }
       const presetRegexScripts = Array.isArray(activePresetSnapshot && activePresetSnapshot.regexScripts) ? activePresetSnapshot.regexScripts : []
-      const replyDisplay = await requestPerformance.stage('historyProjection', () => incrementalReplyView.project(chat, {
+      let replyDisplay = await requestPerformance.stage('historyProjection', () => incrementalReplyView.project(chat, {
         charName: chat.cardName, macroState: chat.macroState,
         regexScripts: composeTavernRegexScripts(cardExtensions, presetRegexScripts),
         placement: 2, isMarkdown: true, isEdit: false, depth: 0
       }, { charName: chat.cardName, macroState: chat.macroState, regexScripts: cardExtensions.regexScripts }))
+      const renderChat = {...chat,messages:chat.messages.map((message,index) => message.variables ? message : {...message,variables:helperCore.messages[index]?.swipes_data || []})}
+      replyDisplay = await liveCardUpdate.project(renderChat, card, replyDisplay, {charName:chat.cardName,macroState:chat.macroState,regexScripts:cardExtensions.regexScripts})
       replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
       next.replyProjections = replyDisplay.projections
       next.tavernStatusView = replyDisplay.statusView || null
@@ -1652,6 +1663,14 @@ export async function apply(ctx) {
   }
   const sessionViews = createSessionViewReader({
     readState: sessionStateForSession, readChat: chatForSession,
+    resourceVersion: async chat => {
+      if (!chat.cardPath || chat.mode === 'card') return ''
+      const binding = await fileResources.worldBookBindingForCard(chat.cardPath)
+      const paths = new Set([chat.cardPath])
+      for (const source of binding.sources || [binding]) if (source.path || source.cardPath) paths.add(source.path || source.cardPath)
+      const versions = await Promise.all([...paths].map(path => profileData.version('resources/' + path)))
+      return JSON.stringify([binding, versions, await profileData.version('tavern-extension-settings.json'), await profileData.version('prompt-template-variables.json')])
+    },
     readChanges: chatPersistence.readChangedIndices,
     readViewDelta: chatPersistence.readViewDelta,
     project: { cached: projectCachedSessionView, dirty: projectDirtySessionView, full: projectFullSessionView },
@@ -2100,7 +2119,7 @@ export async function apply(ctx) {
     store: {
       chatForSession: chatForSession,
       readChat: readChat,
-      readCard: readCard,
+      readCard: (path, chat) => chat ? readChatCard(chat) : readCard(path),
       readCardExtensions: readCardExtensions,
       readScript: readScript,
       writeChat: writeChat
@@ -2846,7 +2865,7 @@ export async function apply(ctx) {
     timeline: storyTimeline,
     activity: chat => backgroundTasks.activity(chat),
     project: async (text, chat) => {
-      const extensions = await readCardExtensions(chat.cardPath)
+      const extensions = await readCardExtensions(chat.cardPath, chat)
       return projectRuntimeReply(text, { charName: chat.cardName, macroState: chat.macroState,
         regexScripts: composeTavernRegexScripts(extensions, chat.runtimePresetSnapshot?.regexScripts), placement: 2, isEdit: false, depth: 0 })
     },
@@ -2873,7 +2892,7 @@ export async function apply(ctx) {
       const handle = await agentRegistry.resume({ resumeSessionId: id })
       try { return sessionEvents(handle.agent.session) } finally { await handle.dispose() }
     },
-    requiresBrowser: async chat => hasTavernScriptRuntime(chat, (await readCardExtensions(chat.cardPath))?.helperScripts)
+    requiresBrowser: async chat => hasTavernScriptRuntime(chat, (await readCardExtensions(chat.cardPath, chat))?.helperScripts)
   })
 
   const cardResponseTest = createCardResponseTest({ api: gameplayApi, store: profileData, chatForSession })
@@ -3324,17 +3343,31 @@ export async function apply(ctx) {
       }
       case 'applyUpdatedCard': {
         const sessionId = str(args && args.sessionId)
-        const chat = await chatForSession(sessionId)
-        if (!chat || !['story', 'script'].includes(chat.mode || 'story') || chat.requestMode === 'sillytavern') throw new Error('仅支持当前游玩会话')
-        if ((await sessionActivity(sessionId))?.busy || agentRegistry.get(sessionId)?.phase?.kind === 'running') throw new Error('请等待当前生成和后台任务完成后再应用人物卡')
-        const card = await readChatCard(chat)
         if (typeof args.digest !== 'string' || !args.digest) throw new Error('请刷新后确认人物卡和世界书更新')
-        const patch = await playCardSnapshots.replacement(chat, card, args.digest)
-        const saved = await updateChat(chat.id, current => {
-          if (Number(current.cardContextRevision || 0) !== Number(chat.cardContextRevision || 0)) throw new Error('人物卡已应用，请刷新后重试')
-          return Object.assign(current, patch)
-        }, { source: 'card-context.apply-update' })
-        return { view: await view(saved, card) }
+        const conflict = new Error('游戏状态已变化，未应用更新，请稍后重试')
+        // Rebuild from the latest snapshot on a concurrent write. Never merge an
+        // old prepared save over new state, or skip the exact revision check.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const chat = await chatForSession(sessionId)
+          if (!chat || !['story', 'script'].includes(chat.mode || 'story') || chat.requestMode === 'sillytavern') throw new Error('仅支持当前游玩会话')
+          if ((await sessionActivity(sessionId))?.busy || agentRegistry.get(sessionId)?.phase?.kind === 'running') throw new Error('请等待当前生成和后台任务完成后再应用人物卡')
+          const card = await readCard(chat.cardPath)
+          if (!card) throw new Error('人物卡不存在')
+          const patch = await playCardSnapshots.replacement(chat, card, args.digest)
+          const prepared = await liveCardUpdate.prepare({...chat,...patch}, card, chat)
+          prepared.tavernHelperLifecycleRevision = (Number(chat.tavernHelperLifecycleRevision) || 0) + 1
+          const extensions = await readCardExtensions(chat.cardPath, prepared)
+          await liveCardUpdate.project(prepared, card, {projections:[]}, {charName:card.name,macroState:chat.macroState,regexScripts:extensions.regexScripts})
+          await playCardSnapshots.replacement(chat, await readCard(chat.cardPath), args.digest)
+          try {
+            const saved = await updateChat(chat.id, current => {
+              if (current._storageRevision !== chat._storageRevision || agentRegistry.get(sessionId)?.phase?.kind === 'running' || ['pending','running','waiting-runtime'].includes(current.settleStatus)) throw conflict
+              return prepared
+            }, { source: 'card-context.apply-update' })
+            return { view: await view(saved, card) }
+          } catch (error) { if (error !== conflict) throw error }
+        }
+        throw conflict
       }
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': return sessionViews.response(args || {})
@@ -3827,7 +3860,7 @@ export async function apply(ctx) {
     const presetDocument = presetPath === '' ? {} : snapshot.compatibilityPresetDocument
     if (!preset || preset.valid !== true || preset.recognized !== true || !presetDocument) throw new Error('当前预设不存在或无法读取：' + presetPath)
     const card = await readChatCard(chat)
-    const extensions = await readCardExtensions(chat.cardPath)
+    const extensions = await readCardExtensions(chat.cardPath, chat)
     const regexScripts = composeTavernRegexScripts(extensions, snapshot?.regexScripts)
     const worldInfo = await compatibilityWorldInfo(chat, card, userText)
     const compiled = compileSillyTavernRequest({
@@ -3953,7 +3986,7 @@ export async function apply(ctx) {
   const foregroundStrategies = createForegroundOrchestrationStrategies({
     compatibility: {
       beforeTurn: async function (input) {
-        if (!hasTavernScriptRuntime(input.chat, (await readCardExtensions(input.chat.cardPath))?.helperScripts)) return
+        if (!hasTavernScriptRuntime(input.chat, (await readCardExtensions(input.chat.cardPath, input.chat))?.helperScripts)) return
         const context = await tavernScriptHostAdapter.context(input.sessionId, input.chat, input.userText)
         const messageId = Math.max(0, context.messages.length - 1)
         await tavernScriptHostAdapter.dispatchEvent({ sessionId: input.sessionId, context, name: 'MESSAGE_SENT', args: [messageId] })

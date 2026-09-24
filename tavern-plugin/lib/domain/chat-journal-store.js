@@ -435,6 +435,9 @@ export function createChatJournalStore(options = {}) {
     return serialize(chatId,async()=>{
       const state=await cachedState(chatId)
       if(!state || state.revision!==expectedRevision)return undefined
+      // An acknowledged no-op is not a story edit: keep undo points valid.
+      // Check the exact revision and transaction guard under the same lock.
+      if(changes.length===0){metadata.assertCurrent?.();return slice(state.chat,[]).chat}
       const paths=layout(chatId)
       // Cache and disk must contain the same JSON. Canonicalize only changed
       // payloads, never copy the complete chat on this fast path.

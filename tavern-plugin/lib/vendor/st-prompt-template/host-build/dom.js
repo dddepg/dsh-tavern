@@ -9,9 +9,9 @@ export function formatTemplateSource(text) {
   return template.innerHTML
 }
 
-function formatDisplayText(text, isSystem, isUser, index) {
+function formatDisplayText(text, isSystem, isUser, index, statusBoundaries = true) {
   const source = isSystem ? text : getRegexedString(String(text ?? ''), isUser ? 1 : 2,
-    { isMarkdown: true, depth: Math.max(0, chat.length - index - 1), statusBoundaries: true })
+    { isMarkdown: true, depth: Math.max(0, chat.length - index - 1), statusBoundaries })
   return String(source ?? '').replace(/\{\{\s*(user|char)\s*\}\}/gi, (token, name) => name.toLowerCase() === 'user' ? name1 || '你' : name2 || token)
 }
 
@@ -30,10 +30,10 @@ export function captureTemplateDisplay(message, index) {
   for (const button of root.querySelectorAll('button[data-template-copy]')) button.remove()
   const formattingText = formatDisplayText(message.mes, message.is_system, message.is_user, index)
   const formatted = formatTemplateMessage(message.mes, message.name, message.is_system, message.is_user, index)
-  if (parsed.innerHTML === formatted && !root.querySelector('[data-dsh-template-status]')) {
+  if (parsed.innerHTML === formatted) {
     if (formattingText === message.mes) return undefined
     // Freeze ordinary formatting too, without making the whole reply an HTML frame.
-    return {source:message.mes,swipe:message.swipe_id || 0,html:formatted,formattingText}
+    return {source:message.mes,swipe:message.swipe_id || 0,html:formatted,formattingText:formatDisplayText(message.mes,message.is_system,message.is_user,index,false)}
   }
   // Preserve decorations in real template output.
   parsed.innerHTML = html

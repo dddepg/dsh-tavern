@@ -4,7 +4,7 @@ function identity(chat) {
     cardContextRevision: Number(chat.cardContextRevision) || 0, mode, isCard: mode === 'card' }
 }
 function matches(cached, next) {
-  return cached && ['cardPath', 'cardContextRevision', 'mode', 'isCard'].every(key => cached[key] === next[key])
+  return cached && ['cardPath', 'cardContextRevision', 'mode', 'isCard', 'resourceVersion'].every(key => cached[key] === next[key])
 }
 function canProjectDirty(previous, chat, indices) {
   const before = previous?.tavernHelper?.messages, after = chat.messages
@@ -25,7 +25,7 @@ function canProjectDirty(previous, chat, indices) {
  * Projections consume detached inputs; callers never receive a partial Chat.
  */
 export function createSessionViewReader({ readState, readChat, readChanges, readViewDelta, project, activity,
-  trace, foregroundRunning, synchronize }) {
+  trace, foregroundRunning, synchronize, resourceVersion = async () => '' }) {
   const cache = new Map()
   async function changes(chat, revision) {
     const target = Number(chat._storageRevision) || 0
@@ -37,23 +37,24 @@ export function createSessionViewReader({ readState, readChat, readChanges, read
     const selected = await trace.stage('readChat', async () => {
       const state = await readState(sessionId)
       if (state === undefined) return { chat: undefined }
-      const cached = cache.get(state.id), next = identity(state)
-      if (matches(cached, next) && cached.revision === next.revision) return { chat: state, cached }
+      const resources = await resourceVersion(state)
+      const cached = cache.get(state.id), next = {...identity(state), resourceVersion: resources}
+      if (matches(cached, next) && cached.revision === next.revision) return { chat: state, cached, resourceVersion: resources }
       if (matches(cached, next) && cached.revision < next.revision && readViewDelta) {
         const delta = await trace.stage('readViewDelta', () => readViewDelta(state.id, cached.revision))
         const dirty = delta && new Set(delta.indices)
         if (delta?.baseRevision === cached.revision && delta.chat?.id === state.id
           && delta.revision === next.revision && identity(delta.chat).revision === next.revision
-          && matches(cached, identity(delta.chat)) && canProjectDirty(cached.view, delta.chat, dirty)) {
-          return { chat: delta.chat, cached, dirty }
+          && matches(cached, {...identity(delta.chat), resourceVersion: resources}) && canProjectDirty(cached.view, delta.chat, dirty)) {
+          return { chat: delta.chat, cached, dirty, resourceVersion: resources }
         }
       }
       const chat = await trace.stage('readFullChat', () => readChat(sessionId))
-      return { chat, cached: chat && cache.get(chat.id) }
+      return { chat, cached: chat && cache.get(chat.id), resourceVersion: resources }
     })
     const { chat, cached } = selected
     if (chat === undefined) return { view: null, revision: 0, chat: undefined }
-    const next = identity(chat), currentActivity = activity(chat)
+    const next = {...identity(chat),resourceVersion:selected.resourceVersion}, currentActivity = activity(chat)
     let view, rebuild
     // The selected cache entry is request-local, even if another read replaces it.
     if (matches(cached, next) && cached.revision === next.revision) {
@@ -61,7 +62,7 @@ export function createSessionViewReader({ readState, readChat, readChanges, read
       rebuild = 'cache'
     } else {
       const dirty = selected.dirty ?? (matches(cached, next) && cached.revision < next.revision ? await changes(chat, cached.revision) : null)
-      if (canProjectDirty(cached?.view, chat, dirty)) {
+      if (matches(cached, next) && canProjectDirty(cached?.view, chat, dirty)) {
         view = await trace.stage('projectViewDirty', () => project.dirty(chat, cached.view, dirty, currentActivity))
         rebuild = 'dirty'
       } else {

@@ -11,7 +11,8 @@ function latest(chat) {
 }
 function source(message) { return message.projectionText ?? message.sourceText ?? message.text ?? '' }
 function token(chat, message) {
-  const { displayRuntime: _capture, ...body } = message
+  // Template display bookkeeping is not an edit to the authoritative prose.
+  const { displayRuntime: _capture, tavernPluginData: _templateCache, ...body } = message
   return createHash('sha256').update(JSON.stringify([chat.id, chat.timeline?.branchId, chat.timeline?.revision, chat.messages.length, body])).digest('hex')
 }
 
