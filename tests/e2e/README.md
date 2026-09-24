@@ -61,3 +61,7 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 其他可选变量：`TAVERN_E2E_OUTPUT` 指定产物父目录；`TAVERN_E2E_TIMEOUT_MS` 指定界面单步超时（默认 30 秒）；`TAVERN_E2E_KEEP=1` 保留本次临时数据用于诊断。启动单独限时 60 秒。
 
 断言失败时先检查界面、日志与存档，不能因为实现输出不同就改成新的预期值。这里的验收约定始终是：领取 10 枚金币、显示正确状态、刷新后不丢失。
+
+## 压缩专项
+
+运行 `pnpm test:e2e:compaction`，执行 32K 窗口下的五组前后台压缩验收。场景、模型边界与未覆盖范围见 [压缩专项 E2E](COMPACTION.md)。
