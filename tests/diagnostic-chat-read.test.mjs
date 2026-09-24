@@ -101,7 +101,7 @@ test('background task configuration keeps model overrides without copying archiv
   await store.update('chat', () => ({ id: 'chat', sessionId: 's', _storageRevision: 1,
     backgroundModelSelection: selection, webSearchEnabled: true, cardContextRevision: 7,
     backgroundTasks: { variables: false, posture: false },
-    timeline: { participants: { background: { status: 'needs-session' } } },
+    timeline: { participants: { background: { status: 'needs-session' } }, operations: { saved: { payload: 'operation history'.repeat(1000) } } },
     messages: Array.from({ length: 459 }, (_, turn) => ({ role: 'assistant', turn,
       variables: { stat_data: { payload: 'historical state'.repeat(1000) } } })) }))
   const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
@@ -110,13 +110,15 @@ test('background task configuration keeps model overrides without copying archiv
   const callbacks = vm.runInNewContext(`({${options}})`, {
     chatForSession: () => store.read('chat'),
     sessionStateForSession: () => store.readSessionState('chat'),
+    backgroundConfigForSession: () => store.readBackgroundConfig('chat'),
     backgroundModelSelection: chat => resolveChatBackgroundModel(chat, { provider: 'default', model: 'foreground' }),
     normalizeBackgroundTasks
   })
-  let historicalCopies = 0
+  let historicalCopies = 0, unrelatedCopies = 0
   const clone = globalThis.structuredClone
   t.mock.method(globalThis, 'structuredClone', value => {
     if (value?.messages?.some(message => message.variables)) historicalCopies++
+    if (value?.messages || value?.timeline?.operations) unrelatedCopies++
     return clone(value)
   })
   const input = { sessionId: 's' }
@@ -127,7 +129,8 @@ test('background task configuration keeps model overrides without copying archiv
   const override = { variables: true }
   assert.equal(await callbacks.resolveBackgroundTasks({ ...input, backgroundTasks: override }), override)
   assert.equal(historicalCopies, 0)
-  const state = await store.readSessionState('chat')
+  assert.equal(unrelatedCopies, 0, 'configuration reads must not copy messages or operation history')
+  const state = await store.readBackgroundConfig('chat')
   state.backgroundModelSelection.model = 'accidental mutation'
   state.backgroundTasks.variables = true
   assert.deepEqual(await callbacks.resolveModelSelection(input), selection)

@@ -1,3 +1,4 @@
+import { projectChatBackgroundConfig } from './chat-session-state.js'
 import { currentBackgroundSessionId, referencedBackgroundSessionIds } from './background-identity.js'
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
@@ -50,6 +51,14 @@ export function createTavernConversationRegistry(options = {}) {
   // Same alias/recovery rules, with a detached read-only projection when supported.
   async function resolveState(sessionId) {
     return resolveUsing(sessionId, id => typeof store.readChatState === 'function' ? store.readChatState(id) : store.readChat(id))
+  }
+
+  async function resolveBackgroundConfig(sessionId) {
+    return resolveUsing(sessionId, async id => {
+      if (typeof store.readBackgroundConfig === 'function') return store.readBackgroundConfig(id)
+      const chat = await store.readChat(id)
+      return chat ? projectChatBackgroundConfig(chat) : undefined
+    })
   }
 
   async function resolveUsing(sessionId, readChat) {
@@ -194,5 +203,5 @@ export function createTavernConversationRegistry(options = {}) {
     return { deleted: true }
   }
 
-  return { links, resolve, resolveState, publish, sync, list, touch, remove }
+  return { links, resolve, resolveState, resolveBackgroundConfig, publish, sync, list, touch, remove }
 }

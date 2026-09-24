@@ -24,8 +24,7 @@ export function projectChatSessionState(chat) {
     operation?.kind === 'body' && operation.status === 'foreground-completed')) return { ...structuredClone(chat), pendingMvuSettlement }
   const selected = { pendingMvuSettlement }
   for (const key of ['id', 'sessionId', '_storageRevision', 'mode', 'cardPath', 'cardContextRevision',
-    'backgroundConfigVersion', 'backgroundModelSelection', 'backgroundModelRevision', 'backgroundTasks', 'webSearchEnabled',
-    'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
+    'backgroundConfigVersion', 'conversationFeaturesVersion', 'updatedAt', 'timeline', 'candidateAgent',
     'settleError', 'scriptState', 'hiddenDshErrorTurns', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {
     if (Object.hasOwn(chat, key)) selected[key] = chat[key]
   }
@@ -178,4 +177,15 @@ export function projectDisplayRuntimeState(chat, requestedTurn) {
     displayRuntime: messageIndex < 0 ? undefined : messages[messageIndex].displayRuntime,
     rollbackUndo: chat.rollbackUndo ? { ready: chat.rollbackUndo.ready, storageRevision: chat.rollbackUndo.storageRevision } : undefined
   })
+}
+
+// Task startup configuration is independent of message and operation history.
+export function projectChatBackgroundConfig(chat) {
+  const selected = {}
+  for (const key of ['id', 'sessionId', 'mode', 'backgroundConfigVersion', 'conversationFeaturesVersion',
+    'backgroundModelSelection', 'backgroundModelRevision', 'backgroundTasks', 'webSearchEnabled', 'cardContextRevision']) {
+    if (Object.hasOwn(chat, key)) selected[key] = chat[key]
+  }
+  selected.backgroundSessionStatus = chat.timeline?.participants?.background?.status
+  return structuredClone(selected)
 }
