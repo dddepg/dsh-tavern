@@ -275,6 +275,27 @@ window.__ModuleLoader__.load({
 
 		// @include modules/library-refresh.js
 
+        const tavernSidebarOpens = new Map();
+        function openTavernSidebarTab(ctx, seed, scope) {
+            const key = JSON.stringify([scope.sessionId, seed]);
+            if (tavernSidebarOpens.has(key)) return tavernSidebarOpens.get(key);
+            const operation = (async function () {
+                const deadline = Date.now() + 10000;
+                for (;;) {
+                    try { ctx.betterSidebar.openTab(seed, scope); return; }
+                    catch (error) {
+                        // The session list can restore before DSH mounts its native
+                        // sidebar seat. Retry this specific readiness error only.
+                        if (!/sidebarRight: no session surface is mounted/.test(String(error.message || error)) || Date.now() >= deadline) throw error;
+                        await new Promise(resolve => window.setTimeout(resolve, 100));
+                        if (ctx.sessions.list.getSnapshot().current !== scope.sessionId) return;
+                    }
+                }
+            })().catch(error => tavernErrorHub.report("打开酒馆侧栏", error)).finally(() => tavernSidebarOpens.delete(key));
+            tavernSidebarOpens.set(key, operation);
+            return operation;
+        }
+
 		function openPlayChatDebugWorkspace(sourceSessionId, turn) {
 			return new Promise(function (resolve, reject) {
 				let settled = false;
@@ -5997,6 +6018,7 @@ window.__ModuleLoader__.load({
 			const currentSummary = current ? summaries[current] : null;
 			const readyTavernSession = current && summaries[current] && summaries[current].blank === false && history.some(function (entry) { return entry.sessionId === current && isPlayMode(entry.mode); }) ? current : "";
 			const readyCardSession = current && summaries[current] && summaries[current].blank === false && history.some(function (entry) { return entry.sessionId === current && entry.mode === "card"; }) ? current : "";
+
 			React.useEffect(function () {
 				if (!current || !summaries[current] || !props.sessions.binding(current)) return;
 				const latest = tavernErrorHub.getSnapshot()[0];
@@ -6882,11 +6904,11 @@ window.__ModuleLoader__.load({
 					},
 					archiveSession: function (sessionId) { return ctx.workspaces.archiveSession(sessionId); },
 					toggleSidebar: function () { if (props.wide) ctx.layout.toggleSidebar(); else props.expandSidebar(); },
-					openConversationSettingsTab: async function (sessionId) { await ctx.betterSidebar.openTab({ type: "dsh-tavern:conversation-settings" }, { sessionId: sessionId }); await ctx.betterSidebar.openTab({ type: "dsh-tavern:status" }, { sessionId: sessionId }); },
-					openCardLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:cards" }, { sessionId: sessionId }); ctx.betterSidebar.updateTab("dsh-tavern:cards", { meta: null }); },
-					openPresetLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:presets" }, { sessionId: sessionId }); },
-					openWorldBookLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:worldbooks" }, { sessionId: sessionId }); },
-					openResourcesTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:resources" }, { sessionId: sessionId }); },
+					openConversationSettingsTab: async function (sessionId) { await openTavernSidebarTab(ctx, { type: "dsh-tavern:conversation-settings" }, { sessionId: sessionId }); await openTavernSidebarTab(ctx, { type: "dsh-tavern:status" }, { sessionId: sessionId }); },
+					openCardLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:cards", meta: null }, { sessionId: sessionId }); },
+					openPresetLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:presets" }, { sessionId: sessionId }); },
+					openWorldBookLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks" }, { sessionId: sessionId }); },
+					openResourcesTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:resources" }, { sessionId: sessionId }); },
 					appendMention: input.appendMention,
 					injectTaskPrompt: input.injectTaskPrompt,
 					cleanWorkspaceDraft: input.cleanWorkspaceDraft
@@ -8911,8 +8933,7 @@ window.__ModuleLoader__.load({
 					return React.createElement(CardLibraryTab, Object.assign({}, props, {
 						appendMention: function (path, label) { appendMention(props.scope.sessionId, "card", path, label); },
 						openWorldBook: function (source) {
-							ctx.betterSidebar.openTab({ type: "dsh-tavern:worldbooks" }, { sessionId: props.scope.sessionId });
-							ctx.betterSidebar.updateTab("dsh-tavern:worldbooks", { meta: { worldBookSource: source } });
+							openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks", meta: { worldBookSource: source } }, { sessionId: props.scope.sessionId });
 						}
 					}));
 				}
@@ -10503,7 +10524,6 @@ window.__ModuleLoader__.load({
 			const executeSlash = createTavernFrameSlashExecutor(ctx);
             ctx.effect(() => ctx.betterSidebar.registerTab({
                 id: "dsh-tavern:conversation-settings", title: "本局设置", order: 8, single: true,
-                createTab: () => ({ tab: { id: "dsh-tavern:conversation-settings", type: "dsh-tavern:conversation-settings", title: "本局设置" }, patch: { panelOpen: true } }),
                 component: props => React.createElement(TavernConversationSettingsTab, { sessionId: props.scope.sessionId, sessions: ctx.sessions })
             }), "dsh-tavern: conversation settings tab");
             // Replace shipped host chrome that is noise in the Tavern profile.
@@ -10526,18 +10546,15 @@ window.__ModuleLoader__.load({
             )), "dsh-tavern: immersive header action");
             ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
                 { name: "conversation.session.header.utilities", id: "dsh-tavern-conversation-settings", order: 80 },
-                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => ctx.betterSidebar.openTab({ type: "dsh-tavern:conversation-settings" }, { sessionId }) })
+                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => openTavernSidebarTab(ctx, { type: "dsh-tavern:conversation-settings" }, { sessionId }) })
             )), "dsh-tavern: conversation settings action");
 			ctx.effect(() => ctx.betterSidebar.registerTab({
 				id: "dsh-tavern:status",
 				title: "酒馆状态",
 				order: 7,
 				single: true,
-				createTab: function () {
-					return { tab: { id: "dsh-tavern:status", type: "dsh-tavern:status", title: "酒馆状态" }, patch: { panelOpen: true } };
-				},
 				component: function (props) {
-					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type) { ctx.betterSidebar.openTab({ type: type }, { sessionId: props.scope.sessionId }); } });
+					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type) { openTavernSidebarTab(ctx, { type: type }, { sessionId: props.scope.sessionId }); } });
 				}
 			}), "dsh-tavern: Better Sidebar status tab");
 			ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
