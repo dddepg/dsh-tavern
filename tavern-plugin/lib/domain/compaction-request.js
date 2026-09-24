@@ -1,3 +1,5 @@
+import { boundedCompaction } from './bounded-compaction.js'
+
 // Internal metadata-only events are persisted on the Session surface but are
 // not user utterances. Native compaction replays that surface independently of
 // the normal request projection, so omit them at this request boundary too.
@@ -11,12 +13,17 @@ export function projectCompactionRequest(request) {
 }
 
 export function installCompactionRequestProjection(ctx, ownsSession) {
+  const internal = new WeakSet()
+  const stream = request => {
+    internal.add(request)
+    return ctx.llm.stream(request)
+  }
   ctx.on('llm/stream', (request, next) => {
-    const projected = projectCompactionRequest(request)
-    if (projected === request || !request.sessionId) return next()
+    if (internal.has(request) || request?.purpose !== 'compaction' || !request.sessionId) return next()
     return (async function * () {
-      if (await ownsSession(request.sessionId)) yield * ctx.llm.stream(projected)
-      else yield * next()
+      if (!(await ownsSession(request.sessionId))) { yield* next(); return }
+      const projected = projectCompactionRequest(request)
+      yield* boundedCompaction(ctx, projected, stream)
     })()
   })
 }
