@@ -85,7 +85,37 @@ function prepareLegacySessionBuffer(buffer, catalog) {
   return prepareParsedLegacySession(header, events, headerLine, catalog, () => parseSessionLog(buffer).events)
 }
 
+// Never trade a compacted history boundary for a log that merely opens. Sequence
+// numbers can change, but every summary and replacement checkpoint must survive.
+function compactionBoundaries(events) {
+  return events.flatMap(event => {
+    const message = event.data?.message || event.data
+    if (event.type === 'compaction/summary') return [{
+      kind: 'summary', content: event.data.summary,
+      range: Boolean(event.data.shadowedRange), seqs: Boolean(event.data.shadowedSeqs?.length),
+    }]
+    if (event.surfaceOp?.op === 'replace' &&
+        (message?.source?.compactionId || /compact/.test(message?.source?.plugin || ''))) {
+      return [{ kind: 'checkpoint', content: message.content }]
+    }
+    return []
+  })
+}
+
+function preserveCompaction(boundaries, result) {
+  if (!boundaries.length || !result?.ok) return result
+  if (!result.artifact || JSON.stringify(boundaries) !== JSON.stringify(compactionBoundaries(result.artifact.events))) {
+    return refuse('无法安全保留压缩摘要和上下文边界，已保留原始日志，未执行有损迁移')
+  }
+  return result
+}
+
 function prepareParsedLegacySession(header, events, headerLine, catalog, reparse) {
+  const boundaries = compactionBoundaries(events)
+  return preserveCompaction(boundaries, prepareParsedLegacySessionUnchecked(header, events, headerLine, catalog, reparse))
+}
+
+function prepareParsedLegacySessionUnchecked(header, events, headerLine, catalog, reparse) {
   // Issue #71: stripping illegal source keys (fixedSystemText, …) alone is enough
   // for the host to open many archives. Prefer that over leaving the raw v0 file
   // when the fuller rewrite refuses.
@@ -154,6 +184,11 @@ function prepareParsedLegacySession(header, events, headerLine, catalog, reparse
 
 /** Drop only non-released source members, then open with the official catalog. */
 export function sanitizeLegacySessionLog(header, events, catalog, headerLine) {
+  const boundaries = compactionBoundaries(events)
+  return preserveCompaction(boundaries, sanitizeLegacySessionLogUnchecked(header, events, catalog, headerLine))
+}
+
+function sanitizeLegacySessionLogUnchecked(header, events, catalog, headerLine) {
   // Caller owns `events` (fresh reparse or disposable draft); mutate in place.
   const only = events
   let changed = false
@@ -696,7 +731,14 @@ function citesMissingSeq(event, seqs) {
 }
 
 function placeOpening(events, prefix) {
-  const source = events.filter(event => !DROPPED_TYPES.has(event.type) && !isPrefix(event))
+  // A prefix already covered by compaction is historical evidence and may be
+  // the checkpoint's range endpoint. Keep that row in history even though the
+  // fixed background is also lifted into the system header.
+  const protectedSeqs = new Set(events.filter(event => event.type === 'compaction/summary').flatMap(event => [
+    ...(event.data?.shadowedSeqs || []), event.data?.shadowedRange?.start, event.data?.shadowedRange?.end,
+  ]))
+  const removablePrefix = event => isPrefix(event) && !protectedSeqs.has(event.seq)
+  const source = events.filter(event => !DROPPED_TYPES.has(event.type) && !removablePrefix(event))
   const dropped = source.length !== events.length
   const stepIndex = source.findIndex(event => event.type === 'step/start')
   const before = stepIndex < 0 ? source : source.slice(0, stepIndex)
@@ -711,7 +753,7 @@ function placeOpening(events, prefix) {
       kept.push(event)
       continue
     }
-    if (isPrefix(event)) continue
+    if (removablePrefix(event)) continue
     alignMovedStep(event, step)
     moved.push(event)
   }
@@ -789,7 +831,19 @@ function foldTavernReplacements(events) {
     changed = true
   }
   if (!drop.size) return { events, changed: false }
-  return { events: events.filter(event => !drop.has(event.seq)), changed }
+  // Compaction checkpoints can name an edited assistant node. Folding the edit
+  // must redirect every downstream span to the surviving node before deleting
+  // it; otherwise dangling-pointer cleanup drops the summary and revives history.
+  const pointers = new Map([...presentSeqs(events)].map(seq => [seq, seq]))
+  for (const [from, target] of alias) {
+    let to = target
+    const seen = new Set([from])
+    while (alias.has(to) && !seen.has(to)) { seen.add(to); to = alias.get(to) }
+    pointers.set(from, to)
+  }
+  const kept = events.filter(event => !drop.has(event.seq))
+  for (const event of kept) remapPointers(event, pointers)
+  return { events: kept, changed }
 }
 
 function isSurfaceReplacement(event) {

@@ -10,7 +10,7 @@ import { installCompactionRequestProjection } from '../tavern-plugin/lib/domain/
 const native = { skip: !process.env.DSH_BOOT_MODULE, timeout: 30000 }
 for (const side of ['foreground', 'background']) {
   test(`real DSH: ${side} compaction excludes internal empty messages without changing stored context`, native, async t => {
-    const h = await createInitializationNative(process.env.DSH_BOOT_MODULE)
+    const h = await createInitializationNative(process.env.DSH_BOOT_MODULE, { contextWindow: 32768 })
     t.after(() => h.dispose())
     const { BasicCompactionEngine } = await import(new URL('../../dsh-compaction-basic/lib/index.js', pathToFileURL(process.env.DSH_BOOT_MODULE)))
     let agent = h.target.agent

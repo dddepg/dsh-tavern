@@ -1,4 +1,4 @@
-import { visibleTemplateDisplay } from './template-variable-display.js'
+import { visibleTemplateDisplay, annotateTemplateStatusParts } from './template-variable-display.js'
 import { createHash } from 'node:crypto'
 import { applyTavernRegexText } from './tavern-regex-display.js'
 import { marked } from 'marked'
@@ -420,7 +420,7 @@ export function createReplyHistoryProjector({ maxCacheBytes = 16 * 1024 * 1024, 
           turn,
           text: projected.displayText,
           mode: projected.displayMode,
-          parts: structuredClone(projected.displayParts),
+          parts: ordinaryDisplay ? annotateTemplateStatusParts(projected.displayParts, templateDisplay.html) : structuredClone(projected.displayParts),
           warnings: [...projected.warnings]
         })
       }

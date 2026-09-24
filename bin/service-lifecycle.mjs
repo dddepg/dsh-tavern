@@ -277,14 +277,25 @@ export async function startService() {
   ensureSidebarDefaults()
   const timeoutMs = startupTimeoutMs(RUNTIME_HOST)
   const state = await serviceState()
+  if (state.record && !state.ready) {
+    console.log(`正在等待已有 DSH Tavern 进程就绪：PID ${state.record.pid}。`)
+    // Join an existing start without taking ownership of its process or PID record.
+    // Only the original starter may terminate it when startup fails.
+    await waitForServiceStartup({
+      timeoutMs,
+      alive: () => inspectRecordedProcess(state.record) === 'owned',
+      ready: async () => await isPortOpen(state.port) && await isServiceReady(state.port),
+      stop: async () => {},
+    })
+    if (inspectRecordedProcess(state.record) !== 'owned') throw new Error('等待中的 DSH Tavern 进程已被替换，请重试。')
+    state.ready = true
+    state.portOpen = true
+  }
   if (state.record && state.ready) {
     console.log(`DSH Tavern 已经在运行：PID ${state.record.pid}。`)
     const webUrl = await currentServiceWebUrl(state)
     printServiceWebUrl(webUrl)
     return { ...state, webUrl, runtimeGeneration: state.record.pid }
-  }
-  if (state.record) {
-    throw new Error(`已有 DSH Tavern 进程正在启动：PID ${state.record.pid}。`)
   }
   if (state.portOpen) {
     throw new Error(`端口 ${state.port} 已被其他进程占用，拒绝启动。`)

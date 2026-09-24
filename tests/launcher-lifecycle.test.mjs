@@ -33,13 +33,30 @@ test('实际 CLI 创建、复用、重启和停止自己的子进程，不修改
   await writeFile(childScript, `import { createServer } from 'node:http';
 const port=Number(process.argv[process.argv.indexOf('--port')+1]);
 const server=createServer((req,res)=>res.end('fixture service'));
-server.listen(port,'127.0.0.1',()=>console.log('dsh web: http://127.0.0.1:'+port+'/'));
+setTimeout(()=>server.listen(port,'127.0.0.1',()=>console.log('dsh web: http://127.0.0.1:'+port+'/')),1500);
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
 `)
   await writeFile(path.join(bin, 'dsh'), '#!/bin/sh\nexec '+quote(process.execPath)+' '+quote(childScript)+' "$@"\n', { mode: 0o755 })
   const env = { ...process.env, DSH_HOME: root, DSH_TAVERN_CLI_HOME: root, DSH_TAVERN_PORT: String(port), DSH_TAVERN_NO_OPEN: '1', PATH: bin + path.delimiter + process.env.PATH }
   const run = action => execute(process.execPath, [launcher, action], { env, timeout: 12000 })
-  assert.match((await run('start')).stdout, /已启动/)
+  const firstStart = run('start')
+  const firstResult = firstStart.catch(error => error)
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try { ownedPid = JSON.parse(await readFile(pidFile, 'utf8')).pid; break } catch {}
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  assert.ok(ownedPid, 'first starter published its PID before readiness')
+  await assert.rejects(execute(process.execPath, [launcher, 'start'], {
+    env: { ...env, DSH_TAVERN_START_TIMEOUT: '0.05' }, timeout: 12000
+  }), error => error.code === 1 && /启动超时/.test(error.stderr))
+  process.kill(ownedPid, 0)
+  assert.equal(JSON.parse(await readFile(pidFile, 'utf8')).pid, ownedPid,
+    'a timed-out follower must preserve the original starter and its record')
+  const secondStart = await run('start')
+  assert.match((await firstResult).stdout, /已启动/)
+  assert.match(secondStart.stdout, /正在等待已有 DSH Tavern/)
+  assert.match(secondStart.stdout, /已经在运行/)
+  assert.equal(JSON.parse(await readFile(pidFile, 'utf8')).pid, ownedPid)
   ownedPid = JSON.parse(await readFile(pidFile, 'utf8')).pid
   assert.notEqual(ownedPid, process.pid)
   assert.match((await run('start')).stdout, /已经在运行/)

@@ -21,7 +21,7 @@ async function collect(relative) {
     return
   }
   for (const item of items) {
-    if (item.name === 'node_modules' || item.name === 'docs') continue
+    if (['node_modules', 'docs', 'tests', '__tests__', 'testsets'].includes(item.name)) continue
     await collect(path.join(relative, item.name))
   }
 }

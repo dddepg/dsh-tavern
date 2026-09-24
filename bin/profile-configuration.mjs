@@ -49,11 +49,11 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
   const currentTavern = object(currentDocument.dshTavern)
   // Pocket includes mobile-nav itself. Select one layout owner per host,
   // including old/manual installs, so upgrades cannot reintroduce both.
-  const excludedMobileBundles = host === 'desktop'
-    ? ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav']
-    : host === 'android' ? ['dsh-pocket', '@dsh-external/dsh-mobile-nav'] : ['@dsh-external/dsh-mobile-nav']
+  const excludedMobileBundles = host === 'android'
+    ? ['dsh-pocket', '@dsh-external/dsh-mobile-nav']
+    : ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav']
   const sourceBundles = uniqueStrings(sourceProfile.bundles)
-    .map(name => host === 'desktop' && name === 'dsh-web-mobile' ? 'dsh-pocket' : name)
+    .map(name => host !== 'android' && name === 'dsh-web-mobile' ? 'dsh-pocket' : name)
     .filter(name => !excludedMobileBundles.includes(name))
   const previousManagedBundles = uniqueStrings(currentTavern.managedBundles).length > 0
     ? uniqueStrings(currentTavern.managedBundles)
