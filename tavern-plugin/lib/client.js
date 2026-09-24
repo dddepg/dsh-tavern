@@ -4830,9 +4830,11 @@ window.__ModuleLoader__.load({
 				const element = document.createElement("script");
 				const completionKey = "__dshTavernModuleComplete_" + Math.random().toString(36).slice(2);
 				let settled = false;
+				let mountTimer = null;
 				function finish(error) {
 					if (settled) return;
 					settled = true;
+					if (mountTimer !== null) window.clearTimeout(mountTimer);
 					window.removeEventListener("error", onError);
 					delete window[completionKey];
 					element.remove();
@@ -4855,7 +4857,19 @@ window.__ModuleLoader__.load({
 				// bindings/re-exports and dynamic imports can resolve local cache URLs.
 				// A completion footer waits for top-level await (a load event does not).
 				element.textContent = String(source) + "\n;window[" + JSON.stringify(completionKey) + "]?.();\n//# sourceURL=" + sourceUrl + "\n";
-				try { document.body.appendChild(element); } catch (error) { finish(error); }
+				// document.open/write can temporarily leave only a parsing <head>.
+				// Wait before attaching; never replay a module that has started.
+				const mountDeadline = Date.now() + 30000;
+				function mount() {
+					if (settled) return;
+					if (!document.body) {
+						if (Date.now() >= mountDeadline) { finish(new Error("开局文档尚未生成 body，脚本无法启动")); return; }
+						mountTimer = window.setTimeout(mount, 10);
+						return;
+					}
+					try { document.body.appendChild(element); } catch (error) { finish(error); }
+				}
+				mount();
 			});
 		}
 
