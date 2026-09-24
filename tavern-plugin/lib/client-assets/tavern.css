@@ -854,6 +854,22 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
    stranding its tab bar above the viewport. Only pane content should scroll. */
 body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 
+/* Pocket's legacy :last-child header rule hides the native right-sidebar
+   corner added by the host. Restore that explicit seat, not the old utilities
+   row. Keep the native controller and its horizontal drawer transition. */
+@media (max-width: 767px) {
+  body.dsh-tavern-shell-active [data-phase] header:has([data-conversation-header-corner]) { position: relative; }
+  body.dsh-tavern-shell-active [data-phase] header [data-conversation-header-corner] {
+    display: flex !important;
+    position: absolute;
+    right: 8px;
+    top: 12px;
+    margin: 0;
+    z-index: 3;
+  }
+  body.dsh-tavern-shell-active [data-dsh-bottom-toggle] { display: none !important; }
+}
+
 .dsh-tavern-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dsh-tavern-history-action { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
 .dsh-tavern-history-action:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: rgba(128, 128, 128, .12); }
