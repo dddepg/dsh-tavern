@@ -104,3 +104,26 @@ test('同步从同一份已协调快照投影活动，无需再次读取聊天',
   assert.equal(result.task.status, 'succeeded')
   assert.equal(result.projection, 'saved')
 })
+
+test('read-only polling avoids full reads; repair rechecks a writable snapshot', async () => {
+  let chat = { id: 'c', messages: [{ text: 'preserve history' }], taskMailbox: { version: 1, latestByKind: { candidate: 't' }, tasks: {
+    t: { taskId: 't', kind: 'candidate', status: 'running', requestId: 'r', input: {} }
+  } } }
+  let fullReads = 0, writes = 0, repair = false
+  const mailbox = createDurableTaskMailbox({
+    store: {
+      readState: async () => structuredClone({ id: chat.id, taskMailbox: chat.taskMailbox }),
+      readChat: async () => { fullReads++; return structuredClone(chat) },
+      writeChat: async value => { writes++; chat = structuredClone(value); return value }
+    },
+    reconcile: () => repair ? { status: 'succeeded', stage: 'completed' } : null
+  })
+  for (let i = 0; i < 20; i++) assert.equal((await mailbox.sync('c', { taskId: 't' })).task.status, 'running')
+  assert.equal(fullReads, 0)
+  repair = true
+  assert.equal((await mailbox.sync('c', { taskId: 't' })).task.status, 'succeeded')
+  assert.equal(fullReads, 1); assert.equal(writes, 1)
+  assert.equal(chat.messages[0].text, 'preserve history')
+  await mailbox.sync('c', { taskId: 't' }); await mailbox.recover('c')
+  assert.equal(fullReads, 1); assert.equal(writes, 1)
+})

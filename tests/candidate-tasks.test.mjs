@@ -136,3 +136,21 @@ test('旧RPC保留准备中、operationId和basedOn响应，后台执行与新�
   await done.promise
   assert.equal(calls, 1)
 })
+
+test('session polling uses state projections without materializing history', async t => {
+  const h = await harness(t)
+  const original = h.chats.forSession
+  const state = await original('s')
+  state.cardName = 'card'
+  state.requestMode = 'sillytavern'
+  h.chats.stateForSession = async () => structuredClone(state)
+  h.chats.readState = async () => structuredClone(state)
+  h.chats.forSession = h.chats.read = async () => { throw Error('unexpected full read') }
+  const service = h.create({})
+  for (let i = 0; i < 10; i++) {
+    const result = await service.sync('s', { kind: 'candidate' })
+    assert.equal(result.cardName, 'card')
+    assert.equal(result.requestMode, 'sillytavern')
+    assert.equal(result.activity.busy, true)
+  }
+})

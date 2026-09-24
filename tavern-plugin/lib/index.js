@@ -1589,7 +1589,7 @@ export async function apply(ctx) {
   }
 
   async function sessionOperation(sessionId, operationId) {
-    const chat = await chatForSession(sessionId)
+    const chat = await sessionStateForSession(sessionId)
     if (chat === undefined) return null
     const operation = backgroundTasks.operation(chat, operationId)
     if (operation === null || operation.role !== 'candidate' || operation.successful !== true) return operation
@@ -2045,7 +2045,7 @@ export async function apply(ctx) {
           })
         })
       }
-      const chat = await chatForSession(target.session.id)
+      const chat = await sessionStateForSession(target.session.id)
       if (!chat || !['story', 'script'].includes(chat.mode)) return fallback()
       const pendingMessages = pendingCompactionMessages.get(target) || []
       return compactForegroundIfNeeded({
@@ -2060,7 +2060,7 @@ export async function apply(ctx) {
     }, { beforeRegion: async target => {
       const background = backgroundAgentRunner.requestContext(target.session.id)
       if (!background || ['image', 'phone'].includes(background.task)) return
-      const chat = await chatForSession(background.parentSessionId)
+      const chat = await sessionStateForSession(background.parentSessionId)
       if (!chat) throw new Error('后台压缩找不到所属对话')
       await updateChat(chat.id, current => {
         const participant = current.timeline?.participants?.background
@@ -2076,7 +2076,7 @@ export async function apply(ctx) {
   }
   ctx.on('agent/pre-step', async (payload, next) => {
     const id = payload.agent.session.id, background = backgroundAgentRunner.requestContext(id)
-    const chat = background ? null : await chatForSession(id)
+    const chat = background ? null : await sessionStateForSession(id)
     if (chat && ['story', 'script'].includes(chat.mode)) await retireOldForegroundFrames(payload.agent, payload.turn)
     if (background && ['image', 'phone'].includes(background.task)) return next()
     if (background || chat && ['story', 'script'].includes(chat.mode)) {
@@ -2136,6 +2136,7 @@ export async function apply(ctx) {
     backgroundTasks: async chat => normalizeBackgroundTasks((await backgroundConfigForSession(chat.sessionId))?.backgroundTasks),
     store: {
       chatForSession: chatForSession,
+      stateForSession: sessionStateForSession,
       readChat: readChat,
       readCard: (path, chat) => chat ? readChatCard(chat) : readCard(path),
       readCardExtensions: readCardExtensions,
@@ -2174,7 +2175,7 @@ export async function apply(ctx) {
     logger: console
   })
   const candidateTasks = createCandidateTasks({
-    chats: { read: readChat, write: writeChat, forSession: chatForSession },
+    chats: { read: readChat, write: writeChat, forSession: chatForSession, stateForSession: sessionStateForSession, readState: chatPersistence.readSessionState },
     generator: candidateGenerator,
     backgroundTasks,
     sessions: {
@@ -2778,6 +2779,7 @@ export async function apply(ctx) {
     captureSceneWorldbook,
     store: {
       chatForSession,
+      stateForSession: sessionStateForSession,
       readCard,
       readCardExtensions,
       readScript,
@@ -2826,7 +2828,7 @@ export async function apply(ctx) {
   const foregroundHandoff = createForegroundHandoff({
     turns: turnOrchestrator,
     prepareOpeningWorldBook: prepareNextWorldBookContext,
-    store: { chatForSession, readChat },
+    store: { chatForSession, readChat, readState: chatPersistence.readSessionState },
     tasks: backgroundTasks,
     queueBackground: queueSettlement,
     cleanupFailedTurn: async function (input) {
@@ -2866,7 +2868,7 @@ export async function apply(ctx) {
   // ---------- 重新生成正文（生成即替换，无确认） ----------
   const { regenerate: regenBody, replayFailed: replayFailedTurn, recover: recoverRegeneration, rollback: rollbackTurn, undoRollback: undoRollbackTurn } = createRoundHistory({
     diagnostics: mvuDiagnostics,
-    chats: { read: readChat, forSession: chatForSession, readCard: readChatCard,
+    chats: { read: readChat, readState: chatPersistence.readSessionState, forSession: chatForSession, readCard: readChatCard,
       readRevision: readChatRevision, write: writeChat, update: updateChat },
     sessions: { get: function (sessionId) { return ctx.get('agents')?.get(sessionId) },
       getSession: sessionId => sessionStore.get(sessionId),
@@ -3113,12 +3115,12 @@ export async function apply(ctx) {
         return { saved: true }
       }
       case 'getConversationWritingSkills': {
-        const chat = await chatForSession(str(args?.sessionId))
+        const chat = await sessionStateForSession(str(args?.sessionId))
         if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
         return { skills: (await tavernSkills.list()).filter(skill => skill.agents.includes('foreground')).map(skill => ({ name: skill.name, description: skill.description, enabled: !(chat.disabledWritingSkills || []).map(canonicalTavernSkillName).includes(skill.name) })) }
       }
       case 'setConversationWritingSkill': {
-        const chat = await chatForSession(str(args?.sessionId))
+        const chat = await sessionStateForSession(str(args?.sessionId))
         if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
         const skill = await tavernSkills.read(args.name)
         if (!skill?.agents.includes('foreground') || typeof args.enabled !== 'boolean') throw new Error('无效的写作 Skill 配置')
@@ -3131,7 +3133,7 @@ export async function apply(ctx) {
         const background = backgroundAgentRunner.requestContext(sessionId)
         const session = sessionStore.get(sessionId) || agentRegistry.get(sessionId)?.session
         const ownerId = background?.parentSessionId || session?.header?.parentSession || sessionId
-        const chat = await chatForSession(ownerId)
+        const chat = await sessionStateForSession(ownerId)
         return { record: await modelRequestLog.latestForSession(sessionId, str(args?.knownId), chat?.id) }
       }
       case 'listSkills': return { skills: (await tavernSkills.list()).map(({ content, path, ...summary }) => summary) }
@@ -3155,7 +3157,7 @@ export async function apply(ctx) {
       }
       case 'getConversationBackgroundModel':
       case 'getConversationBackgroundConfig': {
-        const chat = await chatForSession(str(args?.sessionId))
+        const chat = await backgroundConfigForSession(str(args?.sessionId))
         if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
         return { backgroundModel: chat.backgroundModelSelection || null, backgroundTasks: normalizeBackgroundTasks(chat.backgroundTasks), webSearchEnabled: chat.webSearchEnabled === true, sceneImagesEnabled: chat.sceneImagesEnabled === true, sceneImagesAvailable: TAVERN_RELEASE_CAPABILITIES.sceneImages, modelCatalog: await tavernModelCatalog() }
       }

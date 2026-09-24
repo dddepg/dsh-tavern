@@ -738,7 +738,7 @@ export function createTurnOrchestrator(options) {
   }
 
   async function visibleTools(sessionId) {
-    const chat = await store.chatForSession(sessionId)
+    const chat = await (store.stateForSession || store.chatForSession)(sessionId)
     if (chat === undefined) return []
     const mode = chat.mode || 'story'
     const webTools = chat.webSearchEnabled === true ? ['web_search'] : []
@@ -748,7 +748,7 @@ export function createTurnOrchestrator(options) {
   }
 
   async function modeFor(sessionId) {
-    const chat = await store.chatForSession(sessionId)
+    const chat = await (store.stateForSession || store.chatForSession)(sessionId)
     return chat === undefined ? null : (chat.mode || 'story')
   }
 

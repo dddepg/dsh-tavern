@@ -79,6 +79,7 @@ export function createRegenerationRecovery({ chats, sessions, timeline, isActive
     recovering.add(chatId)
     let handle
     try {
+      if (chats.readState && !(await chats.readState(chatId))?.regenInProgress) return
       const chat = await chats.read(chatId)
       if (!chat || chat.regenInProgress !== true) return
       const sessionId = chat.regenRecovery?.sessionId || chat.sessionId

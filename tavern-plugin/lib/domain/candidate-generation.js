@@ -510,7 +510,7 @@ export function createCandidateGenerator(options) {
   }
 
   async function find(input) {
-    const chat = await store.chatForSession(input.sessionId)
+    const chat = await (store.stateForSession || store.chatForSession)(input.sessionId)
     if (chat === undefined || chat.candidates === null || typeof chat.candidates !== 'object' || str(chat.candidates.messageId) !== str(input.messageId)) return null
     const limit = (chat.mode || 'story') === 'script' ? 1 : 5
     const choices = Array.isArray(chat.candidates.choices) ? chat.candidates.choices.map(function (item) {
