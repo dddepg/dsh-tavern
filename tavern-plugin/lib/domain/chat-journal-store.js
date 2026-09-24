@@ -435,6 +435,9 @@ export function createChatJournalStore(options = {}) {
     return serialize(chatId,async()=>{
       const state=await cachedState(chatId)
       if(!state || state.revision!==expectedRevision)return undefined
+      // An acknowledged no-op is not a story edit: keep undo points valid.
+      // Check the exact revision and transaction guard under the same lock.
+      if(changes.length===0){metadata.assertCurrent?.();return slice(state.chat,[]).chat}
       const paths=layout(chatId)
       const next=applyJsonChangesShared(state.chat,changes)
       if(next.id!==chatId || revisionOf(next)!==expectedRevision+1)throw new Error('Invalid journal patch revision')

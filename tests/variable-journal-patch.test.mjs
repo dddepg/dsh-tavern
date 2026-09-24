@@ -77,3 +77,14 @@ test('变量回执基线过期或保存时竞争仍返回完整上下文',async 
   {chatId:'c',stateRevision:before._storageRevision,lifecycleRevision:1})
  assert.ok(stale.context);assert.equal(stale.contextDelta,undefined)
 })
+
+test('刷新回写相同变量不推进存储版本，空补丁仍检查版本和事务', async t => {
+ const {adapter,persistence,root}=await harness(t)
+ const before=await persistence.read('c')
+ await adapter.updateVariables('s',{type:'message',message_id:0},{hp:10},1)
+ assert.deepEqual(await persistence.read('c'),before)
+ assert.deepEqual(await createChatJournalStore({dataRoot:root}).read('c'),before)
+ assert.equal(await persistence.patch('c',before._storageRevision-1,[]),undefined)
+ await assert.rejects(persistence.patch('c',before._storageRevision,[],{assertCurrent(){throw new Error('cancelled')}}),/cancelled/)
+ assert.deepEqual(await persistence.read('c'),before)
+})

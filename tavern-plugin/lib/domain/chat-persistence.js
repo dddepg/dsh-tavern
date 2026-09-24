@@ -265,6 +265,7 @@ export function createChatPersistence(options = {}) {
   // Returns metadata only. Callers cannot accidentally retain another complete history.
   async function patch(chatId, revision, changes, metadata={}) {
     if(!records.patch)return undefined
+    if(changes.length===0)return records.patch(chatId,revision,[],metadata)
     if(changes.some(c=>['_storageRevision','updatedAt','id'].includes(c.path?.[0])))throw new Error('Reserved journal patch field')
     return await records.patch(chatId,revision,[...changes,{op:'set',path:['_storageRevision'],value:revision+1},
       ...(metadata.touchUpdatedAt===false?[]:[{op:'set',path:['updatedAt'],value:now()}])],metadata)
