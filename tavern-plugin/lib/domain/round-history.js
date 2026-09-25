@@ -6,7 +6,7 @@ import { sessionEvents, appendSessionEvent } from './session-events.js'
 import { randomUUID } from 'node:crypto'
 import { createRegenerationRecovery } from './regeneration-recovery.js'
 import { isDeepStrictEqual } from 'node:util'
-import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, replayableFailedTurn } from './rollback-surface.js'
+import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, failedTurnReplayAvailability } from './rollback-surface.js'
 import { assertRegenerationSourceCurrent, replaceLastRound } from './last-round-replacement.js'
 import { diagnosticIdentity, regenerationTargetDiagnostic } from './regeneration-diagnostics.js'
 
@@ -300,8 +300,9 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (agent.phase !== undefined && agent.phase !== null && agent.phase.kind === 'running') throw new Error('正在生成，请先停止后再重新生成')
     const session = agent.session
     const events = sessionEvents(session)
-    const target = replayableFailedTurn({ events })
-    if (target === null) throw new Error('当前没有可重新生成的失败回合')
+    const replay = failedTurnReplayAvailability({ events, nodes: session.surface?.nodes || [] })
+    const target = replay.target
+    if (target === null) throw new Error(replay.reason)
     // Read the card before spending a generation: a broken card must fail here,
     // not after the new turn has already committed.
     const card = await readChatCard(chat)

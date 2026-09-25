@@ -1,3 +1,4 @@
+import { surfaceRecoveryChecks } from './surface-recovery.mjs'
 import { cardUpdateChecks } from './card-update.mjs'
 import { sidebarUpgrade } from './sidebar-upgrade.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
@@ -14,6 +15,7 @@ import { spawn } from 'node:child_process'
 import { chromium } from 'playwright'
 import { createChatJournalStore } from '../../tavern-plugin/lib/domain/chat-journal-store.js'
 
+const recoveryScenario = process.argv.includes('--surface-recovery')
 const compactionScenario = process.argv.find(arg => arg.startsWith('--compaction='))?.split('=')[1]
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const runtime = resolve(process.env.TAVERN_E2E_RUNTIME || join(homedir(), '.dsh-tavern/runtime'))
@@ -67,10 +69,13 @@ async function inspectRound(name, gold, text, rounds = 2) {
   report[name] = { chatId: chat.id, rounds, gold, text }
   await page.screenshot({ path: join(output, name + '.png'), fullPage: true })
 }
+async function openStatus() {
+  await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
+}
 async function inspectScreen() {
   await page.getByText('你获得了十枚金币。', { exact: false }).filter({ visible: true }).first().waitFor()
   await page.getByText(/变量已更新/).filter({ visible: true }).first().waitFor()
-  await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
+  await openStatus()
   await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
     .locator('#e2e-gold').filter({ hasText: /^金币：10$/ }).waitFor()
   await page.getByText('站在柜台前，收下奖励。', { exact: true }).filter({ visible: true }).waitFor()
@@ -92,7 +97,12 @@ try {
     })) await symlink(target, join(profile, 'node_modules', name))
     // This package resolves DSH imports relative to its directory, so give it
     // the isolated profile's runtime scope rather than the development scope.
-    await cp(process.env.TAVERN_E2E_SIDEBAR || join(source, 'node_modules/dsh-better-sidebar'), join(profile, 'node_modules/dsh-better-sidebar'), { recursive: true, dereference: true })
+    const sidebar = process.env.TAVERN_E2E_SIDEBAR || join(source, 'node_modules/dsh-better-sidebar')
+    const sidebarVersion = JSON.parse(await readFile(join(sidebar, 'package.json'), 'utf8')).version
+    const expectedSidebar = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).dependencies['dsh-better-sidebar']
+    if (!process.env.TAVERN_E2E_SIDEBAR) assert.equal(sidebarVersion, expectedSidebar, '侧栏依赖与仓库锁定版本不一致；安装锁定依赖或用 TAVERN_E2E_SIDEBAR 指向独立测试包')
+    report.sidebarVersion = sidebarVersion
+    await cp(sidebar, join(profile, 'node_modules/dsh-better-sidebar'), { recursive: true, dereference: true })
     await symlink(join(modules, '@deepseek-ai'), join(profile, 'node_modules/@deepseek-ai'))
     for (const name of await readdir(join(source, 'node_modules'))) {
       if (name.startsWith('.') || ['@deepseek-ai', 'dsh-tavern-plugin', 'dsh-tavern-remote', 'dsh-web-mobile', 'dsh-better-sidebar'].includes(name)) continue
@@ -126,6 +136,7 @@ try {
       child = spawn(process.execPath, [cli, '--profile', 'tavern', '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: source, env: { ...env, DSH_HOME: root, DSH_CWD: root,
           TAVERN_E2E_COMPACTION_DIR: compactionScenario ? output : '',
+          TAVERN_E2E_RECOVERY_DIR: recoveryScenario ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
           TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
           TAVERN_E2E_WRONG_GOLD: process.env.TAVERN_E2E_WRONG_GOLD || '' }, stdio: ['ignore', 'pipe', 'pipe']
@@ -156,12 +167,14 @@ try {
       current.host = next.host
       current.searchParams.set('token', next.searchParams.get('token'))
       await page.goto(current.toString(), { waitUntil: 'domcontentloaded' })
-      await page.locator('.dsh-tavern-history-group-toggle').filter({ hasText: 'E2E 奖励验收' }).click()
+      const history = page.locator('.dsh-tavern-history-group-toggle').filter({ hasText: 'E2E 奖励验收' })
+      if (!await history.isVisible()) await page.getByRole('button', { name: /^(Open|Expand) sidebar$/ }).click()
+      await history.click()
       await page.locator('.dsh-tavern-side-row-name').first().click()
-      await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
+      await openStatus()
     }
     browser = await chromium.launch({ headless: true })
-    context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+    context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...(recoveryScenario ? { hasTouch: true } : {}) })
     context.setDefaultTimeout(timeout)
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true })
     page = await context.newPage()
@@ -174,10 +187,13 @@ try {
     await page.getByText('E2E 奖励验收', { exact: true }).first().click()
     await page.getByRole('button', { name: '开始新游戏', exact: true }).click()
     await page.getByRole('textbox', { name: /发消息|Message/ }).waitFor()
-    await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
+    await openStatus()
     await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
       .locator('#e2e-gold').filter({ hasText: /^金币：0$/ }).waitFor()
   })
+  if (recoveryScenario) {
+    await surfaceRecoveryChecks({ page, step, savedChat, output, report, root, restartServer })
+  } else {
   await step('玩一轮，确认正文、金币与人物姿势', async () => {
     const composer = page.getByRole('textbox', { name: /发消息|Message/ })
     await composer.fill('领取任务奖励')
@@ -307,6 +323,7 @@ try {
   }
   if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
+  }
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   report.status = 'passed'
   delete report.currentStep

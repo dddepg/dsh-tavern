@@ -172,6 +172,8 @@ test('重新生成正文完整遮蔽旧正文、失败回合残留和合成输�
     data: { turn: 2, step: 1, message: { role: 'assistant', source: modelSource() } },
     surfaceOp: 'append'
   }
+  events[52] = { seq: 52, type: 'turn/start', data: { turn: 3 } }
+  events[60] = { seq: 60, type: 'turn/end', data: { turn: 3, reason: { kind: 'error' } } }
   events[55] = { seq: 55, type: 'user/message', data: { role: 'user' }, surfaceOp: 'append' }
   events[56] = { seq: 56, type: 'user/message', data: { role: 'user' }, surfaceOp: 'append' }
   events[69] = { seq: 69, type: 'user/message', data: { role: 'user' }, surfaceOp: 'append' }
@@ -316,9 +318,10 @@ test('摘要之前的输入不能跨越压缩点配对，摘要之后完整的�
   assert.deepEqual(locateRollbackSurface({ events, nodes: [1, 2, 3, 4] }).shadowedSeqs, [3, 4])
 })
 
-test('失败清理只豁免已退役的历史提示词，不放宽跨正文的安全检查', () => {
-  const frame = { seq: 6, type: 'user/message', data: { content: [], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame' } }, surfaceOp: { op: 'replace', start: 2, end: 2 } }
+test('历史替换按来源归属；缺失来源或新追加跨越正文仍拒绝清理', () => {
+  const frame = { seq: 6, type: 'user/message', data: { content: [], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame' } }, surfaceOp: { op: 'replace', start: 2, end: 2 }, sourceEventSeqs: [2] }
   const events = [
+    { seq: 2, type: 'user/message', data: {}, surfaceOp: 'append' },
     { seq: 3, type: 'assistant/message', data: { turn: 1 } },
     { seq: 5, type: 'turn/start', data: { turn: 2 } }, frame,
     { seq: 7, type: 'user/message', data: {} },
@@ -326,10 +329,13 @@ test('失败清理只豁免已退役的历史提示词，不放宽跨正文的�
   ]
   assert.equal(planFailedTurnSurface({ events, nodes: [6, 3], turn: 2 }), null)
   for (const replacement of [
+    frame,
     { ...frame, data: { ...frame.data, content: [{ type: 'text', text: '仍有效的提示词' }] } },
-    { ...frame, data: { ...frame.data, source: { kind: 'user' } } },
-    { ...frame, surfaceOp: 'append' }
+    { ...frame, data: { ...frame.data, source: { kind: 'user' } } }
   ]) {
+    assert.deepEqual(planFailedTurnSurface({ events: events.map(event => event === frame ? replacement : event), nodes: [6, 3, 7], turn: 2 }).shadowedSeqs, [7])
+  }
+  for (const replacement of [{ ...frame, sourceEventSeqs: [] }, { ...frame, surfaceOp: 'append' }]) {
     assert.throws(() => planFailedTurnSurface({ events: events.map(event => event === frame ? replacement : event), nodes: [6, 3, 7], turn: 2 }), /不是连续区间/)
   }
 })

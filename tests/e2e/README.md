@@ -73,3 +73,9 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 ## 人物卡原存档更新
 
 `node tests/e2e/gameplay.mjs --card-update`：真实浏览器在已玩一轮的存档中，修改状态栏、EJS、世界书和变量定义，再通过“应用变化”继续游玩。检查初始值不覆盖进度、EJS 预览副作用隔离、坏模板不改存档、改名缺少迁移时拒绝、声明迁移的改名/转换/删除、前后台模型实际收到新世界书，以及回退和刷新后仍能使用新版状态栏。产物包括 `card-update-*.png`、`saved-state.json`、`preset-requests.jsonl` 和 `trace.zip`。模型输出固定，存储、模板、MVU、界面和结算执行真实链路。
+
+## 失败回合恢复专项
+
+`node tests/e2e/gameplay.mjs --surface-recovery`：在真实 DSH 中新开一局，从首次模型请求开始注入“只有思考、没有正文”，覆盖历史系统槽位更新。恢复操作使用 430×932 触摸浏览器窗口（服务重启后的历史导航在 1440×1000 宽屏完成，再切回窄屏），点击清除未完成回复并继续、原样重试、重启服务、重新生成失败再成功、回退并撤销，以及失败后不手动清理而直接继续。独立读取落盘 Chat 与 Session，核对未提交失败正文、原始输入重放、消息面无思考残留、历史和后续正文保留。
+
+只在模型边界读取 `recovery-control.json` 控制故障，不模拟酒馆接口或直接修改存档；`recovery-requests.jsonl` 记录故障实际到达模型边界。输出还包含 `recovery-*.png` 和公共的 `report.json` / `trace.zip`。这是 Chromium 触摸与窄屏验证，不等同于手机真机远程访问。

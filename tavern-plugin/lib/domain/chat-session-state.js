@@ -1,4 +1,4 @@
-import { rollbackAvailability, hasRollbackMessages, replayableFailedTurn, foregroundSuppressedTurns, supersededRegenerationErrorTurns } from './rollback-surface.js'
+import { rollbackAvailability, hasRollbackMessages, failedTurnReplayAvailability, foregroundSuppressedTurns, supersededRegenerationErrorTurns } from './rollback-surface.js'
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
 const str = value => String(value ?? '')
@@ -106,7 +106,7 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
       canRollback: false, canClearIncompleteReply: false,
       reason: '当前会话的消息流尚未加载，请重新打开对话后重试；历史正文仍保留。'
     }
-    const replayTarget = replayableFailedTurn({ events: evidence.events || [] })
+    const replayTarget = Array.isArray(nodes) ? failedTurnReplayAvailability({ events: evidence.events || [], nodes }).target : null
     const hasRound = hasRollbackMessages(chat.messages)
     return {
       hiddenDshErrorTurns: chat.hiddenDshErrorTurns || [],
@@ -123,7 +123,7 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
       canRollback: rollbackState.canRollback,
       canClearIncompleteReply: rollbackState.canClearIncompleteReply,
       undoRollbackTurn: canUndoRollback(chat, evidence.session) ? chat.rollbackUndo.turn : null,
-      rollbackUnavailableReason: hasRollbackMessages(chat.messages) ? rollbackState.reason : ''
+      rollbackUnavailableReason: rollbackState.reason
     }
   }
 

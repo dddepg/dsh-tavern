@@ -1,3 +1,4 @@
+import { recoveryBlocks } from './recovery-model.mjs'
 import { compactionStream, modelCapacity } from './compaction-model.mjs'
 // The only substituted boundary: fixed provider output. Tools execute normally.
 import { appendFile } from 'node:fs/promises'
@@ -12,6 +13,15 @@ export function apply(ctx) {
     async *stream(input) {
       if (process.env.TAVERN_E2E_COMPACTION_DIR) { yield* compactionStream(input); return }
       const tools = new Set((input.tools || []).map(tool => tool.name))
+      const recovery = await recoveryBlocks(input, tools)
+      if (recovery) {
+        for (const [index, block] of recovery.entries()) {
+          yield { type: 'block-start', index, blockType: block.type }
+          yield { type: 'block-end', index, block }
+        }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
       const done = new Set(input.messages.flatMap(message => message.content || [])
         .filter(block => block.type === 'tool-result').map(block => block.toolCallId))
       const text = JSON.stringify(input.messages)

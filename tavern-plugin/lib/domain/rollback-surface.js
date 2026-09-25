@@ -1,7 +1,8 @@
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { restoredSurfaceSeqs } from './surface-restoration.js'
-import { sessionEvents, appendSessionEvent, surfaceReplacementRange } from './session-events.js'
+import { sessionEvents, surfaceReplacementRange } from './session-events.js'
+import { createSurfaceOwnership, planSurfaceRecovery, planSurfaceRange, SurfaceRecoveryError, OWNED } from './surface-recovery.js'
 import { randomUUID } from 'node:crypto'
 
 function object(value) {
@@ -98,9 +99,9 @@ function modelTurns(events, seqs) {
 export function regenerationAttemptTurns(input) {
   const events = Array.isArray(input && input.events) ? input.events : []
   const eventStart = Math.max(0, Number(input && input.eventStart) || 0)
-  return modelTurns(events, events.filter(function (event) {
-    return event && Number.isSafeInteger(event.seq) && event.seq >= eventStart
-  }).map(function (event) { return event.seq }))
+  const end = regenerationAttemptEnd(events, eventStart)
+  const belongs = createSurfaceOwnership(events).classify(event => event.seq >= eventStart && event.seq < end)
+  return modelTurns(events, events.filter(event => event && belongs(event.seq) === OWNED).map(event => event.seq))
 }
 
 export function abortedRegenerationTurns(input) {
@@ -200,6 +201,7 @@ export function locateRegenerationSurface(input) {
 // the user explicitly clears them. Never consume a committed story to do that.
 export function pendingFailedSurfaceTurns({ events = [], nodes = [], suppressed = [] }) {
   const hidden = new Set(suppressed.map(Number))
+  let ownership, failures
   const turns = new Set()
   for (let index = nodes.length - 1; index >= 0; index--) {
     const event = eventAt(events, nodes[index])
@@ -208,20 +210,16 @@ export function pendingFailedSurfaceTurns({ events = [], nodes = [], suppressed 
     if (isRollbackAssistantTombstone(event, events) || isForegroundContext(event)) continue
     if (!isRollbackUserTombstone(event)) break
     if (event.data.source.plugin !== 'dsh-tavern-failed-turn-cleanup') continue
+    ownership ??= createSurfaceOwnership(events)
+    failures ??= turnIntervals(events).filter(interval => interval.failed && !hidden.has(interval.turn))
     const sources = event.sourceEventSeqs || []
     const failed = new Set(modelTurns(events, sources))
     // A provider can fail before emitting any assistant message. Recover the
     // turn from the cleaned nodes' enclosing lifecycle, including old records.
-    let started = null
-    for (const candidate of events) {
-      if (candidate?.type === 'turn/start') started = candidate
-      if (candidate?.type !== 'turn/end' || !started) continue
-      if (Number(candidate.data?.turn) === Number(started.data?.turn) &&
-          ['error', 'aborted'].includes(candidate.data?.reason?.kind) &&
-          sources.some(seq => seq > started.seq && seq < candidate.seq)) {
-        failed.add(Number(candidate.data.turn))
-      }
-      started = null
+    const origin = ownership.firstOrigin(event.seq)
+    const interval = failures.find(item => origin > item.start && origin < item.end)
+    if (interval && ownership.classify(candidate => candidate.seq > interval.start && candidate.seq < interval.end)(event.seq) === OWNED) {
+      failed.add(interval.turn)
     }
     for (const turn of failed) {
       if (Number.isSafeInteger(turn) && turn > 0 && !hidden.has(turn)) turns.add(turn)
@@ -303,7 +301,20 @@ export function locateRollbackSurface(input) {
   }
   if (assistantIndex < 0 || assistantEvent === null || source === null) return null
 
-  const shadowedSeqs = nodes.slice(userIndex)
+  const ownership = createSurfaceOwnership(events)
+  const start = ownership.firstOrigin(nodes[userIndex])
+  const belongs = ownership.classify(event => event.seq >= start)
+  const turn = Number(assistantEvent.data?.turn)
+  const range = planSurfaceRange({ nodes, start: nodes[userIndex], end: nodes.at(-1),
+    accepts: seq => {
+      const event = ownership.eventAt(seq)
+      if (isRollbackUserTombstone(event) || isRollbackAssistantTombstone(event, events)) return true
+      if (belongs(seq) !== OWNED) return false
+      if (event?.type === 'assistant/message' && Number(event.data?.turn) !== turn) return false
+      const frameTurn = Number(event?.data?.source?.trace?.turn)
+      return !(frameTurn > 0) || frameTurn === turn
+    }, message: '回退消息归属不一致，无法安全清理' })
+  const shadowedSeqs = range.shadowedSeqs
   return Object.freeze({
     userSeq: Number(nodes[userIndex]),
     assistantSeq: Number(nodes[assistantIndex]),
@@ -323,95 +334,80 @@ export function planRegenerationSurface(input) {
   const oldAssistantIndex = nodes.indexOf(oldAssistantSeq)
   if (oldAssistantIndex < 0) throw new Error('旧正文已经不在当前模型消息面中')
 
-  let finalAssistantIndex = -1
-  for (let index = nodes.length - 1; index > oldAssistantIndex; index -= 1) {
+  const ownership = createSurfaceOwnership(events)
+  const end = regenerationAttemptEnd(events, eventStart)
+  const attempt = ownership.classify(event => event.seq >= eventStart && event.seq < end)
+  let finalAssistantSeq = null
+  for (let index = nodes.length - 1; index > oldAssistantIndex; index--) {
     const seq = Number(nodes[index])
-    if (seq < eventStart) continue
-    const event = eventAt(events, seq)
-    if (event && event.type === 'assistant/message' && modelSourceOf(event) !== null) {
-      finalAssistantIndex = index
+    const event = ownership.eventAt(seq)
+    if (attempt(seq) === OWNED && event?.type === 'assistant/message' && modelSourceOf(event) !== null) {
+      finalAssistantSeq = seq
       break
     }
   }
-  if (finalAssistantIndex < 0) throw new Error('重新生成流程未在当前模型消息面中产生正文')
+  if (finalAssistantSeq === null) throw new SurfaceRecoveryError('重新生成流程未在当前模型消息面中产生正文')
 
-  const shadowedSeqs = nodes.slice(oldAssistantIndex, finalAssistantIndex + 1).map(Number)
-  if (shadowedSeqs.length === 0) throw new Error('重新生成流程没有需要替换的旧消息')
-  return Object.freeze({
-    start: shadowedSeqs[0],
-    end: shadowedSeqs[shadowedSeqs.length - 1],
-    finalAssistantSeq: Number(nodes[finalAssistantIndex]),
-    shadowedSeqs: Object.freeze(shadowedSeqs)
-  })
+  const failed = turnIntervals(events).filter(interval => interval.failed && interval.end < eventStart)
+  const residue = ownership.classify(event => failed.some(interval => event.seq > interval.start && event.seq < interval.end))
+  const range = planSurfaceRange({ nodes, start: oldAssistantSeq, end: finalAssistantSeq,
+    accepts: seq => seq === oldAssistantSeq || attempt(seq) === OWNED || residue(seq) === OWNED ||
+      isRollbackUserTombstone(ownership.eventAt(seq)) || isRollbackAssistantTombstone(ownership.eventAt(seq), events),
+    message: '重新生成消息归属不一致，无法安全清理' })
+  // Replacing a saved round is never allowed to consume or precede newer story.
+  if (nodes.slice(nodes.indexOf(finalAssistantSeq) + 1).some(seq =>
+    !isRollbackUserTombstone(ownership.eventAt(seq)) && !isRollbackAssistantTombstone(ownership.eventAt(seq), events))) {
+    throw new SurfaceRecoveryError('重新生成后已有新的消息，无法安全清理')
+  }
+  return Object.freeze({ ...range, finalAssistantSeq })
+}
+
+function turnIntervals(events) {
+  const starts = new Map(), intervals = []
+  for (const event of events) {
+    if (!event) continue
+    const turn = Number(event.data?.turn)
+    if (event.type === 'turn/start') starts.set(turn, event.seq)
+    if (event.type === 'turn/end' && starts.has(turn)) {
+      intervals.push({ turn, start: starts.get(turn), end: event.seq, failed: ['error', 'aborted'].includes(event.data?.reason?.kind) })
+      starts.delete(turn)
+    }
+  }
+  return intervals
+}
+
+function regenerationAttemptEnd(events, eventStart) {
+  let started = false
+  for (const event of events) {
+    if (!event || event.seq < eventStart) continue
+    if (event.type === 'turn/end' || (event.type === 'user/message' && event.data?.source?.kind === 'user')) return event.seq
+    if (event.type === 'turn/start') {
+      if (started) return event.seq
+      started = true
+    } else if (event.surfaceOp === 'append' && ['user/message', 'assistant/message', 'tool/result'].includes(event.type)) {
+      // Legacy recovery can start at the injected input, after turn/start.
+      // A later turn/start is still a boundary if turn/end was never written.
+      started = true
+    }
+  }
+  return Infinity
 }
 
 export function planFailedTurnSurface(input) {
   const events = Array.isArray(input && input.events) ? input.events : []
   const nodes = Array.isArray(input && input.nodes) ? input.nodes : []
   const turn = Math.max(0, Number(input && input.turn) || 0)
-  let startSeq = -1
-  let endSeq = -1
-  for (const event of events) {
-    if (!event || !Number.isSafeInteger(event.seq) || Number(event.data && event.data.turn) !== turn) continue
-    if (event.type === 'turn/start') startSeq = Math.max(startSeq, event.seq)
-    if (event.type === 'turn/end') endSeq = Math.max(endSeq, event.seq)
-  }
-  if (startSeq < 0 || endSeq <= startSeq) return null
+  const interval = turnIntervals(events).findLast(interval => interval.turn === turn)
+  if (!interval) return null
+  const { start: startSeq, end: endSeq } = interval
 
-  // Retiring an older frame writes a new event at its historical surface
-  // position. That empty replacement belongs to the old context, not this
-  // failed attempt; including it would span a previously committed reply.
-  function isRetiredHistoricalFrame(seq) {
-    const event = eventAt(events, seq)
-    if (!isForegroundContext(event) || event.data.source.form !== 'foreground-frame' ||
-      !Array.isArray(event.data.content) || event.data.content.length !== 0 || event.surfaceOp?.op !== 'replace') return false
-    const range = surfaceReplacementRange(event.surfaceOp)
-    return Number.isSafeInteger(range.start) && Number.isSafeInteger(range.end) &&
-      range.start < startSeq && range.end < startSeq
-  }
-
-  // Host system refreshes replace the pinned historical system slot. They
-  // are not failed model output, even though written during this attempt.
-  function isHistoricalSystemRefresh(seq) {
-    const event = eventAt(events, seq)
-    if (event?.type !== 'system/message' || event.surfaceOp?.op !== 'replace') return false
-    const range = surfaceReplacementRange(event.surfaceOp)
-    return range.start === range.end && range.start < startSeq &&
-      eventAt(events, range.start)?.type === 'system/message'
-  }
-
-  const owned = new Set()
-  for (const event of events) {
-    const seq = event?.seq
-    if (!Number.isSafeInteger(seq)) continue
-    if (seq > startSeq && seq < endSeq && !isRetiredHistoricalFrame(seq) && !isHistoricalSystemRefresh(seq)) {
-      owned.add(seq)
-    } else if (seq > endSeq && isForegroundContext(event) && event.data.source.form === 'foreground-frame' &&
-      Array.isArray(event.data.content) && event.data.content.length === 0 && event.surfaceOp?.op === 'replace') {
-      // A later attempt may already have retired this failed frame. Only its
-      // proven replacement belongs to the failure; never absorb later output.
-      const refs = event.sourceEventSeqs
-      if (Array.isArray(refs) && refs.length > 0 && refs.every(ref => owned.has(ref))) owned.add(seq)
-    }
-  }
-
-  let firstIndex = -1
-  let lastIndex = -1
-  for (let index = 0; index < nodes.length; index += 1) {
-    const seq = Number(nodes[index])
-    if (!owned.has(seq)) continue
-    if (firstIndex < 0) firstIndex = index
-    lastIndex = index
-  }
-  if (firstIndex < 0 || lastIndex < firstIndex) return null
-
-  const shadowedSeqs = nodes.slice(firstIndex, lastIndex + 1).map(Number)
-  const outsideTurn = shadowedSeqs.find(function (seq) { return !owned.has(seq) })
-  if (outsideTurn !== undefined) throw new Error('失败回合的模型消息面不是连续区间，无法安全清理: ' + outsideTurn)
-  return Object.freeze({
-    start: shadowedSeqs[0],
-    end: shadowedSeqs[shadowedSeqs.length - 1],
-    shadowedSeqs: Object.freeze(shadowedSeqs)
+  return planSurfaceRecovery({
+    nodes,
+    ownership: input.ownership || createSurfaceOwnership(events),
+    selectOrigin: event => event.seq > startSeq && event.seq < endSeq,
+    inScope: event => event.seq > startSeq,
+    ignore: isRollbackUserTombstone,
+    message: '失败回合的模型消息面不是连续区间，无法安全清理'
   })
 }
 
@@ -443,35 +439,25 @@ export function clearRegenerationAttemptSurface(input) {
   const nodes = session.surface && Array.isArray(session.surface.nodes) ? session.surface.nodes : []
   const eventStart = Math.max(0, Number(input && input.eventStart) || 0)
   const events = sessionEvents(session)
-  // A replacement has a new seq but keeps its historical position. Ownership
-  // follows displaced nodes; event time alone cannot identify temporary input.
-  const end = events.find(event => event.seq >= eventStart && (event.type === 'turn/end' ||
-    (event.type === 'user/message' && event.data?.source?.kind === 'user')))?.seq ?? Infinity
-  const owned = new Set()
-  for (const event of events) {
-    if (event.seq < eventStart) continue
-    if (event.surfaceOp?.op === 'replace') {
-      const refs = event.sourceEventSeqs
-      if (Array.isArray(refs) && refs.length > 0 && refs.every(seq => owned.has(seq))) owned.add(event.seq)
-    } else if (event.seq < end && event.surfaceOp === 'append') {
-      owned.add(event.seq)
-    }
-  }
-  const temporary = nodes.filter(seq => owned.has(Number(seq))).map(Number)
-  if (temporary.length === 0) return 0
-  const firstIndex = nodes.indexOf(temporary[0])
-  const lastIndex = nodes.indexOf(temporary[temporary.length - 1])
-  if (firstIndex < 0 || lastIndex < firstIndex || lastIndex - firstIndex + 1 !== temporary.length) {
-    throw new Error('重新生成临时消息不是连续区间，无法安全清理')
-  }
+  const end = regenerationAttemptEnd(events, eventStart)
+  const cleanup = planSurfaceRecovery({
+    nodes, ownership: createSurfaceOwnership(events),
+    selectOrigin: event => event.seq >= eventStart && event.seq < end,
+    inScope: event => event.seq >= eventStart,
+    // Failed cleanup may precede regeneration abort; convert it once to the
+    // abort marker, then retries are true no-ops (including after a flush error).
+    ignore: event => event?.data?.source?.plugin === 'dsh-tavern-regeneration-abort',
+    message: '重新生成临时消息不是连续区间，无法安全清理'
+  })
+  if (!cleanup) return 0
   const makeId = typeof input.id === 'function' ? input.id : function () { return randomUUID() }
   replaceSessionSurface(session, 'user/message', {
     id: makeId(),
     role: 'user',
     content: [],
     source: { kind: 'plugin', plugin: 'dsh-tavern-regeneration-abort' }
-  }, { start: temporary[0], end: temporary[temporary.length - 1], sourceEventSeqs: temporary })
-  return temporary.length
+  }, { start: cleanup.start, end: cleanup.end, sourceEventSeqs: cleanup.shadowedSeqs })
+  return cleanup.shadowedSeqs.length
 }
 
 export function hasRollbackMessages(messages) {
@@ -498,23 +484,19 @@ function unclearedFailedTail(chat, events, nodes) {
   if (lastEvent?.type === 'assistant/message' && (Number(lastEvent.data?.turn) === Number(latest?.turn) || Number(lastEvent.data?.turn) === Number(chat.regeneratedDshTurns?.[String(latest?.turn)]))) return []
   const committed = new Set((chat.messages || []).filter(message => message?.role === 'assistant').map(message => Number(message.turn)))
   for (const turn of Object.values(chat.regeneratedDshTurns || {})) committed.add(Number(turn))
-  const starts = new Map(), intervals = []
-  for (const event of events) {
-    const turn = Number(event.data?.turn)
-    if (event.type === 'turn/start') starts.set(turn, event.seq)
-    if (event.type === 'turn/end' && starts.has(turn)) {
-      intervals.push({ turn, start: starts.get(turn), end: event.seq, failed: ['error', 'aborted'].includes(event.data?.reason?.kind) })
-      starts.delete(turn)
-    }
-  }
+  const intervals = turnIntervals(events)
+  const ownership = createSurfaceOwnership(events)
   let remaining = [...nodes]
   const result = []
   while (remaining.length) {
     const event = eventAt(events, remaining.at(-1))
     if (isRollbackAssistantTombstone(event, events) || isRollbackUserTombstone(event) || isForegroundContext(event)) { remaining.pop(); continue }
-    const interval = intervals.findLast(item => event && event.seq > item.start && event.seq < item.end)
+    const origin = ownership.firstOrigin(event?.seq)
+    const interval = intervals.findLast(item =>
+      (event?.type === 'assistant/message' && Number(event.data?.turn) === item.turn) ||
+      (origin > item.start && origin < item.end))
     if (!interval?.failed || committed.has(interval.turn)) break
-    const plan = planFailedTurnSurface({ events, nodes: remaining, turn: interval.turn })
+    const plan = planFailedTurnSurface({ events, nodes, turn: interval.turn, ownership })
     if (!plan) break
     result.push(interval.turn)
     const removed = new Set(plan.shadowedSeqs)
@@ -524,7 +506,7 @@ function unclearedFailedTail(chat, events, nodes) {
 }
 
 // UI and mutation share the same native target and failed-tail precedence.
-export function rollbackAvailability(chat, { events = [], nodes = [] } = {}) {
+function planRollbackAvailability(chat, { events = [], nodes = [] } = {}) {
   const unclearedTurns = unclearedFailedTail(chat, events, nodes)
   const failedTurns = [...new Set([...pendingFailedSurfaceTurns({ events, nodes, suppressed: chat.suppressedDshTurns || [] }), ...unclearedTurns])].sort((a, b) => a - b)
   if (failedTurns.length) return { canRollback: true, canClearIncompleteReply: true, failedTurns, unclearedTurns, target: null, reason: '' }
@@ -538,4 +520,27 @@ export function rollbackAvailability(chat, { events = [], nodes = [] } = {}) {
   const canRollback = hasMessages && Boolean(matches)
   return { canRollback, canClearIncompleteReply: false, failedTurns, target: canRollback ? target : null,
     reason: canRollback ? '' : hasMessages ? '当前轮次已不在可回退的消息流中，请继续发送新消息；历史正文仍保留。' : '当前没有可回退的已提交轮次' }
+}
+
+// Unsafe recovery is a domain result in views, and the mutation consumes that
+// same result. Never let a corrupt range take down the entire status query.
+export function rollbackAvailability(chat, input = {}) {
+  try {
+    return planRollbackAvailability(chat, input)
+  } catch (error) {
+    if (!(error instanceof SurfaceRecoveryError)) throw error
+    return { canRollback: false, canClearIncompleteReply: false, failedTurns: [], unclearedTurns: [], target: null, reason: error.message }
+  }
+}
+
+export function failedTurnReplayAvailability({ events = [], nodes = [] } = {}) {
+  const target = replayableFailedTurn({ events })
+  if (!target) return { target: null, reason: '当前没有可重新生成的失败回合' }
+  try {
+    planFailedTurnSurface({ events, nodes, turn: target.turn })
+    return { target, reason: '' }
+  } catch (error) {
+    if (!(error instanceof SurfaceRecoveryError)) throw error
+    return { target: null, reason: error.message }
+  }
 }
