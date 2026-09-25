@@ -12240,7 +12240,6 @@ window.__ModuleLoader__.load({
 			if (!view) return h("aside", { className: "dsh-tavern-status" },
 				h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "状态栏")),
 				h("div", { className: "dsh-tavern-status-body" },
-                        h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
 					h("div", { className: "dsh-tavern-status-empty" }, missingCard ? "人物卡已删除，酒馆状态不可用；已有对话仍可查看。" : (loadState === "retrying" ? "正在重新连接酒馆状态…" : (error || (loadState === "loading" ? "正在加载酒馆状态…" : "选择人物卡后，这里会显示持续状态。")))),
 					loadState === "retrying" || missingCard ? h("button", { className: "dsh-tavern-btn", onClick: function () { liveTavernView.invalidate(props.sessionId); } }, "重新加载") : null
 				)
@@ -12255,6 +12254,7 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-tavern-status-settle" }, h("span", { className: "dsh-tavern-status-dot " + (view.settleStatus || "idle") }), statusText)
 				),
 					h("div", { className: "dsh-tavern-status-body" },
+                        h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
 					view.requestMode !== "sillytavern" && view.cardUpdate?.available ? h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : "人物卡信息已变化"),
 						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用前会预检状态栏、EJS、世界书与变量结构。保留剧情和已有数值，补齐新增变量；字段改名或类型变化需在人物卡声明迁移。成功后可继续当前游戏，无需重开。"),
