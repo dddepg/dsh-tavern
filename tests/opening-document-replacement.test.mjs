@@ -21,7 +21,7 @@ test('开局页面替换 document 后仍启动宿主模块并保留其 API', asy
     if(asset){res.setHeader('content-type',asset.mediaType);res.end(asset.body);return}
     res.setHeader('content-type','text/html');res.end(html)
   })
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)))
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r))})
   const browser=await chromium.launch();t.after(()=>browser.close())
   const page=await browser.newPage()
   await page.goto('http://127.0.0.1:'+server.address().port)
@@ -54,7 +54,7 @@ test('远程开局重写到 head 阶段时，MVU 等待 body 后只启动一次�
     if(asset){res.setHeader('content-type',asset.mediaType);res.end(asset.body);return}
     res.setHeader('content-type','text/html');res.end('<iframe src="/frame"></iframe>')
   })
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)))
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r))})
   const browser=await chromium.launch();t.after(()=>browser.close())
   const page=await browser.newPage(),dialogs=[]
   page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss()})

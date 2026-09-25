@@ -262,7 +262,7 @@ test('游玩 Agent 接收解析后的玩家输入，不接收原始 Tavern 宏�
 })
 
 test('读取 Session View 不启动后台工作，开场回合由玩家输入边界过滤', () => {
-  const sessionView = between(serverSource, 'async function sessionView', 'async function ensureNativeOpening')
+  const sessionView = between(serverSource, 'function sessionView', 'async function ensureNativeOpening')
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
 
   assert.doesNotMatch(sessionView, /queueSettlement|writeChat|settleStatus/)

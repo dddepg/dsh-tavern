@@ -13,8 +13,8 @@ test('README、安装提示和独立版本查询使用同一适配版本', async
   const config = JSON.parse(await readFile(new URL('../config/dsh-compatibility.json', import.meta.url), 'utf8'))
   assert.equal(adaptedDshVersion, config.adaptedDshVersion)
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
-  assert.ok(readme.includes('`' + adaptedDshVersion + '`'))
-  assert.ok(readme.includes('https://github.com/anywhere-labs/dsh-desktop/releases'))
+  assert.ok(readme.includes(adaptedDshVersion))
+  assert.ok(readme.includes('https://flizzywine.github.io/dsh-tavern/#a02'))
   const result = spawnSync(process.execPath, ['bin/dsh-compatibility.mjs', '--version'], { cwd: root, encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout.trim(), adaptedDshVersion)
@@ -84,14 +84,14 @@ fail() { printf 'FAIL:%s\\n' "$1"; exit 1; }
 
 test('Desktop 和 DSHA 各有一个明确适配版本，提示与安装文档包含下载入口', async () => {
   const config = JSON.parse(await readFile(new URL('../config/dsh-compatibility.json', import.meta.url), 'utf8'))
-  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
+  const installation = await readFile(new URL('../docs/installation.md', import.meta.url), 'utf8')
   const manual = await readFile(new URL('../docs/index.html', import.meta.url), 'utf8')
   for (const [host, version, url] of [
     ['desktop', config.recommendedDesktopVersion, config.desktopReleasesUrl],
     ['android', config.recommendedDshaVersion, config.dshaReleasesUrl],
   ]) {
     assert.equal(typeof version, 'string')
-    for (const text of [dshCompatibilityNotice('99.0.0', host), readme, manual]) {
+    for (const text of [dshCompatibilityNotice('99.0.0', host), installation, manual]) {
       assert.ok(text.includes(version))
       assert.ok(text.includes(url))
     }

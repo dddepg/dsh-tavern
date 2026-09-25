@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
+const stateViewSource = await readFile(new URL('../tavern-plugin/lib/domain/chat-session-state.js', import.meta.url), 'utf8')
 
 const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const clientCss = await readFile(new URL('../tavern-plugin/lib/client-assets/tavern.css', import.meta.url), 'utf8')
@@ -317,7 +319,7 @@ test('后台结算期间禁用候选项按钮，完成后自动恢复', () => {
 
   assert.match(serverSource, /case 'syncSession'/)
   assert.match(serverSource, /case 'submitTask'/)
-  assert.match(activity, /const activity = backgroundTasks\.activity\(chat\)/)
+  assert.match(activity, /return sessionStateView\.status\(chat\)/)
   assert.doesNotMatch(activity, /settleStatus/)
   assert.doesNotMatch(activity, /view\(|readChatCard|projectRuntimeReplyHistory/)
   assert.doesNotMatch(clientSource, /dsh-tavern-activity-gate/)
@@ -344,10 +346,12 @@ test('后台结算期间禁用候选项按钮，完成后自动恢复', () => {
 })
 
 test('酒馆状态读取 MVU 回执时使用当前模块可用的复制能力', () => {
-	const receipts = between(serverSource, 'function mvuReceiptsOf', 'function withLegacyPresentationProjection')
-
-	assert.match(receipts, /structuredClone\(stored\)/)
-	assert.doesNotMatch(receipts, /\bclone\(stored\)/)
+  const stored = { version: 1, status: 'updated', changes: [{ path: '/hp', after: 9 }] }
+  const view = createSessionStateView({ activity: () => ({}), evidence: () => ({}) })
+  const receipts = view.receipts({ messages: [{ role: 'assistant', turn: 2, mvu: { receipt: stored } }] })
+  assert.deepEqual(receipts, [{ turn: 2, receipt: stored }])
+  receipts[0].receipt.changes[0].after = 1
+  assert.equal(stored.changes[0].after, 9, 'reading receipts must not expose persisted objects')
 })
 
 test('失败的最新后台结算可以按原任务类型原地重试', () => {
@@ -632,15 +636,15 @@ test('游玩默认打开本局设置，酒馆状态仍保留为独立侧栏', ()
   assert.match(sidebar, /readyTavernSession/)
   assert.match(sidebar, /summaries\[current\]\.blank === false/)
   assert.match(sidebar, /history\.some\(function \(entry\) \{ return entry\.sessionId === current && isPlayMode\(entry\.mode\); \}\)/)
-  assert.match(clientSource, /openConversationSettingsTab: async function \(sessionId\) \{ await ctx\.betterSidebar\.openTab\(\{ type: "dsh-tavern:conversation-settings" \}/)
+  assert.match(clientSource, /openConversationSettingsTab: async function \(sessionId\) \{ await openTavernSidebarTab\(ctx, \{ type: "dsh-tavern:conversation-settings" \}/)
   assert.match(sidebar, /props\.openConversationSettingsTab\(readyTavernSession\)/)
   assert.match(sidebar, /props\.openConversationSettingsTab\(pending\.sessionId\)/)
   assert.match(clientSource, /ctx\.betterSidebar\.registerTab\(\{/)
   assert.match(clientSource, /id: "dsh-tavern:status"/)
-  assert.match(clientSource, /patch: \{ panelOpen: true \}/)
+  assert.match(clientSource, /ctx\.betterSidebar\.openTab\(seed, scope\)/)
   assert.doesNotMatch(clientSource, /className: "dsh-tavern-status-presentation"/)
   assert.doesNotMatch(clientSource, /buildOpeningPreviewDocument\(view\.presentation\.html\)/)
-  assert.match(clientSource, /ctx\.betterSidebar\.openTab\(\{ type: "dsh-tavern:conversation-settings" \}/)
+  assert.match(clientSource, /openTavernSidebarTab\(ctx, \{ type: "dsh-tavern:conversation-settings" \}/)
   assert.doesNotMatch(clientSource, /slots\.inject\("details"|openDetails|ensureDetailsOpen/)
 })
 
@@ -798,15 +802,15 @@ test('卡片模式预加载人物卡、预设、世界书和剧本四个库', ()
   assert.match(clientSource, /props\.openWorldBookLibraryTab\(readyCardSession\)/)
   assert.doesNotMatch(clientSource, /openBoundaryLibraryTab/)
   assert.ok(clientSource.indexOf('props.openCardLibraryTab(readyCardSession)') < clientSource.indexOf('props.openResourcesTab(readyCardSession)'))
-  assert.match(clientSource, /openCardLibraryTab: function \(sessionId\) \{ ctx\.betterSidebar\.openTab\(\{ type: "dsh-tavern:cards" \}/)
-  assert.match(clientSource, /ctx\.betterSidebar\.updateTab\("dsh-tavern:cards", \{ meta: null \}\)/)
+  assert.match(clientSource, /openCardLibraryTab: function \(sessionId\) \{ return openTavernSidebarTab\(ctx, \{ type: "dsh-tavern:cards", meta: null \}/)
+  assert.match(clientSource, /type: "dsh-tavern:cards", meta: null/)
   assert.match(clientSource, /registerTab\(\{\s*id: "dsh-tavern:resources"/)
   assert.match(clientSource, /id: "dsh-tavern:resources",\s*title: "剧本与素材库"/)
   assert.match(clientSource, /id: "dsh-tavern:worldbooks",\s*title: "世界书库"/)
   assert.match(clientSource, /function reconcileLibraryTabTitles\(\)/)
   assert.match(clientSource, /"dsh-tavern:resources": "剧本与素材库"/)
   assert.match(clientSource, /subscribeState\(reconcileLibraryTabTitles\)/)
-  assert.match(clientSource, /openTab\(\{ type: "dsh-tavern:resources" \}/)
+  assert.match(clientSource, /openTavernSidebarTab\(ctx, \{ type: "dsh-tavern:resources" \}/)
   assert.doesNotMatch(clientSource, /openTab\(\{ type: "editor", id: "dsh-tavern:files"/)
   assert.match(clientSource, /group\("剧本与素材", "source", resources\.resources/)
   assert.doesNotMatch(clientSource, /group\("素材", "source"/)
@@ -1277,7 +1281,7 @@ test('实验分支开放兼容入口并保留普通游玩与资源能力', () =>
 	assert.match(action, /rollbackViewState = useLiveTavernView\(props\.sessionId,[\s\S]*canRollback = rollbackViewState\.view && \(rollbackViewState\.view\.canRegenerate \?\? rollbackViewState\.view\.canRollback\) === true/)
 	assert.match(clientSource, /function TavernMoreActions[\s\S]*React\.createElement\(TavernRollbackAction, props\)[\s\S]*React\.createElement\(TavernCompactionAction,/)
 	assert.match(action, /liveTavernView\.invalidate\(props\.sessionId\)[\s\S]*tavernCoordination\.invalidate\(props\.sessionId\)/)
-	assert.match(serverSource, /canRollback: rollbackState\.canRollback/)
+	assert.match(stateViewSource, /canRollback: rollbackState\.canRollback/)
 	assert.doesNotMatch(player, /setRequestMode|请求：酒馆兼容/)
 	assert.doesNotMatch(clientSource, /"请求模式".*"select"/s)
 	assert.doesNotMatch(serverSource, /resolveDeveloperMode|DSH_TAVERN_DEV_MODE|仅在开发模式下可用/)

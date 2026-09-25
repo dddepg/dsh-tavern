@@ -68,7 +68,7 @@ test('production middleware filters play and background but preserves card agent
   vm.runInNewContext(source.slice(start, end), {
     ctx, installWorkspaceInstructionPresentation,
     backgroundAgentRunner: { owns: id => id === 'background' },
-    chatForSession: async id => chats[id]
+    sessionStateForSession: async id => chats[id]
   })
   const sessions = ['story', 'script', 'legacy', 'card', 'edit', 'background', 'unrelated']
   for (const sessionId of sessions) {

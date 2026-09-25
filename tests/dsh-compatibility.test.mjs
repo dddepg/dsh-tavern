@@ -14,7 +14,7 @@ test('Tavern pins dsh-tools to the adapted host release and reuses host packages
   assert.equal(pluginManifest.dependencies['@deepseek-ai/dsh-typert-protocol'], '>=0.1.2-rc.1 <0.2.0')
   assert.match(pluginSource, /from '@deepseek-ai\/dsh-tools'/)
   assert.match(backgroundSource, /from '@deepseek-ai\/dsh-subagent'/)
-  assert.match(launcherSource, /import \{ installPluginDependencies \} from '.\/plugin-dependencies.mjs'/)
+  assert.match(launcherSource, /import \{[^}]*\binstallPluginDependencies\b[^}]*\} from '.\/plugin-dependencies.mjs'/)
   assert.match(installerSource, /resolveHostDependencies\(hostOptions\)/)
   assert.match(installerSource, /run\('pnpm', \['install', '--lockfile=false'\], \{ cwd: pluginDirectory \}\)/)
   assert.doesNotMatch(launcherSource, /'install'[\s\S]{0,40}'--ignore-workspace'/)

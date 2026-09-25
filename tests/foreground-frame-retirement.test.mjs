@@ -41,7 +41,7 @@ test('生产 pre-step 在自动压缩及生成之前清理旧指引，多步工�
     checkedCompactionPressure: new WeakSet(), ctx: { on: (_name, fn) => { hook = fn } },
     retireForegroundFrames, sessionStore: { flush: async () => calls.push('flush') },
     backgroundAgentRunner: { requestContext: () => null },
-    chatForSession: async () => ({ mode: 'story' }), pendingCompactionMessages: new WeakMap(),
+    sessionStateForSession: async () => ({ mode: 'story' }), pendingCompactionMessages: new WeakMap(),
     configureAgentCompaction: async () => ({ compactIfNeeded: async () => {
       const text = JSON.stringify(session.deriveMessages().map(message => message.content))
       assert.doesNotMatch(text, /frame-1/); assert.match(text, /frame-2/)

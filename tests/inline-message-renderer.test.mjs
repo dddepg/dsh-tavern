@@ -699,7 +699,7 @@ test('官方 MVU owner 作为共享沙箱首个系统模块本地加载', () => 
   assert.match(loader, /await window\.waitGlobalInitialized\("Mvu"\)/)
   assert.match(loader, /finally\{window\.__dshTavernResolveCompanionScriptsReady\(\);\}/)
   assert.match(frames[0].srcdoc, /id="extensions_settings2" hidden/)
-  assert.match(clientSource, /const queuedEvents = officialOwner \? \[\] : eventsBetween\(previous, nextSnapshot\)/)
+  assert.match(clientSource, /const queuedEvents = officialOwner \|\| viewer \? \[\] : eventsBetween\(previous, nextSnapshot\)/)
   runtime.dispose()
 })
 

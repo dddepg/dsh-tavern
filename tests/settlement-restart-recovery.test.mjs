@@ -1,5 +1,5 @@
 import { createSettlementJobs } from '../tavern-plugin/lib/domain/settlement-jobs.js'
-import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
+import { createSessionStateView, projectChatSessionState, pendingMvuSettlementState } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import { collectMvuHelperContext, createMvuSettlementModule } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
 import { createTavernScriptHostAdapter } from '../tavern-plugin/lib/domain/tavern-script-host-adapter.js'
 import { createTavernScriptDispatch } from '../tavern-plugin/lib/domain/tavern-script-dispatch.js'
@@ -44,10 +44,11 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
   }).chat
   const running = beginRunning ? await tasks.begin(current, 'settlement') : null
   const sandbox = vm.createContext({
-    collectMvuHelperContext, normalizeBackgroundTasks, structuredClone, Date, AbortController, console: { log() {}, error() {} },
+    collectMvuHelperContext, normalizeBackgroundTasks, pendingMvuSettlementState, structuredClone, Date, AbortController, console: { log() {}, error() {} },
     str: value => value == null ? '' : String(value),
     backgroundTasks: tasks, storyTimeline: timeline,
     readChat: store.readChat, chatForSession: store.readChat, writeChat: store.writeChat,
+    sessionStateForSession: async () => projectChatSessionState(await store.readChat()),
     prepareNextWorldBookContext: async chat => chat, readChatCard: async () => ({}),
     view: async chat => chat, settlementTurn: () => 2,
     projectAgentMessageText: message => message.text, mvuUpdateRules: async () => [],
@@ -151,9 +152,13 @@ test('重启丢失 MVU 回执：显示中断、保留正文变量、可从真实
 
 test('变量 effect 与 receipt 提交时不重复推进正文 checkpoint 和 revision', async () => {
   const run = await harness({ beginRunning: false })
-  let updates = 0
+  const commits = []
   const originalUpdate = run.store.updateChat
-  run.store.updateChat = async function (...args) { updates++; return await originalUpdate(...args) }
+  run.store.updateChat = async function (...args) {
+    const saved = await originalUpdate(...args)
+    commits.push({ source: args[2]?.source, chat: structuredClone(saved) })
+    return saved
+  }
   run.sandbox.mvuSettlement.settleVariables = async input => {
     const before = run.get()
     const after = structuredClone(before)
@@ -173,7 +178,11 @@ test('变量 effect 与 receipt 提交时不重复推进正文 checkpoint 和 re
   await run.sandbox.queueSettlement('chat')
 
   const saved = run.get()
-  assert.equal(updates, 1)
+  assert.equal(commits.filter(row => row.source === 'background.settlement.commit').length, 1)
+  for (const { chat } of commits) {
+    assert.equal(chat.timeline.revision, 1)
+    assert.equal(chat.timeline.checkpoints.length, 1)
+  }
   assert.equal(saved.messages[1].variables[0].stat_data.hp, 9)
   assert.equal(saved.messages[1].mvu.receipt.status, 'updated')
   assert.equal(saved.timeline.operations[run.body.value.operationId].status, 'completed')
@@ -403,6 +412,8 @@ test('MVU 执行器失联保留持久任务，恢复后自动续办且不重开�
   assert.equal(run.tasks.activity(pending).phase, 'pending')
   assert.equal(pending.messages[1].mvu.delivery.version, 1)
   run.sandbox.mvuSettlement.resumeVariables = async () => { resumed++; return { receipt: { status: 'unchanged', changes: [] } } }
+  // Complete the independent onSettled offline check before reconnecting.
+  await new Promise(resolve => setImmediate(resolve))
   run.sandbox.tavernScriptDispatch.status = () => ({ ready: true })
   await run.reconciler.wake('session')
   assert.equal(run.get().settleStatus, 'done')
@@ -516,6 +527,8 @@ for (const recovery of ['自动恢复', '手动重新投递']) test('正式模�
   assert.equal(run.get().messages[1].mvu.pendingSubmission.operations[0].value, -1)
   assert.equal(run.tasks.activity(run.get()).phase, 'pending')
   assert.equal(run.get().messages[1].mvu.receipt.deferredReason, 'claim-timeout')
+  // onSettled starts its own reconciliation check after the model job resolves.
+  await new Promise(resolve => setImmediate(resolve))
   gate.claim('session', 'browser', true)
   if (recovery === '手动重新投递') await run.sandbox.retrySettlement('session', 2)
   const resumed = recovery === '自动恢复'
