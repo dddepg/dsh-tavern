@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "379e86b50133bb86c426c33f51235cdf5e359684",
-  "releaseSequence": 395,
+  "revision": "1273782a1e08a11a39da5d7c46df434211837262",
+  "releaseSequence": 396,
   "version": "2.2.0",
   "files": [
     {
@@ -616,8 +616,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-orchestration-strategies.js",
-      "sha256": "096c5d54fdeed7392651d56bf415669a6d5c4b20576a46b96148b26db748e14a",
-      "size": 17798
+      "sha256": "0cbba5289c816fc7a2fe3a493477823a469de8fb0c8dbb42034833a383521f53",
+      "size": 17844
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-worldbook.js",
@@ -976,8 +976,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/runtime-preset-lifecycle.js",
-      "sha256": "f9239b3a223caa76b5102405ad4f3227cec8f691ff58272afa36d585da3a682c",
-      "size": 6207
+      "sha256": "9d6d3fffc3c74edfcbe0d2fde51f7728a6ecd671f35e94bf25fdade8c704d67e",
+      "size": 7615
     },
     {
       "path": "tavern-plugin/lib/domain/runtime-presets.js",
@@ -1351,8 +1351,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-settings.js",
-      "sha256": "be1bf48217f0c6e7b7db538d7885743023c3af607219eddfc11a465fe4c9e7ba",
-      "size": 6939
+      "sha256": "eb2b4ccb64c77f5c658d6ceddd40aa1f6a0ea6b963d8103824e9e31e53499b9b",
+      "size": 6940
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-skill-provider.js",
@@ -1506,8 +1506,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "7fa8cfae2bb94327d75d660f93dd0f807f7a43582a0d30ec0f5a8e6501c790fe",
-      "size": 307303
+      "sha256": "c0337c9744328ea31405a56e4412ec22ffada81faec865d3980a2f706d2e5110",
+      "size": 307362
     },
     {
       "path": "tavern-plugin/lib/pocket-settings.js",
@@ -1521,8 +1521,8 @@
     },
     {
       "path": "tavern-plugin/lib/prompt-catalog.js",
-      "sha256": "df784146ef7d341037c0dd9c4d18ce4c73fdd094962d9f835ee66d5d1905232b",
-      "size": 2742
+      "sha256": "075103f855725372d1eb9f8632fa484a840889b0224037f57b1c455937f2e1b7",
+      "size": 2772
     },
     {
       "path": "tavern-plugin/lib/scene-image-prompts.js",
@@ -3781,8 +3781,8 @@
     },
     {
       "path": "tavern-plugin/prompts/system-append.md",
-      "sha256": "e4cb76438e1827760f2a46ccb434facf071b2987a1dc5a6b7150128ba1e22d3f",
-      "size": 217
+      "sha256": "429d33383006219432a75346141dc58a899cf2ef3c421cd4b87d0d33aaa87b58",
+      "size": 1372
     },
     {
       "path": "tavern-plugin/src/client/android-web-polyfills.js",
