@@ -176,31 +176,72 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 ### 命令行版的启动、停止与更新
 
-安装完成后，新开一个终端或 PowerShell。
+安装完成后，新开一个 PowerShell / 终端即可使用下列命令。Windows、macOS、Linux / WSL2 的 `dsh-tavern` 命令写法相同。**每次只复制你要执行的那条，不要把整张表依次执行。**
 
-启动：
+| 命令 | 用途 | 什么时候用 |
+| --- | --- | --- |
+| `dsh-tavern start` | 启动酒馆后台服务 | 开机后，或服务已经停止时 |
+| `dsh-tavern open` | 在浏览器中打开当前酒馆 | 服务已启动，但网页关掉了或没有自动打开时 |
+| `dsh-tavern status` | 查看服务状态及可用的访问地址 | 确认是否正在运行，或排查网页打不开时 |
+| `dsh-tavern stop` | 停止酒馆后台服务 | 暂时不用、备份数据或准备覆盖重装时 |
+| `dsh-tavern restart` | 先停止，再启动酒馆服务 | 更新后需要手动重启，或按排错提示重启时 |
+| `dsh-tavern update` | 在原安装位置更新酒馆 | 想通过终端更新时 |
+| `dsh-tavern install` | 使用当前本地程序安装或修复 Tavern Profile、依赖及所需运行时 | 手动部署或修复本地安装配置时 |
+| `dsh-tavern --help` | 显示命令帮助 | 忘记有哪些命令时 |
+
+不带参数运行 `dsh-tavern` 等同于 `dsh-tavern status`。帮助命令也可以写成 `dsh-tavern help` 或 `dsh-tavern -h`。
+
+**启动服务：**
 
 ```bash
 dsh-tavern start
 ```
 
-停止：
+**打开网页：** 只负责打开页面，不会自动启动尚未运行的服务。若提示尚未就绪，先运行上面的启动命令。
+
+```bash
+dsh-tavern open
+```
+
+**查看运行状态和访问地址：** 地址可能包含鉴权 token，请勿公开分享。
+
+```bash
+dsh-tavern status
+```
+
+**停止服务：** 停止后网页无法继续生成，已有聊天和人物卡仍保留。先等当前生成结束并保存编辑内容。
 
 ```bash
 dsh-tavern stop
 ```
 
-重启：
+**重启服务：** 如果浏览器没有恢复连接，完成后再运行 `dsh-tavern open`。
 
 ```bash
 dsh-tavern restart
 ```
 
-更新：
+**更新酒馆：** 更新沿用已安装目录，保留数据。完整覆盖重装步骤见[更新与重新安装](https://flizzywine.github.io/dsh-tavern/#a02--section-9)。
 
 ```bash
 dsh-tavern update
 ```
+
+**安装或修复本地配置：** 此命令使用已经下载到本地的程序，不负责获取最新版酒馆源码。第一次安装请使用上面的完整安装命令；要更新程序，请用 `update`，或按覆盖重装步骤重新执行完整安装命令。
+
+```bash
+dsh-tavern install --host cli
+```
+
+在命令行版环境中，`dsh-tavern install` 默认使用 CLI 宿主；这里显式写出 `--host cli` 便于确认安装目标。`--host desktop` 和 `--host android` 用于对应宿主内安装，命令行版用户无需切换。
+
+**查看帮助：**
+
+```bash
+dsh-tavern --help
+```
+
+**常见操作顺序：** 开机后先 `start` 再 `open`；只关闭了浏览器，直接 `open`；打不开先看 `status`；更新用 `update`；需要停止服务用 `stop`。关闭终端或浏览器不等于停止后台服务。
 
 命令行版的 `dsh-tavern update` 更新插件，并检查独立 DSH 的版本与启动状态；符合要求就直接复用，否则重新安装指定版本。全局 DSH 的升级不会改变这份运行时。Desktop / DSHA 更新只更新酒馆，保留宿主版本；兼容报错时请自行下载适配宿主版本。Desktop 版由 DSH Desktop 统一管理启停。
 

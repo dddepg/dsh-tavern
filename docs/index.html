@@ -97,6 +97,28 @@
 <p>仍打不开时，查看服务状态与访问地址：</p>
 <div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern status</code></pre></div>
 <p>使用输出中的<strong>完整访问地址</strong>，其中可能带有鉴权 token，不要分享给别人。看到酒馆界面后，继续<a href="#a02--section-7">配置模型并开始第一局</a>。</p>
+<h3>命令行版命令一览</h3>
+<p>安装完成后，新开一个 PowerShell / 终端即可使用下列命令。Windows、macOS、Linux / WSL2 的 <code>dsh-tavern</code> 命令写法相同。<strong>每次只复制你要执行的那条，不要把整张表依次执行。</strong></p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="说明表格"><table><thead><tr><th scope="col">命令</th><th scope="col">用途</th><th scope="col">什么时候用</th></tr></thead><tbody><tr><td><code>dsh-tavern start</code></td><td>启动酒馆后台服务</td><td>开机后，或服务已经停止时</td></tr><tr><td><code>dsh-tavern open</code></td><td>在浏览器中打开当前酒馆</td><td>服务已启动，但网页关掉了或没有自动打开时</td></tr><tr><td><code>dsh-tavern status</code></td><td>查看服务状态及可用的访问地址</td><td>确认是否正在运行，或排查网页打不开时</td></tr><tr><td><code>dsh-tavern stop</code></td><td>停止酒馆后台服务</td><td>暂时不用、备份数据或准备覆盖重装时</td></tr><tr><td><code>dsh-tavern restart</code></td><td>先停止，再启动酒馆服务</td><td>更新后需要手动重启，或按排错提示重启时</td></tr><tr><td><code>dsh-tavern update</code></td><td>在原安装位置更新酒馆</td><td>想通过终端更新时</td></tr><tr><td><code>dsh-tavern install</code></td><td>使用当前本地程序安装或修复 Tavern Profile、依赖及所需运行时</td><td>手动部署或修复本地安装配置时</td></tr><tr><td><code>dsh-tavern --help</code></td><td>显示命令帮助</td><td>忘记有哪些命令时</td></tr></tbody></table></div>
+<p>不带参数运行 <code>dsh-tavern</code> 等同于 <code>dsh-tavern status</code>。帮助命令也可以写成 <code>dsh-tavern help</code> 或 <code>dsh-tavern -h</code>。</p>
+<p><strong>启动服务：</strong></p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern start</code></pre></div>
+<p><strong>打开网页：</strong> 只负责打开页面，不会自动启动尚未运行的服务。若提示尚未就绪，先运行上面的启动命令。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern open</code></pre></div>
+<p><strong>查看运行状态和访问地址：</strong> 地址可能包含鉴权 token，请勿公开分享。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern status</code></pre></div>
+<p><strong>停止服务：</strong> 停止后网页无法继续生成，已有聊天和人物卡仍保留。先等当前生成结束并保存编辑内容。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern stop</code></pre></div>
+<p><strong>重启服务：</strong> 如果浏览器没有恢复连接，完成后再运行 <code>dsh-tavern open</code>。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern restart</code></pre></div>
+<p><strong>更新酒馆：</strong> 更新沿用已安装目录，保留数据。完整覆盖重装步骤见<a href="#a02--section-9">更新与重新安装</a>。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern update</code></pre></div>
+<p><strong>安装或修复本地配置：</strong> 此命令使用已经下载到本地的程序，不负责获取最新版酒馆源码。第一次安装请使用本节前面的完整安装命令；要更新程序，请用 <code>update</code>，或按覆盖重装步骤重新执行完整安装命令。</p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern install --host cli</code></pre></div>
+<p>在命令行版环境中，<code>dsh-tavern install</code> 默认使用 CLI 宿主；这里显式写出 <code>--host cli</code> 便于确认安装目标。<code>--host desktop</code> 和 <code>--host android</code> 用于对应宿主内安装，命令行版用户无需切换。</p>
+<p><strong>查看帮助：</strong></p>
+<div class="code-block"><div class="code-heading"><span>bash</span><button type="button" class="copy-code" aria-label="复制这段命令" hidden>复制</button></div><pre tabindex="0"><code>dsh-tavern --help</code></pre></div>
+<p><strong>常见操作顺序：</strong> 开机后先 <code>start</code> 再 <code>open</code>；只关闭了浏览器，直接 <code>open</code>；打不开先看 <code>status</code>；更新用 <code>update</code>；需要停止服务用 <code>stop</code>。关闭终端或浏览器不等于停止后台服务。</p>
 <h2 id="a02--section-5">D．Android 独立 APK（Android 11+ / ARM64）</h2>
 <p>适合想直接安装酒馆应用的用户，无需另装 DSHA，也无需输入安装命令。此包要求 Android 11 及以上、ARM64。</p>
 <h3>第 1 步：下载并安装 APK</h3>
