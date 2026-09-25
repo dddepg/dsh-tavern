@@ -1,4 +1,3 @@
-import { createPocketSettings } from './pocket-settings.js'
 import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
 import { projectCardSummary } from './domain/card-preparation.js'
 import { createCardSummaryCache } from './domain/card-summary-cache.js'
@@ -351,7 +350,6 @@ export async function apply(ctx) {
     }
     return values
   }
-  const pocketSettings = createPocketSettings({ dataRoot, sourceRoot })
   const applicationUpdater = createApplicationUpdater({
     dataRoot,
     sourceRoot,
@@ -2961,9 +2959,6 @@ export async function apply(ctx) {
         sessionPatch.confirmClient(args || {})
         return { patch: sessionPatch.view() }
       }
-      case 'getPocketSettings': return { pocket: await pocketSettings.status() }
-      case 'setPocketSettings': return { pocket: await pocketSettings.save(args?.enabled) }
-      case 'applyPocketSettings': return { pocket: await pocketSettings.apply() }
       case 'getUpdateStatus': return { status: await applicationUpdater.status() }
       case 'checkUpdate': return { status: await applicationUpdater.check() }
       case 'startUpdate': return { status: await applicationUpdater.start() }

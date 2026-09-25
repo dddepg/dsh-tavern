@@ -514,7 +514,7 @@ export DSH_TAVERN_REINSTALL_RUNTIME=1
 
 **这里是“电脑运行，手机访问”，和在 Android 手机上安装应用是两种用法。** 先完成电脑端安装，再按需配置；安装电脑端酒馆不需要先做本节。
 
-电脑端 Desktop / CLI 安装和更新会自动配置 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码连接。使用时电脑及酒馆服务需要保持运行；选择局域网时，手机和电脑应在同一局域网。
+Desktop 安装和更新会自动配置 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。重启后，在 **设置 → 手机访问** 中选择局域网或公网访问，手机扫码连接。CLI 不提供 Pocket 手机访问，升级时会移除旧版 Pocket。使用时电脑及酒馆服务需要保持运行；选择局域网时，手机和电脑应在同一局域网。
 
 自行部署服务器的用户可参考 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)，为已经能访问的 WebUI 添加账号密码认证。它不提供内网穿透，服务器地址、监听和端口需要自行配置。参考插件教程时，请保留本项目适配的 DSH {{dshVersion}}，不要照抄升级 DSH 的步骤。
 

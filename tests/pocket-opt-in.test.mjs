@@ -7,7 +7,7 @@ const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data', h
 function pocket(manifest, expected) {
   assert.equal(Object.hasOwn(manifest.dependencies, 'dsh-pocket'), expected)
   for (const list of [manifest.dsh.profile.bundles, manifest.dshTavern.managedBundles, manifest.dshTavern.managedDependencies]) assert.equal(list.includes('dsh-pocket'), expected)
-  assert.equal(manifest.dshTavern.cliPocketEnabled, expected)
+  assert.equal(manifest.dshTavern.cliPocketEnabled, undefined)
 }
 test('fresh and legacy forced Pocket CLI installs default to off, including unrecorded dependencies', () => {
   for (const current of [{}, { dependencies: { 'dsh-pocket': '2.10.6', 'dsh-webui-auth': '1.0.0' }, dsh: { profile: { bundles: ['dsh-pocket', 'dsh-webui-auth'] } } }]) {
@@ -17,10 +17,10 @@ test('fresh and legacy forced Pocket CLI installs default to off, including unre
     if (current.dependencies) assert.equal(next.dependencies['dsh-webui-auth'], '1.0.0')
   }
 })
-test('explicit enable survives upgrades; disable removes all four references and remains disabled', () => {
+test('legacy explicit enable is removed and cannot return on upgrades', () => {
   let current = mergeProfileManifest({ ...options, current: { dshTavern: { cliPocketEnabled: true } } })
-  pocket(current, true)
-  current = mergeProfileManifest({ ...options, current }); pocket(current, true)
+  pocket(current, false)
+  current = mergeProfileManifest({ ...options, current }); pocket(current, false)
   current = mergeProfileManifest({ ...options, current: { ...current, dshTavern: { ...current.dshTavern, cliPocketEnabled: false } } }); pocket(current, false)
   current = mergeProfileManifest({ ...options, current }); pocket(current, false)
 })

@@ -7385,73 +7385,6 @@ window.__ModuleLoader__.load({
                     h("span", { className: "dsh-tavern-settings-desc" }, notice)) : null);
         }
 
-        function TavernPocketSettings() {
-            const h = React.createElement;
-            const [pocket, setPocket] = React.useState(null);
-            const [busy, setBusy] = React.useState(false);
-            const [error, setError] = React.useState("");
-            React.useEffect(function () {
-                let active = true;
-                rpc("getPocketSettings").then(result => { if (active) setPocket(result.pocket); }, err => { if (active) setError(String(err.message || err)); });
-                return () => { active = false; };
-            }, []);
-            React.useEffect(function () {
-                if (!pocket?.running) return;
-                let active = true, checking = false;
-                const timer = window.setInterval(async function () {
-                    if (checking) return;
-                    checking = true;
-                    try { const result = await rpc("getPocketSettings"); if (active) setPocket(result.pocket); }
-                    catch (_) { /* Service is temporarily unavailable while restarting. */ }
-                    finally { checking = false; }
-                }, 3000);
-                return () => { active = false; window.clearInterval(timer); };
-            }, [Boolean(pocket?.running)]);
-            async function change(enabled) {
-                setBusy(true); setError("");
-                try { setPocket((await rpc("setPocketSettings", { enabled })).pocket); }
-                catch (err) { setError(String(err.message || err)); }
-                finally { setBusy(false); }
-            }
-            async function apply() {
-                setBusy(true); setError("");
-                try { setPocket((await rpc("applyPocketSettings")).pocket); }
-                catch (err) { setError(String(err.message || err)); }
-                finally { setBusy(false); }
-            }
-            if (pocket && !pocket.supported) return null;
-            const mutedStyle = { color: "var(--dsw-alias-label-tertiary,#8b93a1)", fontSize: 12, lineHeight: 1.5 };
-            const disabled = !pocket || busy || pocket.running;
-            return h("section", { className: "dsh-tavern-pocket-settings", "aria-label": "Pocket 手机访问", style: {
-                background: "var(--dsw-alias-bg-layer-1,#fff)", color: "var(--dsw-alias-label-primary,inherit)",
-                border: "1px solid var(--dsw-alias-border-l2,#e5e7eb)", borderRadius: 12, padding: "16px 20px", maxWidth: 480, marginBottom: 12
-            } },
-                h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 } },
-                    h("div", null,
-                        h("strong", { style: { fontSize: 13 } }, "手机访问服务"),
-                        h("div", { style: { ...mutedStyle, marginTop: 4 } }, "CLI 默认关闭，更改后需应用并重启。")),
-                    h("button", { type: "button", role: "switch", "aria-label": "启用 Pocket 手机访问", "aria-checked": Boolean(pocket?.enabled), disabled,
-                        onClick: () => change(!pocket.enabled), style: {
-                            flexShrink: 0, width: 40, height: 22, borderRadius: 11, border: "none", padding: 0, position: "relative",
-                            cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1,
-                            background: pocket?.enabled ? "var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary,#4f6ef7))" : "var(--dsw-alias-border-l2,#d1d5db)"
-                        } }, h("span", { "aria-hidden": true, style: { position: "absolute", top: 2, left: pocket?.enabled ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff" } }))),
-                h("div", { style: { borderTop: "1px solid var(--dsw-alias-border-l2,#e5e7eb)", paddingTop: 12, marginTop: 14 } },
-                    h("div", { role: "status", style: mutedStyle }, !pocket ? "正在读取设置…" : pocket.running ? "正在准备依赖并重启，连接会暂时中断。" : pocket.restartRequired ? "设置已保存，尚未生效。当前服务" + (pocket.active ? "仍在运行" : "未运行") + "。" : "服务" + (pocket.active ? "已启用" : "已关闭") + "，更新后会保留此选择。"),
-                    h("details", { style: { ...mutedStyle, marginTop: 8 } },
-                        h("summary", { style: { cursor: "pointer" } }, "连接与认证说明"),
-                        h("div", { style: { marginTop: 6 } }, "Pocket 默认监听全部网卡，使用独立 PIN 认证。公网隧道默认关闭；公网 IP 能否直接访问仍取决于网络和防火墙。端口以本页访问设置为准。"))),
-                pocket?.restartRequired || pocket?.error ? h("div", { style: { marginTop: 12 } },
-                    h("div", { style: { ...mutedStyle, marginBottom: 10 } }, "应用会中断当前任务；关闭后手机连接会断开，请使用主界面重新访问。"),
-                    h("button", { type: "button", disabled: busy || pocket.running, onClick: apply, style: {
-                        font: "inherit", cursor: busy || pocket.running ? "default" : "pointer", opacity: busy || pocket.running ? 0.5 : 1,
-                        border: "1px solid var(--dsw-alias-button-ghost-active-border, var(--dsw-alias-border-l2,#d1d5db))",
-                        background: "var(--dsw-alias-bg-layer-1,#fff)", color: "var(--dsw-alias-label-primary,inherit)", height: 36, padding: "0 16px", borderRadius: 999, fontSize: 13
-                    } }, "应用并重启")) : null,
-                error || pocket?.error ? h("div", { role: "alert", style: { marginTop: 10, fontSize: 12, lineHeight: 1.5, color: "var(--dsw-alias-state-error-primary,#dc2626)" } }, error || pocket.error) : null);
-
-        }
-
 		function TavernSettingsSection() {
 			const [state, setState] = React.useState({ loading: true, busy: false, defaultForegroundModel: null, defaultBackgroundModel: null, notice: "", webSearchEnabled: false, backgroundModel: null, backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, modelCatalog: [], sceneImages: false, error: "" });
 			React.useEffect(function () {
@@ -11025,18 +10958,7 @@ window.__ModuleLoader__.load({
 					label: function () { return "DSH Tavern"; }
 				}, TavernSettingsSection); });
 			}, "dsh-tavern: settings section");
-            ctx.effect(() => slots.inject("dsh-pocket.service-control", () => slots.register({
-                name: "dsh-pocket.service-control", id: "dsh-tavern-pocket-control", order: 0
-            }, TavernPocketSettings)), "dsh-tavern: Pocket service control");
-            ctx.effect(() => slots.inject("settings.section", () => {
-                let active = true, dispose;
-                rpc("getPocketSettings").then(result => {
-                    if (!active || !result.pocket?.supported || slots.entries("settings.section").some(entry => entry.options.id === "pocket")) return;
-                    dispose = slots.register({ name: "settings.section", id: "pocket", order: 1,
-                        label: () => "手机访问" }, TavernPocketSettings);
-                }).catch(error => { console.warn("Pocket settings unavailable:", String(error.message || error)); });
-                return () => { active = false; if (dispose) dispose(); };
-            }), "dsh-tavern: disabled Pocket settings page");
+
 			ctx.effect(function () {
 				const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:system-prompts", title: "系统提示词", order: 5, single: true, component: SystemPromptSidebarTab });
 				return function () { if (typeof dispose === "function") dispose(); };

@@ -281,9 +281,6 @@ export async function installProfile(host = RUNTIME_HOST) {
     writeFileSync(path.join(SOURCE_ROOT, '.dsh-tavern-local.json'), JSON.stringify({ host, dshHome: DSH_ROOT }) + '\n')
     runtime?.commit()
     console.log('DSH Tavern 已安装。')
-    if (host === 'cli') console.log(configuration.manifest.dshTavern.cliPocketEnabled
-      ? 'Pocket 已启用（全部网卡，独立 PIN 认证）。可在“设置 → 手机访问”中关闭。'
-      : 'Pocket 已关闭；旧版自动安装不视为主动开启。需要手机访问时，请在“设置 → 手机访问”中开启 Pocket。')
     console.log(host === 'cli' ? `已安装独立 DSH ${dshVersion}：${CLI_RUNTIME_ROOT}；不使用全局 DSH。` : `已复用当前 DSH ${dshVersion} 的本地依赖；未升级或降级宿主。`)
     if (host === 'desktop') {
       console.log('请重启 DSH Desktop，然后从托盘的 Profile 菜单切换到 tavern。')

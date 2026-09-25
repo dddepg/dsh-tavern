@@ -208,7 +208,7 @@ dsh-tavern open</code></pre></div>
 <p>当前适配的 DSH 是 <strong>0.1.5-rc.2</strong>。Desktop / DSHA 的更新可能改变内置 DSH，导致酒馆不兼容；请等本项目明确适配后再升级。酒馆更新与宿主升级是两件事，安装器不会自动替你升级或降级 Desktop / DSHA。命令行版使用自己的固定 DSH 运行时。</p>
 <h2 id="a02--section-10">可选：用手机访问电脑上的酒馆</h2>
 <p><strong>这里是“电脑运行，手机访问”，和在 Android 手机上安装应用是两种用法。</strong> 先完成电脑端安装，再按需配置；安装电脑端酒馆不需要先做本节。</p>
-<p>电脑端 Desktop / CLI 安装和更新会自动配置 <a href="https://github.com/shaobeichen/dsh-pocket">dsh-pocket</a>。重启后，在 <strong>设置 → 手机访问</strong> 中选择局域网或公网访问，手机扫码连接。使用时电脑及酒馆服务需要保持运行；选择局域网时，手机和电脑应在同一局域网。</p>
+<p>Desktop 安装和更新会自动配置 <a href="https://github.com/shaobeichen/dsh-pocket">dsh-pocket</a>。重启后，在 <strong>设置 → 手机访问</strong> 中选择局域网或公网访问，手机扫码连接。CLI 不提供 Pocket 手机访问，升级时会移除旧版 Pocket。使用时电脑及酒馆服务需要保持运行；选择局域网时，手机和电脑应在同一局域网。</p>
 <p>自行部署服务器的用户可参考 <a href="https://github.com/Yuuz12/dsh-webui-auth">dsh-webui-auth</a>，为已经能访问的 WebUI 添加账号密码认证。它不提供内网穿透，服务器地址、监听和端口需要自行配置。参考插件教程时，请保留本项目适配的 DSH 0.1.5-rc.2，不要照抄升级 DSH 的步骤。</p>
 <h2 id="a02--section-11">安装失败时</h2>
 <p>先确认自己正在做的是 A、B、C、D、E 中哪一种，停在了哪一步。保留<strong>最前面的具体错误、文件路径和前后日志</strong>，不要只截最后一句“失败”。反馈时附上系统版本、安装方式和错误截图，隐藏模型密钥、鉴权链接和私人剧情。</p>
