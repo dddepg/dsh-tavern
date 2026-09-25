@@ -59,7 +59,7 @@ Desktop / DSHA 安装器会检查宿主内置的 DSH 版本：与适配版本不
 
 适配版本：**DSH Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`），内置 DSH 版本必须匹配，否则停止安装。请自行打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.13**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。
 
-安装后，从系统托盘（macOS 菜单栏）打开 **Open DSH Terminal**，运行对应命令：
+安装后，进入 DSH Desktop **设置 → 通用设置**，点击窗口顶部的 **打开 DSH 终端**，在弹出的终端窗口运行对应系统的命令。Windows 使用 PowerShell，macOS 使用下面的终端命令；代码框上方的语言标签不用输入。
 
 Windows：
 
@@ -73,7 +73,7 @@ macOS：
 curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=desktop sh
 ```
 
-安装完成后，重启 DSH Desktop，并从托盘的 **Profile** 菜单选择 **tavern**。Desktop 会自动管理启停和端口；更新 dsh-tavern 时，在 DSH Terminal 中重新运行上述安装命令即可。
+安装完成后，重启 DSH Desktop，进入 **设置 → 桌面设置**，在右侧 **Profile** 列表点击 **tavern**，旁边显示 **当前** 即为选中。Desktop 会自动管理启停和端口；更新 dsh-tavern 时，在 DSH Terminal 中重新运行上述安装命令即可。
 
 旧版内置更新失败时，也直接运行上面的命令：它会获取最新安装器，绕过本地旧更新脚本。Windows 命令按 UTF-8 解码，避免中文乱码。若仍失败，请提供日志最前面的具体错误和文件路径。
 
@@ -125,7 +125,7 @@ pnpm run start:tavern
 
 然后使用终端显示的完整访问地址，或运行 `dsh-tavern open`。若当前终端尚未识别该命令，可在仓库目录运行 `node ./bin/dsh-tavern.mjs open`。
 
-如果使用 DSH Desktop，请从托盘打开 **DSH Terminal**，在解压目录运行：
+如果使用 DSH Desktop，请从 **设置 → 通用设置 → 打开 DSH 终端**，在解压目录运行：
 
 ```bash
 node ./bin/dsh-tavern.mjs install --host desktop
