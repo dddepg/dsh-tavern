@@ -1,3 +1,4 @@
+import { openingPreviewPayload, openingInitializationPayload } from './domain/opening-transport.js'
 import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
 import { createSessionStateView, settlementTurn, pendingMvuSettlementState, projectDisplayRuntimeState } from './domain/chat-session-state.js'
@@ -911,7 +912,7 @@ export async function apply(ctx) {
     })
   }
   const openingPreparation = createOpeningPreparation({ readCard, worldBooks, readRuntimeExtensions: async cardPath => tavernRemoteAssets.pinExtensions(await readCardExtensions(cardPath)), generateRaw: (config, context) => generateHelperRaw(config, { ...context, callModel }) })
-  async function getCardOpenings(cardPath, userName, requestMode) {
+  async function getCardOpenings(cardPath, userName, requestMode, previewTransport) {
     const startedAt = performance.now(), stages = {}
     let success = false
     async function timedStage(stage, operation) {
@@ -944,12 +945,13 @@ export async function apply(ctx) {
       for (const opening of previews.openings) if (hasHelperScripts || hasOpeningScript(opening)) {
         opening.openingPreview = { swipes, openingIds, selectedIndex: openingIds.indexOf(opening.id),
           messageHtml: opening.projection.parts.map(part => part.kind === 'markdown' ? marked.parse(str(part.text), { gfm: true }) : str(part.content)).join('\n'),
-          preparationId: preparation.id, worldbook: preparation.worldbook, characterName: card.name, runtime: preparation.runtime }
+          preparationId: preparation.id, characterName: card.name, ...openingPreviewPayload(preparation, previewTransport) }
       }
     }
     success = true
     return {
       preparationId: preparation?.id || '',
+      previewTransport: previewTransport === 'deferred-v1' ? previewTransport : undefined,
       openings: previews.openings,
       diagnostics: previews.diagnostics,
       trustedCardMode: settings.trustedCardMode
@@ -2961,13 +2963,13 @@ export async function apply(ctx) {
       }
       case 'callOpeningRuntime': return await openingPreparation.callRuntime(args && args.id, args && args.method, args && args.args)
       case 'saveOpeningSelection': return openingPreparation.select(args && args.id, args && args.openingId)
-      case 'initializeOpeningTemplate': try { return await openingPreparation.applyTemplateInitial(args.id, await fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([])) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }
+      case 'initializeOpeningTemplate': try { return openingInitializationPayload(await openingPreparation.applyTemplateInitial(args.id, await fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([])), args.compact) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }
       case 'createOpeningPreparation': return await openingPreparation.create(args && args.path)
       case 'getOpeningPreparation': return args?.touchOnly === true ? openingPreparation.retain(args.id) : openingPreparation.get(args && args.id)
       case 'retainOpeningPreparation': return openingPreparation.retain(args && args.id)
       case 'releaseOpeningPreparation': fullTemplateRuntime.cancel('opening:' + args.id); return openingPreparation.release(args && args.id)
       case 'replaceOpeningWorldbook': return await openingPreparation.replaceWorldbook(args && args.id, args && args.entries, args && args.expectedEntries)
-      case 'getCardOpenings': return await getCardOpenings(args && args.path, args && args.userName, args && args.requestMode)
+      case 'getCardOpenings': return await getCardOpenings(args && args.path, args && args.userName, args && args.requestMode, args && args.previewTransport)
       case 'preparePlayStart': {
         await runtimePresets.prepareFullSnapshot()
         return { prepared: true }

@@ -6193,8 +6193,11 @@ window.__ModuleLoader__.load({
 
 		async function initializeFullOpeningTemplate(response) {
 		  if (!response.preparationId) return response;
-		  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId }, 'opening:' + response.preparationId);
-		  for (const opening of response.openings || []) if (opening.openingPreview) opening.openingPreview.runtime = prepared.runtime;
+		  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId, compact: response.previewTransport === 'deferred-v1' }, 'opening:' + response.preparationId);
+		  for (const opening of response.openings || []) if (opening.openingPreview) {
+		    opening.openingPreview.runtime = prepared.runtime;
+		    if (response.previewTransport === 'deferred-v1') opening.openingPreview.worldbook = prepared.runtime?.context?.worldbook ?? prepared.worldbook ?? null;
+		  }
 		  return response;
 		}
 
@@ -8436,7 +8439,7 @@ window.__ModuleLoader__.load({
 				if (openingPicker.preparedKey === preparedKey) return;
 				const timer = window.setTimeout(async function () {
 					try {
-						const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { path: cardPath, userName: userName, requestMode: compatibilityAvailable && (openingPicker.requestMode || requestMode) === "sillytavern" ? "sillytavern" : "dsh" }));
+						const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { previewTransport: "deferred-v1", path: cardPath, userName: userName, requestMode: compatibilityAvailable && (openingPicker.requestMode || requestMode) === "sillytavern" ? "sillytavern" : "dsh" }));
 						if (stopped) return;
 						setOpeningPicker(function (current) {
 							if (!current || current.card.path !== cardPath || (String(current.userName || "你").trim() || "你") !== userName) return current;
@@ -8712,7 +8715,7 @@ window.__ModuleLoader__.load({
 					const userName = String(window.localStorage.getItem("dsh-tavern-player-name") || "你").trim() || "你";
 					const preparedKey = JSON.stringify([userName, compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh"]);
 					setOpeningPicker({ card: card, requestMode: requestMode, openings: [], index: 0, userName: userName, preparing: true });
-					const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { path: card.path, userName: userName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh" }));
+					const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { previewTransport: "deferred-v1", path: card.path, userName: userName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh" }));
 					const openings = response.openings || [];
 					setOpeningPicker({ card: card, requestMode: requestMode, preparing: false, preparedKey: preparedKey, preparationId: response.preparationId || "", openings: openings, index: 0, userName: userName, trustedCardMode: response.trustedCardMode });
 				} catch (err) { setOpeningPicker(null); playPrewarmRef.current.cancel(); setError(String(err && err.message || err)); }

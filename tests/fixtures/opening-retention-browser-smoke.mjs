@@ -38,6 +38,7 @@ window.verifyOpeningRetention=async function(){
  (await until(()=>document.querySelector('.dsh-tavern-card-pick'))).click();
  const frame=await until(()=>{const f=document.querySelector('iframe');return f?.contentWindow?.document.querySelector('#name')&&f;});
  const win=frame.contentWindow, instance=win.instance;
+ check(win.getCharWorldbookNames().primary==='Fixture worldbook','deferred worldbook reaches opening iframe');
  win.document.querySelector('#name').value='保留的角色';
  win.document.querySelector('#choice').click();win.document.querySelector('#increment').click();
  function preserved(label){check(frame.isConnected && document.querySelector('iframe')===frame && frame.contentWindow.instance===instance && win.document.querySelector('#name').value==='保留的角色' && win.document.querySelector('#choice').checked && win.chosen===1,label);}
@@ -70,7 +71,8 @@ const server = createServer(async(req,res)=>{
     if(body.method==='listSessions')result={sessions:[],capabilities:{trustedCardMode:true}}
     if(body.method==='getUpdateStatus')result={status:{phase:'idle'}}
     if(body.method==='getResourceWorkspace')result={path:'/fixture'}
-    if(body.method==='getCardOpenings')result={preparationId:'draft',trustedCardMode:true,openings:[{id:'primary',projection:{parts:[{kind:'html',content}]},openingPreview:{swipes:['表单'],openingIds:['primary'],selectedIndex:0,preparationId:'draft'}}]}
+    if(body.method==='initializeOpeningTemplate'){if(body.compact!==true)throw Error('compact initialization required');result={runtime:null,worldbook:{name:'Fixture worldbook',entries:[]}}}
+    if(body.method==='getCardOpenings')result={preparationId:'draft',previewTransport:'deferred-v1',trustedCardMode:true,openings:[{id:'primary',projection:{parts:[{kind:'html',content}]},openingPreview:{swipes:['表单'],openingIds:['primary'],selectedIndex:0,preparationId:'draft'}}]}
     return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({ok:true,...result}))
   }
   res.writeHead(200,{'Content-Type':'text/html;charset=utf-8'}).end('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><style>body{margin:0}#app{width:340px;height:100vh}</style><div id="app"></div><script src="/runner.js"></script>')

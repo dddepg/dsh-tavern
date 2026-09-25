@@ -103,7 +103,10 @@ function createServerTemplatePanel({ window: hostWindow, rpc: invoke, isActive =
 
 async function initializeFullOpeningTemplate(response) {
   if (!response.preparationId) return response;
-  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId }, 'opening:' + response.preparationId);
-  for (const opening of response.openings || []) if (opening.openingPreview) opening.openingPreview.runtime = prepared.runtime;
+  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId, compact: response.previewTransport === 'deferred-v1' }, 'opening:' + response.preparationId);
+  for (const opening of response.openings || []) if (opening.openingPreview) {
+    opening.openingPreview.runtime = prepared.runtime;
+    if (response.previewTransport === 'deferred-v1') opening.openingPreview.worldbook = prepared.runtime?.context?.worldbook ?? prepared.worldbook ?? null;
+  }
   return response;
 }
