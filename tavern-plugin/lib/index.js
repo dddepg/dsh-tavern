@@ -119,6 +119,7 @@ import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.j
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
 import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
+import { streamFinishKind } from './domain/reply-completeness.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
 import { projectTavernHelperWorldbook } from './domain/tavern-helper-worldbook.js'
@@ -4223,6 +4224,15 @@ export async function apply(ctx) {
       })
       throw new Error(message)
     }
+    // A truncated body must not become a Round: committing it would freeze a half
+    // sentence into the story and consume the failed tail that replays the input.
+    await turnOrchestrator.assertCompleteReply({
+      sessionId,
+      turn: payload.turn,
+      requestId,
+      text: assistant.text,
+      finishKind: streamFinishKind(assistant.event && assistant.event.data && assistant.event.data.stream)
+    })
     const saved = await foregroundHandoff.finalize({
       sessionId,
       turn: payload.turn,

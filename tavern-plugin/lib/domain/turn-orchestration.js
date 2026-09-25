@@ -5,6 +5,7 @@ import { rememberTavernResources } from './workspace-resources.js'
 import { projectBackgroundInput } from './runtime-content-projection.js'
 import { lastTavernHelperVariables } from './tavern-helper-context.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
+import { truncatedForegroundReply } from './reply-completeness.js'
 
 export const cordisToolNames = Object.freeze([
   'cordis_inspect_list',
@@ -698,6 +699,26 @@ export function createTurnOrchestrator(options) {
     return true
   }
 
+  // A truncated body is a failed turn, not a Round: committing it would freeze a
+  // half sentence into the story and consume the failed tail that replays the
+  // input. Record the failure and refuse the commit; the host then ends the turn
+  // with `error` and the normal failed-tail cleanup takes over. Card workbench
+  // replies carry editing output rather than story prose and are not judged here.
+  async function assertCompleteReply(input) {
+    const mode = await modeFor(input.sessionId)
+    if (mode !== 'story' && mode !== 'script') return null
+    const truncation = truncatedForegroundReply({ text: input.text, finishKind: input.finishKind })
+    if (truncation === null) return null
+    await recordFailure({
+      sessionId: input.sessionId,
+      turn: input.turn,
+      requestId: input.requestId,
+      code: truncation.code,
+      message: truncation.message
+    })
+    throw new Error(truncation.message)
+  }
+
   async function discard(input) {
     const target = await store.chatForSession(input.sessionId)
     if (target === undefined) return false
@@ -752,5 +773,5 @@ export function createTurnOrchestrator(options) {
     return chat === undefined ? null : (chat.mode || 'story')
   }
 
-  return Object.freeze({ prepare, beginCompatibility, saveChanges, stageChanges, finalize, recordFailure, discard, visibleTools, modeFor })
+  return Object.freeze({ prepare, beginCompatibility, saveChanges, stageChanges, finalize, assertCompleteReply, recordFailure, discard, visibleTools, modeFor })
 }

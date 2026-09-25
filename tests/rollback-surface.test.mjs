@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { rollbackAvailability, pendingFailedSurfaceTurns, abortedRegenerationTurns, clearFailedTurnSurface, hasRollbackMessages, locateRollbackSurface, planFailedTurnSurface, planRegenerationSurface, regenerationAttemptTurns, replayableFailedTurn } from '../tavern-plugin/lib/domain/rollback-surface.js'
+import { rollbackAvailability, pendingFailedSurfaceTurns, abortedRegenerationTurns, clearFailedTurnSurface, hasRollbackMessages, isFailedTurnReason, locateRollbackSurface, planFailedTurnSurface, planRegenerationSurface, regenerationAttemptTurns, replayableFailedTurn } from '../tavern-plugin/lib/domain/rollback-surface.js'
 
 function modelSource() {
   return { kind: 'model', provider: 'test', model: 'test-model' }
@@ -362,6 +362,26 @@ test('失败尾部重放认领用户输入与历史重放输入，且只认领�
   // 尾部已完成、或失败之后又有新回合开始，都不再有可重放的失败尾部。
   assert.equal(replayableFailedTurn({ events: events.map(event => event.seq === 5 ? { ...event, data: { turn: 3, reason: { kind: 'completed' } } } : event) }), null)
   assert.equal(replayableFailedTurn({ events: [...events, { seq: 6, type: 'turn/start', data: { turn: 4 } }, { seq: 7, type: 'user/message', data: { content: [{ type: 'text', text: '第三次' }], source: { kind: 'user' } } }] }), null)
+})
+
+test('达到 token 上限的截断尾部同样提供重放，不当作已提交回合', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 5 } },
+    { seq: 1, type: 'user/message', data: { content: [{ type: 'text', text: '本轮输入' }], source: { kind: 'user', rpcId: 'rpc-5' } } },
+    { seq: 2, type: 'assistant/message', data: { turn: 5, step: 1, message: { content: [{ type: 'text', text: '当着自己的面，一个不到' }], source: modelSource() } }, surfaceOp: 'append' },
+    { seq: 3, type: 'turn/end', data: { turn: 5, reason: { kind: 'max-tokens' } } }
+  ]
+  assert.deepEqual(replayableFailedTurn({ events }), { turn: 5, startSeq: 0, endSeq: 3, userText: '本轮输入', source: { kind: 'user', rpcId: 'rpc-5' } })
+  // 截断之后又开始了新回合时，尾部已经不属于它。
+  assert.equal(replayableFailedTurn({ events: [...events, { seq: 4, type: 'turn/start', data: { turn: 6 } }] }), null)
+})
+
+test('失败原因判定覆盖出错、中断与输出超限三种尾部', () => {
+  assert.equal(isFailedTurnReason('error'), true)
+  assert.equal(isFailedTurnReason('aborted'), true)
+  assert.equal(isFailedTurnReason('max-tokens'), true)
+  assert.equal(isFailedTurnReason('completed'), false)
+  assert.equal(isFailedTurnReason(undefined), false)
 })
 
 test('重生成合成输入的失败尾部不提供重放，避免把补充要求当成玩家原文提交', () => {

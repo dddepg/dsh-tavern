@@ -39,13 +39,15 @@ DSH Agent 的 Session 是只追加轨迹，不采用 SillyTavern 的多 Swipe �
 
 失败的一轮从未提交为 Round，所以既没有可回退的 checkpoint，也没有可替代的旧正文；把“重新生成”接到整体替换上，只会命中上一条已提交 Round，删掉玩家最新一次输入。因此失败尾部使用独立的恢复路径：
 
-1. 只认领尾部：最后一个 `turn/end` 的 reason 是 `error` 或 `aborted`，且其后再没有 `turn/start`。失败之后又开始了新回合时不再提供重放。
-2. 从只追加事件历史里取回该轮的原始玩家输入。失败清理墓碑会替换原生节点，但原始 `user/message` 仍在历史中，`sourceEventSeqs` 只用于定位，不承担输入事实。
-3. 复用失败清理：清理钩子已在失败时执行过，重复调用对已清理回合是无操作；钩子缺失时在这里补清。无论哪种情况，模型可见上下文都不再包含被中断的内容。
-4. 把该轮计入 `suppressedDshTurns`，客户端据此隐藏残留正文与错误行。
-5. 以该轮原始输入的**用户身份**重发同一文本（沿用原 `rpcId` / `clientTimeZone`），走正常前台 prepare/finalize，提交一条新的 Round 并正常排队状态结算。只认领原生用户输入与历史 `dsh-tavern-replay` 输入；`dsh-tavern-regen` 合成输入（含补充意见）不走重放，避免把内部指令当成玩家原文提交。
-6. 重发必须保持 `source.kind === 'user'`。宿主 chat UI 只把 `kind` 为 `user` 的 `user/message` 渲染成输入行，其余一律归类为 context 节点（`dsh-client-ui-chat` 的 `messageDefinition.start`）。早期实现用 `{kind:'plugin', plugin:'dsh-tavern-replay'}` 标记来源，结果是：失败轮次的输入被 `suppressedDshTurns` 隐藏、重发的副本又只渲染成不可见的上下文节点——玩家文字在对话里彻底消失（实际 bug）。
-7. 重放与重生成、回退互斥：任一进行中时，另外两个入口直接拒绝。
+1. 只认领尾部：最后一个 `turn/end` 的 reason 是 `error`、`aborted` 或 `max-tokens`，且其后再没有 `turn/start`。失败之后又开始了新回合时不再提供重放。
+2. 正文被截断但回合被记成 `completed` 时，同样按失败尾部处理：前台在 `agent/turn-stopping` 提交之前先判定正文（`reply-completeness.js`）。`finish` 分片是 `max-tokens` 直接判截断；`stop` 还要看正文结尾——结尾是文字、数字、逗号/冒号/开引号这类「只能继续」的字符时算截断，停在句末标点、右引号、右括号、markdown 强调符、破折号或表情符号则视为写完。判定成立就 `recordFailure` 并抛错，DSH 会把该回合记为 `error`，于是走下面的清理与重放。供应商把被截断的流谎报成 `stop`（渠道输出上限、网关空闲超时、上游安全截断）时，这是唯一能识破的信号。
+3. 从只追加事件历史里取回该轮的原始玩家输入。失败清理墓碑会替换原生节点，但原始 `user/message` 仍在历史中，`sourceEventSeqs` 只用于定位，不承担输入事实。
+4. 复用失败清理：清理钩子已在失败时执行过，重复调用对已清理回合是无操作；钩子缺失时在这里补清。无论哪种情况，模型可见上下文都不再包含被中断的内容。
+5. 把该轮计入 `suppressedDshTurns`，客户端据此隐藏残留正文与错误行。
+6. 以该轮原始输入的**用户身份**重发同一文本（沿用原 `rpcId` / `clientTimeZone`），走正常前台 prepare/finalize，提交一条新的 Round 并正常排队状态结算。只认领原生用户输入与历史 `dsh-tavern-replay` 输入；`dsh-tavern-regen` 合成输入（含补充意见）不走重放，避免把内部指令当成玩家原文提交。
+7. 重发必须保持 `source.kind === 'user'`。宿主 chat UI 只把 `kind` 为 `user` 的 `user/message` 渲染成输入行，其余一律归类为 context 节点（`dsh-client-ui-chat` 的 `messageDefinition.start`）。早期实现用 `{kind:'plugin', plugin:'dsh-tavern-replay'}` 标记来源，结果是：失败轮次的输入被 `suppressedDshTurns` 隐藏、重发的副本又只渲染成不可见的上下文节点——玩家文字在对话里彻底消失（实际 bug）。
+8. 重放与重生成、回退互斥：任一进行中时，另外两个入口直接拒绝。
+9. 只有正常 `completed` 才启动后台结算：`foregroundHandoff.end` 不再把 `max-tokens` 当作成功，否则截断正文会被结算成正式状态，重放也就无从谈起。
 
 因为失败时被中断的节点已经离开模型消息面，重放请求的前缀与失败前完全一致；只有末尾“本轮注入”需要按当前状态重新渲染，因此绝大部分 prompt 仍可命中供应商缓存。重放不需要意见输入：它恢复的是同一个请求，不是一次改写。
 
@@ -58,3 +60,5 @@ DSH Agent 的 Session 是只追加轨迹，不采用 SillyTavern 的多 Swipe �
 3. 已提交的上一条 Round 不被回退、不被替换；重放成功后追加一条新 Round。
 4. 清除未完成回复不再使重放失效：可用性只看事件历史里的失败尾部，不看展示状态。
 5. 失败后已经有新回合开始、或重放/重生成/回退进行中时，重放被拒绝；重生成合成输入的失败尾部也不提供重放。
+6. 被截断的正文不进入剧情与变量：该回合不写 `chat.messages`、不排队结算，界面按失败尾部给出错误行与“重新生成本轮”。
+7. 正文停在句末标点的正常回合不受影响；工具调用步骤与未知 `finish` 原因不参与截断判定。

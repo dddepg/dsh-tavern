@@ -196,6 +196,13 @@ export function locateRegenerationSurface(input) {
   return null
 }
 
+// An ended turn leaves the model surface without committing a Round in three
+// ways: a provider failure, a user stop, or an output cap (`max-tokens`) that cut
+// the body off mid-sentence. All three are failed tails and stay replayable.
+export function isFailedTurnReason(kind) {
+  return kind === 'error' || kind === 'aborted' || kind === 'max-tokens'
+}
+
 // Failed turns have already left the model surface, but remain visible until
 // the user explicitly clears them. Never consume a committed story to do that.
 export function pendingFailedSurfaceTurns({ events = [], nodes = [], suppressed = [] }) {
@@ -217,7 +224,7 @@ export function pendingFailedSurfaceTurns({ events = [], nodes = [], suppressed 
       if (candidate?.type === 'turn/start') started = candidate
       if (candidate?.type !== 'turn/end' || !started) continue
       if (Number(candidate.data?.turn) === Number(started.data?.turn) &&
-          ['error', 'aborted'].includes(candidate.data?.reason?.kind) &&
+          isFailedTurnReason(candidate.data?.reason?.kind) &&
           sources.some(seq => seq > started.seq && seq < candidate.seq)) {
         failed.add(Number(candidate.data.turn))
       }
@@ -244,7 +251,7 @@ export function replayableFailedTurn(input) {
   }
   if (lastEnd === null) return null
   const reason = lastEnd.data && lastEnd.data.reason ? lastEnd.data.reason.kind : ''
-  if (reason !== 'error' && reason !== 'aborted') return null
+  if (!isFailedTurnReason(reason)) return null
   const turn = Number(lastEnd.data.turn)
   const endSeq = Number(lastEnd.seq)
   // A turn that already started after this failure owns the tail now; replaying
@@ -479,7 +486,7 @@ function unclearedFailedTail(chat, events, nodes) {
     const turn = Number(event.data?.turn)
     if (event.type === 'turn/start') starts.set(turn, event.seq)
     if (event.type === 'turn/end' && starts.has(turn)) {
-      intervals.push({ turn, start: starts.get(turn), end: event.seq, failed: ['error', 'aborted'].includes(event.data?.reason?.kind) })
+      intervals.push({ turn, start: starts.get(turn), end: event.seq, failed: isFailedTurnReason(event.data?.reason?.kind) })
       starts.delete(turn)
     }
   }

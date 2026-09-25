@@ -48,7 +48,10 @@ export function createForegroundHandoff(options = {}) {
 
   function end(input = {}) {
     const reason = str(input.reason)
-    if (reason === 'completed' || reason === 'max-tokens') {
+    // Only a real completion owns the story tail. `max-tokens` means the model was
+    // cut off by the output cap, so the turn is an incomplete tail like `error`
+    // and must be discarded instead of being settled as a Round.
+    if (reason === 'completed') {
       later(async function () {
         const chat = await store.chatForSession(input.sessionId)
         if (chat === undefined) return

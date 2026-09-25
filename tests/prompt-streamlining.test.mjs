@@ -201,6 +201,17 @@ test('达到输出 token 上限时不把截断内容当作成功', () => {
   assert.match(call, /模型输出达到 token 上限/)
 })
 
+test('前台正文被截断时按失败尾部处理，不提交本轮', () => {
+  const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
+  const stopping = between(lifecycle, "ctx.on('agent/turn-stopping'", "ctx.on('agent/error'")
+
+  assert.match(stopping, /await turnOrchestrator\.assertCompleteReply\(\{/)
+  assert.match(stopping, /streamFinishKind\(/)
+  // 判定必须早于 finalize：一旦提交就再也拿不回失败尾部。
+  assert.ok(stopping.indexOf('assertCompleteReply(') < stopping.indexOf('foregroundHandoff.finalize('),
+    '截断判定必须发生在提交之前')
+})
+
 test('后台 Agent 不进入前台正文上下文注入和工具过滤', () => {
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
 
@@ -262,7 +273,9 @@ test('游玩 Agent 接收解析后的玩家输入，不接收原始 Tavern 宏�
 })
 
 test('读取 Session View 不启动后台工作，开场回合由玩家输入边界过滤', () => {
-  const sessionView = between(serverSource, 'async function sessionView', 'async function ensureNativeOpening')
+  // 上游把 sessionView 收敛成 createSessionViewReader 的同步委托，读取路径
+  // 仍然只接读函数、活动查询和追踪，不写 Chat、不排队结算。
+  const sessionView = between(serverSource, 'const sessionViews = createSessionViewReader({', 'async function ensureNativeOpening')
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
 
   assert.doesNotMatch(sessionView, /queueSettlement|writeChat|settleStatus/)

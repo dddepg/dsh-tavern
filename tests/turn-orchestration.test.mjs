@@ -356,6 +356,42 @@ test('无正文失败会保留诊断，下一次正式重试开始时自动清�
   assert.equal(run.chat().foregroundError, null)
 })
 
+test('被截断的正文按失败回合处理：记录失败并拒绝提交', async () => {
+  const run = harness('story')
+  await run.orchestrator.prepare({ sessionId: 'session-1', turn: 2, requestId: 'rpc-cut', userText: '继续' })
+
+  await assert.rejects(
+    () => run.orchestrator.assertCompleteReply({
+      sessionId: 'session-1', turn: 2, requestId: 'rpc-cut', text: '当着自己的面，一个不到', finishKind: 'stop'
+    }),
+    /正文中途中断/
+  )
+  assert.equal(run.chat().foregroundError.code, 'truncated-response')
+  assert.deepEqual(run.chat().messages, [])
+  assert.equal(run.chat().nativeCommits['2'], undefined)
+
+  // 输出上限造成的中断同样是失败尾部，与正文结尾长什么样无关。
+  await assert.rejects(
+    () => run.orchestrator.assertCompleteReply({
+      sessionId: 'session-1', turn: 2, requestId: 'rpc-cut', text: '这一轮写到一半。', finishKind: 'max-tokens'
+    }),
+    /token 上限/
+  )
+
+  // 正常收尾的正文照常放行。
+  assert.equal(await run.orchestrator.assertCompleteReply({
+    sessionId: 'session-1', turn: 2, requestId: 'rpc-cut', text: '这一轮写完了。', finishKind: 'stop'
+  }), null)
+})
+
+test('卡片工作台回复不参与正文截断判定', async () => {
+  const run = harness('card')
+  assert.equal(await run.orchestrator.assertCompleteReply({
+    sessionId: 'session-1', turn: 2, requestId: 'rpc-card', text: '字段：名称', finishKind: 'stop'
+  }), null)
+  assert.equal(run.chat().foregroundError ?? null, null)
+})
+
 test('正文准备只读取本地已保存的下一轮世界书上下文，不再触发匹配', async () => {
   let recallCalls = 0
   const run = harness('story', {

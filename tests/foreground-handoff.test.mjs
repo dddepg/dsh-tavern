@@ -94,6 +94,27 @@ test('失败回合只清理 Foreground Turn，不启动后台工作', async () =
   assert.deepEqual(queued, [])
 })
 
+test('达到 token 上限的回合按失败尾部清理，不启动后台结算', async () => {
+  const discarded = []
+  const cleaned = []
+  const queued = []
+  const handoff = createForegroundHandoff({
+    turns: { async finalize() {}, async discard(input) { discarded.push(input) } },
+    store: { async chatForSession() { return { id: 'chat-1' } } },
+    tasks: { activity() { return { phase: 'pending', busy: true, role: 'settlement' } } },
+    async queueBackground(chatId) { queued.push(chatId) },
+    async cleanupFailedTurn(input) { cleaned.push(input) },
+    defer(run) { run() },
+    logger: { error() {} }
+  })
+
+  assert.equal(handoff.end({ sessionId: 'session-1', turn: 4, reason: 'max-tokens' }), true)
+  await new Promise(function (resolve) { setImmediate(resolve) })
+  assert.deepEqual(discarded, [{ sessionId: 'session-1', turn: 4 }])
+  assert.deepEqual(cleaned, [{ sessionId: 'session-1', turn: 4 }])
+  assert.deepEqual(queued, [])
+})
+
 test('发送下一轮正文时按需完成待处理 Background Cycle', async () => {
   let prepared = false
   const queued = []
