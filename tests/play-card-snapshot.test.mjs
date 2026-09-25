@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persistence.js'
 import { createContextPlanner } from '../tavern-plugin/lib/domain/context-planner.js'
-import { createPlayCardSnapshots } from '../tavern-plugin/lib/domain/play-card-snapshots.js'
+import { createPlayCardSnapshots, cardContentDigest } from '../tavern-plugin/lib/domain/play-card-snapshots.js'
 
 test('v5 老对话重建完整固定前缀，v7 后续请求和恢复复用快照', async () => {
   const card = { name: '测试人物', description: '固定描述', personality: '固定性格', scenario: '固定场景', mes_example: '固定示例', system_prompt: '逐轮系统指令', post_history_instructions: '逐轮历史后指令' }
@@ -304,11 +304,14 @@ test('显式应用新版同步刷新常驻背景、MVU 规则和模板世界书�
   old.entries[1].content = '人际网络'
   const chat = { id: 'test', mode: 'story', cardPath: 'cards/test.json', cardContextSnapshotVersion: 7,
     cardContextSnapshot: '旧版背景', messages: [{role:'assistant',text:'历史'}], variables: {hp:12},
-    openingWorldbookSnapshot: {version:1,source:{kind:'card',cardPath:'cards/test.json'},document:old} }
+    openingWorldbookSnapshot: {version:1,source:{kind:'card',cardPath:'cards/test.json',cardName:card.name},document:old} }
+  chat.cardContentDigest = cardContentDigest(card)
   const before = structuredClone(chat)
   const api = createPlayCardSnapshots({worldBooks, planner:createContextPlanner({prompt:()=>''}), writeChat:async()=>{throw Error('must not save')}, readCard:async()=>card})
   assert.equal(await api.ensure(chat,card),'旧版背景')
-  const patch = await api.replacement(chat,card)
+  const status = await api.updateStatus(chat, card)
+  assert.equal(status.available, false, '旧存档同一本世界书内容改变时可能没有更新提示')
+  const patch = await api.replacement(chat,card,status.digest)
   assert.deepEqual(chat,before)
   assert.match(patch.cardContextSnapshot,/新版背景/)
   const updated = {...chat,...patch}

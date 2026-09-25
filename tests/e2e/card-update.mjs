@@ -18,15 +18,15 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
   async function save() {
     await writeFile(path,JSON.stringify(document)); await page.reload({waitUntil:'domcontentloaded'})
     await page.getByText('酒馆状态',{exact:true}).filter({visible:true}).first().click()
-    await page.getByRole('button',{name:'应用变化到当前游戏',exact:true}).waitFor()
+    await page.getByRole('button',{name:'重新加载人物卡与世界书',exact:true}).waitFor()
   }
   async function apply() {
-    await page.getByRole('button',{name:'应用变化到当前游戏',exact:true}).click()
+    await page.getByRole('button',{name:'重新加载人物卡与世界书',exact:true}).click()
     await page.getByRole('dialog',{name:'确认操作'}).getByRole('button',{name:'确认',exact:true}).click()
   }
   async function applied() {
-    await page.getByRole('button',{name:'正在应用变化…',exact:true}).waitFor({state:'hidden'})
-    await page.getByRole('button',{name:'应用变化到当前游戏',exact:true}).waitFor({state:'hidden'})
+    await page.getByRole('button',{name:'正在重新加载…',exact:true}).waitFor({state:'hidden'})
+    await page.getByRole('button',{name:'重新加载人物卡与世界书',exact:true}).waitFor({state:'visible'})
     assert.equal((await savedChat()).sessionId,initial.sessionId)
     assert.deepEqual((await savedChat()).cardDefinitionSnapshot.extensions,card.extensions,'应用回执必须对应本次卡片版本')
   }
