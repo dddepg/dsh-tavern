@@ -310,7 +310,8 @@ test('显式应用新版同步刷新常驻背景、MVU 规则和模板世界书�
   const api = createPlayCardSnapshots({worldBooks, planner:createContextPlanner({prompt:()=>''}), writeChat:async()=>{throw Error('must not save')}, readCard:async()=>card})
   assert.equal(await api.ensure(chat,card),'旧版背景')
   const status = await api.updateStatus(chat, card)
-  assert.equal(status.available, false, '旧存档同一本世界书内容改变时可能没有更新提示')
+  assert.equal(status.available, true)
+  assert.equal(status.worldbookSyncRequired, true, '旧存档缺少原始版本时提示同步')
   const patch = await api.replacement(chat,card,status.digest)
   assert.deepEqual(chat,before)
   assert.match(patch.cardContextSnapshot,/新版背景/)
@@ -375,7 +376,7 @@ test('应用后本局脚本修改世界书不冒充资源库更新，库文件�
   assert.deepEqual(chat, before)
 })
 
-test('旧快照无源版本时只比较绑定，不把历史脚本改写误报为资源更新', async () => {
+test('旧快照无源版本时提示同步，不把历史脚本改写误报为资源更新', async () => {
   const { cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
   const card = { name: '旧存档' }
   let source = { kind: 'standalone', path: 'book.json' }
@@ -383,7 +384,38 @@ test('旧快照无源版本时只比较绑定，不把历史脚本改写误报�
   const chat = { cardContentDigest: cardContentDigest(card), openingWorldbookSnapshot: {
     version: 1, source: structuredClone(source), document: { entries: { 0: { content: '过去脚本写入的状态' } } }
   } }
-  assert.equal((await api.updateStatus(chat, card)).available, false)
+  const status = await api.updateStatus(chat, card)
+  assert.equal(status.available, true)
+  assert.equal(status.worldbookSyncRequired, true)
+  assert.equal(status.worldbookChanged, false)
   source = { kind: 'standalone', path: 'new-book.json' }
   assert.equal((await api.updateStatus(chat, card)).worldbookChanged, true)
+})
+
+test('旧存档同步后按资源条目原文和配置检测增删改，忽略渲染和本局改写', async () => {
+  const card = { name: '人物' }
+  const live = { source: { kind: 'standalone', path: 'book.json' }, document: { entries: { a: { content: '<%= name %>', enabled: true, keys: ['人物'] } } }, view: { entries: [] } }
+  const api = createPlayCardSnapshots({ worldBooks: { bound: async () => live }, planner: createContextPlanner({ prompt: () => '' }) })
+  let chat = { mode: 'story', cardContentDigest: cardContentDigest(card), openingWorldbookSnapshot: { version: 1, source: live.source, document: structuredClone(live.document) } }
+  const pending = await api.updateStatus(chat, card)
+  assert.equal(pending.worldbookSyncRequired, true)
+  chat = { ...chat, ...await api.replacement(chat, card, pending.digest) }
+  assert.equal((await api.updateStatus(chat, card)).available, false)
+  assert.equal((await api.updateStatus(chat, card)).worldbookSyncRequired, false)
+  chat.openingWorldbookSnapshot.document.entries.a.content = '本局脚本修改'
+  live.view.entries = [{ content: '渲染后的文字' }]
+  assert.equal((await api.updateStatus(chat, card)).available, false)
+  for (const change of [
+    () => { live.document.entries.b = { content: '新增条目' } },
+    () => { delete live.document.entries.b },
+    () => { live.document.entries.a.content = '<%= otherName %>' },
+    () => { live.document.entries.a.enabled = false },
+    () => { live.document.entries.a.keys = ['新关键词'] }
+  ]) {
+    change()
+    const status = await api.updateStatus(chat, card)
+    assert.equal(status.worldbookChanged, true)
+    chat = { ...chat, ...await api.replacement(chat, card, status.digest) }
+    assert.equal((await api.updateStatus(chat, card)).available, false)
+  }
 })

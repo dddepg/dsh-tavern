@@ -115,10 +115,12 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
       const digest = updateDigest(card, snapshot)
       const previous = chat.worldbookLibraryDigest ?? chat.openingWorldbookSnapshot?.libraryDigest
       // Legacy snapshots may already contain local script writes. Without the
-      // original resource version, only binding identity is reliable evidence.
+      // original resource version, request explicit synchronization instead of
+      // silently adopting the current library as the historical baseline.
       const worldbookChanged = previous ? previous !== snapshot.libraryDigest
         : worldbookContentDigest({ source: chat.openingWorldbookSnapshot?.source }) !== worldbookContentDigest({ source: snapshot.source })
-      return { ...base, available: cardChanged || worldbookChanged, worldbookChanged, digest }
+      const worldbookSyncRequired = !previous && !!(snapshot.source || snapshot.document || chat.openingWorldbookSnapshot?.source || chat.openingWorldbookSnapshot?.document)
+      return { ...base, available: cardChanged || worldbookChanged || worldbookSyncRequired, worldbookChanged, worldbookSyncRequired, digest }
     } catch (error) {
       // Missing/corrupt library resources must not prevent reading a saved game.
       return { ...base, available: true, worldbookChanged: true, digest: '', error: str(error?.message || error) }
