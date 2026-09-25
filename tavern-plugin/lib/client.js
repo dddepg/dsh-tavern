@@ -5462,10 +5462,10 @@ window.__ModuleLoader__.load({
 					Promise.resolve(invoke("recordMvuRuntimeDiagnostic", { diagnostic: data }, record.sessionId)).catch(function () {});
 				} catch (_) {}
 			}
-			function createRecord(sessionId, scripts, context, trustedCardMode) {
+			function createRecord(sessionId, scripts, context, trustedCardMode, viewer) {
 				const container = ensureRoot();
 				const frame = hostDocument.createElement("iframe");
-				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
+				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				const record = {
 					id: "shared",
 					sessionId: sessionId,
@@ -5515,7 +5515,7 @@ window.__ModuleLoader__.load({
 			}
 			function scriptsForView(view) {
 				const scripts = Array.isArray(view && view.tavernHelperScripts) ? view.tavernHelperScripts.slice() : [];
-				const mvu = view && view.tavernMvuRuntime;
+				const mvu = view && view.tavernScriptRuntimeMode !== "viewer" && view.tavernMvuRuntime;
 				if (mvu && mvu.owner === "official" && mvu.assetUrl) {
 					scripts.unshift({
 						id: "__dsh_official_mvu__",
@@ -5533,17 +5533,19 @@ window.__ModuleLoader__.load({
 				if (activeSessionId && activeSessionId !== nextSessionId) clear();
 				activeSessionId = nextSessionId;
 				const scripts = scriptsForView(view);
+				const viewer = Boolean(view && view.tavernScriptRuntimeMode === "viewer");
 				const trustedCardMode = Boolean(view && view.tavernRuntimePolicy && view.tavernRuntimePolicy.trustedCardMode);
-				readinessKey = scripts.length === 0 ? "" : nextSessionId + "\n" + scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
+				readinessKey = scripts.length === 0 ? "" : nextSessionId + "\n" + scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				if (scripts.length === 0) { clear(); activeSessionId = nextSessionId; return; }
 				const context = helperContext(view, scripts);
 				const nextSnapshot = snapshot(context);
 				const officialOwner = Boolean(view && view.tavernMvuRuntime && view.tavernMvuRuntime.owner === "official");
-				const queuedEvents = officialOwner ? [] : eventsBetween(previous, nextSnapshot);
-				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
+				// Viewers mirror committed data without replaying settlement callbacks.
+				const queuedEvents = officialOwner || viewer ? [] : eventsBetween(previous, nextSnapshot);
+				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				let record = records.get("shared");
 				if (record && record.fingerprint !== fingerprint) { removeRecord("shared"); record = null; }
-				if (!record) record = createRecord(nextSessionId, scripts, context, trustedCardMode);
+				if (!record) record = createRecord(nextSessionId, scripts, context, trustedCardMode, viewer);
 				else {
 					record.context = context;
 					post(record, { type: "dsh-tavern-helper-context", context: context });
@@ -5861,10 +5863,15 @@ window.__ModuleLoader__.load({
 			let claimRequested = false;
 			let claimRetryCount = 0;
 			let active = false;
+			let ownershipKnown = false;
 			let input = null;
 
-			function inactiveView(view) {
-				return Object.assign({}, view || {}, { tavernHelperScripts: [], tavernMvuRuntime: null });
+			function runtimeView(view) {
+				if (active) return view;
+				// Wait for the first claim before evaluating any scripts. Once another
+				// browser owns settlement, this page still needs its own interactive UI.
+				if (!ownershipKnown) return Object.assign({}, view || {}, { tavernHelperScripts: [], tavernMvuRuntime: null });
+				return Object.assign({}, view || {}, { tavernScriptRuntimeMode: "viewer", tavernMvuRuntime: null });
 			}
 			function hasScriptRuntime(view) {
 				return Boolean(
@@ -5887,6 +5894,7 @@ window.__ModuleLoader__.load({
                 delivery = null;
 				input = null;
 				active = false;
+				ownershipKnown = false;
 					claimRequested = false;
 					claimRetryCount = 0;
 					if (claimRetryTimer !== null) hostWindow.clearTimeout(claimRetryTimer);
@@ -5912,7 +5920,7 @@ window.__ModuleLoader__.load({
 						void claimWork();
 					},
 					onReady: function (readySessionId) {
-						if (lease !== currentLease || !readySessionId || !input || input.sessionId !== readySessionId) return;
+						if (lease !== currentLease || !active || !readySessionId || !input || input.sessionId !== readySessionId) return;
 						const chatId = String(input.view && input.view.chatId || "");
 						// MVU uses this identity to invalidate older asynchronous initialization.
 						// An absent ID cancels the real chat's startup without initializing a replacement.
@@ -6014,16 +6022,20 @@ window.__ModuleLoader__.load({
 				try {
 					if (releasesPending > 0) await releaseBarrier;
 					if (lease !== currentLease) return;
-					const result = await invokeWithDeadline("claimTavernScriptWork", currentLease, currentRuntime.inspect());
+					// A ready viewer cannot advertise settlement readiness: promotion
+					// rebuilds the sandbox with the official core before accepting work.
+					const inspection = ownershipKnown && !active ? { scripts: [] } : currentRuntime.inspect();
+					const result = await invokeWithDeadline("claimTavernScriptWork", currentLease, inspection);
 					if (lease !== currentLease) {
 						if (result && result.active) releaseLease(currentLease);
 						return;
 					}
 					if (result && result.active) claimRetryCount = 0;
 					else scheduleClaimRetry(currentLease);
-					if (Boolean(result && result.active) !== active) {
+					if (!ownershipKnown || Boolean(result && result.active) !== active) {
+						ownershipKnown = true;
 						active = Boolean(result && result.active);
-						currentRuntime.sync(input.sessionId, active ? input.view : inactiveView(input.view));
+						currentRuntime.sync(input.sessionId, runtimeView(input.view));
 					}
 						currentEvent = result && result.event;
 						leaseToken = String(result && result.leaseToken || "");
@@ -6048,7 +6060,7 @@ window.__ModuleLoader__.load({
 				if (input && input.sessionId !== nextSessionId) dispose();
 				const currentRuntime = ensureRuntime(nextSessionId);
 				input = { sessionId: nextSessionId, view: view };
-				currentRuntime.sync(nextSessionId, active ? view : inactiveView(view));
+				currentRuntime.sync(nextSessionId, runtimeView(view));
 				// Claim also renews the lease and recovers work when its signal was lost.
 				if (heartbeatTimer === null && startHeartbeat) heartbeatTimer = startHeartbeat(function () { void claimWork(); }, heartbeatIntervalMs);
 				void claimWork();
@@ -6058,7 +6070,7 @@ window.__ModuleLoader__.load({
                 setForeground: function (value) { foreground = value; if (runtime && runtime.setForeground) runtime.setForeground(value); },
 				retryMvuLoad: function () { return Boolean(runtime && active && runtime.retryMvuLoad()); },
 				triggerButton: function (scriptId, name) {
-					if (!runtime || !active) return Promise.reject(new Error("人物卡脚本正在其他窗口运行，或尚未加载完成"));
+					if (!runtime || !ownershipKnown) return Promise.reject(new Error("人物卡脚本尚未加载完成"));
 					return runtime.triggerButton(scriptId, name);
 				},
 				inspect: function () { return { active: active, busy: Boolean(delivery || claimBusy), input: input, runtime: runtime && runtime.inspect() }; }

@@ -766,22 +766,36 @@ test('执行租约 claim 将 MVU 加载失败与未就绪分开报告', async ()
   h.module.dispose()
 })
 
-test('another window owning the lease keeps local scripts inactive until ownership is available', async () => {
+test('second browser keeps companion UI scripts while only the lease owner initializes and settles', async () => {
   const h = execution()
   let owns = false
   h.respond(() => Promise.resolve({ active: owns }))
-  h.module.sync('A', view())
+  h.module.sync('A', mvuView())
+  assert.equal(h.runtimes[0].syncs.at(-1).view.tavernHelperScripts.length, 0, 'wait for the first ownership response')
   await h.settle()
   assert.equal(h.module.inspect().active, false)
-  assert.ok(h.runtimes[0].syncs.every(x => x.view.tavernHelperScripts.length === 0))
-  await assert.rejects(h.module.triggerButton('script', 'button'), /其他窗口/)
+  const viewer = h.runtimes[0].syncs.at(-1).view
+  assert.equal(viewer.tavernHelperScripts.length, 1, 'companion scripts mount local panels')
+  assert.equal(viewer.tavernScriptRuntimeMode, 'viewer')
+  assert.equal(viewer.tavernMvuRuntime, null, 'viewer cannot initialize a second MVU core')
+  await h.runtimes[0].options.onReady('A')
+  assert.equal(h.runtimes[0].emissions.length, 0, 'viewer must not receive CHAT_CHANGED initialization')
+  assert.equal(await h.module.triggerButton('script', 'button'), 'clicked', 'explicit UI actions remain usable')
+  h.module.sync('A', view(2))
+  assert.equal(h.runtimes[0].syncs.at(-1).view.tavernHelper.stateRevision, 2)
+  await h.settle()
+  assert.equal(h.calls.filter(call => call.method === 'claimTavernScriptWork').at(-1).args.ready, false, 'viewer readiness cannot claim settlement before executor promotion')
   owns = true
   h.wake(); await h.settle()
   assert.equal(h.module.inspect().active, true)
-  assert.equal(h.runtimes[0].syncs.at(-1).view.tavernHelperScripts.length, 1)
+  assert.notEqual(h.runtimes[0].syncs.at(-1).view.tavernScriptRuntimeMode, 'viewer')
+  await h.runtimes[0].options.onReady('A')
+  assert.equal(h.runtimes[0].emissions.length, 1)
   owns = false
   h.wake(); await h.settle()
-  assert.equal(h.runtimes[0].syncs.at(-1).view.tavernHelperScripts.length, 0)
+  assert.equal(h.runtimes[0].syncs.at(-1).view.tavernScriptRuntimeMode, 'viewer')
+  await h.runtimes[0].options.onReady('A')
+  assert.equal(h.runtimes[0].emissions.length, 1)
   h.module.dispose()
 })
 
