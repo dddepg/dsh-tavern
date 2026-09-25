@@ -80,7 +80,7 @@
 
 **[下载 Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)**（Android 11 及以上、ARM64）
 
-安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。Android 仍属实验性支持，不保证一定可用。
+安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。
 
 ### 借助 DSH Desktop（Windows / macOS）
 

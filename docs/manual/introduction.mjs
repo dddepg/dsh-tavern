@@ -86,7 +86,7 @@ export const installation = `
 | Android 11 及以上、ARM64，想直接装酒馆应用 | [D．Android 独立 APK](#a02--section-5) | 不需要 |
 | Android，已经在使用 DSHA，或需要尝试兼容包 | [E．通过 DSHA 安装](#a02--section-6) | 在 DSHA 中执行安装命令 |
 
-**Windows 不知道怎么选，就选 A；想按你已有的 DSH Desktop 来安装，就选 B。** A 已包含 Desktop，不用再做一遍 B。Android 属于实验性支持，不保证一定可用。
+**Windows 不知道怎么选，就选 A；想按你已有的 DSH Desktop 来安装，就选 B。** A 已包含 Desktop，不用再做一遍 B。
 
 安装前保持联网，并预留下载和安装的时间。先装好程序即可，模型密钥和人物卡可以稍后准备。不同安装方式的数据各自独立，切换方式不会自动带走原来的聊天、人物卡和设置；桌面版与命令行版不要同时运行。
 
@@ -220,7 +220,7 @@ dsh-tavern status
 
 ## D．Android 独立 APK（Android 11+ / ARM64）
 
-适合想直接安装酒馆应用的用户，无需另装 DSHA，也无需输入安装命令。**Android 属于实验性支持，不保证一定可用。** 此包要求 Android 11 及以上、ARM64；目前已在 MuMu Android 12 验证首次安装、启动、重启及覆盖安装，尚未完成实体手机测试。
+适合想直接安装酒馆应用的用户，无需另装 DSHA，也无需输入安装命令。此包要求 Android 11 及以上、ARM64。
 
 ### 第 1 步：下载并安装 APK
 
@@ -242,7 +242,7 @@ dsh-tavern status
 
 ## E．Android：通过 DSHA 安装
 
-适合已经使用 DSHA，或需要尝试兼容包的用户。已安装上面的独立 APK 并能正常使用，就无需再做本节。**Android 属于实验性支持，不保证一定可用。**
+适合已经使用 DSHA，或需要尝试兼容包的用户。已安装上面的独立 APK 并能正常使用，就无需再做本节。
 
 ### 第 1 步：安装适配的 DSHA
 
