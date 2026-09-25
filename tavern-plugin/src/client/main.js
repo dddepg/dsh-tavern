@@ -7420,15 +7420,36 @@ window.__ModuleLoader__.load({
                 finally { setBusy(false); }
             }
             if (pocket && !pocket.supported) return null;
-            return h("section", { className: "dsh-tavern-settings-section", "aria-label": "Pocket 手机访问" },
-                h("h3", null, "Pocket 手机访问"),
-                h("p", null, "CLI 默认关闭。开启后口袋版默认监听全部网卡，使用独立 PIN 认证。端口以“手机访问”页面为准；是否可从公网访问取决于防火墙。"),
-                h("label", null, h("input", { type: "checkbox", role: "switch", "aria-label": "启用 Pocket 手机访问", checked: Boolean(pocket?.enabled), disabled: !pocket || busy || pocket.running, onChange: event => change(event.target.checked) }), "启用 Pocket 手机访问"),
-                pocket ? h("p", { role: "status" }, pocket.running ? "正在准备依赖并重启，请稍候。连接会暂时中断。" : pocket.restartRequired ? "设置已保存，尚未生效。当前 Pocket " + (pocket.active ? "仍在运行" : "未运行") + "。" : "当前 Pocket " + (pocket.active ? "已启用" : "已关闭") + "，更新后会保留此选择。") : null,
-                pocket?.restartRequired || pocket?.error ? h("div", null,
-                    h("p", null, "应用会重启酒馆并中断正在进行的任务；关闭后 Pocket 连接会断开，请使用主界面重新访问。"),
-                    h("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || pocket.running, onClick: apply }, "应用并重启")) : null,
-                error || pocket?.error ? h("p", { role: "alert" }, error || pocket.error) : null);
+            const mutedStyle = { color: "var(--dsw-alias-label-tertiary,#8b93a1)", fontSize: 12, lineHeight: 1.5 };
+            const disabled = !pocket || busy || pocket.running;
+            return h("section", { className: "dsh-tavern-pocket-settings", "aria-label": "Pocket 手机访问", style: {
+                background: "var(--dsw-alias-bg-layer-1,#fff)", color: "var(--dsw-alias-label-primary,inherit)",
+                border: "1px solid var(--dsw-alias-border-l2,#e5e7eb)", borderRadius: 12, padding: "16px 20px", maxWidth: 480, marginBottom: 12
+            } },
+                h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 } },
+                    h("div", null,
+                        h("strong", { style: { fontSize: 13 } }, "手机访问服务"),
+                        h("div", { style: { ...mutedStyle, marginTop: 4 } }, "CLI 默认关闭，更改后需应用并重启。")),
+                    h("button", { type: "button", role: "switch", "aria-label": "启用 Pocket 手机访问", "aria-checked": Boolean(pocket?.enabled), disabled,
+                        onClick: () => change(!pocket.enabled), style: {
+                            flexShrink: 0, width: 40, height: 22, borderRadius: 11, border: "none", padding: 0, position: "relative",
+                            cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1,
+                            background: pocket?.enabled ? "var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary,#4f6ef7))" : "var(--dsw-alias-border-l2,#d1d5db)"
+                        } }, h("span", { "aria-hidden": true, style: { position: "absolute", top: 2, left: pocket?.enabled ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff" } }))),
+                h("div", { style: { borderTop: "1px solid var(--dsw-alias-border-l2,#e5e7eb)", paddingTop: 12, marginTop: 14 } },
+                    h("div", { role: "status", style: mutedStyle }, !pocket ? "正在读取设置…" : pocket.running ? "正在准备依赖并重启，连接会暂时中断。" : pocket.restartRequired ? "设置已保存，尚未生效。当前服务" + (pocket.active ? "仍在运行" : "未运行") + "。" : "服务" + (pocket.active ? "已启用" : "已关闭") + "，更新后会保留此选择。"),
+                    h("details", { style: { ...mutedStyle, marginTop: 8 } },
+                        h("summary", { style: { cursor: "pointer" } }, "连接与认证说明"),
+                        h("div", { style: { marginTop: 6 } }, "Pocket 默认监听全部网卡，使用独立 PIN 认证。公网隧道默认关闭；公网 IP 能否直接访问仍取决于网络和防火墙。端口以本页访问设置为准。"))),
+                pocket?.restartRequired || pocket?.error ? h("div", { style: { marginTop: 12 } },
+                    h("div", { style: { ...mutedStyle, marginBottom: 10 } }, "应用会中断当前任务；关闭后手机连接会断开，请使用主界面重新访问。"),
+                    h("button", { type: "button", disabled: busy || pocket.running, onClick: apply, style: {
+                        font: "inherit", cursor: busy || pocket.running ? "default" : "pointer", opacity: busy || pocket.running ? 0.5 : 1,
+                        border: "1px solid var(--dsw-alias-button-ghost-active-border, var(--dsw-alias-border-l2,#d1d5db))",
+                        background: "var(--dsw-alias-bg-layer-1,#fff)", color: "var(--dsw-alias-label-primary,inherit)", height: 36, padding: "0 16px", borderRadius: 999, fontSize: 13
+                    } }, "应用并重启")) : null,
+                error || pocket?.error ? h("div", { role: "alert", style: { marginTop: 10, fontSize: 12, lineHeight: 1.5, color: "var(--dsw-alias-state-error-primary,#dc2626)" } }, error || pocket.error) : null);
+
         }
 
 		function TavernSettingsSection() {
