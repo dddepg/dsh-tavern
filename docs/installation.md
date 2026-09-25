@@ -75,7 +75,9 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 安装完成后，重启 DSH Desktop，进入 **设置 → 桌面设置**，在右侧 **Profile** 列表点击 **tavern**，旁边显示 **当前** 即为选中。Desktop 会自动管理启停和端口；更新 dsh-tavern 时，在 DSH Terminal 中重新运行上述安装命令即可。
 
-旧版内置更新失败时，也直接运行上面的命令：它会获取最新安装器，绕过本地旧更新脚本。Windows 命令按 UTF-8 解码，避免中文乱码。若仍失败，请提供日志最前面的具体错误和文件路径。
+旧版内置更新失败时，也直接运行上面的命令：它会获取安装器，绕过本地旧更新脚本（CDN 缓存可能延迟刷新）。Windows 命令按 UTF-8 解码，避免中文乱码。
+
+Windows 安装失败时，请提供终端显示的 `update-diagnostics.jsonl` 文件，默认位于 `%USERPROFILE%\.dsh\profile-data\tavern\data\`；自定义 `DSH_HOME` 时以终端显示的位置为准。日志记录实际安装路径、失败步骤、退出码和脱敏后的错误输出。包管理环境首次下载失败会尝试三次；文件缺失会直接显示缺失路径。依赖安装期间会实时显示输出。若提示日志写入失败，请保留终端中的具体错误。
 
 ### 命令行版
 

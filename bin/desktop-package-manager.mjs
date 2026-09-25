@@ -19,6 +19,7 @@ export async function prepareDesktopPackageManager(options = {}) {
   if (!home || !path.isAbsolute(home)) throw new Error('Desktop 包管理需要明确的 DSH_HOME')
   const executable = env.DSH_DESKTOP_APP_EXECUTABLE || process.execPath
   const candidates = [
+    ...(env.DSH_DESKTOP_PNPM_ENTRY ? [env.DSH_DESKTOP_PNPM_ENTRY] : []),
     path.join(path.dirname(executable), 'resources/app/node_modules/pnpm/bin/pnpm.mjs'),
     path.join(path.dirname(executable), 'resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs'),
     ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [path.resolve(path.dirname(env.DSH_DESKTOP_DSH_BOOTSTRAP), '../node_modules/pnpm/bin/pnpm.mjs')] : []),
@@ -33,11 +34,19 @@ export async function prepareDesktopPackageManager(options = {}) {
   let valid = false
   try { valid = digest(await readFile(node)) === hashes[arch] } catch {}
   if (!valid) {
-    options.onProgress?.('正在准备 Windows 更新运行环境…')
     const url = `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`
-    const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
-    if (!response.ok) throw new Error(`无法下载 Windows 更新运行环境：HTTP ${response.status}`)
-    const bytes = Buffer.from(await response.arrayBuffer())
+    let bytes
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${url}`)
+      try {
+        const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        bytes = Buffer.from(await response.arrayBuffer())
+        break
+      } catch (cause) {
+        if (attempt === 3) throw new Error(`Windows 更新运行环境下载失败（已尝试 3 次）：${url}`, { cause })
+      }
+    }
     if (digest(bytes) !== hashes[arch]) throw new Error('Windows 更新运行环境 SHA-256 校验失败，已停止安装')
     const temporary = node + '.' + randomUUID() + '.tmp'
     try { await writeFile(temporary, bytes); await rename(temporary, node) }
@@ -51,7 +60,7 @@ export async function prepareDesktopPackageManager(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const result = await prepareDesktopPackageManager()
+    const result = await prepareDesktopPackageManager({ onProgress: message => console.error(message) })
     if (result) console.log(result.bin)
   } catch (error) { console.error(error); process.exitCode = 1 }
 }

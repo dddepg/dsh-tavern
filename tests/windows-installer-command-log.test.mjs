@@ -28,6 +28,14 @@ try {
 }
 $result = Invoke-InstallCommand 'desktop.package-manager' 'node' @((Join-Path $PSScriptRoot 'ok.cjs')) -CaptureOutput
 if ($result -match 'warning' -or $result -notmatch 'space') { throw 'stderr contaminated path' }
+try {
+  Assert-InstallFiles $PSScriptRoot
+  throw 'Missing file accepted'
+} catch { if ($_.Exception.Message -notmatch 'package.json') { throw } }
+function node { throw 'broken Desktop Node shim' }
+$fallback = Join-Path $PSScriptRoot 'fallback.txt'
+[IO.File]::WriteAllText($fallback, 'FALLBACK_ERROR password=secret https://u:secret@example.com/file?token=secret')
+Write-UpdateLog 'installer.stage.failed' 'fallback.test' '17' '' $fallback
 `
     await writeFile(path.join(root, 'probe.ps1'), '\ufeff' + probe)
     const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'probe.ps1')], { encoding: 'utf8' })
@@ -40,5 +48,6 @@ if ($result -match 'warning' -or $result -notmatch 'space') { throw 'stderr cont
     assert.match(failure.output, /setup started/)
     assert.doesNotMatch(JSON.stringify(logs), /secret/)
     assert.ok(logs.some(r => r.event === 'installer.stage.succeeded'))
+    assert.match(logs.find(r => r.step === 'fallback.test').output, /FALLBACK_ERROR/)
   } finally { await rm(root, { recursive: true, force: true }) }
 })

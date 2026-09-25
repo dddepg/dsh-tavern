@@ -150,10 +150,35 @@ try {
  fs.mkdirSync(root,{recursive:true});const target=path.join(root,'update-diagnostics.jsonl');
  try{if(fs.statSync(target).size>1048576){try{fs.unlinkSync(target+'.1')}catch{}fs.renameSync(target,target+'.1')}}catch{}
  fs.appendFileSync(target,JSON.stringify(record)+'\n');
-}catch{}
+}catch{process.exitCode=1}
 '@, (New-Object Text.UTF8Encoding($false)))
   function Write-UpdateLog([string]$Event, [string]$Step, [string]$Code = '', [string]$Started = '', [string]$OutputFile = '') {
-    try { $LogArgs = @($UpdateLogRoot, $Event, $Step, $Code, $Started, $OutputFile) | ForEach-Object { if ($_ -eq '') { '-' } else { $_ } }; & node $UpdateLogger @LogArgs *> $null } catch {}
+    try {
+      $LogArgs = @($UpdateLogRoot, $Event, $Step, $Code, $Started, $OutputFile) | ForEach-Object { if ($_ -eq '') { '-' } else { $_ } }
+      & node $UpdateLogger @LogArgs *> $null
+      if ($LASTEXITCODE -eq 0) { return }
+    } catch {}
+    # Logging must still work when the Desktop Node shim itself is broken.
+    try {
+      $Text = if ($OutputFile -and (Test-Path -LiteralPath $OutputFile)) { [IO.File]::ReadAllText($OutputFile) } else { '' }
+      $Text = [regex]::Replace($Text, 'https?://[^\s<>"'')]+', { param($m) try { $u = [Uri]$m.Value; $u.GetLeftPart([UriPartial]::Authority) -replace '://[^/]*@', '://' } catch { '[URL]' } })
+      $Text = $Text -replace '(?i)Bearer\s+[^\s,;]+', 'Bearer [redacted]' -replace '(?i)((?:authorization|token|password|api[_-]?key)\s*[:=]\s*)[^\s,;]+', '$1[redacted]'
+      $Count = $Text.Length
+      if ($Count -gt 6000) { $Text = $Text.Substring(0,3000) + "`n[中间输出省略]`n" + $Text.Substring($Count-3000) }
+      $Record = @{ at = [DateTime]::UtcNow.ToString('o'); attemptId = $env:DSH_TAVERN_UPDATE_ATTEMPT; event = $Event; step = $Step; output = $Text; outputCharacters = $Count }
+      if ($Code -ne '') { $Record.exitCode = [int]$Code }
+      if ($Started -ne '') { $Record.durationMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - [long]$Started }
+      New-Item -ItemType Directory -Force -Path $UpdateLogRoot | Out-Null
+      $LogPath = Join-Path $UpdateLogRoot 'update-diagnostics.jsonl'
+      if ((Test-Path -LiteralPath $LogPath) -and (Get-Item -LiteralPath $LogPath).Length -gt 1048576) { Move-Item -LiteralPath $LogPath -Destination "$LogPath.1" -Force }
+      [IO.File]::AppendAllText($LogPath, (($Record | ConvertTo-Json -Compress) + "`n"), (New-Object Text.UTF8Encoding($false)))
+    } catch { Write-Warning "诊断日志写入失败：$($_.Exception.Message)" }
+  }
+  function Assert-InstallFiles([string]$Root) {
+    foreach ($Relative in @('package.json', 'pnpm-lock.yaml', 'bin\dsh-compatibility.mjs', 'bin\dsh-tavern.mjs', 'bin\desktop-package-manager.mjs', 'config\dsh-compatibility.json')) {
+      $Required = Join-Path $Root $Relative
+      if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "安装文件不完整，缺少：$Required" }
+    }
   }
   function Invoke-UpdateGit([string]$Step, [string[]]$GitArgs) {
     $Started = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -185,12 +210,21 @@ try {
     $InvocationError = ''
     try {
       $ErrorActionPreference = 'Continue'
-      & $Command @CommandArgs 1> $OutputFile 2> $ErrorFile
+      & $Command @CommandArgs 2>&1 | ForEach-Object {
+        $Line = [string]$_
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+          [IO.File]::AppendAllText($ErrorFile, "$Line`n")
+          Write-Host $Line
+        } else {
+          [IO.File]::AppendAllText($OutputFile, "$Line`n")
+          if (-not $CaptureOutput) { Write-Host $Line }
+        }
+      }
       $Code = $LASTEXITCODE
     } catch { $InvocationError = $_.Exception.ToString() }
     finally { $ErrorActionPreference = $PreviousPreference }
-    $Stdout = if (Test-Path $OutputFile) { [string](Get-Content -LiteralPath $OutputFile -Raw) } else { '' }
-    $Stderr = if (Test-Path $ErrorFile) { [string](Get-Content -LiteralPath $ErrorFile -Raw) } else { '' }
+    $Stdout = if (Test-Path $OutputFile) { [IO.File]::ReadAllText($OutputFile) } else { '' }
+    $Stderr = if (Test-Path $ErrorFile) { [IO.File]::ReadAllText($ErrorFile) } else { '' }
     $Combined = "$Stdout`n$Stderr`n$InvocationError".Trim()
     [IO.File]::WriteAllText($OutputFile, $Combined, (New-Object Text.UTF8Encoding($false)))
     $Event = if ($Code -eq 0) { 'installer.stage.succeeded' } else { 'installer.stage.failed' }
@@ -198,9 +232,7 @@ try {
     if ($Code -ne 0) {
       throw "步骤 $Step 失败（退出码 $Code）。`n$Combined`n诊断日志：$UpdateLogRoot/update-diagnostics.jsonl"
     }
-    if ($Stderr.Trim()) { Write-Host $Stderr.Trim() }
     if ($CaptureOutput) { return $Stdout.Trim() }
-    if ($Stdout.Trim()) { Write-Host $Stdout.Trim() }
   }
   Write-UpdateLog 'installer.started' 'bootstrap'
   Write-Host "更新诊断日志：$UpdateLogRoot/update-diagnostics.jsonl"
@@ -301,6 +333,7 @@ try {
   if (-not (Test-Path (Join-Path $SourceDir.FullName 'package.json'))) {
     throw '下载内容不完整。'
   }
+  Assert-InstallFiles $SourceDir.FullName
 
   # Read compatibility from the downloaded release before installing missing tools.
   $CompatibilityScript = Join-Path $SourceDir.FullName 'bin\dsh-compatibility.mjs'
@@ -349,6 +382,10 @@ try {
   New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
   # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data\ 用户数据会保留。
   Get-ChildItem -LiteralPath $SourceDir.FullName -Force | Copy-Item -Destination $AppDir -Recurse -Force
+  Assert-InstallFiles $AppDir
+  $PathsFile = Join-Path $TempDir 'install-paths.txt'
+  [IO.File]::WriteAllText($PathsFile, "Host=$InstallHost`nDSH_HOME=$DshRoot`nAppDir=$AppDir`nSource=$($SourceDir.FullName)`nCommit=$TargetCommit`nNode=$((Get-Command node).Source)", (New-Object Text.UTF8Encoding($false)))
+  Write-UpdateLog 'installer.paths' 'files.copy' '0' '' $PathsFile
   if ($UsedCdn -and (Test-Path (Join-Path $AppDir '.dsh-tavern-release.json'))) {
     Remove-Item -LiteralPath (Join-Path $AppDir '.dsh-tavern-release.json') -Force
   }
