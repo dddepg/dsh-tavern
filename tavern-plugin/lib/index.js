@@ -4146,8 +4146,7 @@ export async function apply(ctx) {
   installWorkspaceInstructionPresentation(ctx, async sessionId => {
     if (backgroundAgentRunner.owns(sessionId)) return true
     const chat = await sessionStateForSession(sessionId)
-    // Card agents work with files and Skills, so keep the host's workspace guidance.
-    return Boolean(chat) && (chat.mode || 'story') !== 'card'
+    return Boolean(chat)
   })
   installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)))
 

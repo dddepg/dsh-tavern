@@ -326,6 +326,7 @@ export function createNativePlayOrchestrationStrategy(options) {
       if (workspace !== '') sections.push({ name: 'tavern:resource-workspace', text: workspace })
     }
     assembly.sections = sections
+    if (Array.isArray(assembly.contexts)) assembly.contexts = assembly.contexts.filter(section => section.name !== 'approval:policy')
     assembly.tools = assembly.tools.filter(function (schema) {
       return !options.controlledToolNames.has(schema.name) || visible.has(schema.name)
     })
