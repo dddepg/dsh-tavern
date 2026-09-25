@@ -21,6 +21,7 @@
     "test": "node bin/test-tavern.mjs",
     "test:play": "node testsets/test-play.mjs",
     "test:e2e": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs",
+    "test:e2e:display": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --display-regression",
     "test:e2e:card-update": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --card-update",
     "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs"
   },

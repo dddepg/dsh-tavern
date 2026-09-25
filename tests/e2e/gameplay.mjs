@@ -1,3 +1,4 @@
+import {displayRegressionRules, displayRegressionChecks} from './display-regression.mjs'
 import { surfaceRecoveryChecks } from './surface-recovery.mjs'
 import { cardUpdateChecks } from './card-update.mjs'
 import { sidebarUpgrade } from './sidebar-upgrade.mjs'
@@ -15,6 +16,7 @@ import { spawn } from 'node:child_process'
 import { chromium } from 'playwright'
 import { createChatJournalStore } from '../../tavern-plugin/lib/domain/chat-journal-store.js'
 
+const displayScenario = process.argv.includes('--display-regression')
 const recoveryScenario = process.argv.includes('--surface-recovery')
 const compactionScenario = process.argv.find(arg => arg.startsWith('--compaction='))?.split('=')[1]
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -87,6 +89,10 @@ try {
       await writeFile(join(data, 'tavern-settings.json'), JSON.stringify({ contextCompaction: { mode: compactionScenario === 'rounds' ? 'rounds' : ['manual', 'overflow', 'legacy'].includes(compactionScenario) ? 'manual' : 'percent', rounds: 2, percent: 50 } }))
       await writeFile(join(output, 'model-control.json'), JSON.stringify({ foregroundPadding: compactionScenario === 'overflow' ? 4000 : 650, backgroundPadding: 0, window: compactionScenario === 'overflow' ? 262144 : 32768 }))
     }
+    if (displayScenario) {
+      await mkdir(data,{recursive:true})
+      await writeFile(join(data,'tavern-extension-settings.json'),JSON.stringify({EjsTemplate:{enabled:true,render_enabled:true,raw_message_evaluation_enabled:false,preload_worldinfo_enabled:false,code_blocks_enabled:true}}))
+    }
     await access(cli).catch(() => { throw Error('找不到 DSH runtime；先安装酒馆，或设置 TAVERN_E2E_RUNTIME。') })
     report.runtimeVersion = JSON.parse(await readFile(join(modules, '@deepseek-ai/dsh/package.json'), 'utf8')).version
     await mkdir(join(profile, 'node_modules'), { recursive: true })
@@ -125,7 +131,7 @@ try {
       mes_example: '', scenario: '', personality: '',
       character_book: { name: '验收初始变量', entries: [{ id: 1, keys: [], comment: '[initvar]初始值', content: 'gold: 0', enabled: true, constant: true, insertion_order: 1 }] },
       extensions: { mvu: {}, regex_scripts: [{ id: 'e2e-status', scriptName: '金币状态', findRegex: '<StatusPlaceHolderImpl/>',
-        replaceString: '```html\n' + status + '\n```', placement: [2], markdownOnly: true, disabled: false }] }
+        replaceString: '```html\n' + status + '\n```', placement: [2], markdownOnly: true, disabled: false }, ...(displayScenario ? displayRegressionRules() : [])] }
     } }))
   })
   await step('启动真实 DSH 与酒馆', async () => {
@@ -168,7 +174,9 @@ try {
       current.searchParams.set('token', next.searchParams.get('token'))
       await page.goto(current.toString(), { waitUntil: 'domcontentloaded' })
       const history = page.locator('.dsh-tavern-history-group-toggle').filter({ hasText: 'E2E 奖励验收' })
-      if (!await history.isVisible()) await page.getByRole('button', { name: /^(Open|Expand) sidebar$/ }).click()
+      const sidebarToggle = page.getByRole('button', { name: /^(Open|Expand) sidebar$/ })
+      await history.filter({visible:true}).or(sidebarToggle.filter({visible:true})).first().waitFor()
+      if (!await history.isVisible()) await sidebarToggle.click()
       await history.click()
       await page.locator('.dsh-tavern-side-row-name').first().click()
       await openStatus()
@@ -210,7 +218,9 @@ try {
     assert.deepEqual(errors, [], '浏览器不得出现未捕获异常')
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
-  if (compactionScenario) {
+  if (displayScenario) {
+    await displayRegressionChecks({page,step,savedChat,data,output,report,restartServer})
+  } else if (compactionScenario) {
     const installLegacyFixture = async () => {
       const chat = await savedChat()
       let directory, storedHeader
@@ -325,6 +335,7 @@ try {
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   }
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
+  assert.doesNotMatch(log, /服务端模板进程异常|Unsupported or expired template RPC/, '验收期间模板子进程不得异常退出')
   report.status = 'passed'
   delete report.currentStep
 } catch (error) {
@@ -337,7 +348,7 @@ try {
   // Read-only evidence, independent of the status iframe and its UI assertions.
   const chat = await savedChat().catch(error => { report.savedStateError = String(error.message || error); return null })
   if (chat) await writeFile(join(output, 'saved-state.json'), JSON.stringify({ id: chat.id, posture: chat.posture, contextCompaction: chat.contextCompaction, timeline: chat.timeline,
-    messages: chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text, turn: message.turn, variables: message.variables, mvu: message.mvu })) }, null, 2))
+    messages: chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text, turn: message.turn, variables: message.variables, mvu: message.mvu, ...(displayScenario ? {tavernPluginData:message.tavernPluginData} : {}) })) }, null, 2))
   await context?.tracing.stop({ path: join(output, 'trace.zip') }).catch(() => {})
   await browser?.close()
   if (child && child.exitCode === null) {
