@@ -38,13 +38,13 @@ export function createPerformanceDiagnostics() {
       for (const collection of ['requests', 'openingRequests']) if (Array.isArray(value[collection])) clean[collection] = value[collection].slice(-60).filter(row => row && /^[a-f0-9-]{36}$/.test(row.id || '') && ['getSession', 'syncSession', 'getCardOpenings', 'initializeOpeningTemplate', 'preparePlayStart', 'startChat'].includes(row.method)).map(row => {
         const result = { id: row.id, method: row.method, failed: row.failed === true }
         for (const key of ['sentAt', 'active', 'headersMs', 'parsedMs', 'durationMs', 'requestBytes', 'responseBytes', 'bodyChars']) {
-          if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = Math.min(1e12, Math.round(row[key]))
+          if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = Math.min(key === 'sentAt' || key === 'startedAt' ? Number.MAX_SAFE_INTEGER : 1e12, Math.round(row[key]))
         }
         return result
       })
       if (Array.isArray(value.openings)) clean.openings = value.openings.slice(-120).filter(row => row && /^[a-f0-9-]{36}$/.test(row.id || '') && ['startClick', 'claimPrewarm', 'submitInitialMessage', 'preparePreview', 'startGame', 'archiveCurrent', 'resolveWorkspace', 'connectWorkspace', 'waitForSession', 'ensurePreset', 'createChat', 'finishOpen'].includes(row.stage) && ['running', 'completed', 'failed'].includes(row.status)).map(row => {
         const result = { id: row.id, stage: row.stage, status: row.status };
-        for (const key of ['startedAt', 'durationMs']) if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = Math.min(1e12, Math.round(row[key]));
+        for (const key of ['startedAt', 'durationMs']) if (Number.isFinite(row[key]) && row[key] >= 0) result[key] = Math.min(key === 'sentAt' || key === 'startedAt' ? Number.MAX_SAFE_INTEGER : 1e12, Math.round(row[key]));
         return result;
       })
       if (Object.keys(clean).length) browser = { ...clean, receivedAt: Date.now(), longTaskSupported: value.longTaskSupported === true }
