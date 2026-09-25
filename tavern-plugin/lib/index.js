@@ -4073,6 +4073,7 @@ export async function apply(ctx) {
       projectMessages: compatibilityMessages
     },
     nativePlay: {
+      systemAppend: () => runtimePrompt('system-append'),
       stagedRequests: runtimePresetSnapshots,
       modeFor: async function (sessionId) { return await turnOrchestrator.modeFor(sessionId) },
       filterMessages: filterSkillMessages,

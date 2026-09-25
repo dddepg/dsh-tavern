@@ -280,6 +280,7 @@ export function createNativePlayOrchestrationStrategy(options) {
     const baseRequest = nativeMessages === optionsValue.messages
       ? optionsValue : Object.assign({}, optionsValue, { messages: nativeMessages })
     let request = projectRuntimePresetRequest(baseRequest, staged.snapshot, {
+      systemAppend: options.systemAppend?.(),
       scope: staged.scope,
       turn: staged.turn,
       step: staged.step

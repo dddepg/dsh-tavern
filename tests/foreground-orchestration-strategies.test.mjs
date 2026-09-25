@@ -565,3 +565,12 @@ for (const sessionId of ['native', 'compat']) test('regeneration gates ordinary 
   await run.value.prepareStep(input(message))
   assert.ok(run.calls.length>0)
 })
+
+test('普通游玩最终请求读取附加指令并置于外部预设前', () => {
+  const strategy = createNativePlayOrchestrationStrategy({
+    stagedRequests: new Map([['prefix-order', { scope: 'foreground', turn: 1, step: 1, snapshot: { front: { entries: [{ content: '外部预设' }] } } }]]),
+    systemAppend: () => '附加指令'
+  })
+  const result = strategy.projectRequest({ sessionId: 'prefix-order', system: '附加指令\n\n系统内容', messages: [{ role: 'user', content: [{ type: 'text', text: '输入' }] }] })
+  assert.equal(result.messages[0].content[0].text, '附加指令\n\n外部预设\n\n系统内容')
+})
