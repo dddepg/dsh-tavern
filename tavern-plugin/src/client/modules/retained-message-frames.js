@@ -84,7 +84,8 @@ function createRetainedTavernFrames(options) {
         mount: function (props, home) {
             const record = get(props);
             move(record.node, home);
-            record.unmount = retention.mount(props.sessionId);
+            const unmount = retention.mount(props.sessionId);
+            record.unmount = unmount;
             const movable = !props.persistent && /<(?:script|iframe|object|embed)\b/i.test(String(props.content || ""));
             if (movable && options.panels) {
                 record.panel = Object.assign(record.panel || {}, { id: "retained:" + record.key,
@@ -100,6 +101,9 @@ function createRetainedTavernFrames(options) {
                     if (!attached) return;
                     attached = false;
                     if (records.get(record.key) !== record) return;
+                    // Another React root may attach the new placement before
+                    // the previous root cleans up. Its stale lease must not move it.
+                    if (record.unmount !== unmount) { unmount(); return; }
                     if (record.unpin) { record.unpin(); record.unpin = null; }
                     move(record.node, parked());
                     if (record.unmount) { record.unmount(); record.unmount = null; }

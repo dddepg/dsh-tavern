@@ -5820,7 +5820,9 @@ window.__ModuleLoader__.load({
 				const mvuReceiptNode = mvuReceipt ? React.createElement(TavernMvuReceipt, { receipt: mvuReceipt, sessionId: props.sessionId, turn: storyTurn, latest: storyTurn === liveState.view?.settlementTurn, busy: Boolean(liveState.view?.activity?.busy) }) : null;
 				const sceneImagesEnabled = Boolean(liveState.view && liveState.view.releaseCapabilities && liveState.view.releaseCapabilities.sceneImages);
 				const illustration = sceneImagesEnabled && settled && storyTurn > 0 && isPlayMode(liveState.view && liveState.view.mode) && !sessionTransitioning ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn }) : null;
-				return React.createElement("div", { className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, rendered, illustration, mvuReceiptNode);
+                const inlineStatus = liveState.view?.statusBarPlacement === "body" && !sessionTransitioning && storyTurn > 0 && storyTurn === latestProjectionTurn && data.finalNode && tail?.closing?.finalNode?.seq === data.finalNode.seq
+                    ? React.createElement(TavernPersistentStatusRuntime, { sessionId: props.sessionId, view: liveState.view, executeSlash: props.executeSlash }) : null;
+				return React.createElement("div", { className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, rendered, illustration, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
 				const liveState = useLiveTavernView(props.sessionId, String(props.messageId || ""));
@@ -9699,7 +9701,7 @@ window.__ModuleLoader__.load({
 					) : null,
 					view.worldBookError ? h("div", { className: "dsh-card-error" }, "世界书召回失败：" + view.worldBookError) : null,
 					view.foregroundError ? h("div", { className: "dsh-card-error" }, view.foregroundError.message || "前台正文生成失败，请重新生成本轮正文。") : null,
-					view.tavernHelper ? h("section", { className: "dsh-tavern-status-section" },
+					view.tavernHelper && view.statusBarPlacement !== "body" ? h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "人物卡状态栏"),
 						h(TavernPersistentStatusRuntime, { sessionId: props.sessionId, view: view, executeSlash: props.executeSlash })
 					) : null,
@@ -10195,6 +10197,26 @@ window.__ModuleLoader__.load({
                 React.createElement("p", { className: "dsh-local-help" }, "离开输入框后保存，仅用于后续内容。"), React.createElement("span", { role: "status", className: "dsh-local-feedback" }, status));
         }
 
+        function TavernStatusBarSetting(props) {
+            const h = React.createElement;
+            const state = useLiveTavernView(props.sessionId, "status-bar-setting");
+            const [busy, setBusy] = React.useState(false);
+            const [error, setError] = React.useState("");
+            async function change(placement) {
+                setBusy(true); setError("");
+                try {
+                    await rpc("setStatusBarPlacement", { placement: placement }, props.sessionId);
+                    liveTavernView.invalidate(props.sessionId);
+                } catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            return h("div", { className: "dsh-local-field" },
+                h("label", null, "状态栏位置", h("select", { className: "dsh-tavern-settings-select", "aria-label": "状态栏位置",
+                    value: state.view?.statusBarPlacement || "sidebar", disabled: busy || !state.view, onChange: event => change(event.target.value) },
+                    h("option", { value: "sidebar" }, "侧边栏"), h("option", { value: "body" }, "正文下方"))),
+                error ? h("p", { role: "alert" }, "保存失败：" + error) : null);
+        }
+
         function TavernConversationSettingsTab(props) {
             const h = React.createElement;
             const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
@@ -10205,6 +10227,7 @@ window.__ModuleLoader__.load({
                     h("p", { className: "dsh-local-intro" }, "仅影响本局，修改后自动保存。已有对话和变量会保留。"),
                     h("section", { className: "dsh-local-section" }, h("h3", null, "基本信息"),
                         h(TavernLocalPlayerName, { key: owner + ":name", sessionId: owner }),
+                        h(TavernStatusBarSetting, { key: owner + ":status", sessionId: owner }),
                         h(TavernConversationPreset, { key: owner + ":preset", sessionId: owner }),
                         h(UserPreferenceProfileTab, { key: owner + ":profile", scope: { sessionId: owner }, conversationOnly: true }),
                         h("p", { className: "dsh-local-warning" }, "切换预设或用户画像会使提示词缓存失效，首次请求会增加耗时和费用。")),

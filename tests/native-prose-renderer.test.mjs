@@ -62,6 +62,21 @@ test('正式消息 renderer 使用原生 Markdown、完整标签参数，并只�
   assert.equal(buttons(forkAction).filter(node => node.props['aria-label'] === '从这一轮分叉').length, 1)
   assert.equal(buttons(ForkAction({ ...forkInject('fixture'), messageId: 'older-assistant' })).length, 1)
   assert.equal(ForkAction({ ...forkInject('fixture'), messageId: 'unknown-assistant' }), null)
+  // Only the final assistant node of the newest story turn owns inline status.
+  function inlineStatus(nextProps = props) {
+    const node = Assistant(nextProps)
+    return node.tag(node.props).children.filter(child => child?.tag?.name === 'TavernPersistentStatusRuntime')
+  }
+  props.useTurnData = () => ({ closing: { finalNode: { seq: 1 } } })
+  assert.equal(inlineStatus().length, 0, 'default stays in sidebar')
+  currentView.statusBarPlacement = 'body'
+  assert.equal(inlineStatus().length, 1)
+  props.useTurnData = () => ({ closing: { finalNode: { seq: 2 } } })
+  assert.equal(inlineStatus().length, 0, 'intermediate assistant steps must not duplicate the status')
+  props.useTurnData = () => ({ closing: { finalNode: { seq: 1 } } })
+  currentView.replyProjections.push({ version: 2, turn: 2, mode: 'text', parts: [] })
+  assert.equal(inlineStatus().length, 0, 'older replies must not keep another status')
+  currentView.statusBarPlacement = 'sidebar'
   props.node.data.status = 'running'
   const streamingRegistration = Assistant(props)
   const streaming = leaves(streamingRegistration && typeof streamingRegistration.tag === 'function'
