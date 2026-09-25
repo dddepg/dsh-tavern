@@ -1,11 +1,22 @@
 import { marked } from 'marked'
+import { fencedSegments } from '../../../domain/html-fenced-segments.js'
 import { chat, getRegexedString, name1, name2 } from './host.js'
 
 export function formatTemplateSource(text) {
   // Compare DOM serialization on both sides: parsing alone lowercases custom
   // tags and expands self-closing tags without any template display change.
   const template = document.createElement('template')
-  template.innerHTML = marked.parse(String(text ?? ''), { gfm: true })
+  // Narrative protocol tags can keep Markdown in an HTML block, swallowing
+  // the following fence. Use the same boundaries as the visible reply before
+  // Markdown can reinterpret blank lines and indentation inside author scripts.
+  template.innerHTML = fencedSegments(text).map(segment => {
+    if (segment.kind !== 'html') return marked.parse(segment.text, { gfm: true })
+    const pre = document.createElement('pre'), code = document.createElement('code')
+    code.className = 'language-html'
+    code.textContent = segment.content
+    pre.append(code)
+    return pre.outerHTML + '\n'
+  }).join('')
   return template.innerHTML
 }
 
