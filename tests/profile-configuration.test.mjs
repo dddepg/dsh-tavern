@@ -104,10 +104,12 @@ for (const host of ['desktop', 'android', 'cli']) {
       }
       const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host }
       const next = mergeProfileManifest({ ...options, current })
-      const selected = host === 'android' ? 'dsh-web-mobile' : 'dsh-pocket'
-      assert.equal(next.dependencies[selected], source.dependencies[selected])
-      assert.ok(next.dshTavern.managedBundles.includes(selected))
-      assert.ok(next.dshTavern.managedDependencies.includes(selected))
+      const selected = host === 'android' ? 'dsh-web-mobile' : host === 'desktop' ? 'dsh-pocket' : null
+      if (selected) {
+        assert.equal(next.dependencies[selected], source.dependencies[selected])
+        assert.ok(next.dshTavern.managedBundles.includes(selected))
+        assert.ok(next.dshTavern.managedDependencies.includes(selected))
+      }
       assert.equal(next.dependencies['user-extra'], '3.0.0')
       assert.ok(next.dsh.profile.bundles.includes('user-extra'))
       for (const name of names) {
@@ -116,7 +118,7 @@ for (const host of ['desktop', 'android', 'cli']) {
       }
       assert.deepEqual(mergeProfileManifest({ ...options, current: next }), next)
       const fresh = mergeProfileManifest(options)
-      assert.deepEqual(fresh.dsh.profile.bundles.filter(name => names.includes(name)), [selected])
+      assert.deepEqual(fresh.dsh.profile.bundles.filter(name => names.includes(name)), selected ? [selected] : [])
     })
   }
 }
@@ -127,11 +129,11 @@ test('同一源码在 CLI、Desktop 与 DSHA 之间切换只保留目标平台�
   let current = {}
   for (const host of ['android', 'desktop', 'cli', 'android', 'cli', 'desktop']) {
     current = mergeProfileManifest({ ...options, host, current })
-    const selected = host === 'android' ? 'dsh-web-mobile' : 'dsh-pocket'
+    const selected = host === 'android' ? 'dsh-web-mobile' : host === 'desktop' ? 'dsh-pocket' : null
     const removed = host === 'android' ? 'dsh-pocket' : 'dsh-web-mobile'
     assert.equal(current.dependencies[selected], source.dependencies[selected])
     assert.equal(current.dependencies[removed], undefined)
-    assert.ok(current.dsh.profile.bundles.includes(selected))
+    if (selected) assert.ok(current.dsh.profile.bundles.includes(selected))
     assert.ok(!current.dsh.profile.bundles.includes(removed))
   }
 })

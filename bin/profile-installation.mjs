@@ -9,7 +9,7 @@ import { patchThemeFontLimit } from './theme-font-limit.mjs'
 import { installPluginDependencies, resolveHostDependencies } from './plugin-dependencies.mjs'
 import { migrateLegacyTavernData, resolveTavernDataRoot } from '../tavern-plugin/lib/domain/tavern-data.js'
 import { ensureUserExtensions } from '../tavern-plugin/lib/domain/user-extensions.js'
-import { beginProfileConfigurationUpdate, loadProfileManifest, mergeProfileManifest, prepareProfilePatch, syncProfileDependencyPatches } from './profile-configuration.mjs'
+import { beginProfileConfigurationUpdate, loadProfileManifest, mergeProfileManifest, prepareProfilePatch, prepareProfileWorkspace, syncProfileDependencyPatches } from './profile-configuration.mjs'
 import { ensureSidebarDefaults } from './launcher-settings.mjs'
 import { INSTALL_HOSTS, SOURCE_ROOT, DSH_ROOT, LEGACY_DSH_ROOT, CLI_RUNTIME_ROOT, RUNTIME_HOST, PROFILE_DIR, LOG_DIR, SCRIPT_PATH, PROFILE, RELEASE_FILE, DEFAULT_COMMIT_URL, REQUIRED_SOURCE_FILES, findDshCommand, requireCommand, run, runDsh } from './launcher-environment.mjs'
 
@@ -256,8 +256,8 @@ export async function installProfile(host = RUNTIME_HOST) {
       if (backup !== null) console.log(`已备份原配置：${backup}`)
     }
     try {
-      const workspaceText = readFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), 'utf8')
-      copyFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), path.join(PROFILE_DIR, 'pnpm-workspace.yaml'))
+      const workspaceText = prepareProfileWorkspace(readFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), 'utf8'), configuration.manifest)
+      writeFileSync(path.join(PROFILE_DIR, 'pnpm-workspace.yaml'), workspaceText)
       syncProfileDependencyPatches({ sourceRoot: SOURCE_ROOT, profileDir: PROFILE_DIR, workspaceText })
       // This generated profile changes dependencies and patch settings on upgrade.
       // Its previous lockfile is not the source repository's frozen lockfile.
@@ -281,6 +281,9 @@ export async function installProfile(host = RUNTIME_HOST) {
     writeFileSync(path.join(SOURCE_ROOT, '.dsh-tavern-local.json'), JSON.stringify({ host, dshHome: DSH_ROOT }) + '\n')
     runtime?.commit()
     console.log('DSH Tavern 已安装。')
+    if (host === 'cli') console.log(configuration.manifest.dshTavern.cliPocketEnabled
+      ? 'Pocket 已启用（全部网卡，独立 PIN 认证）。可在“设置 → 手机访问”中关闭。'
+      : 'Pocket 已关闭；旧版自动安装不视为主动开启。需要手机访问时，请在“设置 → 手机访问”中开启 Pocket。')
     console.log(host === 'cli' ? `已安装独立 DSH ${dshVersion}：${CLI_RUNTIME_ROOT}；不使用全局 DSH。` : `已复用当前 DSH ${dshVersion} 的本地依赖；未升级或降级宿主。`)
     if (host === 'desktop') {
       console.log('请重启 DSH Desktop，然后从托盘的 Profile 菜单切换到 tavern。')

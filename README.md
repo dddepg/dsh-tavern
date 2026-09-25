@@ -110,6 +110,8 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 安装后自动打开网页；以后用 `dsh-tavern open` 打开，`dsh-tavern update` 更新。
 
+CLI 的 Pocket 手机访问默认关闭，可在“设置 → 手机访问”中开启并应用重启；升级会保留明确选择，旧版自动启用的入口会关闭。详见 [Pocket 手机访问](docs/pocket-access.md)。
+
 **更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
 
 [完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。

@@ -47,11 +47,12 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
   const sourceProfile = object(sourceDsh.profile)
   const currentProfile = object(currentDsh.profile)
   const currentTavern = object(currentDocument.dshTavern)
+  const cliPocketEnabled = currentTavern.cliPocketEnabled === true
   // Pocket includes mobile-nav itself. Select one layout owner per host,
   // including old/manual installs, so upgrades cannot reintroduce both.
   const excludedMobileBundles = host === 'android'
     ? ['dsh-pocket', '@dsh-external/dsh-mobile-nav']
-    : ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav']
+    : ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav', ...(host === 'cli' && !cliPocketEnabled ? ['dsh-pocket'] : [])]
   const sourceBundles = uniqueStrings(sourceProfile.bundles)
     .map(name => host !== 'android' && name === 'dsh-web-mobile' ? 'dsh-pocket' : name)
     .filter(name => !excludedMobileBundles.includes(name))
@@ -90,6 +91,7 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
     },
     dshTavern: {
       ...currentTavern,
+      ...(host === 'cli' ? { cliPocketEnabled } : {}),
       source: path.resolve(String(pluginPath), '..'),
       dataRoot,
       host,
@@ -99,6 +101,18 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
       profileConfigurationVersion: PROFILE_CONFIGURATION_VERSION,
     },
   }
+}
+
+// Optional packages must not leave mandatory pnpm patches behind when disabled.
+export function prepareProfileWorkspace(workspaceText, manifest) {
+  const document = parseDocument(String(workspaceText || ''))
+  if (document.errors.length > 0) throw new Error(`无法读取 pnpm workspace 配置：${document.errors[0].message}`)
+  if (!manifest.dependencies?.['dsh-pocket']) {
+    for (const name of Object.keys(object(document.toJS()?.patchedDependencies))) {
+      if (name === 'dsh-pocket' || name.startsWith('dsh-pocket@')) document.deleteIn(['patchedDependencies', name])
+    }
+  }
+  return String(document)
 }
 
 export function syncProfileDependencyPatches({ sourceRoot, profileDir, workspaceText }) {

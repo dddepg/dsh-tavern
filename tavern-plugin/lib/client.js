@@ -8128,7 +8128,7 @@ window.__ModuleLoader__.load({
 			async function removeSelected() {
 				if (busy || running.current || !selected.length) return;
 				const names = selected.slice(0, 20).map(card => "• " + card.name + "（" + card.path + "）").join("\n");
-				if (!await askConfirm("删除所选的 " + selected.length + " 张人物卡吗？\n\n" + names + (selected.length > 20 ? "\n……共 " + selected.length + " 张" : "") + "\n\n人物卡工作版和原版都会删除，已有对话会保留。此操作不可撤销。")) return;
+				if (!await askConfirm("删除所选的 " + selected.length + " 张人物卡吗？\n\n" + names + (selected.length > 20 ? "\n……共 " + selected.length + " 张" : "") + "\n\n此操作不可撤销。")) return;
 				running.current = true; setBusy(true); setNotice("");
 				try {
 					const results = await deleteTavernCards(selected, path => rpc("deleteCard", { path }));
@@ -9065,7 +9065,7 @@ window.__ModuleLoader__.load({
 				h("div", { className: "dsh-tavern-picker-foot", style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "24px", flexWrap: "wrap" } }, h("input", { ref: chatImportFile, type: "file", accept: ".jsonl", style: { display: "none" }, onChange: function (event) { previewChatImport(event.target.files && event.target.files[0]); event.target.value = ""; } }), h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" } }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { chatImportFile.current.click(); } }, "导入聊天记录"), h("small", { style: { opacity: .7 } }, "（必须和人物卡匹配）")), h("button", { className: "dsh-tavern-question-primary", disabled: busy || openingPicker.preparing || (openingPicker.openings.length > 0 && !selectedOpening), onClick: function () { newConversation(openingPicker.card, null, selectedOpening ? selectedOpening.id : "", openingPicker.userName || "你"); } }, "开始新游戏"))
 			) : null;
 			const playPicker = h("div", { className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": openingPicker ? "游戏准备" : "选择人物卡开始游玩" }, pickerError, openingPicker ? h(React.Fragment, null, importChoice, h("div", { style: { display: importChoice ? "none" : "contents" } }, openingChoice)) : h(React.Fragment, null,
-				h("div", { className: "dsh-tavern-card-picker-head" }, h("span", null, "选择人物卡 · 开始游玩"), h("span", { className: "dsh-tavern-spacer" }), h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }), h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
+				h("div", { className: "dsh-tavern-card-picker-head" }, h("span", null, "选择人物卡 · 开始游玩"), h("span", { className: "dsh-tavern-spacer" }), h("button", { className: "dsh-tavern-btn", disabled: busy || (!cardBatch.managing && !cards.length), onClick: function () { if (cardBatch.managing) cardBatch.reset(); else cardBatch.begin(); } }, cardBatch.managing ? "取消" : "批量删除"), h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }), h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
 				h("input", { ref: fileRef, type: "file", accept: ".png,.json", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importCard(f); e.target.value = ""; } }),
 				organization.toolbar(),
 				organization.visible.length ? h(React.Fragment, null, h("div", { className: "dsh-tavern-side-empty", style: { padding: "4px 6px" } }, "已绑定剧本的人物卡将自动按剧本推进；未绑定的按自由故事推进。剧本绑定在“卡片模式”中管理。"), organization.renderCards(function (card) { return h("div", { key: card.path, className: "dsh-tavern-card-pick-wrap" },
@@ -9630,6 +9630,52 @@ window.__ModuleLoader__.load({
                         h("option", { value: "after-send" }, "可选择多项发送后才隐藏"))),
                 notice ? h("div", { className: "dsh-tavern-settings-row", role: "status" },
                     h("span", { className: "dsh-tavern-settings-desc" }, notice)) : null);
+        }
+
+        function TavernPocketSettings() {
+            const h = React.createElement;
+            const [pocket, setPocket] = React.useState(null);
+            const [busy, setBusy] = React.useState(false);
+            const [error, setError] = React.useState("");
+            React.useEffect(function () {
+                let active = true;
+                rpc("getPocketSettings").then(result => { if (active) setPocket(result.pocket); }, err => { if (active) setError(String(err.message || err)); });
+                return () => { active = false; };
+            }, []);
+            React.useEffect(function () {
+                if (!pocket?.running) return;
+                let active = true, checking = false;
+                const timer = window.setInterval(async function () {
+                    if (checking) return;
+                    checking = true;
+                    try { const result = await rpc("getPocketSettings"); if (active) setPocket(result.pocket); }
+                    catch (_) { /* Service is temporarily unavailable while restarting. */ }
+                    finally { checking = false; }
+                }, 3000);
+                return () => { active = false; window.clearInterval(timer); };
+            }, [Boolean(pocket?.running)]);
+            async function change(enabled) {
+                setBusy(true); setError("");
+                try { setPocket((await rpc("setPocketSettings", { enabled })).pocket); }
+                catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            async function apply() {
+                setBusy(true); setError("");
+                try { setPocket((await rpc("applyPocketSettings")).pocket); }
+                catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            if (pocket && !pocket.supported) return null;
+            return h("section", { className: "dsh-tavern-settings-section", "aria-label": "Pocket 手机访问" },
+                h("h3", null, "Pocket 手机访问"),
+                h("p", null, "CLI 默认关闭。开启后口袋版默认监听全部网卡，使用独立 PIN 认证。端口以“手机访问”页面为准；是否可从公网访问取决于防火墙。"),
+                h("label", null, h("input", { type: "checkbox", role: "switch", "aria-label": "启用 Pocket 手机访问", checked: Boolean(pocket?.enabled), disabled: !pocket || busy || pocket.running, onChange: event => change(event.target.checked) }), "启用 Pocket 手机访问"),
+                pocket ? h("p", { role: "status" }, pocket.running ? "正在准备依赖并重启，请稍候。连接会暂时中断。" : pocket.restartRequired ? "设置已保存，尚未生效。当前 Pocket " + (pocket.active ? "仍在运行" : "未运行") + "。" : "当前 Pocket " + (pocket.active ? "已启用" : "已关闭") + "，更新后会保留此选择。") : null,
+                pocket?.restartRequired || pocket?.error ? h("div", null,
+                    h("p", null, "应用会重启酒馆并中断正在进行的任务；关闭后 Pocket 连接会断开，请使用主界面重新访问。"),
+                    h("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || pocket.running, onClick: apply }, "应用并重启")) : null,
+                error || pocket?.error ? h("p", { role: "alert" }, error || pocket.error) : null);
         }
 
 		function TavernSettingsSection() {
@@ -10884,7 +10930,7 @@ window.__ModuleLoader__.load({
 				finally { setBusy(false); }
 			}
 			async function deleteCardFile() {
-				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？\n人物卡工作版和原版都会删除，已有对话会保留。")) return;
+				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？")) return;
 				setBusy(true); setError("");
 				try { await rpc("deleteCard", { path: card.path }); setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards"); }
 				catch (err) { setError(String(err && err.message || err)); }
@@ -13586,6 +13632,18 @@ window.__ModuleLoader__.load({
 					label: function () { return "DSH Tavern"; }
 				}, TavernSettingsSection); });
 			}, "dsh-tavern: settings section");
+            ctx.effect(() => slots.inject("dsh-pocket.service-control", () => slots.register({
+                name: "dsh-pocket.service-control", id: "dsh-tavern-pocket-control", order: 0
+            }, TavernPocketSettings)), "dsh-tavern: Pocket service control");
+            ctx.effect(() => slots.inject("settings.section", () => {
+                let active = true, dispose;
+                rpc("getPocketSettings").then(result => {
+                    if (!active || !result.pocket?.supported || slots.entries("settings.section").some(entry => entry.options.id === "pocket")) return;
+                    dispose = slots.register({ name: "settings.section", id: "pocket", order: 1,
+                        label: () => "手机访问" }, TavernPocketSettings);
+                }).catch(error => { console.warn("Pocket settings unavailable:", String(error.message || error)); });
+                return () => { active = false; if (dispose) dispose(); };
+            }), "dsh-tavern: disabled Pocket settings page");
 			ctx.effect(function () {
 				const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:system-prompts", title: "系统提示词", order: 5, single: true, component: SystemPromptSidebarTab });
 				return function () { if (typeof dispose === "function") dispose(); };

@@ -11,3 +11,4 @@ minimumReleaseAgeExclude:
   - dsh-better-sidebar@0.19.1
 patchedDependencies:
   dsh-better-sidebar@0.19.1: patches/dsh-better-sidebar@0.19.1.patch
+  dsh-pocket@2.10.6: patches/dsh-pocket@2.10.6.patch
