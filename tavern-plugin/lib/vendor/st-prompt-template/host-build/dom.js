@@ -1,23 +1,37 @@
 import { marked } from 'marked'
-import { fencedSegments } from '../../../domain/html-fenced-segments.js'
+import { displaySourceSegments } from '../../../domain/display-source.js'
 import { chat, getRegexedString, name1, name2 } from './host.js'
 
+function escapeHTML(value) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 export function formatTemplateSource(text) {
-  // Compare DOM serialization on both sides: parsing alone lowercases custom
-  // tags and expands self-closing tags without any template display change.
+  const source = String(text ?? '')
+  // Keep expressions opaque to both the Markdown lexer and the HTML parser.
+  // Restore exactly one entity layer for upstream's escaped EJS delimiters.
+  let prefix = '\uE000DSH_TEMPLATE_EXPRESSION_'
+  while (source.includes(prefix)) prefix += '_'
+  const expressions = []
+  const protectedSource = source.replace(/<%([\s\S]*?)%>/g, (_match, body) => {
+    const token = prefix + expressions.length + '\uE001'
+    expressions.push({token, text:'&lt;%' + escapeHTML(body) + '%&gt;'})
+    return token
+  })
   const template = document.createElement('template')
-  // Narrative protocol tags can keep Markdown in an HTML block, swallowing
-  // the following fence. Use the same boundaries as the visible reply before
-  // Markdown can reinterpret blank lines and indentation inside author scripts.
-  template.innerHTML = fencedSegments(text).map(segment => {
-    if (segment.kind !== 'html') return marked.parse(segment.text, { gfm: true })
+  template.innerHTML = displaySourceSegments(protectedSource, {editing:true}).map(segment => {
+    if (segment.kind === 'marker') return segment.text
+    if (segment.kind !== 'html') return marked.parse(segment.text, {gfm:true})
+    if (!segment.fenced) return segment.content
     const pre = document.createElement('pre'), code = document.createElement('code')
     code.className = 'language-html'
     code.textContent = segment.content
     pre.append(code)
     return pre.outerHTML + '\n'
   }).join('')
-  return template.innerHTML
+  let html = template.innerHTML
+  for (const {token, text} of expressions) html = html.replaceAll(token, text)
+  return html
 }
 
 function formatDisplayText(text, isSystem, isUser, index, statusBoundaries = true) {
@@ -28,7 +42,7 @@ function formatDisplayText(text, isSystem, isUser, index, statusBoundaries = tru
 
 export function formatTemplateMessage(text, _name, isSystem = false, isUser = false, index = chat.length - 1) {
   // Upstream evaluates HTML-escaped delimiters, including in script/style text.
-  return formatTemplateSource(formatDisplayText(text, isSystem, isUser, index).replace(/<%/g, '&lt;%').replace(/%>/g, '%&gt;'))
+  return formatTemplateSource(formatDisplayText(text, isSystem, isUser, index))
 }
 
 export function captureTemplateDisplay(message, index) {
@@ -98,7 +112,14 @@ function installMirrorFormatting() {
     if (typeof value === 'string' && this.length && this.toArray().every(element => element.closest?.('#chat'))) {
       return this.each(function () { this.innerHTML = inertMarkup(value) })
     }
-    return original.apply(this,arguments)
+    const result = original.apply(this,arguments)
+    // The DOM decodes entities in attributes (including inert handler JSON).
+    // Upstream reads this mirror using escaped EJS delimiters; encode those
+    // delimiters again without double-escaping the already serialized body.
+    if (!arguments.length && typeof result === 'string' && this[0]?.closest?.('#chat')) {
+      return result.replace(/<%([\s\S]*?)%>/g, (_match, body) => '&lt;%' + body + '%&gt;')
+    }
+    return result
   }
   html.templateMirror = true; window.$.fn.html = html
 }
