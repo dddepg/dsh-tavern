@@ -23,8 +23,16 @@ export const DSH_ROOT = path.resolve(RUNTIME_HOST === 'cli'
   : (process.env.DSH_HOME || path.join(os.homedir(), '.dsh')))
 export const CLI_RUNTIME_ROOT = path.join(DSH_ROOT, 'runtime')
 export function runtimeEnvironment() {
+  const environment = { ...process.env }
+  // Match both installer scripts, including direct `dsh-tavern install` calls.
+  // Windows treats these names case-insensitively; do not leave conflicting keys.
+  for (const key of Object.keys(environment)) {
+    if (['npm_config_registry', 'pnpm_config_registry'].includes(key.toLowerCase())) delete environment[key]
+  }
+  const registry = process.env.DSH_TAVERN_NPM_REGISTRY || 'https://registry.npmmirror.com'
   // pnpm's optional update check can keep Node alive after a completed install.
-  return { ...process.env, pnpm_config_update_notifier: 'false', DSH_HOME: DSH_ROOT, DSH_TAVERN_RUNTIME_HOST: RUNTIME_HOST,
+  return { ...environment, npm_config_registry: registry, pnpm_config_registry: registry,
+    pnpm_config_update_notifier: 'false', DSH_HOME: DSH_ROOT, DSH_TAVERN_RUNTIME_HOST: RUNTIME_HOST,
     ...(RUNTIME_HOST === 'cli' ? { DSH_TAVERN_CLI_HOME: DSH_ROOT, DSH_TAVERN_LEGACY_DSH_HOME: LEGACY_DSH_ROOT } : {}) }
 }
 export const PROFILE_DIR = path.join(DSH_ROOT, 'profiles', PROFILE)

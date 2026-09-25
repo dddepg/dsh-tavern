@@ -15,8 +15,8 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
 class Launcher : Form {
- // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
- const string Version="a272f20b3f1f5b15-setup2";
+ // Bump for any embedded runtime/bootstrap change; never patch a running installation.
+ const string Version="a272f20b3f1f5b15-setup3";
  Label label=new Label(); ProgressBar bar=new ProgressBar();
  string root, runtime, data; string[] args;
  string installedLauncher; bool showCompletion, installationSelected;
@@ -166,13 +166,15 @@ class Launcher : Form {
   using(var mutex=new Mutex(false,"Local\\DSHTavernPrepare-Online")) {
    Status("正在等待运行文件准备完成…"); bool locked=false;
    try {try {locked=mutex.WaitOne();}catch(AbandonedMutexException){locked=true;}
+    runtime=ChooseRuntime(root);
     if(Array.IndexOf(args,"--prepare-only")<0 && NeedsUpgrade()) StopInstallationProcesses();
     SaveEntry();
-    if(!File.Exists(Path.Combine(runtime,"ready"))) {
+    if(!IsRuntimeReady(runtime)) {
      Status("首次准备运行环境，后续启动无需重复解压…");
      var stage=Path.Combine(root,"preparing-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(stage);
      try {
-     var archive=Path.Combine(stage,"payload.7z");var seven=Path.Combine(stage,"7za.exe");var app=Path.Combine(stage,"app");
+     PrepareRuntime(runtime,delegate(string app) {
+     var archive=Path.Combine(stage,"payload.7z");var seven=Path.Combine(stage,"7za.exe");
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
@@ -192,7 +194,7 @@ class Launcher : Form {
      patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
      patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
      using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
-     Directory.Move(app,runtime);File.WriteAllText(Path.Combine(runtime,"ready"),Version);
+     });
      // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
      // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.
      } finally {TryDeleteTree(stage);}
@@ -210,6 +212,36 @@ class Launcher : Form {
   start.Arguments=string.Join(" ",Array.ConvertAll(args,Quote));
   start.EnvironmentVariables.Remove("ELECTRON_RUN_AS_NODE");
   using(var p=Process.Start(start)){if(Array.IndexOf(args,"--tavern-smoke")>=0){p.WaitForExit();if(p.ExitCode!=0)throw new Exception("启动检查失败");}}
+ }
+ static bool IsRuntimeReady(string path) {
+  try {return File.Exists(Path.Combine(path,"DSH Desktop.exe"))&&File.ReadAllText(Path.Combine(path,"ready"))==Version;}
+  catch(IOException){return false;}
+  catch(UnauthorizedAccessException){return false;}
+ }
+ static string ChooseRuntime(string root) {
+  string legacy=Path.Combine(root,"runtime-"+Version);
+  if(IsRuntimeReady(legacy))return legacy;
+  if(Directory.Exists(root)) {
+   var candidates=Directory.GetDirectories(root,"runtime-"+Version+"-*");
+   Array.Sort(candidates,StringComparer.OrdinalIgnoreCase);
+   foreach(string candidate in candidates)if(IsRuntimeReady(candidate))return candidate;
+  }
+  return legacy+"-"+Guid.NewGuid().ToString("N");
+ }
+ static void PrepareRuntime(string runtime,Action<string> prepare) {
+  if(Directory.Exists(runtime)||File.Exists(runtime))throw new IOException("运行环境目录已存在："+runtime);
+  // Prepare at the final unique path. Renaming a directory containing an open
+  // child file can fail with ERROR_ACCESS_DENIED regardless of elevation.
+  // The exact ready marker is the commit point; incomplete directories are
+  // never selected, even when a scanner prevents best-effort cleanup.
+  bool complete=false;
+  Directory.CreateDirectory(runtime);
+  try {
+   prepare(runtime);
+   if(!File.Exists(Path.Combine(runtime,"DSH Desktop.exe")))throw new IOException("运行环境不完整："+runtime);
+   File.WriteAllText(Path.Combine(runtime,"ready"),Version);
+   complete=true;
+  } finally {if(!complete)TryDeleteTree(runtime);}
  }
  void EnsureTavern() {
   if(!NeedsUpgrade())return;

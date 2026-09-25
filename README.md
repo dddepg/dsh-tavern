@@ -72,7 +72,7 @@
 
 ### Windows 一键安装
 
-**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)**（Windows x64）
+**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe)**（Windows x64，修复运行目录移动时的访问拒绝）
 
 下载后双击运行，保持联网，按提示完成安装；以后从桌面「DSH Tavern」快捷方式打开。无需另装 Node.js 或 DSH Desktop。
 

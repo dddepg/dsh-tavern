@@ -1,4 +1,5 @@
-param([Parameter(Mandatory=$true)][string]$InstallDirectory,[switch]$Retry)
+param([Parameter(Mandatory=$true)][string]$InstallDirectory,[switch]$Retry,
+      [string]$Registry=$(if($env:DSH_TAVERN_NPM_REGISTRY){$env:DSH_TAVERN_NPM_REGISTRY}else{'https://registry.npmmirror.com'}))
 $ErrorActionPreference='Stop'
 $InstallDirectory=(Resolve-Path -LiteralPath $InstallDirectory).Path
 if(!(Test-Path (Join-Path $InstallDirectory 'Desktop/DSH Tavern.lnk'))){throw 'Use an isolated launcher test installation'}
@@ -12,8 +13,10 @@ if(!$Retry){
 $sentinel=Join-Path $data 'upgrade-data-sentinel.txt'
 if(!$Retry){Set-Content $sentinel 'existing game data'}
 $before=(Get-FileHash $sentinel).Hash
+$previousTestRoot=$env:DSH_LAUNCHER_TEST_ROOT
+$previousRegistry=$env:DSH_TAVERN_NPM_REGISTRY
 $env:DSH_LAUNCHER_TEST_ROOT=$InstallDirectory
-$env:DSH_TAVERN_NPM_REGISTRY='https://registry.npmjs.org'
+$env:DSH_TAVERN_NPM_REGISTRY=$Registry
 try {
     $testProcess=Start-Process -FilePath (Join-Path $InstallDirectory 'DSH Tavern.exe') -ArgumentList '--tavern-smoke' -WindowStyle Hidden -PassThru
     $null=$testProcess.Handle
@@ -27,6 +30,6 @@ try {
     if(!(Test-Path (Join-Path $data '.launcher-upgrade-ready'))){throw 'Successful upgrade not recorded'}
     Write-Output "PASS: old installation upgraded to Tavern $version / Desktop $($smoke.desktop); data preserved; smoke passed"
 } finally {
-    Remove-Item Env:DSH_LAUNCHER_TEST_ROOT -ErrorAction SilentlyContinue
-    Remove-Item Env:DSH_TAVERN_NPM_REGISTRY -ErrorAction SilentlyContinue
+    $env:DSH_LAUNCHER_TEST_ROOT=$previousTestRoot
+    $env:DSH_TAVERN_NPM_REGISTRY=$previousRegistry
 }
