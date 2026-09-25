@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "0a8a8076129a0dbdea2ea2b85e72b69859d37d01",
-  "releaseSequence": 391,
+  "revision": "08617dffe6ab4d4565282d1ca8d9f946dba65f8d",
+  "releaseSequence": 392,
   "version": "2.2.0",
   "files": [
     {
@@ -86,8 +86,8 @@
     },
     {
       "path": "bin/service-lifecycle.mjs",
-      "sha256": "48df3c2c154fbd9e0d34e14550a8a14e843017560bf16a92b45b30ada03f48b8",
-      "size": 15157
+      "sha256": "99118f9d61e75fe9b771151fc8d1bda3d166595377bdfb3a4ea5642db16e0610",
+      "size": 16139
     },
     {
       "path": "bin/service-process-identity.mjs",
@@ -151,8 +151,8 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "dcd9a0aa07c23e8fa987c77390c431ee6e3a4f376c35aebb7d8a626a7f7327d8",
-      "size": 25818
+      "sha256": "40c7bba222b9509b84a41ab235e5f01c215015cb6f15c276db8d85e62b64e213",
+      "size": 26471
     },
     {
       "path": "install.sh",
