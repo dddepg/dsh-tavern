@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "7a2d7d36318984a081aeb28a9ffe2cce974e549c",
-  "releaseSequence": 393,
+  "revision": "4ed59950f23d5f4c7b6157595b09707878748f77",
+  "releaseSequence": 394,
   "version": "2.2.0",
   "files": [
     {
@@ -311,8 +311,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "d5cd7fa1edaf1dce550933fc71bc75b235ea9742eacd21ef322a306ee01a0a33",
-      "size": 1120745
+      "sha256": "43fceab6b3b294f5b1de429633a42e979f57873444e2fb64045b273ebdb4fc05",
+      "size": 1123029
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -3826,8 +3826,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "4f96314d7141bbc32c9fc26bf5aabc4ce755c348638cfa34e3a30fe24ed68777",
-      "size": 799811
+      "sha256": "75cf6428a407e8cab86de82ce443ed31719bf43b088704be75669a0e1e1b0ada",
+      "size": 802132
     },
     {
       "path": "tavern-plugin/src/client/modules/background-wait.js",
