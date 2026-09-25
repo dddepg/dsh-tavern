@@ -154,3 +154,72 @@ test('batch prepares each entry, isolates failed scopes, and returns compact rec
  assert.equal(results[0].text,'1');assert.equal(results[1].ok,false);assert.equal(results[2].text,'3|1')
  assert.ok(results.every(result=>!Object.hasOwn(result,'scopes')))
 })
+
+test('template workers have a configurable heap budget above the former 256 MB ceiling', async t => {
+  const { engine } = fixture(t, { maxOldSpaceMb: 768 })
+  const result = await engine.render('<%= structuredClone.constructor("return process")().execArgv.find(flag=>flag.startsWith("--max-old-space-size=")) %>')
+  assert.equal(result.text, '--max-old-space-size=768')
+})
+
+test('large template allocations fit the default heap budget', async t => {
+  const { engine } = fixture(t)
+  // Three retained arrays exceed 450 MiB without creating a multi-GB fixture.
+  // This drives the real jsdom/EJS worker through the old 256 MiB failure.
+  const result = await engine.render('<% window.memoryProbe=[new Array(20000000).fill(1),new Array(20000000).fill(2),new Array(20000000).fill(3)] %><%= window.memoryProbe.reduce((sum,array)=>sum+array.length,0) %><% delete window.memoryProbe %>')
+  assert.equal(result.text, '60000000')
+})
+
+test('OOM is classified from V8 stderr and leaves a diagnostic for the interrupted job', async t => {
+  const diagnostics = []
+  const { engine, runtime, journals } = fixture(t, { maxOldSpaceMb: 256, onDiagnostic: value => diagnostics.push(value) })
+  await assert.rejects(engine.render('<% window.memoryProbe=[new Array(20000000).fill(1),new Array(20000000).fill(2),new Array(20000000).fill(3)] %>'), error => {
+    assert.equal(error.code, 'FULL_TEMPLATE_OUT_OF_MEMORY')
+    assert.match(error.message, /256 MB/)
+    return true
+  })
+  assert.equal(diagnostics.length, 1, 'started work must not be replayed')
+  assert.equal(diagnostics[0].outOfMemory, true)
+  assert.match(diagnostics[0].stderr, /heap out of memory|heap limit/i)
+  const job = [...journals.values()].at(-1)
+  assert.equal(job.phase, 'interrupted')
+  assert.equal(job.workerDiagnostic.heapMb, 256)
+  assert.ok(job.workerDiagnostic.stderr.length <= 8192)
+  assert.equal((await runtime.inspect('s')).present, false)
+  assert.equal((await engine.render('explicit recovery')).text, 'explicit recovery')
+})
+
+test('display worker failures preserve bounded redacted stderr without replay or false OOM claims', async t => {
+  const diagnostics = []
+  const { engine, runtime, journals } = fixture(t, { onDiagnostic: value => diagnostics.push(value) })
+  await assert.rejects(engine.renderProjection('<% const p=structuredClone.constructor("return process")();await new Promise(resolve=>p.stderr.write("x".repeat(20000)+"\\nfixture crash\\nAuthorization: Bearer fake-worker-secret\\n",resolve));p.exit(42) %>'), error => {
+    assert.equal(error.code, 'FULL_TEMPLATE_WORKER_EXIT')
+    return true
+  })
+  assert.equal(diagnostics.length, 1)
+  assert.equal(diagnostics[0].outOfMemory, false)
+  assert.equal(diagnostics[0].exitCode, 42)
+  assert.match(diagnostics[0].stderr, /fixture crash/)
+  assert.ok(diagnostics[0].stderr.length <= 8192, 'stderr remains bounded even when the worker floods it')
+  assert.doesNotMatch(diagnostics[0].stderr, /fake-worker-secret/)
+  assert.match(diagnostics[0].stderr, /REDACTED/)
+  const journal = [...journals.values()].at(-1)
+  assert.equal(journal.transient, true)
+  assert.equal(journal.phase, 'interrupted')
+  assert.equal((await runtime.inspect('s')).task.workerDiagnostic.exitCode, 42)
+})
+
+test('heap configuration rejects invalid or unbounded values before starting workers', () => {
+  for (const maxOldSpaceMb of [0, 127, 4097, Infinity, 1.5, '512 --inspect']) {
+    assert.throws(() => createServerTemplateRuntime({ rpc() {}, maxOldSpaceMb }), /128.*4096/)
+  }
+})
+
+test('heap environment override is parsed by the host without inheriting its environment', async t => {
+  const previous = process.env.DSH_TAVERN_TEMPLATE_HEAP_MB
+  process.env.DSH_TAVERN_TEMPLATE_HEAP_MB = '640'
+  t.after(() => { if (previous === undefined) delete process.env.DSH_TAVERN_TEMPLATE_HEAP_MB; else process.env.DSH_TAVERN_TEMPLATE_HEAP_MB = previous })
+  const { engine, runtime } = fixture(t)
+  assert.equal((await runtime.inspect('s')).heapMb, 640)
+  const result = await engine.render('<%= structuredClone.constructor("return process")().env.DSH_TAVERN_TEMPLATE_HEAP_MB || "absent" %>')
+  assert.equal(result.text, 'absent')
+})

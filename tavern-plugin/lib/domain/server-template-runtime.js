@@ -3,6 +3,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { redactMvuLoadError } from './mvu-diagnostics.js'
 
 const rpcMethods = new Set(['getFullPromptTemplateState', 'saveFullPromptTemplateState',
   'saveFullPromptTemplateSettings', 'saveFullPromptTemplateGlobals', 'countFullTemplateTokens',
@@ -11,13 +12,15 @@ const require = createRequire(import.meta.url)
 const worker = fileURLToPath(new URL('./server-template-worker.js', import.meta.url))
 
 /** Service-owned sessions. No browser leases, heartbeat, or replay of started work. */
-export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, idleMs = 600000, maxSessions = 4, readOnly = false }) {
+export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, idleMs = 600000, maxSessions = 4, readOnly = false, maxOldSpaceMb, onDiagnostic }) {
+  const heapMb = Number(maxOldSpaceMb ?? process.env.DSH_TAVERN_TEMPLATE_HEAP_MB ?? 1024)
+  if (!Number.isInteger(heapMb) || heapMb < 128 || heapMb > 4096) throw new RangeError('DSH_TAVERN_TEMPLATE_HEAP_MB 必须是 128 到 4096 之间的整数（MB）')
   const sessions = new Map(), tails = new Map(), generations = new Map(), jobs = new Map()
   const capacityWaiters = new Set()
   const wakeCapacity = () => { for (const wake of capacityWaiters) wake() }
   let disposed = false
   const journalPath = id => 'template-work/' + createHash('sha256').update(id).digest('hex') + '.json'
-  const save = (id, job) => store && !job.transient ? store.writeJson(journalPath(id), job) : Promise.resolve()
+  const save = (id, job, failure = false) => store && (failure || !job.transient) ? store.writeJson(journalPath(id), job) : Promise.resolve()
   function stop(record, error = new Error('服务端提示词模板执行已停止')) {
     if (sessions.get(record.sessionId) === record) sessions.delete(record.sessionId)
     record.closed = true
@@ -55,12 +58,29 @@ export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, id
     // Node 24 removed the experimental alias; older hosts still need it.
     const permissionFlag = process.allowedNodeEnvironmentFlags.has('--permission') ? '--permission' : '--experimental-permission'
     const child = fork(worker, [], { env: { NODE_ENV: 'production', ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) },
-      execArgv: [permissionFlag, '--allow-fs-read=' + plugin, '--allow-fs-read=' + modules, '--max-old-space-size=256'],
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'], serialization: 'advanced', windowsHide: true })
-    const record = { child, sessionId, pending: new Map(), busy: true, ready: false, closed: false, usedAt: Date.now(), writes: Promise.resolve() }
+      execArgv: [permissionFlag, '--allow-fs-read=' + plugin, '--allow-fs-read=' + modules, '--max-old-space-size=' + heapMb],
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc'], serialization: 'advanced', windowsHide: true })
+    const record = { child, sessionId, pending: new Map(), busy: true, ready: false, closed: false, stderr: '', usedAt: Date.now(), writes: Promise.resolve() }
     sessions.set(sessionId, record)
     child.on('error', error => stop(record, error))
-    child.on('exit', (code, signal) => { if (!record.closed) stop(record, new Error(`服务端提示词模板进程退出 (${signal || code})，任务未重试`)) })
+    // Retain only a bounded stderr tail. Wait for stdio to close so V8's fatal
+    // message is available; SIGABRT alone does not establish an OOM diagnosis.
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', chunk => { record.stderr = (record.stderr + chunk).slice(-16384) })
+    child.on('close', (code, signal) => {
+      if (record.closed) return
+      const outOfMemory = /FATAL ERROR:[^\r\n]*(?:heap out of memory|Reached heap limit|Ineffective mark-compacts near heap limit)/i.test(record.stderr)
+      const diagnostic = { phase: record.ready ? 'execution' : 'initialization', exitCode: code, signal,
+        heapMb, outOfMemory, stderr: redactMvuLoadError(record.stderr, 16384).slice(-8192) }
+      const message = outOfMemory
+        ? `服务端提示词模板内存不足（V8 老生代上限 ${heapMb} MB，${signal || code}），任务未重试`
+        : `服务端提示词模板进程退出 (${signal || code})，任务未重试`
+      const error = Object.assign(new Error(message), {
+        code: outOfMemory ? 'FULL_TEMPLATE_OUT_OF_MEMORY' : 'FULL_TEMPLATE_WORKER_EXIT', workerDiagnostic: diagnostic
+      })
+      try { onDiagnostic?.(diagnostic) } catch { /* Logging cannot prevent task rejection. */ }
+      stop(record, error)
+    })
     child.on('message', async message => {
       if (record.closed) return
       if (message.type === 'result') {
@@ -110,7 +130,9 @@ export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, id
         return result
       } catch (error) {
         job.phase = 'interrupted'; job.error = String(error.message || error)
-        try { await save(sessionId, job) }
+        if (error.workerDiagnostic) job.workerDiagnostic = error.workerDiagnostic
+        // Display jobs skip routine journals, but their crashes need evidence too.
+        try { await save(sessionId, job, true) }
         finally { if (record) { stop(record, error); await record.writes } }
         throw error
       } finally {
@@ -140,7 +162,7 @@ export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, id
     synchronize: sessionId => invoke(sessionId, 'synchronize', {}, true),
     inspect: async sessionId => {
       const record = sessions.get(sessionId)
-      return { executor: 'node', present: Boolean(record), ready: Boolean(record?.ready), busy: Boolean(record?.busy),
+      return { executor: 'node', heapMb, present: Boolean(record), ready: Boolean(record?.ready), busy: Boolean(record?.busy),
         phase: record?.busy ? 'executing' : 'idle', heartbeat: null, task: jobs.get(sessionId) || (store && await store.readJson(journalPath(sessionId))) || null }
     },
     cancel(sessionId) { generations.set(sessionId, randomUUID()); const record = sessions.get(sessionId); if (record) stop(record, new Error('提示词模板任务已手动取消')); wakeCapacity() },

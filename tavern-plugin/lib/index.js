@@ -243,7 +243,10 @@ export async function apply(ctx) {
   const dataRoot = resolveTavernDataRoot()
   const stablePrefixStorage = createSessionStablePrefixStorage(dataRoot + '/session-prefixes')
   const profileData = createProfileDataStore({ dataRoot })
-  const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData, rpc: (method, args) => dispatchMethod(method, args, true) })
+  const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData,
+    rpc: (method, args) => dispatchMethod(method, args, true),
+    onDiagnostic: diagnostic => console.warn('dsh-tavern: 服务端模板进程异常:', diagnostic)
+  })
   const templateSync = createServerTemplateSync({
     run: sessionId => fullTemplateRuntime.synchronize(sessionId),
     onError: error => console.warn('dsh-tavern: 服务端模板显示处理失败:', str(error.message || error))
