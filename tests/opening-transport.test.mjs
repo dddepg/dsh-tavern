@@ -40,7 +40,7 @@ test('production opening RPC defers payload only when the caller opts in',async(
  const extensions={helperScripts:[],regexScripts:[],mvuResources:[]}
  const record={source:{kind:'embedded'},view:inspectWorldBookDocument({entries:[{content:'large'.repeat(10000)}]})}
  const openingPreparation=createOpeningPreparation({readCard:async()=>card,worldBooks:{bound:async()=>record}})
- const scope=vm.createContext({performance,console:{info(){}},readCard:async()=>card,readTavernSettings:async()=>({}),readCardExtensions:async()=>extensions,
+ const scope=vm.createContext({requestPerformance:{stage:(_name,work)=>work()},performance,console:{info(){}},readCard:async()=>card,readTavernSettings:async()=>({}),readCardExtensions:async()=>extensions,
  tavernRemoteAssets:{pinExtensions:async()=>extensions},performanceDiagnostics:{opening(){}},projectCardOpeningPreviews,projectTavernHelperScripts,cardOpeningChoices,openingPreparation,openingPreviewPayload,marked:{parse:x=>x},str:String})
  vm.runInContext(implementation,scope)
  const legacy=await scope.getCardOpenings('card','you','dsh')

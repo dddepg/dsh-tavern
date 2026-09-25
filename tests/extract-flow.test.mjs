@@ -1106,7 +1106,7 @@ test('游戏准备预热与正式启动不再操纵通知连接槽', () => {
   assert.match(sidebar, /busy \? h\("div", \{ className: "dsh-tavern-session-switching", role: "status", "aria-live": "polite" \}, openingPicker\.preparing \? "正在准备开场与脚本资源…" : "正在完成游戏初始化…"/)
   assert.doesNotMatch(assistantRenderer, /renderTavernProjection\(sessionTransitioning\.projection/)
   assert.match(assistantRenderer, /正在完成游戏初始化/)
-  assert.match(serverSource, /case 'preparePlayStart':[\s\S]*await runtimePresets\.prepareFullSnapshot\(\)/)
+  assert.match(serverSource, /case 'preparePlayStart':[\s\S]*requestPerformance\.stage\('preparePreset', \(\) => runtimePresets\.prepareFullSnapshot\(\)/)
 })
 
 test('有效的世界书匹配设置在兼容字段之外，兼容字段默认折叠', () => {

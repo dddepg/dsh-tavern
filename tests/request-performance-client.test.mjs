@@ -84,3 +84,20 @@ test('视图 HTTP 请求全部阻塞时，领取、续租和回执仍经独立�
     await Promise.all([...views, ...requests])
   }
 })
+
+test('opening RPC exports correlated timing without serializing the parsed response again',async()=>{
+ const source=await readFile(new URL('../tavern-plugin/src/client/main.js',import.meta.url),'utf8')
+ const recorder=await readFile(new URL('../tavern-plugin/src/client/opening-performance.js',import.meta.url),'utf8')
+ const sent=[];const result={ok:true,toJSON(){throw Error('large response must not be serialized for diagnostics')}}
+ const scope=vm.createContext({window:{},performance,Date,Math,performanceReportAt:0,pagePerformanceStarted:0,pagePerformance:{},performanceRequests:[],performanceActiveRequests:0,beginSessionViewRead:()=>null,tavernRuntimeGenerationMonitor:{observe(){}},
+ readTavernJsonResponse:(_response,onBody)=>{onBody?.('x'.repeat(100));return result},fetch:async(_url,request)=>{sent.push(JSON.parse(request.body));return {headers:{get:()=>null}}}})
+ const start=source.indexOf('\t\tfunction rpc(method,')
+ vm.runInContext(recorder+'\n'+source.slice(start,source.indexOf('\n\t\tfunction recordImageInteraction',start)),scope)
+ await scope.rpc('initializeOpeningTemplate',{})
+ for(let i=0;i<70;i++)await scope.rpc('syncSession',{})
+ await scope.rpc('exportDiagnostics',{})
+ const report=sent.at(-1)._performance
+ assert.equal(report.openingRequests[0].id,sent[0]._traceId)
+ assert.equal(report.openingRequests[0].bodyChars,100)
+ assert.equal(report.requests.some(row=>row.method==='initializeOpeningTemplate'),false)
+})

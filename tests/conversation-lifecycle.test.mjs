@@ -216,3 +216,16 @@ test('同一次开始操作并发触发只创建一条会话', async () => {
   await Promise.all([module.start({ kind: 'play' }), module.start({ kind: 'play' })])
   assert.equal(calls.filter(item => item.startsWith('connect:')).length, 1)
 })
+
+test('lifecycle timing marks the actual failed stage without changing retry behavior',async()=>{
+ const records=[];let fail=true
+ const h=harness({trace:stage=>({async measure(name,work){try{const value=await work();records.push([name,true]);return value}catch(error){records.push([name,false]);throw error}},finish:success=>records.push([stage,success])}),
+ createChat:async()=>{if(fail)throw Error('fixture')}})
+ const request={kind:'play',targetMode:'story',card:{path:'card'}}
+ await assert.rejects(h.module.start(request),/fixture/)
+ assert.deepEqual(records.slice(-2),[['createChat',false],['startGame',false]])
+ fail=false;records.length=0;await h.module.start(request)
+ assert.deepEqual(records.at(-1),['startGame',true])
+ assert.ok(records.some(([name])=>name==='finishOpen'))
+ assert.ok(!records.some(([name])=>name==='connectWorkspace'),'retry reuses established session')
+})

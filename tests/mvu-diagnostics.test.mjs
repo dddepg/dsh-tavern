@@ -356,3 +356,12 @@ test('写盘失败时诊断导出包含内存日志并明确标记未持久化',
   assert.match(text, /"persistence":"pending"/)
   assert.doesNotMatch(text, /DO_NOT_EXPORT/)
 })
+
+test('existing log ZIP exports opening timings from before the session existed',async()=>{
+ const {createPerformanceDiagnostics}=await import('../tavern-plugin/lib/domain/performance-diagnostics.js')
+ const performance=createPerformanceDiagnostics()
+ performance.browser({openings:[{id:'00000000-0000-0000-0000-000000000001',stage:'preparePreview',status:'completed',durationMs:5000,content:'PRIVATE'}]})
+ const result=await createMvuDiagnosticExport({sessionId:'new-session',store:createMvuDiagnosticStore(storage()),performanceDiagnostics:performance.read()})
+ const text=zipText(result.buffer)
+ assert.match(text,/performance\/summary.json/);assert.match(text,/preparePreview/);assert.match(text,/5000/);assert.doesNotMatch(text,/PRIVATE/)
+})

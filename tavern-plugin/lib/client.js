@@ -403,7 +403,7 @@ window.__ModuleLoader__.load({
 			refresh: reloadTavernClient
 		});
 
-		async function readTavernJsonResponse(response) {
+		async function readTavernJsonResponse(response, onBody) {
 			function failure(message, retryable) {
 				const error = new Error(message);
 				error.status = response.status;
@@ -414,11 +414,30 @@ window.__ModuleLoader__.load({
 			if (response.status === 403) throw failure("请求被拒绝，请检查访问地址和权限", false);
 			if (!response.ok) throw failure("服务请求失败（HTTP " + response.status + "），请稍后重试", [404, 408, 429, 502, 503, 504].includes(response.status));
 			const body = await response.text();
+            if (onBody) onBody(body);
 			if (!body.trim()) throw failure("服务返回空响应，可能仍在启动或重启，请稍后重试", true);
 			try { return JSON.parse(body); }
 			catch (_error) { throw failure("服务返回非 JSON 或不完整的响应，请稍后重试", true); }
 		}
 
+		// Bounded timing metadata only; never retain action arguments or error messages.
+		function createOpeningPerformance() {
+		  const rows = [], requests = [];
+		  const clock = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
+		  const id = () => typeof window !== 'undefined' && window.crypto?.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === 'x' ? n : (n & 3) | 8).toString(16); });
+		  function begin(stage, actionId) {
+		    const started = clock();
+		    const row = { id: actionId || id(), stage, startedAt: Date.now(), status: 'running' };
+		    rows.push({ row, started });
+		    if (rows.length > 120) rows.shift();
+		    return {
+		      finish(success) { if (row.status !== 'running') return; row.durationMs = Math.max(0, Math.round(clock() - started)); row.status = success ? 'completed' : 'failed'; },
+		      async measure(name, work) { const child = begin(name, row.id); try { const value = await work(); child.finish(true); return value; } catch (error) { child.finish(false); throw error; } }
+		    };
+		  }
+		  return { begin, recordRequest(row) { requests.push({ ...row }); if (requests.length > 60) requests.shift(); }, requests: () => requests.map(row => ({ ...row })), read: () => rows.map(({row, started}) => ({ ...row, durationMs: row.status === 'running' ? Math.max(0, Math.round(clock() - started)) : row.durationMs })) };
+		}
+		const openingPerformance = createOpeningPerformance();
 		const pagePerformance = { observedMs: 0, longTaskCount: 0, longTaskTotalMs: 0, longTaskMaxMs: 0, slowRpcCount: 0, slowRpcMaxMs: 0, longTaskSupported: false };
 		const pagePerformanceStarted = Date.now();
 		let performanceReportAt = 0;
@@ -497,12 +516,12 @@ window.__ModuleLoader__.load({
 			const controlChannel = runtimeControl && typeof tavernSessionSignals !== "undefined" && typeof tavernSessionSignals.control === "function" ? tavernSessionSignals : null;
 			const started = Date.now();
             const clockStart = performance.now();
-            const traced = method === "getSession" || method === "syncSession";
+            const traced = ["getSession", "syncSession", "getCardOpenings", "initializeOpeningTemplate", "preparePlayStart", "startChat"].includes(method);
             const trace = traced ? { id: window.crypto?.randomUUID?.() || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === "x" ? n : (n & 3) | 8).toString(16); }), method, sentAt: started, active: ++performanceActiveRequests } : null;
             const payload = Object.assign({}, args || {});
 			if (!runtimeControl && (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method))) {
 				pagePerformance.observedMs = started - pagePerformanceStarted;
-				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice() });
+				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice(), openingRequests: typeof openingPerformance !== "undefined" ? openingPerformance.requests() : [], openings: typeof openingPerformance !== "undefined" ? openingPerformance.read() : [] });
 				performanceReportAt = started;
 			}
 			if (trace) payload._traceId = trace.id;
@@ -526,13 +545,13 @@ window.__ModuleLoader__.load({
 				? Promise.resolve().then(() => controlChannel.control(method, JSON.parse(requestBody), requestOptions && requestOptions.signal))
 				: fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
                 if (trace) trace.headersMs = Math.round(performance.now() - clockStart);
-                const result = await readTavernJsonResponse(response);
+                const result = await readTavernJsonResponse(response, trace ? body => { trace.bodyChars = body.length; } : undefined);
                 if (trace) {
 					trace.parsedMs = Math.round(performance.now() - clockStart);
 					try {
 						const header = response.headers && typeof response.headers.get === "function" ? response.headers.get("content-length") : null;
 						if (header) trace.responseBytes = Number(header);
-						else trace.responseBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(JSON.stringify(result)).length : JSON.stringify(result).length;
+						// bodyChars measures the decoded body without serializing the large result again.
 					} catch (_error) {}
 				}
                 return result;
@@ -555,6 +574,7 @@ window.__ModuleLoader__.load({
                     performanceActiveRequests--;
                     trace.durationMs = Math.round(performance.now() - clockStart);
                     performanceRequests.push(trace);
+                    if (!["getSession", "syncSession"].includes(method) && typeof openingPerformance !== "undefined") openingPerformance.recordRequest(trace);
                     if (performanceRequests.length > 60) performanceRequests.shift();
                 }
                 if (elapsed >= 1000) { pagePerformance.slowRpcCount++; pagePerformance.slowRpcMaxMs = Math.max(pagePerformance.slowRpcMaxMs, elapsed); }
@@ -1391,36 +1411,40 @@ window.__ModuleLoader__.load({
             async function run(request, key) {
                 let phase = "清理当前空白对话";
                 let attempt = attempts.get(key);
+                const timing = options.trace ? options.trace("startGame") : null;
+                const step = (name, work) => timing ? timing.measure(name, work) : work();
+                let successful = false;
                 try {
                     const existingId = attempt && attempt.sessionId || request.preparedSessionId || "";
-                    await options.archiveCurrent(existingId);
+                    await step("archiveCurrent", () => options.archiveCurrent(existingId));
                     if (!attempt) {
                         let sessionId = existingId;
                         if (!sessionId) {
                             phase = request.kind === "card" ? "准备卡片工作区" : "准备游玩工作区";
-                            const workspaceId = request.preparedWorkspaceId || await options.resolveWorkspace(request);
+                            const workspaceId = request.preparedWorkspaceId || await step("resolveWorkspace", () => options.resolveWorkspace(request));
                             phase = "创建 DSH Session";
-                            sessionId = await options.connectWorkspace(workspaceId);
+                            sessionId = await step("connectWorkspace", () => options.connectWorkspace(workspaceId));
                         }
                         attempt = { sessionId, initialized: false };
                         attempts.set(key, attempt);
                     }
                     const sessionId = attempt.sessionId;
                     phase = "等待 DSH Session 就绪";
-                    await options.waitForSession(sessionId);
+                    await step("waitForSession", () => options.waitForSession(sessionId));
                     if (!attempt.initialized) {
                         phase = "切换到酒馆模式";
-                        await options.ensurePreset(sessionId, request);
+                        await step("ensurePreset", () => options.ensurePreset(sessionId, request));
                         phase = request.kind === "card" ? "创建卡片工作台对话" : "写入人物卡开场白";
-                        await options.createChat(request, sessionId);
+                        await step("createChat", () => options.createChat(request, sessionId));
                         attempt = { sessionId, initialized: true };
                         attempts.set(key, attempt);
                     }
                     phase = "同步并打开 DSH Session";
                     const pending = Object.assign({}, request.pending || {}, { sessionId, targetMode: request.targetMode });
                     options.rememberPending(pending);
-                    await options.finishOpen(pending);
+                    await step("finishOpen", () => options.finishOpen(pending));
                     attempts.delete(key);
+                    successful = true;
                     return { sessionId, pending };
                 } catch (error) {
                     const failure = error instanceof Error ? error : new Error(String(error || "创建对话失败"));
@@ -1431,7 +1455,7 @@ window.__ModuleLoader__.load({
                     // the next click, or waitForSession keeps timing out on the same id.
                     if (attempt && !attempt.initialized && /列表同步超时/.test(failure.message)) attempts.delete(key);
                     throw failure;
-                }
+                } finally { if (timing) timing.finish(successful); }
             }
             return { start };
         }
@@ -8607,6 +8631,7 @@ window.__ModuleLoader__.load({
 			}
 			const conversationLifecycle = createConversationLifecycleModule({
                 attempts: startAttemptsRef.current,
+                trace: stage => openingPerformance.begin(stage),
 				archiveCurrent: archiveCurrentBlankSession,
 				resolveWorkspace: async function (request) {
 					if (request.kind !== "card") return playWorkspaceResolverRef.current();
@@ -8691,6 +8716,8 @@ window.__ModuleLoader__.load({
 			async function newConversation(card, requestedMode, openingId, userName, initialMessage) {
 				const targetMode = requestedMode || (uiMode === "play" ? playModeOfCard(card) : "card");
 				const startedAt = Date.now();
+                const timing = openingPerformance.begin("startClick");
+                let successful = false;
 				const previousOpeningPicker = openingPicker;
                 let created = null;
 				const transitionOpening = previousOpeningPicker && previousOpeningPicker.openings ? previousOpeningPicker.openings.filter(function (item) { return item.id === openingId; })[0] : null;
@@ -8699,17 +8726,20 @@ window.__ModuleLoader__.load({
 				try {
 					const resolvedUserName = String(userName || "你").trim() || "你";
 					let preparedWorkspaceId = "";
-					try { preparedWorkspaceId = await playPrewarmRef.current.claim(card && card.path); }
+					try { preparedWorkspaceId = await timing.measure("claimPrewarm", () => playPrewarmRef.current.claim(card && card.path)); }
 					catch (prewarmError) { console.warn("dsh-tavern: 工作区预热不可用，改为正常创建", prewarmError); }
 					created = await conversationLifecycle.start({ kind: "play", targetMode: targetMode, card: card, preparationId: previousOpeningPicker && previousOpeningPicker.preparationId || "", openingId: openingId || "", userName: resolvedUserName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh", preparedWorkspaceId: preparedWorkspaceId });
-					if (initialMessage) await props.executeSlash("/send " + initialMessage + "|/trigger", created.sessionId);
+					if (initialMessage) await timing.measure("submitInitialMessage", () => props.executeSlash("/send " + initialMessage + "|/trigger", created.sessionId));
 					if (targetMode !== "card") window.localStorage.setItem("dsh-tavern-player-name", resolvedUserName);
+					successful = true;
 					console.info("dsh-tavern: 开始游戏完成", (Date.now() - startedAt) + "ms", preparedWorkspaceId ? "工作区已就绪" : "即时创建");
 				} catch (err) { if (!created) setOpeningPicker(previousOpeningPicker); setError((created ? "游戏已创建，开局消息发送失败：" : String(err && err.phase || "创建对话") + "失败：") + String(err && err.message || err)); if (initialMessage) throw err; }
-				finally { tavernSessionTransition.end(); setBusy(false); }
+				finally { timing.finish(successful); tavernSessionTransition.end(); setBusy(false); }
 			}
 			async function preparePlayConversation(card) {
 				setBusy(true); setError("");
+                const timing = typeof openingPerformance !== "undefined" ? openingPerformance.begin("preparePreview") : null;
+                let successful = false;
 				playPrewarmRef.current.begin({ key: card.path, kind: "play" });
 				try {
 					const userName = String(window.localStorage.getItem("dsh-tavern-player-name") || "你").trim() || "你";
@@ -8718,8 +8748,9 @@ window.__ModuleLoader__.load({
 					const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { previewTransport: "deferred-v1", path: card.path, userName: userName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh" }));
 					const openings = response.openings || [];
 					setOpeningPicker({ card: card, requestMode: requestMode, preparing: false, preparedKey: preparedKey, preparationId: response.preparationId || "", openings: openings, index: 0, userName: userName, trustedCardMode: response.trustedCardMode });
+				successful = true;
 				} catch (err) { setOpeningPicker(null); playPrewarmRef.current.cancel(); setError(String(err && err.message || err)); }
-				finally { setBusy(false); }
+				finally { if (timing) timing.finish(successful); setBusy(false); }
 			}
 			async function importCard(file) {
 				setBusy(true); setError("");

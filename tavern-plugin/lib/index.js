@@ -917,7 +917,7 @@ export async function apply(ctx) {
     let success = false
     async function timedStage(stage, operation) {
       const started = performance.now()
-      try { return await operation() } finally { stages[stage] = Math.round(performance.now() - started); performanceDiagnostics.opening({ stage, durationMs: stages[stage] }) }
+      try { return await requestPerformance.stage(stage, operation) } finally { stages[stage] = Math.round(performance.now() - started); performanceDiagnostics.opening({ stage, durationMs: stages[stage] }) }
     }
     try {
     const card = await timedStage('readCard', () => readCard(cardPath))
@@ -1576,14 +1576,14 @@ export async function apply(ctx) {
     // Plain greetings have no interactive preview draft, but need the same
     // game-local worldbook snapshot as scripted openings.
     if (!preparationId && groupOfMode(mode || 'story') === 'play') {
-      preparationId = (await openingPreparation.create(cardPath, { userName })).id
+      preparationId = (await requestPerformance.stage('openingDraft', () => openingPreparation.create(cardPath, { userName }))).id
     }
     const preparation = preparationId ? openingPreparation.resolve(preparationId, cardPath, openingId) : undefined
     if (preparation?.sourceSessionId) {
       const source = await chatForSession(preparation.sourceSessionId)
       if (!source || !sessionOpeningDescriptor(source, await readChatCard(source)) || Number(source.tavernHelperLifecycleRevision || 0) !== preparation.sourceLifecycleRevision) throw new Error('原对话已变化，请重新选择开场')
     }
-    return await conversationInitialization.start({ cardPath, sessionId, mode, openingId, userName, requestMode, preparation, cardTask })
+    return await requestPerformance.stage('initializeConversation', () => conversationInitialization.start({ cardPath, sessionId, mode, openingId, userName, requestMode, preparation, cardTask }))
   }
 
   async function scriptPreviewOf(chat) {
@@ -2963,7 +2963,7 @@ export async function apply(ctx) {
       }
       case 'callOpeningRuntime': return await openingPreparation.callRuntime(args && args.id, args && args.method, args && args.args)
       case 'saveOpeningSelection': return openingPreparation.select(args && args.id, args && args.openingId)
-      case 'initializeOpeningTemplate': try { return openingInitializationPayload(await openingPreparation.applyTemplateInitial(args.id, await fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([])), args.compact) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }
+      case 'initializeOpeningTemplate': try { return openingInitializationPayload(await openingPreparation.applyTemplateInitial(args.id, await requestPerformance.stage('templateInitialize', () => fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([]))), args.compact) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }
       case 'createOpeningPreparation': return await openingPreparation.create(args && args.path)
       case 'getOpeningPreparation': return args?.touchOnly === true ? openingPreparation.retain(args.id) : openingPreparation.get(args && args.id)
       case 'retainOpeningPreparation': return openingPreparation.retain(args && args.id)
@@ -2971,7 +2971,7 @@ export async function apply(ctx) {
       case 'replaceOpeningWorldbook': return await openingPreparation.replaceWorldbook(args && args.id, args && args.entries, args && args.expectedEntries)
       case 'getCardOpenings': return await getCardOpenings(args && args.path, args && args.userName, args && args.requestMode, args && args.previewTransport)
       case 'preparePlayStart': {
-        await runtimePresets.prepareFullSnapshot()
+        await requestPerformance.stage('preparePreset', () => runtimePresets.prepareFullSnapshot())
         return { prepared: true }
       }
       case 'getUserPreferenceProfile': {
