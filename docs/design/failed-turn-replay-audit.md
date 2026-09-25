@@ -199,3 +199,32 @@ seq 1016 turn/end turn85 reason {"kind":"completed"}  ← DSH 只能照记完成
 ### 顺带修掉的上游失效用例
 
 `tests/prompt-streamlining.test.mjs` 的「读取 Session View 不启动后台工作」仍按 `async function sessionView` 取区间，而上游 `ad18e4a6` 已把 `sessionView` 收敛成 `createSessionViewReader` 的同步委托（上游自己的用例也没跟上；该文件不在 CI 子集里）。断言区间改为 `const sessionViews = createSessionViewReader({` 起，检查意图不变。
+
+## 9. 同步上游与回归证据（2026-09-25）
+
+### 同步结果
+
+`git fetch upstream` 后把 `upstream/main`（`aae3b904`，领先 107 个提交）并入本地 `main`：**无冲突**（failing-turn-replay 那批改动上游已作为 PR #85 收录），`node bin/build-tavern-client.mjs --check` 报「已是最新」。合并提交 `583b79c4`，截断修复提交在其上。
+
+### 全量测试（`node bin/test-tavern.mjs`，借用实例 0.1.5-rc.2 运行时）
+
+```
+tests 3141 · pass 3081 · fail 44
+```
+
+44 个失败分两类，**都与本次修复无关**：
+
+1. **浏览器缺失（环境）**：`upstream-template-runtime.mjs` 强依赖 playwright 1.58.2 对应的 `chromium_headless_shell-1208`，本机缓存只有 `-1234`（browser-bot 用的 1.62.1）。`npx playwright install chromium` 在本机下载完成后卡在解压（两次复现），因此 `worldbook-*`、`full-template-*`、`frame-*`、`opening-document-replacement`、`status-viewer-browser`、`dynamic-constant-worldbook`、`chat-history-import-service` 等约 15 个文件失败。
+2. **上游测试漂移（上游自身）**：15 个失败在合并提交 `583b79c4` 上**逐一复现**（用 worktree 跑同样 7 个文件对比，失败集合一致）：`extract-flow`（5，index.js/client.js 源码标记被上游重构）、`settlement-restart-recovery`（4）、`dsh-version-policy`（2）、`dsh-compatibility`（1）、`superseded-turn-errors`（1）、`workspace-instruction-presentation`（1）、`foreground-frame-retirement`（1，`sessionStateForSession is not defined`）。这些文件都不在 CI 子集里。
+
+同批修掉两个直接阻塞：
+- `tests/prompt-streamlining.test.mjs` 的 Session View 用例区间标记（`async function sessionView` → `const sessionViews = createSessionViewReader({`）。
+- `tests/fixtures/upstream-template-runtime.mjs` 在浏览器缺失时泄漏监听中的 HTTP server，导致整个 `node --test` 永不退出。
+
+### 本机 playwright 缓存须知
+
+`playwright install` 会按 `.links` 记录回收「未登记的浏览器目录」。本机 `chromium-1234` / `chromium_headless_shell-1234` 属于 browser-bot 的 playwright-core 1.62.1，未被 1.58.2 的 `.links` 登记，一次 `npx playwright install` 就会把它们删掉（本次已复现并按 1.62.1 重新装回）。跨版本安装请加 `PLAYWRIGHT_SKIP_BROWSER_GC=1`。
+
+### 实例部署
+
+实例 `apps/dsh-tavern` 停在合并前的 `cb9c9fec` 文件集，因此**只把本次修复的 5 个文件按同一语义补丁打进实例**（新增 `reply-completeness.js`；`index.js` / `turn-orchestration.js` / `foreground-handoff.js` / `rollback-surface.js` 局部替换，逐处锚点唯一），备份在 `backups/truncation-fix-2026-09-25T00-51-24`。上游 107 个提交没有一并打进实例（依赖、补丁与数据迁移需要在安装器流程里做）。重启后 `getSessionPatchStatus` 正常，`getSession` 视图字段正常。
