@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "51fa0d00dbe59be3598ac92cc9fdb079821cff3e",
-  "releaseSequence": 390,
+  "revision": "0a8a8076129a0dbdea2ea2b85e72b69859d37d01",
+  "releaseSequence": 391,
   "version": "2.2.0",
   "files": [
     {
@@ -36,8 +36,8 @@
     },
     {
       "path": "bin/desktop-package-manager.mjs",
-      "sha256": "b6a7aee63158f1378ea310089169746c5f3e72fcf50abcff63a85cd0a378a70d",
-      "size": 4437
+      "sha256": "058a3506b23b08a1f65f177fc7d02fb0e2a3c538000f499fa270cba7f9166a23",
+      "size": 4806
     },
     {
       "path": "bin/dsh-compatibility.mjs",
@@ -151,8 +151,8 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "1363ec90636b0d2fb634e5afd5414d1018678d900fe52f28d80c82a20d78d0a8",
-      "size": 23138
+      "sha256": "dcd9a0aa07c23e8fa987c77390c431ee6e3a4f376c35aebb7d8a626a7f7327d8",
+      "size": 25818
     },
     {
       "path": "install.sh",
