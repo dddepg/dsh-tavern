@@ -23,7 +23,15 @@ async function createRuntime() {
     } catch (error) { res.statusCode = 500; res.end(String(error)) }
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  const browser = await chromium.launch({ headless: true })
+  let browser
+  try {
+    browser = await chromium.launch({ headless: true })
+  } catch (error) {
+    // A missing browser build must fail this file, not keep the whole suite alive:
+    // the listening server would otherwise hold the event loop open forever.
+    await new Promise(resolve => server.close(resolve))
+    throw new Error('无法启动 Chromium（先运行 npx playwright install chromium）：' + (error && error.message || error), { cause: error })
+  }
   const page = await browser.newPage()
   await page.addInitScript(() => { delete globalThis.structuredClone; delete Array.prototype.at })
   if(process.env.TEMPLATE_DEBUG) page.on('console', message => console.log(message.text()))
