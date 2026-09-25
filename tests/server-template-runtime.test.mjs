@@ -223,3 +223,17 @@ test('heap environment override is parsed by the host without inheriting its env
   const result = await engine.render('<%= structuredClone.constructor("return process")().env.DSH_TAVERN_TEMPLATE_HEAP_MB || "absent" %>')
   assert.equal(result.text, 'absent')
 })
+
+test('deferred upstream token statistics cannot crash an idle template worker', async t => {
+  const diagnostics = []
+  const { engine, runtime } = fixture(t, { onDiagnostic: value => diagnostics.push(value) })
+  // Upstream updateTokens schedules a timer without awaiting it. Force that
+  // timer past the operation receipt instead of depending on IPC timing.
+  await engine.render('<% const original=window.setTimeout.bind(window); window.setTimeout=(fn,ms,...args)=>original(fn,Math.max(ms||0,150),...args) %>')
+  await engine.projectRequest({ messages: [{ role: 'user', content: 'deferred token statistics' }] })
+  assert.equal((await runtime.inspect('s')).busy, false)
+  await new Promise(resolve => setTimeout(resolve, 500))
+  assert.deepEqual(diagnostics, [])
+  assert.equal((await runtime.inspect('s')).present, true)
+  assert.equal((await engine.render('still alive')).text, 'still alive')
+})
