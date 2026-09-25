@@ -1,3 +1,4 @@
+import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
 import { projectCardSummary } from './domain/card-preparation.js'
 import { createCardSummaryCache } from './domain/card-summary-cache.js'
 import { openingPreviewPayload, openingInitializationPayload } from './domain/opening-transport.js'
@@ -378,6 +379,9 @@ export async function apply(ctx) {
     return !(chat?.disabledWritingSkills || []).map(canonicalTavernSkillName).includes(skill.name)
   }
   let invalidateTavernSkills = () => {}
+  ctx.inject(['sessionSkillCatalog'], scope => {
+    scope.effect(() => installSkillCatalogSessionScope(scope.get('sessionSkillCatalog')))
+  })
   const skillRegistry = ctx.get('skills')
   if (!skillRegistry) throw new Error('dsh-tavern: 缺少原生 Skills 服务')
   skillRegistry.registerProvider(control => {
