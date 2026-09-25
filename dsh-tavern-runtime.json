@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "29671b0922ddd3717d3206a8386426867241011b",
-  "releaseSequence": 389,
+  "revision": "51fa0d00dbe59be3598ac92cc9fdb079821cff3e",
+  "releaseSequence": 390,
   "version": "2.2.0",
   "files": [
     {
@@ -36,8 +36,8 @@
     },
     {
       "path": "bin/desktop-package-manager.mjs",
-      "sha256": "b079c4cf876811de0acabfa1d580637920bc818013bd86d7c657e3a6acf0617d",
-      "size": 4445
+      "sha256": "b6a7aee63158f1378ea310089169746c5f3e72fcf50abcff63a85cd0a378a70d",
+      "size": 4437
     },
     {
       "path": "bin/dsh-compatibility.mjs",
@@ -61,8 +61,8 @@
     },
     {
       "path": "bin/launcher-environment.mjs",
-      "sha256": "83853788d409855cbaf9c230c3da42305469f07c59f326b452b34b2fbf310f56",
-      "size": 7784
+      "sha256": "ac674f2bfd4a734f19a7b48d3e65be0b5e5b2add2c1189f285e4dcc57c03bc2d",
+      "size": 8307
     },
     {
       "path": "bin/launcher-settings.mjs",
@@ -151,8 +151,8 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "e4dd1ee9f84b63c6c3a3f0e6a9f404c269241263911afd600cf05c4144039dec",
-      "size": 21385
+      "sha256": "1363ec90636b0d2fb634e5afd5414d1018678d900fe52f28d80c82a20d78d0a8",
+      "size": 23138
     },
     {
       "path": "install.sh",
