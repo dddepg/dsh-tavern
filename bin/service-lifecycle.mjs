@@ -1,7 +1,7 @@
 import { inspectRecordedProcess as inspectProcess, processStartToken } from './service-process-identity.mjs'
 import { startupTimeoutMs, waitForServiceStartup, stopStartupChild } from './service-startup.mjs'
 import { spawn, spawnSync } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { resolveDshCliEntry } from './plugin-dependencies.mjs'
 import path from 'node:path'
@@ -320,6 +320,8 @@ export async function startService() {
   }
   mkdirSync(LOG_DIR, { recursive: true })
   const logOffset = existsSync(LOG_FILE) ? statSync(LOG_FILE).size : 0
+  const startupLog = (event, details = {}) => appendFileSync(LOG_FILE, JSON.stringify({ at: new Date().toISOString(), event, ...details }) + '\n')
+  startupLog('service.starting', { node: process.version, executable: invocation.command, entry: invocation.args[0], cwd: SOURCE_ROOT, home: DSH_ROOT, port: state.port, timeoutMs })
   const logDescriptor = openSync(LOG_FILE, 'a')
   let child
   try {
@@ -336,6 +338,13 @@ export async function startService() {
       child.once('spawn', resolve)
       child.once('error', reject)
     })
+    startupLog('service.spawned', { pid: child.pid })
+    child.once('exit', (code, signal) => {
+      try { startupLog('service.exited', { pid: child.pid, code, signal }) } catch {}
+    })
+  } catch (error) {
+    startupLog('service.spawn.failed', { code: error.code || null })
+    throw error
   } finally {
     closeSync(logDescriptor)
   }
@@ -343,19 +352,27 @@ export async function startService() {
   try { writePidRecord(child.pid, state.port, logOffset) }
   catch (error) { await stopStartupChild(child); throw error }
 
+  let portOpen = false
+  let serviceReady = false
   try {
     await waitForServiceStartup({
       timeoutMs,
       alive: () => isProcessAlive(child.pid),
-      ready: async () => await isPortOpen(state.port) && await isServiceReady(state.port),
+      ready: async () => {
+        portOpen = await isPortOpen(state.port)
+        serviceReady = portOpen && await isServiceReady(state.port)
+        return serviceReady
+      },
       stop: async () => {
         await stopStartupChild(child)
         if (readPidRecord()?.pid === child.pid) removePidRecord()
       }
     })
   } catch (error) {
+    startupLog('service.start.failed', { pid: child.pid, portOpen, serviceReady, exitCode: child.exitCode, signal: child.signalCode })
     throw new Error(`${error.message}，日志：${LOG_FILE}`, { cause: error })
   }
+  startupLog('service.ready', { pid: child.pid, port: state.port })
   let webUrl = ''
   for (let logAttempt = 0; logAttempt < 50 && webUrl === ''; logAttempt += 1) {
     const logChunk = readFileSync(LOG_FILE).subarray(logOffset).toString('utf8')
