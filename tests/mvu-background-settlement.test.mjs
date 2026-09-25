@@ -474,3 +474,17 @@ test('silent card rejection reports submitted and observed values for a targeted
   assert.deepEqual(feedback.rejectedOperations,[{operation:'replace',path:'/当前活动',submittedJson:'["步行通勤"]',observedJson:'[]'}])
   assert.match(feedback.error,/不得原样重试/)
 })
+
+test('model timeout after a rejected patch remains an actionable task error',async()=>{
+ const variables={stat_data:{hp:10}}
+ const module=createMvuSettlementModule({
+  model:{async run(input){
+   await input.onToolCall({name:'posture_submit',arguments:{posture:'原地站立'}})
+   await input.onToolCall({name:'mvu_submit_update',arguments:{operations:[{op:'replace',path:'/hp',valueJson:'9'}]}})
+   throw new Error('后台模型没有有效输出，请重试',{cause:Object.assign(new Error('timeout'),{code:'BACKGROUND_MODEL_IDLE_TIMEOUT'})})
+  }},
+  runtime:{async settleMvuUpdate(){return {updated:true,context:{messages:[{variables}]}}}}
+ })
+ await assert.rejects(module.settleVariables({operationId:'timed-out',chatId:'c',branchId:'b',basedOnRevision:1,sessionId:'s',messageId:0,swipeId:0,storyText:'已经生成的正文。',currentVariables:variables}),/没有有效输出/)
+ assert.deepEqual(variables,{stat_data:{hp:10}})
+})

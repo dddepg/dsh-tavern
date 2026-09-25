@@ -9675,6 +9675,7 @@ window.__ModuleLoader__.load({
 			if (!view) return h("aside", { className: "dsh-tavern-status" },
 				h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "状态栏")),
 				h("div", { className: "dsh-tavern-status-body" },
+                        h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
 					h("div", { className: "dsh-tavern-status-empty" }, missingCard ? "人物卡已删除，酒馆状态不可用；已有对话仍可查看。" : (loadState === "retrying" ? "正在重新连接酒馆状态…" : (error || (loadState === "loading" ? "正在加载酒馆状态…" : "选择人物卡后，这里会显示持续状态。")))),
 					loadState === "retrying" || missingCard ? h("button", { className: "dsh-tavern-btn", onClick: function () { liveTavernView.invalidate(props.sessionId); } }, "重新加载") : null
 				)
@@ -10138,6 +10139,8 @@ window.__ModuleLoader__.load({
 					h("button", { className: "dsh-tavern-question-primary", disabled: panel.busy || running, onClick: save }, panel.busy ? "保存中…" : "保存"),
 					h("button", { className: "dsh-tavern-question-free", disabled: panel.busy, onClick: function () { setBodyEditPanel(null); } }, "取消")));
 		}
+
+        // @include modules/background-wait.js
 
 		function TavernStopBackgroundAction(props) {
 			const [busy, setBusy] = React.useState(false);

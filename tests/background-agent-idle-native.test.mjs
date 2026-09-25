@@ -19,3 +19,20 @@ test('native JSONL idle release unloads Agent and Session, then restores history
   assert.match(JSON.stringify(runtime.requests.at(-1).messages), /历史标记：空闲释放之前/)
   assert.match(JSON.stringify(runtime.requests.at(-1).messages), /恢复后的新任务/)
 })
+
+test('native stalled model times out, releases the queue and retries on a new session', {skip:!process.env.DSH_BOOT_MODULE,timeout:30000}, async t=>{
+  let release, first=true
+  const gate=new Promise(resolve=>{release=resolve})
+  const runtime=await createSceneImageNativeRuntime(process.env.DSH_BOOT_MODULE,{
+    residentOptions:{modelIdleTimeoutMs:500},
+    beforeModelRequest:async()=>{if(first){first=false;await gate}}
+  })
+  t.after(async()=>{release();await runtime.dispose()})
+  const input={sessionId:'scene-parent',task:'candidate',persistent:true,selection:{provider:'scene-fixture',model:'fixture-text'},messages:[],tools:[]}
+  let failedId
+  await assert.rejects(runtime.runBackground(input),error=>{failedId=error.traceSessionId;return /没有有效输出/.test(error.message)})
+  const result=await runtime.runBackground({...input,persistentSessionId:failedId})
+  assert.notEqual(result.traceSessionId,failedId)
+  assert.ok(result.text)
+  release()
+})

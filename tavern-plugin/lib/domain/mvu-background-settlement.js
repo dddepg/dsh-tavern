@@ -618,7 +618,7 @@ export function createMvuSettlementModule(options = {}) {
       traceSessionId = str(error.traceSessionId) || traceSessionId
       await record('model-failed', { error: str(error.message || error) })
       // Never re-run the entire model task after a possible commit.
-      if (!result) {
+      if (!result || (error.cause?.code === 'BACKGROUND_MODEL_IDLE_TIMEOUT' && !['updated', 'unchanged'].includes(result.receipt?.status))) {
         error.traceSessionId = traceSessionId
         throw error
       }

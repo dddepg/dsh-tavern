@@ -3480,6 +3480,7 @@ export async function apply(ctx) {
       }
       case 'undoRollbackTurn': return { view: await undoRollbackTurn(args && args.sessionId, args && args.chatId) }
       case 'rollbackTurn': return { view: await rollbackTurn(args && args.sessionId, args && args.chatId, args && args.expectedTurn) }
+      case 'getBackgroundProgress': return { progress: backgroundAgentRunner.progress(args && args.sessionId) }
       case 'stopBackground': return { view: await stopBackground(args && args.sessionId, args && args.operationId) }
       case 'retrySettlement': return { view: await retrySettlement(args && args.sessionId, args && args.turn, args && args.guidance) }
       case 'retryMvuSettlement': return { view: await retrySettlement(args && args.sessionId, args && args.turn, args && args.guidance) }

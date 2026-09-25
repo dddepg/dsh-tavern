@@ -56,6 +56,7 @@ export function createBackgroundAgentSessions(options, task) {
   const setupAgent = typeof options.setupAgent === 'function' ? options.setupAgent : null
   const agentPreset = str(options.agentPreset)
   const makeId = typeof options.id === 'function' ? options.id : function () { return 'background-' + randomUUID() }
+  const abandonedSessions = new Set()
   const activeSessions = new Set()
   const requestContexts = new Map()
   const requestSessions = new Map()
@@ -173,6 +174,8 @@ export function createBackgroundAgentSessions(options, task) {
       && await options.needsNewBackgroundSession(input.sessionId)
     const residentSessionId = needsSession && requestedSessionId === '' ? '' : str(residentSessionByParent.get(key))
     let traceSessionId = requestedSessionId || (persistent ? residentSessionId : '') || makeId()
+    const abandoned = abandonedSessions.has(traceSessionId)
+    if (abandoned) traceSessionId = makeId()
     const descriptor = descriptorFor(input, persistent)
     const parentDepth = Number(parent.session.header && parent.session.header.delegationDepth)
     const requestedMaxTokens = Number(input.maxTokens)
@@ -194,7 +197,7 @@ export function createBackgroundAgentSessions(options, task) {
     if (handle === undefined) {
       state = { input: runtimeInput, ctx: null }
       try {
-        if (requestedSessionId !== '' || (persistent && residentSessionId !== '')) {
+        if (!abandoned && (requestedSessionId !== '' || (persistent && residentSessionId !== ''))) {
           if (typeof agents.resume !== 'function') throw new Error('当前 DSH 不支持恢复持久后台 Agent')
           try {
             handle = await agents.resume({
@@ -272,7 +275,14 @@ export function createBackgroundAgentSessions(options, task) {
       return await task.execute({ agent: handle.agent, state, traceSessionId, persistent }, input)
     } finally {
       activeSessions.delete(traceSessionId)
-      if (!persistent) {
+      if (state.abandoned) {
+        // Never reuse a provider consumer that may ignore cancellation.
+        abandonedSessions.add(traceSessionId)
+        residentHandles.delete(traceSessionId)
+        if (residentSessionByParent.get(key)===traceSessionId) residentSessionByParent.delete(key)
+        requestContexts.delete(traceSessionId); requestSessions.delete(traceSessionId)
+        void Promise.resolve().then(()=>handle.dispose()).catch(()=>{})
+      } else if (!persistent) {
         requestContexts.delete(traceSessionId)
         requestSessions.delete(traceSessionId)
         await handle.dispose()
@@ -369,10 +379,20 @@ export function createBackgroundAgentSessions(options, task) {
       const context = requestContexts.get(sessionId)
       if (context?.parentSessionId !== parentSessionId || ['image', 'phone'].includes(context.task)) continue
       const agent = residentHandles.get(sessionId)?.handle?.agent || agents.get(sessionId)
-      if (typeof agent?.cancel === 'function') { agent.cancel({ kind: 'user' }); count++ }
+      const progress=residentHandles.get(sessionId)?.state.progress
+      if (progress) { progress.cancel(); count++ }
+      else if (typeof agent?.cancel === 'function') { agent.cancel({ kind: 'user' }); count++ }
     }
     return count
   }
 
-  return Object.freeze({ run, owns, requestContext, requestSession, compact, cancel, reapIdle, dispose })
+  function progress(parentSessionId) {
+    for(const id of activeSessions) if(requestContexts.get(id)?.parentSessionId===parentSessionId && !['image','phone'].includes(requestContexts.get(id)?.task)) {
+      const snapshot=residentHandles.get(id)?.state.progress?.snapshot()
+      if(snapshot) return {...snapshot,task:requestContexts.get(id).task}
+    }
+    return null
+  }
+
+  return Object.freeze({ progress, run, owns, requestContext, requestSession, compact, cancel, reapIdle, dispose })
 }

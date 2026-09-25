@@ -26,7 +26,7 @@ Tavern Chat 中唯一权威的剧情记录。它用单调递增的 revision、br
 
 ## Background Operation
 
-Background Agent 基于特定 Story Timeline branch/revision 执行的一项工作。运行时长本身不构成失败；operation 只有排队、运行、完成、失败、过期或取消等生命周期事实。
+Background Agent 基于特定 Story Timeline branch/revision 执行的一项工作。运行时长本身不构成失败；operation 只有排队、运行、完成、失败、过期或取消等生命周期事实。后台模型阶段连续 5 分钟没有有效流式输出时中断并记录失败；思考、正文及工具参数增量会刷新进展，工具执行阶段不使用模型空闲超时。长时间运行只提示阶段和停止入口。超时或主动停止后不复用可能未响应取消的 Agent，迟到工具调用被拒绝；重试使用新后台 Session，已提交的前台正文保持不变。
 
 ## Background Cycle
 
