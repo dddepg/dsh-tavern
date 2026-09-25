@@ -322,7 +322,7 @@ export async function apply(ctx) {
     return presentTavernSettings(tavernSettingsDocument, promptDefaults())
   }
   function runtimePrompt(name) {
-    if (name === 'system-append' && tavernSettingsDocument?.systemAppendEnabled !== true) return ''
+    if (name === 'system-append' && tavernSettingsDocument?.systemAppendEnabled === false) return ''
     return resolveSystemPrompt(tavernSettingsDocument, name, prompt)
   }
   function presentSystemPrompts(settings) {

@@ -100,7 +100,7 @@ export function presentTavernSettings(document, defaults) {
     candidateDismissMode: object(document).candidateDismissMode === 'after-send' ? 'after-send' : 'after-fill',
     compatibilityMode: true,
     webSearchEnabled: object(document).webSearchEnabled === true,
-    systemAppendEnabled: object(document).systemAppendEnabled === true,
+    systemAppendEnabled: object(document).systemAppendEnabled !== false,
     backgroundModel: normalizeBackgroundModel(object(document).backgroundModel),
     backgroundTasks: normalizeBackgroundTasks(object(document).backgroundTasks),
     // Card rendering uses a fixed trusted policy; legacy preferences are no longer applied.
