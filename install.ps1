@@ -173,6 +173,35 @@ try {
     if ($Code -ne 0) { throw "Git 步骤失败：$Step（退出码 $Code）：$($Output -join "`n")" }
     return ($Output -join "`n")
   }
+  function Invoke-InstallCommand([string]$Step, [string]$Command, [string[]]$CommandArgs, [switch]$CaptureOutput) {
+    $Started = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    Write-UpdateLog 'installer.stage.started' $Step
+    $OutputFile = Join-Path $TempDir 'command.output'
+    $ErrorFile = Join-Path $TempDir 'command.error'
+    [IO.File]::WriteAllText($OutputFile, '')
+    [IO.File]::WriteAllText($ErrorFile, '')
+    $PreviousPreference = $ErrorActionPreference
+    $Code = 1
+    $InvocationError = ''
+    try {
+      $ErrorActionPreference = 'Continue'
+      & $Command @CommandArgs 1> $OutputFile 2> $ErrorFile
+      $Code = $LASTEXITCODE
+    } catch { $InvocationError = $_.Exception.ToString() }
+    finally { $ErrorActionPreference = $PreviousPreference }
+    $Stdout = if (Test-Path $OutputFile) { [string](Get-Content -LiteralPath $OutputFile -Raw) } else { '' }
+    $Stderr = if (Test-Path $ErrorFile) { [string](Get-Content -LiteralPath $ErrorFile -Raw) } else { '' }
+    $Combined = "$Stdout`n$Stderr`n$InvocationError".Trim()
+    [IO.File]::WriteAllText($OutputFile, $Combined, (New-Object Text.UTF8Encoding($false)))
+    $Event = if ($Code -eq 0) { 'installer.stage.succeeded' } else { 'installer.stage.failed' }
+    Write-UpdateLog $Event $Step ([string]$Code) ([string]$Started) $OutputFile
+    if ($Code -ne 0) {
+      throw "步骤 $Step 失败（退出码 $Code）。`n$Combined`n诊断日志：$UpdateLogRoot/update-diagnostics.jsonl"
+    }
+    if ($Stderr.Trim()) { Write-Host $Stderr.Trim() }
+    if ($CaptureOutput) { return $Stdout.Trim() }
+    if ($Stdout.Trim()) { Write-Host $Stdout.Trim() }
+  }
   Write-UpdateLog 'installer.started' 'bootstrap'
   Write-Host "更新诊断日志：$UpdateLogRoot/update-diagnostics.jsonl"
   $ArchivePath = Join-Path $TempDir 'app.zip'
@@ -330,20 +359,17 @@ try {
 
   if ($InstallHost -eq 'desktop') {
     Write-Host '正在准备 Windows Desktop 包管理环境……'
-    $PackageManagerBin = (& node (Join-Path $AppDir 'bin\desktop-package-manager.mjs'))
-    Assert-LastCommand '准备 Desktop 包管理环境失败。'
+    $PackageManagerBin = Invoke-InstallCommand 'desktop.package-manager' 'node' @((Join-Path $AppDir 'bin\desktop-package-manager.mjs')) -CaptureOutput
     $PackageManagerBin = ($PackageManagerBin -join "`n").Trim()
     if (-not (Test-Path -LiteralPath (Join-Path $PackageManagerBin 'pnpm.cmd'))) { throw 'Desktop 包管理入口未生成。' }
     $env:Path = "$PackageManagerBin;$env:Path"
     $PnpmCommand = Join-Path $PackageManagerBin 'pnpm.cmd'
   }
   Write-Host '正在安装程序依赖……'
-  & $PnpmCommand --dir $AppDir install --frozen-lockfile
-  Assert-LastCommand '程序依赖安装失败。'
+  Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile')
 
   Write-Host '正在配置 Tavern……'
-  & node (Join-Path $AppDir 'bin\dsh-tavern.mjs') install --host $InstallHost
-  Assert-LastCommand 'Tavern profile 安装失败。'
+  Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost)
   if ($InstallHost -eq 'desktop') {
     Write-Host 'DSH Tavern Desktop 版安装完成。'
     Write-Host '请重启 DSH Desktop，再从托盘的 Profile 菜单切换到 tavern。'
@@ -365,6 +391,7 @@ catch {
       Write-UpdateLog 'installer.finished' 'bootstrap' '1' '' $FailureFile
     }
   } catch {}
+  if ($UpdateLogRoot) { Write-Host "安装失败，请提供诊断日志：$UpdateLogRoot/update-diagnostics.jsonl" }
   throw ("安装失败：" + $InstallFailure.Exception.Message)
 }
 finally {

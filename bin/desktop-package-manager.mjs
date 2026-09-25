@@ -53,5 +53,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const result = await prepareDesktopPackageManager()
     if (result) console.log(result.bin)
-  } catch (error) { console.error(error.message); process.exitCode = 1 }
+  } catch (error) { console.error(error); process.exitCode = 1 }
 }
