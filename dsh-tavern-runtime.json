@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "1273782a1e08a11a39da5d7c46df434211837262",
-  "releaseSequence": 396,
+  "revision": "6f6d47c55a2a530a0fa6e5830ecb111badac075a",
+  "releaseSequence": 397,
   "version": "2.2.0",
   "files": [
     {
@@ -616,8 +616,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-orchestration-strategies.js",
-      "sha256": "0cbba5289c816fc7a2fe3a493477823a469de8fb0c8dbb42034833a383521f53",
-      "size": 17844
+      "sha256": "58c3cc6c50553fa359c43cb34f00238f0a2c389cb466b41533dc3869c7aefebc",
+      "size": 17978
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-worldbook.js",
@@ -1406,8 +1406,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/workspace-instruction-presentation.js",
-      "sha256": "3f9f73e86b992293c127bdc6965e3b6b9b3667c507410ca7460d8ed1265480eb",
-      "size": 5005
+      "sha256": "25577b1f3915c43cb6b03c1ada47eaf2e3d611ff6a5d1311e9b24dac74a27adf",
+      "size": 1943
     },
     {
       "path": "tavern-plugin/lib/domain/workspace-resources.js",
@@ -1506,8 +1506,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "c0337c9744328ea31405a56e4412ec22ffada81faec865d3980a2f706d2e5110",
-      "size": 307362
+      "sha256": "f80f7a22458f4323c8596deaccddb04ae82b3bcfd5c48c382b66fada45653793",
+      "size": 307239
     },
     {
       "path": "tavern-plugin/lib/pocket-settings.js",
@@ -3781,8 +3781,8 @@
     },
     {
       "path": "tavern-plugin/prompts/system-append.md",
-      "sha256": "429d33383006219432a75346141dc58a899cf2ef3c421cd4b87d0d33aaa87b58",
-      "size": 1372
+      "sha256": "2b9153575b370d2713ad2db8a9a186cce77dac7734d1a7a082b820f20eef78bd",
+      "size": 1287
     },
     {
       "path": "tavern-plugin/src/client/android-web-polyfills.js",
