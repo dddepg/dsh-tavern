@@ -25,7 +25,7 @@ export function projectChatSessionState(chat) {
   const selected = { pendingMvuSettlement }
   for (const key of ['id', 'sessionId', '_storageRevision', 'mode', 'cardPath', 'cardContextRevision',
     'backgroundConfigVersion', 'conversationFeaturesVersion', 'disabledWritingSkills', 'contextCompaction', 'updatedAt', 'timeline', 'candidateAgent',
-    'cardName', 'requestMode', 'webSearchEnabled', 'candidates', 'taskMailbox', 'regenInProgress',
+    'cardName', 'requestMode', 'statusBarPlacement', 'webSearchEnabled', 'candidates', 'taskMailbox', 'regenInProgress',
     'settleError', 'scriptState', 'hiddenDshErrorTurns', 'suppressedDshTurns', 'regeneratedDshTurns', 'tavernHelperLifecycleRevision']) {
     if (Object.hasOwn(chat, key)) selected[key] = chat[key]
   }
@@ -138,6 +138,7 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
       settleError: activity.reason === 'interrupted' ? '后台结算已中断，请重试结算。' : (chat.settleError || null),
       settlementTurn: settlementTurn(chat),
       scriptProgress,
+      statusBarPlacement: chat.statusBarPlacement === 'body' ? 'body' : 'sidebar',
       updatedAt: chat.updatedAt || 0,
       mvuReceipts: mvuReceiptsOf(chat)
     }
