@@ -384,3 +384,22 @@ test('没有用户输入的失败回合不提供重放', () => {
   assert.equal(replayableFailedTurn({ events }), null)
   assert.equal(replayableFailedTurn({ events: [] }), null)
 })
+
+test('失败清理仅豁免可证明替换历史系统槽位的更新', () => {
+  const refresh = { seq: 4, type: 'system/message', data: {}, surfaceOp: { op: 'replace', startSeq: 0, endSeq: 0 }, sourceEventSeqs: [0] }
+  const events = [
+    { seq: 0, type: 'system/message' },
+    { seq: 1, type: 'assistant/message', data: { turn: 1 } },
+    { seq: 3, type: 'turn/start', data: { turn: 2 } }, refresh,
+    { seq: 5, type: 'user/message', data: {} },
+    { seq: 6, type: 'turn/end', data: { turn: 2 } }
+  ]
+  assert.deepEqual(planFailedTurnSurface({ events, nodes: [4, 1, 5], turn: 2 }).shadowedSeqs, [5])
+  for (const replacement of [
+    { ...refresh, surfaceOp: 'append' },
+    { ...refresh, surfaceOp: { op: 'replace', startSeq: 1, endSeq: 1 } },
+    { ...refresh, surfaceOp: { op: 'replace', startSeq: 0, endSeq: 1 } }
+  ]) {
+    assert.throws(() => planFailedTurnSurface({ events: events.map(e => e === refresh ? replacement : e), nodes: [4, 1, 5], turn: 2 }), /不是连续区间/)
+  }
+})

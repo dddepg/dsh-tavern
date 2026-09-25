@@ -370,19 +370,43 @@ export function planFailedTurnSurface(input) {
       range.start < startSeq && range.end < startSeq
   }
 
+  // Host system refreshes replace the pinned historical system slot. They
+  // are not failed model output, even though written during this attempt.
+  function isHistoricalSystemRefresh(seq) {
+    const event = eventAt(events, seq)
+    if (event?.type !== 'system/message' || event.surfaceOp?.op !== 'replace') return false
+    const range = surfaceReplacementRange(event.surfaceOp)
+    return range.start === range.end && range.start < startSeq &&
+      eventAt(events, range.start)?.type === 'system/message'
+  }
+
+  const owned = new Set()
+  for (const event of events) {
+    const seq = event?.seq
+    if (!Number.isSafeInteger(seq)) continue
+    if (seq > startSeq && seq < endSeq && !isRetiredHistoricalFrame(seq) && !isHistoricalSystemRefresh(seq)) {
+      owned.add(seq)
+    } else if (seq > endSeq && isForegroundContext(event) && event.data.source.form === 'foreground-frame' &&
+      Array.isArray(event.data.content) && event.data.content.length === 0 && event.surfaceOp?.op === 'replace') {
+      // A later attempt may already have retired this failed frame. Only its
+      // proven replacement belongs to the failure; never absorb later output.
+      const refs = event.sourceEventSeqs
+      if (Array.isArray(refs) && refs.length > 0 && refs.every(ref => owned.has(ref))) owned.add(seq)
+    }
+  }
+
   let firstIndex = -1
   let lastIndex = -1
   for (let index = 0; index < nodes.length; index += 1) {
     const seq = Number(nodes[index])
-    if (seq <= startSeq || seq >= endSeq) continue
-    if (isRetiredHistoricalFrame(seq)) continue
+    if (!owned.has(seq)) continue
     if (firstIndex < 0) firstIndex = index
     lastIndex = index
   }
   if (firstIndex < 0 || lastIndex < firstIndex) return null
 
   const shadowedSeqs = nodes.slice(firstIndex, lastIndex + 1).map(Number)
-  const outsideTurn = shadowedSeqs.find(function (seq) { return seq <= startSeq || seq >= endSeq })
+  const outsideTurn = shadowedSeqs.find(function (seq) { return !owned.has(seq) })
   if (outsideTurn !== undefined) throw new Error('失败回合的模型消息面不是连续区间，无法安全清理: ' + outsideTurn)
   return Object.freeze({
     start: shadowedSeqs[0],

@@ -112,3 +112,39 @@ test('新轮退役历史提示词后失败，清理及重载保留上一轮正�
     }
   }
 })
+
+test('失败轮更新历史系统槽位后，纯思考残留可回退清理，重载保留历史和后续正文', async () => {
+  const { retireForegroundFrames } = await import('../tavern-plugin/lib/domain/foreground-frame-retirement.js')
+  for (const laterTurn of [false, true]) {
+    let session = Session.create('reasoning-only-system-refresh')
+    const source = { kind: 'model', provider: 'test', model: 'test' }
+    const system = text => ({ turn: 2, step: 1, message: { id: 'system-' + text, role: 'system', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } } })
+    appendSessionEvent(session, 'system/message', system('旧系统提示'), { surfaceOp: 'append' })
+    session.append('user/message', { id: 'seed', role: 'user', content: [{ type: 'text', text: '历史设定' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot' } }, { surfaceOp: 'append' })
+    appendSessionEvent(session, 'assistant/message', { turn: 1, step: 1, message: { id: 'old-body', role: 'assistant', content: [{ type: 'text', text: '历史正文' }], source } }, { surfaceOp: 'append' })
+    session.append('turn/start', { turn: 2 })
+    appendSessionEvent(session, 'system/message', system('新系统提示'), { surfaceOp: { op: 'replace', start: 0, end: 0 }, sourceEventSeqs: [0] })
+    session.append('user/message', { id: 'input', role: 'user', content: [{ type: 'text', text: '失败输入' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    session.append('user/message', { id: 'frame', role: 'user', content: [{ type: 'text', text: '本轮提示' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame', trace: { turn: 2 } } }, { surfaceOp: 'append' })
+    appendSessionEvent(session, 'assistant/message', { turn: 2, step: 1, message: { id: 'thinking', role: 'assistant', content: [{ type: 'reasoning', text: '只有思考' }], source } }, { surfaceOp: 'append' })
+    session.append('turn/end', { turn: 2, reason: { kind: 'error', message: '没有正文' } })
+    const status = rollbackAvailability({ messages: [{ role: 'assistant', turn: 1 }] }, { events: sessionEvents(session), nodes: session.surface.nodes })
+    assert.equal(status.canClearIncompleteReply, true)
+    if (laterTurn) {
+      session.append('turn/start', { turn: 3 })
+      retireForegroundFrames(session, { keepTurn: 3 })
+      appendSessionEvent(session, 'assistant/message', { turn: 3, step: 1, message: { id: 'later', role: 'assistant', content: [{ type: 'text', text: '后续正文' }], source } }, { surfaceOp: 'append' })
+      session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
+    }
+    session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
+    assert.equal(clearFailedTurnSurface({ session, turn: 2 }), 3)
+    assert.equal(clearFailedTurnSurface({ session, turn: 2 }), 0)
+    session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
+    const visible = JSON.stringify(session.deriveMessages())
+    assert.match(visible, /新系统提示/)
+    assert.match(visible, /历史设定/)
+    assert.match(visible, /历史正文/)
+    assert.doesNotMatch(visible, /失败输入|只有思考|本轮提示/)
+    if (laterTurn) assert.match(visible, /后续正文/)
+  }
+})
