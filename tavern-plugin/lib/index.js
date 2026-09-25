@@ -1,3 +1,5 @@
+import { projectCardSummary } from './domain/card-preparation.js'
+import { createCardSummaryCache } from './domain/card-summary-cache.js'
 import { openingPreviewPayload, openingInitializationPayload } from './domain/opening-transport.js'
 import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader } from './domain/session-view-reader.js'
@@ -844,18 +846,24 @@ export async function apply(ctx) {
     const card = cardPreparation.project(workspace)
     return { path: cardPath, name: card.name, description: card.description, tags: card.tags }
   }
+  const cardSummaries = createCardSummaryCache({
+    absolute: cardPath => fileResources.absolute(cardPath),
+    read: async cardPath => {
+      const workspace = await readCardWorkspace(cardPath)
+      return projectCardSummary(workspace)
+    }
+  })
   async function listCards() {
     const cardPaths = await fileResources.list('card')
     const scriptBindings = await fileResources.scriptBindingsForCards(cardPaths)
     const cards = await Promise.all(cardPaths.map(async function (cardPath) {
       try {
-        const [workspace, hasImage] = await Promise.all([readCardWorkspace(cardPath), fileResources.hasCardImage(cardPath)])
-        const card = cardPreparation.project(workspace)
+        const [card, hasImage] = await Promise.all([cardSummaries.read(cardPath), fileResources.hasCardImage(cardPath)])
         const scriptPath = scriptBindings[cardPath]
         return {
           path: cardPath,
           name: card.name,
-          importedAt: Number(workspace && workspace.meta && workspace.meta.importedAt) || 0,
+          importedAt: card.importedAt,
           hasImage,
           script: scriptPath === undefined ? null : { path: scriptPath, title: scriptPath.split('/').pop() }
         }

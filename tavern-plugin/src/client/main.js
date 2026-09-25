@@ -6108,12 +6108,13 @@ window.__ModuleLoader__.load({
 			function notifyDataChanged(kinds) {
 				notifyTavernDataChanged(kinds, "sidebar");
 			}
-			function refresh() {
+			function refresh(kinds) {
+                if (!Array.isArray(kinds) || !kinds.length || kinds.indexOf("*") >= 0) kinds = null;
 				return Promise.all([
-					call("listCards").then(function (result) {
+					(!kinds || kinds.indexOf("cards") >= 0) && call("listCards").then(function (result) {
 						setCards(result.cards || []); tavernErrorHub.resolve("左侧栏人物卡");
 					}, function (err) { tavernErrorHub.report("左侧栏人物卡", err); }),
-					call("listSessions").then(function (result) {
+					(!kinds || kinds.indexOf("sessions") >= 0) && call("listSessions").then(function (result) {
 						const sessions = result.sessions || [];
 						setHistory(sessions); setTrustedCardMode(!result.capabilities || result.capabilities.trustedCardMode !== false); publishSessionModes(sessions);
 						if (!sessions.some(function (entry) { return entry.sessionId === current && isPlayMode(entry.mode); })) {
@@ -6130,7 +6131,7 @@ window.__ModuleLoader__.load({
 			}, [props.sessionId]);
 			React.useEffect(function () {
 				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["cards", "sessions"], "sidebar")) refresh(); }
+				function onData(event) { if (tavernDataChangeAffects(event, ["cards", "sessions"], "sidebar")) refresh(event && event.detail && event.detail.kinds); }
 				window.addEventListener("dsh-tavern-data-changed", onData);
 				return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
 			}, []);
@@ -6352,7 +6353,7 @@ window.__ModuleLoader__.load({
 			async function openSessionWhenReady(sessionId) {
 				await sessionListRecoveryRef.current.open(sessionId);
 				await call("markConversationOpened", { sessionId: sessionId });
-				await refresh();
+				await refresh(["sessions"]);
 				setError("");
 			}
 			async function finishPendingOpen(pending) {
