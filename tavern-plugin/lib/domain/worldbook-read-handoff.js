@@ -13,7 +13,8 @@ export function foregroundWorldbookReads(chat, session) {
       if (block.type === 'tool-call' && block.name === 'worldbook_search') {
         try {
           const args = typeof block.arguments === 'string' ? JSON.parse(block.arguments) : block.arguments
-          if (Array.isArray(args?.refs) && !args.query) calls.set(block.id, new Set(args.refs))
+          if (Array.isArray(args?.refs) && !args.query) calls.set(block.id, {refs:new Set(args.refs)})
+          else if (args.read === true && typeof args.query === 'string' && args.query.trim()) calls.set(block.id, {query:args.query.trim()})
         } catch { /* Malformed calls do not produce transferable reads. */ }
       }
       if (block.type !== 'tool-result' || block.isError || !calls.has(block.toolCallId)) continue
@@ -21,9 +22,10 @@ export function foregroundWorldbookReads(chat, session) {
         if (part.type !== 'text') continue
         try {
           const result = JSON.parse(part.text)
-          if (result.mode !== 'read') continue
+          const call = calls.get(block.toolCallId)
+          if (result.mode !== 'read' || (call.query && result.query !== call.query)) continue
           for (const entry of result.entries || []) {
-            if (calls.get(block.toolCallId).has(entry.ref) && entry.status === 'ok' && typeof entry.text === 'string' && entry.text.trim()) {
+            if ((call.refs ? call.refs.has(entry.ref) : typeof entry.ref === 'string') && entry.status === 'ok' && typeof entry.text === 'string' && entry.text.trim()) {
               entries.set(entry.ref, { ref: entry.ref, title: entry.title || '', text: entry.text })
             }
           }

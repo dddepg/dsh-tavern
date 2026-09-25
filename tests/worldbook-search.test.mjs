@@ -64,3 +64,24 @@ test('explicit Chinese phrases remain intact and named-entry titles outrank broa
     assert.equal(result.entries.some(entry => entry.ref === 'noise'), false)
   }
 })
+
+test('explicit search-and-read returns bounded current full text in one call', async () => {
+  const f=fixture(), before=structuredClone(f.context)
+  const result=await f.search('s',{query:'少林',read:true,limit:1})
+  assert.equal(result.mode,'read')
+  assert.equal(result.total,2)
+  assert.equal(result.hasMore,true)
+  assert.equal(result.entries[0].text,'少林入门：外门')
+  assert.equal(f.renders(),1)
+  const twoStep=fixture()
+  const hits=await twoStep.search('s',{query:'少林',limit:1})
+  const full=await twoStep.search('s',{refs:hits.entries.map(entry=>entry.ref)})
+  assert.deepEqual(result.entries,full.entries,'one tool call must return the same full content as search then read')
+  assert.deepEqual(f.context,before)
+  f.context.chat.variables.rank='内门'
+  assert.equal((await f.search('s',{query:'少林',read:true,limit:1})).entries[0].text,'少林入门：内门')
+  assert.equal((await f.search('s',{query:'不存在',read:true})).entries.length,0)
+  assert.equal(f.renders(),2,'zero matches must not invoke template rendering')
+  await assert.rejects(f.search('s',{query:'少林',read:true,limit:6}))
+  await assert.rejects(f.search('s',{query:'少林',read:'true'}))
+})

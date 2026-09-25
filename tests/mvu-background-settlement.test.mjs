@@ -458,3 +458,19 @@ test('JSON wire values reach runtime decoded; malformed submissions never dispat
   assert.equal(result.variables.stat_data.金币, 999995)
   assert.equal(variables.stat_data.金币, 1000000)
 })
+
+test('silent card rejection reports submitted and observed values for a targeted correction', async () => {
+  let feedback
+  const module=createMvuSettlementModule({maxAttempts:1,
+    model:{async run(input){
+      await input.onToolCall({name:'posture_submit',arguments:{posture:'站在路旁'}})
+      feedback=JSON.parse(await input.onToolCall({name:'mvu_submit_update',arguments:{operations:[{op:'replace',path:'/当前活动',valueJson:'["步行通勤"]'}]}}))
+      return {text:''}
+    }},
+    runtime:{async settleMvuUpdate(){return {updated:true,context:{messages:[{variables:{stat_data:{当前活动:[]}}}]}}}}
+  })
+  await module.settleVariables({operationId:'rejected-activity',chatId:'c',branchId:'b',basedOnRevision:1,sessionId:'s',messageId:0,swipeId:0,storyText:'走到路旁。',currentVariables:{stat_data:{当前活动:[]}}})
+  assert.equal(feedback.ok,false)
+  assert.deepEqual(feedback.rejectedOperations,[{operation:'replace',path:'/当前活动',submittedJson:'["步行通勤"]',observedJson:'[]'}])
+  assert.match(feedback.error,/不得原样重试/)
+})

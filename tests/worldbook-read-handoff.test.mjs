@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { foregroundWorldbookReads } from '../tavern-plugin/lib/domain/worldbook-read-handoff.js'
 const read = (turn, id, entries, args = { refs: entries.map(e => e.ref) }, isError = false) => [
   { type: 'assistant/message', data: { turn, message: { content: [{ type: 'tool-call', name: 'worldbook_search', id, arguments: JSON.stringify(args) }] } } },
-  { type: 'tool/result', data: { turn, message: { content: [{ type: 'tool-result', toolCallId: id, isError, content: [{ type: 'text', text: JSON.stringify({ mode: args.query ? 'search' : 'read', entries }) }] }] } } }
+  { type: 'tool/result', data: { turn, message: { content: [{ type: 'tool-result', toolCallId: id, isError, content: [{ type: 'text', text: JSON.stringify({ mode: args.query && !args.read ? 'search' : 'read', ...(args.read ? {query:args.query} : {}), entries }) }] }] } } }
 ]
 const entry = (ref, text) => ({ ref, title: ref, text, status: 'ok' })
 test('only successful full reads from the committed turn are handed off; latest read wins', () => {
@@ -37,4 +37,14 @@ test('unpaired, malformed and non-worldbook tool results are not transferred', (
   events[0].data.message.content[0].name = 'worldbook_search'
   events[0].data.message.content[0].arguments = '{broken'
   assert.equal(foregroundWorldbookReads({ messages: [{ role: 'assistant', turn: 2 }] }, { events }), '')
+})
+
+
+test('explicit query-and-read hands full text to settlement, but mismatched queries do not', () => {
+  const events=read(2,'combined',[entry('62','一次查阅的完整正文')],{query:'少林',read:true})
+  const chat={messages:[{role:'assistant',turn:2}]}
+  assert.match(foregroundWorldbookReads(chat,{events}),/一次查阅的完整正文/)
+  const result=events[1].data.message.content[0].content[0]
+  result.text=JSON.stringify({...JSON.parse(result.text),query:'其他'})
+  assert.equal(foregroundWorldbookReads(chat,{events}),'')
 })
