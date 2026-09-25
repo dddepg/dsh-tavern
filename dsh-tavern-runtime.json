@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "f3205b413cc17489ade49d9228898451865ec0da",
-  "releaseSequence": 398,
+  "revision": "170d1e1f37970e44382fdf84ca07fef579934d33",
+  "releaseSequence": 399,
   "version": "2.2.0",
   "files": [
     {
@@ -3771,8 +3771,8 @@
     },
     {
       "path": "tavern-plugin/prompts/system-append.md",
-      "sha256": "2b9153575b370d2713ad2db8a9a186cce77dac7734d1a7a082b820f20eef78bd",
-      "size": 1287
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
     },
     {
       "path": "tavern-plugin/src/client/android-web-polyfills.js",
