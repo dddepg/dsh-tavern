@@ -91,14 +91,15 @@ test('Git 增量归档在用户开启 CRLF 转换时仍保持运行文件原始�
 for (const format of ['tar', 'zip']) {
   test(`兜底 ${format} 下载包只移除开发资料，保留完整运行文件`, async t => {
     const archive = execFileSync('git', ['archive', `--format=${format}`, process.env.DSH_TEST_ARCHIVE_TREE || 'HEAD'], { cwd: root, maxBuffer: 100 * 1024 * 1024 })
-    let listing
-    if (format === 'zip' && process.platform === 'linux') {
-      const directory = await mkdtemp(path.join(os.tmpdir(), 'tavern-archive-'))
-      t.after(() => rm(directory, { recursive: true, force: true }))
-      const file = path.join(directory, 'app.zip')
-      await writeFile(file, archive)
-      listing = execFileSync('unzip', ['-Z1', file], { encoding: 'utf8' })
-    } else listing = execFileSync('tar', ['-tf', '-'], { input: archive, encoding: 'utf8' })
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'tavern-archive-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const file = path.join(directory, `app.${format}`)
+    await writeFile(file, archive)
+    // ZIP readers may stop before consuming all stdin bytes; use a seekable file
+    // to avoid EPIPE or a blocked synchronous pipe on macOS.
+    const listing = format === 'zip' && process.platform === 'linux'
+      ? execFileSync('unzip', ['-Z1', file], { encoding: 'utf8' })
+      : execFileSync('tar', ['-tf', file], { encoding: 'utf8' })
     const files = listing.split(/\r?\n/)
     for (const file of required) assert.ok(files.includes(file), `运行包遗漏：${file}`)
     assert.ok(files.includes('LICENSE'), '保留许可文件')
