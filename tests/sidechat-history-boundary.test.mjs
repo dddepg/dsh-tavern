@@ -9,7 +9,7 @@ const source = await readFile(new URL('../node_modules/dsh-better-sidebar/lib/in
 const functions = parse(source, { ecmaVersion: 'latest', sourceType: 'module' }).body
   .filter(node => node.type === 'FunctionDeclaration')
   .map(node => source.slice(node.start, node.end)).filter(text => !text.includes('import.meta'))
-const context = vm.createContext({ structuredClone })
+const context = vm.createContext({ structuredClone, EVENTS_CAP: 8000 })
 vm.runInContext(functions.join('\n'), context)
 const message = (seq, text) => ({ seq, type: 'user/message', surfaceOp: 'append', data: { content: [{ type: 'text', text }] } })
 const marker = seq => ({ seq, type: 'session/end-seed', data: {} })
@@ -23,16 +23,26 @@ for (const live of [true, false]) {
       const metadata = legacy ? { header: { seedLength: 3 }, meta: { seedLength: 3 } } : { inheritedEventCount: 3 }
       const session = { ...metadata, snapshotEvents: () => events }
       const ctx = { get: name => name === 'agents' ? { get: () => live ? { session } : undefined }
-        : name === 'sessionPersistence' ? { inspect: async () => ({ ...metadata, events }) } : undefined }
-      const history = context.buildSidechatApi(ctx)['sidechat.history']
-      const page = await history({ childId: 'child', maxMessages: 50 })
-      const markers = Array.from(page.events).filter(row => row.event.type === 'session/end-seed')
-      assert.deepEqual(markers.map(row => row.event.seq), [3])
-      const visible = Array.from(page.events).filter(row => row.event.seq > markers[0].event.seq && row.event.type === 'user/message')
-      assert.deepEqual(visible.map(row => row.event.data.content[0].text), ['child first question', 'child followup'])
-      const tail = await history({ childId: 'child', maxMessages: 1 })
-      const older = await history({ childId: 'child', beforeSeq: tail.events[0].event.seq, maxMessages: 50 })
-      assert.deepEqual(Array.from(older.events).filter(row => row.event.type === 'session/end-seed').map(row => row.event.seq), [3])
+        : name === 'sessionPersistence' ? { open: async () => ({ ...metadata, header: metadata.header || {}, read: async () => ({ events }), close: async () => {} }) } : undefined }
+      const history = context.buildSidechatApi(ctx)['sidechat.events']
+      const original = structuredClone(events)
+      const page = await history({ childId: 'child' })
+      const visible = Array.from(page.events).filter(row => row.type === 'user/message')
+      assert.deepEqual(visible.map(row => row.data.content[0].text), ['child first question', 'child followup'])
+      assert.ok(page.events.every(row => row.type !== 'session/end-seed'))
+      const tail = await history({ childId: 'child', afterSeq: 4 })
+      assert.deepEqual(Array.from(tail.events).map(row => row.seq), [6])
+      const unchanged = await history({ childId: 'child', afterSeq: 6 })
+      assert.equal(unchanged.events.length, 0)
+      assert.deepEqual(events, original, 'reading must preserve the original persisted log')
     })
   }
+}
+
+for (const events of [[message(0, 'unseeded')], [marker(0), message(1, 'inherited'), marker(2), message(3, 'own')]]) {
+  test('sidechat without boundary metadata retains the native unseeded/seeded fallback: ' + events.length, async () => {
+    const ctx = { get: name => name === 'agents' ? { get: () => ({ session: { snapshotEvents: () => events } }) } : undefined }
+    const page = await context.buildSidechatApi(ctx)['sidechat.events']({ childId: 'child' })
+    assert.deepEqual(Array.from(page.events).map(event => event.data.content[0].text), [events.at(-1).data.content[0].text])
+  })
 }
