@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+$PreviousConsoleOutputEncoding = [Console]::OutputEncoding
+$PreviousOutputEncoding = $OutputEncoding
 
 $InstallHost = if ($env:DSH_TAVERN_HOST) { $env:DSH_TAVERN_HOST } else { 'cli' }
 if ($InstallHost -notin @('cli', 'desktop')) { throw "不支持的安装宿主：$InstallHost" }
@@ -40,6 +42,10 @@ if ($InstallHost -eq 'cli') {
     }
   }
   $DshRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DshRoot)
+  $WindowsRoot = [IO.Path]::GetFullPath($env:WINDIR).TrimEnd('\')
+  if ($DshRoot.TrimEnd('\') -ieq $WindowsRoot -or $DshRoot.StartsWith($WindowsRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "不能将酒馆安装到 Windows 系统目录：$DshRoot。请重新运行并选择其他目录，例如 D:\Games\dsh-tavern。"
+  }
   if (-not (Test-Path -LiteralPath (Join-Path $DshRoot 'apps/dsh-tavern/.dsh-tavern-local.json') -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $DshRoot '.dsh-tavern-install-root') -PathType Leaf)) {
     foreach ($Entry in @('apps', 'runtime', 'tools', 'profiles', 'profile-data', 'source-cache', 'logs', 'backups', 'settings.yaml')) {
       if (Test-Path -LiteralPath (Join-Path $DshRoot $Entry)) { throw "安装目录存在冲突：$DshRoot\$Entry。请选择空目录，或使用原有安装目录。" }
@@ -96,6 +102,8 @@ $PreviousNpmRegistry = $env:npm_config_registry
 $PreviousPnpmRegistry = $env:pnpm_config_registry
 $PreviousPnpmUpdateNotifier = $env:pnpm_config_update_notifier
 try {
+  [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+  $OutputEncoding = [Console]::OutputEncoding
   $env:DSH_HOME = $DshRoot
   if ($InstallHost -eq 'cli') {
     $env:DSH_TAVERN_CLI_HOME = $DshRoot
@@ -412,8 +420,7 @@ try {
     Write-Host '请重启 DSH Desktop，再从托盘的 Profile 菜单切换到 tavern。'
   }
   else {
-    & node (Join-Path $AppDir 'bin\dsh-tavern.mjs') start
-    Assert-LastCommand 'DSH Tavern 启动失败。'
+    Invoke-InstallCommand 'service.start' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'start')
     Write-Host 'DSH Tavern 安装完成。请使用上方完整访问地址，或运行 dsh-tavern open 打开网页。'
     Write-Host '以后可以使用：dsh-tavern start、open、stop、restart、status、update（新 PowerShell 生效）'
   }
@@ -432,6 +439,8 @@ catch {
   throw ("安装失败：" + $InstallFailure.Exception.Message)
 }
 finally {
+  [Console]::OutputEncoding = $PreviousConsoleOutputEncoding
+  $OutputEncoding = $PreviousOutputEncoding
   $env:npm_config_registry = $PreviousNpmRegistry
   $env:pnpm_config_registry = $PreviousPnpmRegistry
   $env:pnpm_config_update_notifier = $PreviousPnpmUpdateNotifier
