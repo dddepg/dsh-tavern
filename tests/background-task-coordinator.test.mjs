@@ -384,3 +384,101 @@ test('failed background rewind retains its boundary through binding and retries'
   assert.equal(h.current().timeline.participants.background.status, 'current')
   assert.equal(h.current().timeline.participants.background.rewindTo, null)
 })
+
+for (const conflict of [false,true,'cancel']) test(`narrow background mutations preserve concurrent history: ${conflict}`,async t=>{
+  const {mkdtemp,rm}=await import('node:fs/promises')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
+  const root=await mkdtemp(join(tmpdir(),'background-patch-'))
+  t.after(()=>rm(root,{recursive:true,force:true}))
+  const p=createChatPersistence({store:createChatJournalStore({dataRoot:root})})
+  const timeline=createStoryTimeline()
+  await p.write(timeline.apply({chat:{id:'c',messages:[{role:'assistant',text:'keep',variables:[{hp:1}]}]},intent:{kind:'ensure'}}).chat)
+  let patches=0,updates=0
+  const coordinator=createBackgroundTaskCoordinator({timeline,store:{readChat:p.read,writeChat:p.write,
+    readState:p.readSessionState,readSlice:p.readSlice,readSettlementCheckpoint:p.readSettlementCheckpoint,
+    updateChat:(...args)=>{updates++;return p.update(...args)},
+    patchChat:async(...args)=>{
+      patches++
+      if(conflict)await p.update('c',chat=>{chat.messages[0].text='concurrent';if(conflict==='cancel')Object.values(chat.timeline.operations).forEach(op=>{op.status='cancelled'});return chat})
+      return p.patch(...args)
+    }}})
+  const task=await coordinator.begin(await p.read('c'),'settlement')
+  if(conflict==='cancel') {
+    await assert.rejects(task.bindSession('background'),/过期/)
+    assert.equal((await p.read('c')).timeline.operations[task.operationId].startedSessionId,undefined)
+    return
+  }
+  await task.bindSession('background')
+  await task.checkpointMessage(0,(_chat,message)=>{message.mvu={pendingSubmission:[1]}})
+  const saved=await p.read('c')
+  assert.equal(saved.timeline.operations[task.operationId].startedSessionId,'background')
+  assert.deepEqual(saved.messages[0].variables,[{hp:1}])
+  assert.equal(saved.messages[0].text,conflict?'concurrent':'keep')
+  assert.deepEqual(saved.messages[0].mvu.pendingSubmission,[1])
+  assert.equal(patches,2)
+  assert.equal(updates,conflict?2:0)
+  await task.commit()
+  await assert.rejects(task.checkpointMessage(0,(_chat,message)=>{message.text='stale'}),/过期/)
+  const restarted=createChatJournalStore({dataRoot:root})
+  assert.equal((await restarted.read('c')).messages[0].text,conflict?'concurrent':'keep')
+})
+
+
+test('settlement checkpoint reads only its target and running operation', async t => {
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { createChatJournalStore } = await import('../tavern-plugin/lib/domain/chat-journal-store.js')
+  const root = await mkdtemp(join(tmpdir(), 'settlement-scope-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = createChatJournalStore({ dataRoot: root })
+  const p = createChatPersistence({ store })
+  const timeline = createStoryTimeline()
+  const chat = timeline.apply({ chat: { id: 'game', sessionId: 's',
+    cardDefinitionSnapshot: { description: 'large card'.repeat(10000) },
+    messages: Array.from({ length: 459 }, (_, i) => ({ role: 'assistant', turn: i + 1,
+      text: 'story', variables: [{ stat_data: { gold: i } }] })) }, intent: { kind: 'ensure' } }).chat
+  await p.write(chat)
+  const coordinator = createBackgroundTaskCoordinator({ timeline, store: {
+    readChat: p.read, writeChat: p.write, updateChat: p.update, patchChat: p.patch,
+    readState: p.readSessionState, readSlice: p.readSlice, readSettlementCheckpoint: p.readSettlementCheckpoint
+  } })
+  const task = await coordinator.begin(await p.read('game'), 'settlement')
+  const selected = await p.readSettlementCheckpoint('game', 458, task.operationId)
+  assert.equal(selected.chat.messages.length, 1)
+  assert.equal(selected.chat.cardDefinitionSnapshot, undefined)
+  assert.equal(selected.chat.timeline.checkpoints, undefined)
+  assert.deepEqual(Object.keys(selected.chat.timeline.operations), [task.operationId])
+  selected.chat.messages[0].variables[0].stat_data.gold = -1
+  await task.checkpointMessage(458, (_draft, target) => {
+    target.mvuBaseline = { swipeId: 0, variables: target.variables[0] }
+    target.mvu = { pending: true, pendingSubmission: { command: 'saved' } }
+  })
+  const restored = await createChatJournalStore({ dataRoot: root }).read('game')
+  assert.equal(restored.messages.length, 459)
+  assert.equal(restored.messages[0].variables[0].stat_data.gold, 0)
+  assert.equal(restored.messages[458].mvuBaseline.variables.stat_data.gold, 458)
+  assert.equal(restored.messages[458].mvu.pendingSubmission.command, 'saved')
+  assert.equal(restored.cardDefinitionSnapshot.description, chat.cardDefinitionSnapshot.description)
+  await task.commit()
+  await assert.rejects(task.checkpointMessage(458, (_draft, target) => { target.text = 'late' }), /过期/)
+})
+
+test('idle recovery uses only detached state and active recovery reloads the full Chat', async () => {
+  const timeline = createStoryTimeline()
+  let chat = timeline.apply({ chat: { id: 'c', messages: [{ role: 'assistant', text: 'preserve' }] }, intent: { kind: 'ensure' } }).chat
+  let reads = 0, writes = 0
+  const coordinator = createBackgroundTaskCoordinator({ timeline, store: {
+    readState: async () => ({ id: 'c', timeline: structuredClone(chat.timeline), messages: [] }),
+    readChat: async () => { reads++; return structuredClone(chat) },
+    writeChat: async value => { writes++; chat = value }, updateChat: async () => {}
+  } })
+  assert.equal((await coordinator.recover({ id: 'c' })).status, 'unchanged')
+  assert.equal(reads, 0)
+  chat = timeline.apply({ chat, intent: { kind: 'agent.begin', role: 'candidate' } }).chat
+  await coordinator.recover({ id: 'c' })
+  assert.equal(reads, 1); assert.equal(writes, 1)
+  assert.equal(chat.messages[0].text, 'preserve')
+})

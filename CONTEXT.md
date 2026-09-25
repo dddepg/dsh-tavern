@@ -58,6 +58,8 @@ Story Timeline 中 Background Operation 生命周期的只读投影，用于回�
 
 Host 向 Tavern 浏览器消费者发布的带类型唤醒通知。所有活跃会话共用一个 DSH Remote Snapshot Stream，并复用 DSH API Gateway 的 `/api/remote.mux` WebSocket；会话集合变化或断线重连时替换完整基线，普通变化只发增量，因此不占用 HTTP/SSE 连接槽。通知至少携带领域类型与权威版本标识；`tavern-state` 可以附带同版本的只读 Projection，供消费者避免二次 HTTP 读取。附带 Projection 仍不是权威状态，缺失、重复与丢失都不能改变领域结果，消费者在首次连接与重连时仍从领域 Module 校准。`runtime-work` 表示浏览器脚本队列可能有新工作，`tavern-state` 表示包含结算、候选和展示投影的 Tavern 权威视图可能变化；候选持久任务自身的 `candidate` 类型不冒充 Session Signal。
 
+运行时的领取、开工确认、续租、回执和释放也复用同一 Remote mux WebSocket，以一次性 stream 返回结果，避免排在慢视图请求占满的 HTTP 连接之后。控制通道只开放固定的运行时方法，不代理重视图或一般游戏写入；传输失败由执行器按原事件与租约查询恢复，传输层不自动重放。
+
 ## External Preset
 
 从 SillyTavern 等外部系统导入的只读来源。中文正式名称为“外部预设”。用户在预设库中查看它，并手动选择需要启用的提示词和正则；系统不会直接运行整份预设。

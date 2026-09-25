@@ -641,7 +641,14 @@ export function createStoryTimeline(options = {}) {
   }
 
   function inspect(input) {
-    const chat = ensure(input && input.chat)
+    const source = input && input.chat
+    // Legacy foreground migration commits a body and may need story data.
+    // Ordinary inspection only normalizes detached timeline metadata.
+    const legacyBody = Object.values(object(source?.timeline?.operations)).some(operation =>
+      operation && operation.kind === 'body' && operation.status === 'foreground-completed')
+    const chat = ensure(legacyBody ? source : {
+      timeline: source?.timeline, candidateAgent: source?.candidateAgent
+    })
     return clone({
       branchId: chat.timeline.branchId,
       revision: chat.timeline.revision,

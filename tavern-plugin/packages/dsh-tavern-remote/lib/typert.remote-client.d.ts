@@ -3,13 +3,15 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { TavernSessionSignalFrame } from 'dsh-tavern-remote/types'
+import type { TavernJsonValue, TavernRuntimeControlMethod, TavernSessionSignalFrame } from 'dsh-tavern-remote/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$74617665726e5369676e616c73 {
+    control: (method: TavernRuntimeControlMethod, args: Record<string, TavernJsonValue>, signal?: AbortSignal) => AsyncIterable<string>
     follow: (sessionIds: readonly string[], signal?: AbortSignal) => AsyncIterable<TavernSessionSignalFrame>
   }
   interface TypertRemoteMap {
+    'tavernSignals/control': (method: TavernRuntimeControlMethod, args: Record<string, TavernJsonValue>, signal?: AbortSignal) => AsyncIterable<string>
     'tavernSignals/follow': (sessionIds: readonly string[], signal?: AbortSignal) => AsyncIterable<TavernSessionSignalFrame>
   }
   interface TypertRemoteNamespaceMap {

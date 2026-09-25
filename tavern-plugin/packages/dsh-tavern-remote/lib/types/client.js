@@ -75,6 +75,14 @@ export async function apply(ctx) {
         next.start();
     };
     const service = Object.freeze({
+        async control(method, args, signal) {
+            if (disposed)
+                throw new Error('Tavern runtime control has been disposed');
+            // Returning closes the one-shot iterator; the generated transport owns cancellation.
+            for await (const result of tavernSignals.control(method, args, signal))
+                return JSON.parse(result);
+            throw new Error('Tavern runtime control ended without a response');
+        },
         subscribe(sessionId, kind, listener, onError, onConnect) {
             const item = { sessionId: String(sessionId), kind: String(kind), listener, onError, onConnect };
             const before = sessionIds().join('\u0000');

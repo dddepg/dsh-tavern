@@ -1,3 +1,4 @@
+import { projectChatSessionState, projectDisplayRuntimeState, projectChatBackgroundConfig, projectSettlementCheckpoint } from './chat-session-state.js'
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual, promisify } from 'node:util'
@@ -356,16 +357,49 @@ export function createChatJournalStore(options = {}) {
     const state = await cachedState(chatId)
     return state ? structuredClone(state.chat) : undefined
   }
-  function slice(chat, indices) {
-    const {messages:rawMessages,...head}=chat
+  async function readSessionState(chatId) {
+    const state = await cachedState(chatId)
+    return state ? projectChatSessionState(state.chat) : undefined
+  }
+  async function readSettlementCheckpoint(chatId, messageId, operationId) {
+    const state = await cachedState(chatId)
+    return state ? projectSettlementCheckpoint(state.chat, messageId, operationId) : undefined
+  }
+  async function readBackgroundConfig(chatId) {
+    const state = await cachedState(chatId)
+    return state ? projectChatBackgroundConfig(state.chat) : undefined
+  }
+  async function readDisplayRuntimeState(chatId, turn) {
+    const state = await cachedState(chatId)
+    return state ? projectDisplayRuntimeState(state.chat, turn) : undefined
+  }
+  function slice(chat, indices, fields) {
+    const {messages:rawMessages,...allHead}=chat
     const messages=Array.isArray(rawMessages)?rawMessages:[]
     if(indices.some(i=>!Number.isSafeInteger(i)||i<0||i>=messages.length))throw new Error('消息楼层不存在')
+    let head=allHead
+    if (Array.isArray(fields)) {
+      head = {}
+      for (const field of fields) {
+        const parts = String(field).split('.').filter(Boolean)
+        if (!parts.length || parts[0] === 'messages' || parts.some(part => ['__proto__', 'prototype', 'constructor'].includes(part))) continue
+        let source = chat
+        for (const part of parts) source = source && Object.hasOwn(source, part) ? source[part] : undefined
+        if (source === undefined) continue
+        let target = head
+        for (const part of parts.slice(0, -1)) {
+          if (!Object.hasOwn(target, part) || !target[part] || typeof target[part] !== 'object') target[part] = {}
+          target = target[part]
+        }
+        target[parts.at(-1)] = source
+      }
+    }
     return {chat:structuredClone({...head,messages:indices.map(i=>messages[i])}),messageCount:messages.length,denseMessages:Array.isArray(rawMessages) && messages.every(m=>m && typeof m==='object' && !Array.isArray(m))}
   }
   /** Detached metadata and selected native rows, never an editable full-chat snapshot. */
-  async function readSlice(chatId, indices=[]) {
+  async function readSlice(chatId, indices=[], fields) {
     const state=await cachedState(chatId)
-    return state && !indices.some(i=>i>=(state.chat.messages?.length||0)) ? slice(state.chat,indices) : undefined
+    return state && !indices.some(i=>i>=(state.chat.messages?.length||0)) ? slice(state.chat,indices,fields) : undefined
   }
   function rememberChanges(previous, revision, changes) {
     const indices = new Set()
@@ -376,26 +410,80 @@ export function createChatJournalStore(options = {}) {
       if (change.path.length > 1 && Number.isSafeInteger(change.path[1])) indices.add(change.path[1])
       else tail = Math.min(tail, change.op === 'splice' ? change.index : 0)
     }
-    return previous.concat({revision, indices: [...indices], tail}).slice(-32)
+    const frames = previous.concat({baseRevision: revision - 1, revision, indices: [...indices], tail})
+    if (frames.length <= 32) return frames
+    const [first, second, ...rest] = frames
+    const mergedTail = Math.min(first.tail, second.tail)
+    const mergedIndices = [...new Set([...first.indices, ...second.indices])].filter(index => index < mergedTail)
+    // Keep a conservative older summary plus exact recent frames. Bound the
+    // summary too; eviction loses coverage and safely restores the full fallback.
+    if (mergedIndices.length > 4096) return frames.slice(-32)
+    return [{baseRevision:first.baseRevision,revision:second.revision,indices:mergedIndices,tail:mergedTail},...rest]
   }
-  async function readChangedSlice(chatId, revision) {
-    const state = await cachedState(chatId)
-    if (!state || !Number.isSafeInteger(revision) || revision >= state.revision) return undefined
+  function changedIndices(chatId, state, revision) {
+    if (!state || !Number.isSafeInteger(revision) || revision < 0 || revision > state.revision) return undefined
+    if (revision === state.revision) return {indices:[],baseRevision:revision,revision:state.revision}
     const frames = knownChanges(chatId, state).filter(frame => frame.revision > revision)
-    if (frames.length !== state.revision - revision || frames[0]?.revision !== revision + 1) return undefined
+    if (!frames.length || frames[0].baseRevision > revision || frames.at(-1).revision !== state.revision
+      || frames.some((frame,index)=>index > 0 && frame.baseRevision !== frames[index-1].revision)) return undefined
     const length = state.chat.messages?.length || 0
     const indices = new Set(frames.flatMap(frame => frame.indices).filter(index => index < length))
     const tail = Math.min(...frames.map(frame => frame.tail))
     for (let index = tail; index < length; index++) indices.add(index)
     const sorted = [...indices].sort((a,b) => a-b)
-    return {...slice(state.chat, sorted), indices: sorted, baseRevision: revision}
+    return {indices:sorted,baseRevision:revision,revision:state.revision}
+  }
+  async function readChangedIndices(chatId, revision) {
+    return changedIndices(chatId, await cachedState(chatId), revision)
+  }
+  async function readChangedSlice(chatId, revision) {
+    const state = await cachedState(chatId)
+    if (revision === state?.revision) return undefined
+    const changed = changedIndices(chatId,state,revision)
+    return changed ? {...slice(state.chat,changed.indices),indices:changed.indices,baseRevision:revision} : undefined
+  }
+  /** Detached display input: unchanged Helper variables come from the cached view.
+   * Never use this projection as a writable Chat or for a full Helper rebuild. */
+  async function readViewDelta(chatId, revision) {
+    const state = await cachedState(chatId)
+    const changed = changedIndices(chatId, state, revision)
+    if (!changed || revision === state.revision
+      || Object.values(state.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+      || !Array.isArray(state.chat.messages)
+      || !state.chat.messages.every(row => row && typeof row === 'object' && !Array.isArray(row))) return undefined
+    const dirty = new Set(changed.indices)
+    const messages = state.chat.messages.map((row, index) => {
+      if (dirty.has(index)) return row
+      const { variables, ...display } = row
+      return display
+    })
+    return { ...changed, chat: structuredClone({ ...state.chat, messages }) }
   }
   /** Exact-version internal commit; stale callers must use their existing merge path. */
   async function patch(chatId, expectedRevision, changes, metadata={}) {
     return serialize(chatId,async()=>{
       const state=await cachedState(chatId)
       if(!state || state.revision!==expectedRevision)return undefined
+      // An acknowledged no-op is not a story edit: keep undo points valid.
+      // Check the exact revision and transaction guard under the same lock.
+      if(changes.length===0){metadata.assertCurrent?.();return slice(state.chat,[]).chat}
       const paths=layout(chatId)
+      // Cache and disk must contain the same JSON. Canonicalize only changed
+      // payloads, never copy the complete chat on this fast path.
+      const normalized = []
+      for (const change of changes) {
+        if (change.op === 'set' && change.value === undefined) {
+          if (!change.path.length) throw new Error('Journal root cannot be undefined')
+          const current = applyJsonChangesShared(state.chat, normalized)
+          let parent = current
+          for (const key of change.path.slice(0,-1)) parent = parent?.[key]
+          if (!parent || typeof parent !== 'object') throw new Error('Missing mutation parent')
+          const key = change.path.at(-1)
+          if (Array.isArray(parent)) normalized.push({...change,value:null})
+          else if (Object.hasOwn(parent,key)) normalized.push({op:'delete',path:change.path})
+        } else normalized.push(jsonClone(change))
+      }
+      changes = normalized
       const next=applyJsonChangesShared(state.chat,changes)
       if(next.id!==chatId || revisionOf(next)!==expectedRevision+1)throw new Error('Invalid journal patch revision')
       if(state.legacy)await migrateLegacy(paths,state.chat)
@@ -430,6 +518,8 @@ export function createChatJournalStore(options = {}) {
       const current = currentState == null ? undefined : currentState.chat
       const produced = await updater(jsonClone(current))
       if (produced === undefined) return jsonClone(current)
+      // Normalize once before persistence. The already-JSON result can be
+      // detached with structuredClone without another full JSON string.
       const next = jsonClone(produced)
       if (next === undefined || next === null || typeof next !== 'object' || Array.isArray(next)) throw new Error('Chat Journal 只能保存 JSON object')
       if (currentState == null) {
@@ -439,7 +529,7 @@ export function createChatJournalStore(options = {}) {
         rememberState(chatId, await version(chatId), { chat: next, revision, legacy: false,
           snapshot: { path: snapshotPath, name: path.basename(snapshotPath), revision },
           open: null, openFrameCount: 0, openValidBytes: 0, openInvalidLine: 0 })
-        return jsonClone(next)
+        return structuredClone(next)
       }
       const baseRevision = currentState.revision
       const revision = revisionOf(next)
@@ -472,7 +562,7 @@ export function createChatJournalStore(options = {}) {
         snapshot: rotated || currentState.snapshot, open: rotated ? null : open,
         openFrameCount: rotated ? 0 : currentState.openFrameCount + 1, openInvalidLine: 0 },
         rememberChanges(recentChanges, revision, changes))
-      return jsonClone(next)
+      return structuredClone(next)
     })
   }
 
@@ -521,5 +611,7 @@ export function createChatJournalStore(options = {}) {
     })
   }
 
-  return Object.freeze({ read, readSlice, readChangedSlice, patch, readRevision, update, version, remove })
+  // update() owns both boundaries: updater drafts and returned values are
+  // detached from cached state and from each other, including aborted writes.
+  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, update, version, remove })
 }

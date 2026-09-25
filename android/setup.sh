@@ -114,7 +114,7 @@ install_from_tarball() {
   printf 'Git 下载失败，正在改用 GitHub 压缩包……\n'
   download_file "${TARBALL_URL}" "${archive}" || fail "Git 与压缩包下载均失败，请检查网络后重试。"
   mkdir -p "${candidate}"
-  tar -xzf "${archive}" -C "${candidate}" --strip-components=1 || fail "压缩包无法解压，旧版本未被修改。"
+  tar -xzf "${archive}" -C "${candidate}" --strip-components=1 --exclude='*/docs' --exclude='*/docs/*' || fail "压缩包无法解压，旧版本未被修改。"
   verify_source "${candidate}"
   printf '%s\n' "${TARBALL_URL}" > "${candidate}/${SOURCE_MARKER}"
   replace_source "${candidate}"
@@ -125,7 +125,9 @@ install_source() {
   if command -v git >/dev/null 2>&1; then
     local candidate="${TEMP_ROOT}/git-source"
     printf '正在通过 Git 下载 DSH Tavern……\n'
-    if git clone --branch main --single-branch "${REPOSITORY}" "${candidate}"; then
+    if git clone --filter=blob:none --no-checkout --branch main --single-branch "${REPOSITORY}" "${candidate}" \
+      && git -C "${candidate}" sparse-checkout set --no-cone '/*' '!**/docs/' \
+      && git -C "${candidate}" checkout main; then
       replace_source "${candidate}"
       return
     fi
@@ -147,6 +149,10 @@ update_source() {
       fail "项目目录存在未提交修改。为避免覆盖你的文件，已停止更新。"
     fi
     printf '正在检查 DSH Tavern 更新……\n'
+    # Apply before fetching so existing installations also stop requesting doc blobs.
+    git -C "${APP_DIR}" config remote.origin.promisor true
+    git -C "${APP_DIR}" config remote.origin.partialclonefilter blob:none
+    git -C "${APP_DIR}" sparse-checkout set --no-cone '/*' '!**/docs/'
     if git -C "${APP_DIR}" fetch origin main; then
       if ! git -C "${APP_DIR}" merge-base --is-ancestor HEAD origin/main; then
         local generated_only=1
@@ -206,4 +212,8 @@ if ! DSH_HOME="${DSH_ROOT}" bash "${APP_DIR}/android/install.sh"; then
 fi
 
 SOURCE_SWAPPED=0
-printf '\n全部完成。请重启 DSHA，然后点击侧栏里的“酒馆工作台”。\n'
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" = 1 ]; then
+  printf '\n全部完成。请返回 DSH Tavern 应用并重新启动酒馆。\n'
+else
+  printf '\n全部完成。请重启 DSHA，然后点击侧栏里的“酒馆工作台”。\n'
+fi

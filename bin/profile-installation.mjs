@@ -5,7 +5,8 @@ import path from 'node:path'
 import { stopService } from './service-lifecycle.mjs'
 import { installCliRuntime, migrateCliHome } from './cli-runtime.mjs'
 import { extractDshVersion, assertCompatibleDshVersion, dshCompatibilityNotice } from './dsh-compatibility.mjs'
-import { installPluginDependencies } from './plugin-dependencies.mjs'
+import { patchThemeFontLimit } from './theme-font-limit.mjs'
+import { installPluginDependencies, resolveHostDependencies } from './plugin-dependencies.mjs'
 import { migrateLegacyTavernData, resolveTavernDataRoot } from '../tavern-plugin/lib/domain/tavern-data.js'
 import { ensureUserExtensions } from '../tavern-plugin/lib/domain/user-extensions.js'
 import { beginProfileConfigurationUpdate, loadProfileManifest, mergeProfileManifest, prepareProfilePatch, syncProfileDependencyPatches } from './profile-configuration.mjs'
@@ -258,9 +259,13 @@ export async function installProfile(host = RUNTIME_HOST) {
       const workspaceText = readFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), 'utf8')
       copyFileSync(path.join(SOURCE_ROOT, 'pnpm-workspace.yaml'), path.join(PROFILE_DIR, 'pnpm-workspace.yaml'))
       syncProfileDependencyPatches({ sourceRoot: SOURCE_ROOT, profileDir: PROFILE_DIR, workspaceText })
-      run('pnpm', ['install'], { cwd: PROFILE_DIR })
+      // This generated profile changes dependencies and patch settings on upgrade.
+      // Its previous lockfile is not the source repository's frozen lockfile.
+      run('pnpm', ['install', '--no-frozen-lockfile'], { cwd: PROFILE_DIR })
       runDsh(dsh, ['--profile', PROFILE, '--dump-config'], { host })
       ensureSidebarDefaults()
+      const [theme] = resolveHostDependencies({ dsh, host, requiredExports: { '@deepseek-ai/dsh-client-ui-theme': null } })
+      if (patchThemeFontLimit(theme.directory)) console.log('已将 DSH 原有字号上限放宽到 32px。')
       transaction.commit()
     } catch (error) {
       await transaction.rollback()

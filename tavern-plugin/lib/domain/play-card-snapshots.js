@@ -34,6 +34,7 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
     const text = preference === null ? planned : sanitizeAgentProjectionText([preference.text, planned].filter(Boolean).join('\n\n'))
     const patch = {
       cardContextSnapshot: text,
+      cardDefinitionSnapshot: structuredClone(card),
       cardContentDigest: cardContentDigest(card),
       worldbookLibraryDigest: chat.openingWorldbookSnapshot ? chat.openingWorldbookSnapshot.libraryDigest : worldbookContentDigest(worldBook),
       cardContextSnapshotVersion: VERSION,
@@ -107,7 +108,8 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
 
   async function updateStatus(chat, card) {
     const cardChanged = !chat.cardContentDigest || chat.cardContentDigest !== cardContentDigest(card)
-    const base = { legacy: !chat.cardContentDigest, cardChanged }
+    const migrations = (card?.extensions?.dsh_tavern?.stateMigrations || []).filter(plan => !chat.cardStateMigrationIds?.includes(plan.id)).flatMap(plan => plan.operations || []).map(op => op.op === 'move' ? op.from + ' → ' + op.path : op.op === 'convert' ? op.path + ' → ' + op.type : '删除 ' + op.path)
+    const base = { legacy: !chat.cardContentDigest, cardChanged, migrations }
     try {
       const snapshot = bookSnapshot(await liveBook(chat, card))
       const digest = updateDigest(card, snapshot)
@@ -133,7 +135,7 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
       throw new Error('人物卡或世界书已再次修改，请刷新后确认')
     }
     const patch = await build({ ...chat, openingWorldbookSnapshot }, card, true, worldBook)
-    return { ...patch, openingWorldbookSnapshot, cardContextRevision: (Number(chat.cardContextRevision) || 0) + 1 }
+    return { ...patch, cardName: card.name || chat.cardName, openingWorldbookSnapshot, cardContextRevision: (Number(chat.cardContextRevision) || 0) + 1 }
   }
 
   async function preferenceReplacement(chat, enabled, profileId) {

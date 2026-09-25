@@ -294,7 +294,10 @@ test('awaited MVU event writes retain the host event identity across asynchronou
 })
 
 
-test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async () => {
+test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async t => {
+  // setImmediate and a zero-delay timer have no guaranteed relative order.
+  // Hold the timer until the event receipt has been checked.
+  t.mock.timers.enable({ apis: ['setTimeout'] })
   const h = helperHostHarness({ messages: [{ role: 'assistant', variables: { stat_data: { hp: 10 } } }] })
   h.window.eventOn('MESSAGE_RECEIVED', () => {
     h.window.setTimeout(() => {
@@ -305,7 +308,8 @@ test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async
   await tick()
   assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete')?.eventId, 'mvu-work:defer-1')
   assert.equal(h.calls().length, 0)
-  await new Promise(resolve => setTimeout(resolve, 20))
+  t.mock.timers.tick(20)
+  await tick()
   const call = h.calls().find(item => item.method === 'updateTavernHelperVariables')
   assert.equal(call?.eventId, 'mvu-work:defer-1')
   h.reply(call, { updated: true })

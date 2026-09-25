@@ -24,11 +24,12 @@ test('任务提示继承用户已有授权，不强制重复确认或禁止适�
   }
 })
 
-test('MVU 转换创建保留封面的独立副本，并保护原卡和无关字段', () => {
-  assert.match(mvuSkill, /`tavern_convert_to_mvu`/)
+test('MVU 转换 Skill 说明专用工具、来源保护和清理边界', () => {
+  assert.match(mvuSkill, /`tavern_convert_to_mvu\.inspect`/)
   assert.match(mvuSkill, /默认保留无关字段/)
-  assert.match(mvuSkill, /工具从磁盘复制原卡/)
-  assert.match(mvuSkill, /在副本上删除旧实现/)
+  assert.match(mvuSkill, /原卡和共享资源保持不变/)
+  assert.match(mvuSkill, /保留内容由工具复制/)
+  assert.match(mvuSkill, /从原位置直接删除已迁移内容/)
   assert.match(mvuSkill, /定位错误按返回的/)
 
 })

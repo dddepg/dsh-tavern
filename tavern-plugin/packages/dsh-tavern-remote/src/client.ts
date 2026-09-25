@@ -1,7 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteSnapshotStream, RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import { TYPERT_REMOTE } from 'dsh-tavern-remote/remote'
-import type { TavernSessionSignal, TavernSessionSignalClient, TavernSessionSignalFrame, TavernSessionSignalSource } from './shared.js'
+import type { TavernJsonValue, TavernRuntimeControlMethod, TavernSessionSignal, TavernSessionSignalClient, TavernSessionSignalFrame } from './shared.js'
+
+interface TavernSignalRemote {
+  follow(sessionIds: readonly string[], signal: AbortSignal): AsyncIterable<TavernSessionSignalFrame>
+  control(method: TavernRuntimeControlMethod, args: Record<string, TavernJsonValue>, signal?: AbortSignal): AsyncIterable<string>
+}
 
 type Listener = {
   sessionId: string
@@ -23,7 +28,7 @@ export const inject = ['remote']
 
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const unmount = await ctx.remote.$mount(TYPERT_REMOTE)
-  const tavernSignals = ctx.get('remote.tavernSignals') as TavernSessionSignalSource | undefined
+  const tavernSignals = ctx.get('remote.tavernSignals') as TavernSignalRemote | undefined
   if (tavernSignals === undefined) throw new Error('dsh-tavern-remote: remote.tavernSignals is unavailable after mount')
   const listeners = new Set<Listener>()
   const latest = new Map<string, TavernSessionSignal>()
@@ -85,6 +90,12 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     next.start()
   }
   const service: TavernSessionSignalClient = Object.freeze({
+    async control(method: TavernRuntimeControlMethod, args: Record<string, TavernJsonValue>, signal?: AbortSignal) {
+      if (disposed) throw new Error('Tavern runtime control has been disposed')
+      // Returning closes the one-shot iterator; the generated transport owns cancellation.
+      for await (const result of tavernSignals.control(method, args, signal)) return JSON.parse(result) as TavernJsonValue
+      throw new Error('Tavern runtime control ended without a response')
+    },
     subscribe(sessionId: string, kind: string, listener: (signal: TavernSessionSignal) => void,
       onError?: (error: unknown) => void, onConnect?: () => void) {
       const item: Listener = { sessionId: String(sessionId), kind: String(kind), listener, onError, onConnect }

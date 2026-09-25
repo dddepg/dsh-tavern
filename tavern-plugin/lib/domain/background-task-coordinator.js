@@ -1,3 +1,4 @@
+import { diffJson } from './json-mutation.js'
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
@@ -159,9 +160,21 @@ export function createBackgroundTaskCoordinator(options = {}) {
         }
       },
       async bindSession(sessionId) {
-        return serialize(chatId, () => store.updateChat(chatId, source => timeline.apply({ chat: source, intent: {
-          kind: 'agent.bind', operationId: begun.value.operationId, sessionId
-        } }).chat, { source: 'background.' + str(role) + '.bind', operationId: begun.value.operationId }))
+        return serialize(chatId, async () => {
+          const intent = { kind: 'agent.bind', operationId: begun.value.operationId, sessionId }
+          const metadata = { source: 'background.' + str(role) + '.bind', operationId: begun.value.operationId }
+          if (store.readState && store.patchChat) {
+            const state = await store.readState(chatId)
+            const legacy = Object.values(state?.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+            if (state?.timeline?.schemaVersion === 1 && !legacy) {
+              const next = timeline.apply({ chat: state, intent }).chat
+              const saved = await store.patchChat(chatId, state._storageRevision,
+                [{ op: 'set', path: ['timeline'], value: next.timeline }], metadata)
+              if (saved) return store.readChat(chatId)
+            }
+          }
+          return store.updateChat(chatId, source => timeline.apply({ chat: source, intent }).chat, metadata)
+        })
       },
       async checkpoint(apply) {
         const saved = await serialize(chatId, () => store.updateChat(chatId, latest => {
@@ -174,6 +187,36 @@ export function createBackgroundTaskCoordinator(options = {}) {
         }, { source: 'background.' + str(role) + '.checkpoint', operationId: begun.value.operationId }))
         if (!saved) throw new Error('后台任务对话已不存在，保存点未写入')
         return saved
+      },
+      async checkpointMessage(messageId, apply) {
+        return serialize(chatId, async () => {
+          const mutate = (chat, index) => {
+            const state = timeline.inspect({ chat })
+            const operation = state.operations[begun.value.operationId]
+            if (operation?.status !== 'running' || state.branchId !== begun.value.basedOn.branchId
+              || state.revision !== begun.value.basedOn.revision) throw new Error('后台任务保存点已过期')
+            apply(chat, chat.messages[index])
+            return chat
+          }
+          const metadata = { source: 'background.' + str(role) + '.checkpoint', operationId: begun.value.operationId }
+          if (store.readSlice && store.patchChat) {
+            const selected = await store.readSettlementCheckpoint?.(chatId, messageId, begun.value.operationId)
+              || await store.readSlice(chatId, [messageId])
+            const legacy = Object.values(selected?.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+            if (selected?.chat.timeline?.schemaVersion === 1 && !legacy) {
+              const before = selected.chat, after = structuredClone(before)
+              mutate(after, 0)
+              const changes = diffJson(before, after)
+              if (changes.every(c => c.path[0] === 'messages' && c.path[1] === 0 && c.path.length > 2)) {
+                const saved = await store.patchChat(chatId, before._storageRevision,
+                  changes.map(c => ({ ...c, path: ['messages', messageId, ...c.path.slice(2)] })), metadata)
+                if (saved) return
+              }
+            }
+          }
+          const saved = await store.updateChat(chatId, chat => mutate(chat, messageId), metadata)
+          if (!saved) throw new Error('后台任务对话已不存在，保存点未写入')
+        })
       },
       async commit(input = {}) {
         return await serialize(begun.chat.id, async function () {
@@ -214,6 +257,16 @@ export function createBackgroundTaskCoordinator(options = {}) {
   async function recover(chat, options = {}) {
     const chatId = str(chat && chat.id)
     return await serialize(chatId, async function () {
+      if (store.readState && !options.operationId) {
+        const state = await store.readState(chatId)
+        if (state?.timeline?.schemaVersion === 1) {
+          const operations = Object.values(state.timeline.operations || {})
+          const needsRecovery = operations.some(operation =>
+            operation.kind === 'agent' && operation.status === 'running' ||
+            operation.kind === 'body' && ['pending', 'running'].includes(operation.background?.phase))
+          if (!needsRecovery) return { chat: state, status: 'unchanged', activity: activity(state) }
+        }
+      }
       const latest = await store.readChat(chatId)
       const source = latest === undefined ? chat : latest
       if (options.operationId && activity(source).operationId !== options.operationId) {

@@ -123,13 +123,27 @@ export function applyJsonChanges(input, changes) {
 /** Internal immutable update: copy ancestors and changed values, share untouched branches. */
 export function applyJsonChangesShared(input, changes) {
   let result = input
+  // Reuse only ancestors allocated by this batch, never caller-owned nodes.
+  const owned = new WeakSet()
   for (const change of changes) {
     assertPath(change.path)
     if (change.path.includes('__proto__')) throw new Error('Invalid mutation path')
     const visit = (value, depth) => {
-      if (depth === change.path.length) return applyJsonChanges(value, [{...change,path:[]}])
+      if (depth === change.path.length) {
+        if (change.op === 'set') return clone(change.value)
+        // A splice changes array membership, not the untouched elements. Keep
+        // internal immutable rows shared and detach only newly supplied items.
+        if (change.op === 'splice' && Array.isArray(value)) {
+          const target = owned.has(value) ? value : value.slice()
+          owned.add(target)
+          return spliceValue(target, { ...change, path: [] })
+        }
+        return applyJsonChanges(value, [{...change,path:[]}])
+      }
       if (!value || typeof value !== 'object') throw new Error('Missing mutation parent')
-      const key=change.path[depth], next=Array.isArray(value)?value.slice():{...value}
+      const key=change.path[depth]
+      const next=owned.has(value)?value:(Array.isArray(value)?value.slice():{...value})
+      owned.add(next)
       if(depth===change.path.length-1) {
         if(change.op==='delete') {
           if(Array.isArray(value)||!Object.hasOwn(value,key))throw new Error('Invalid delete')

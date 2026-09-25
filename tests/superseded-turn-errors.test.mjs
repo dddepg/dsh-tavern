@@ -141,7 +141,8 @@ test('延迟加载的错误节点仍应用投影，脱离作用域的节点恢�
 test('宿主提供独立错误投影，前端按 Session 隔离并只观察对话滚动区', async () => {
   const host = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
   const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
-  assert.match(host, /const projectionEvents = sessionDebugEvidence\(chat.sessionId\).events/)
+  assert.match(host, /const rollbackEvidence = sessionDebugEvidence\(chat.sessionId, true\)/)
+  assert.match(host, /const projectionEvents = rollbackEvidence.events/)
   assert.match(host, /suppressedDshTurns = foregroundSuppressedTurns\(chat, projectionEvents\)/)
   assert.match(host, /suppressedDshErrorTurns: supersededRegenerationErrorTurns\(\{\s*events: projectionEvents,\s*suppressedDshTurns: chat.suppressedDshTurns/)
   assert.match(source, /createElement\(SupersededTurnErrors, Object.assign\(\{\}, props, \{ key: props.sessionId \}\)\)/)

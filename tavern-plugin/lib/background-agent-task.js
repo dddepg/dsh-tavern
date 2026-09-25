@@ -367,7 +367,7 @@ export function createBackgroundAgentTask(options) {
       {
         const existing = readSessionStablePrefix(agent.session)
         const revision = typeof options.resolveStablePrefixRevision === 'function' ? await options.resolveStablePrefixRevision(input) : 0
-        const background = existing && revision <= Number(existing.message.source.cardContextRevision || 0) ? existing.text : typeof options.resolveStablePrefix === 'function'
+        const background = existing && revision <= existing.revision ? existing.text : typeof options.resolveStablePrefix === 'function'
           ? await options.resolveStablePrefix(input) : input.backgroundContext
         const prefix = await ensureSessionStablePrefix(agent.session, background, options.stablePrefixStorage, revision)
         if (prefix && prefix.event !== existing?.event && typeof options.flushSession === 'function') await options.flushSession(agent.session)

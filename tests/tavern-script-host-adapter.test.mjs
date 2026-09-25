@@ -658,3 +658,41 @@ test('global template settings read and save without resolving any game', async 
   assert.deepEqual(saved.next.otherPlugin, current.otherPlugin)
   await assert.rejects(adapter.saveGlobalPromptTemplateSettings([], {}), /模板设置/)
 })
+
+for (const concurrent of [false, true, 'conflict']) test(`prompt updates use exact-revision patch with safe merge fallback: concurrent=${concurrent}`, async t => {
+  const {mkdtemp,rm}=await import('node:fs/promises')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
+  const {createChatPersistence}=await import('../tavern-plugin/lib/domain/chat-persistence.js')
+  const root=await mkdtemp(join(tmpdir(),'prompt-patch-'))
+  t.after(()=>rm(root,{recursive:true,force:true}))
+  const persistence=createChatPersistence({store:createChatJournalStore({dataRoot:root})})
+  await persistence.write(chat())
+  let patches=0,writes=0
+  const run=harness(chat(),{
+    resolveChat:()=>persistence.read('chat-1'),
+    patchChat:async(id,revision,changes,metadata)=>{
+      patches++
+      assert.deepEqual(changes.map(c=>c.path),[['tavernScriptPrompts']])
+      if(concurrent)await persistence.update(id,latest=>{latest.variables.concurrent=true;if(concurrent==='conflict')latest.tavernScriptPrompts=[{id:'other',content:'并发提示'}];return latest})
+      return persistence.patch(id,revision,changes,metadata)
+    },
+    writeChat:async(value,metadata)=>{writes++;return persistence.write(value,metadata)}
+  })
+  const pending=run.adapter.updatePrompts('session-1',{kind:'inject',prompts:[{id:'test',content:'提示',position:'in_chat',depth:0,role:'system'}]},2)
+  if(concurrent==='conflict') {
+    await assert.rejects(pending,/tavernScriptPrompts/)
+    assert.equal((await persistence.read('chat-1')).tavernScriptPrompts[0].content,'并发提示')
+    return
+  }
+  const result=await pending
+  const saved=await persistence.read('chat-1')
+  assert.equal(patches,1)
+  assert.equal(writes,concurrent?1:0)
+  assert.equal(saved.tavernScriptPrompts[0].content,'提示')
+  assert.deepEqual(saved.messages,chat().messages)
+  assert.equal(saved.variables.concurrent,concurrent?true:undefined)
+  assert.equal(result.context.stateRevision,saved._storageRevision)
+  assert.equal(result.context.messages[0].message,'旧正文')
+})

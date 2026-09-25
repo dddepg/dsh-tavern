@@ -11,7 +11,7 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
   const runtimeGeneration = sessions.runtimeGeneration
   const candidateTaskJobs = new Map()
   const taskMailbox = createDurableTaskMailbox({
-    store: { readChat, writeChat },
+    store: { readChat, writeChat, readState: chats.readState },
     now,
     reconcile(chat, task) {
       if (task.kind !== 'candidate') return null
@@ -70,7 +70,7 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
   }
 
   async function sessionSync(sessionId, selector = {}) {
-    const chat = await chatForSession(sessionId)
+    const chat = await (chats.stateForSession || chatForSession)(sessionId)
     const liveSession = sessions.isLive(str(sessionId))
     if (chat === undefined) {
       return { runtimeGeneration, liveSession, projectionRevision: 0, activity: null, mailboxVersion: 0, task: null, tasks: { candidate: null, background: null } }
@@ -119,7 +119,7 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
 
   async function submitCandidateTask(args = {}) {
     const sessionId = str(args.sessionId)
-    const chat = await chatForSession(sessionId)
+    const chat = await (chats.stateForSession || chatForSession)(sessionId)
     if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
     const task = await taskMailbox.submit(chat.id, {
       requestId: args.requestId,

@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url)
 const worker = fileURLToPath(new URL('./server-template-worker.js', import.meta.url))
 
 /** Service-owned sessions. No browser leases, heartbeat, or replay of started work. */
-export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, idleMs = 600000, maxSessions = 4 }) {
+export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, idleMs = 600000, maxSessions = 4, readOnly = false }) {
   const sessions = new Map(), tails = new Map(), generations = new Map(), jobs = new Map()
   const capacityWaiters = new Set()
   const wakeCapacity = () => { for (const wake of capacityWaiters) wake() }
@@ -83,7 +83,7 @@ export function createServerTemplateRuntime({ rpc, store, timeoutMs = 120000, id
         }
       }
     })
-    record.initialization = request(record, { type: 'initialize', sessionId }).then(() => { record.ready = true })
+    record.initialization = request(record, { type: 'initialize', sessionId, readOnly }).then(() => { record.ready = true })
     return record
   }
   async function invoke(sessionId, operation, input, transient = false) {

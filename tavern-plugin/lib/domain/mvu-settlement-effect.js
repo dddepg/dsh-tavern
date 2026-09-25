@@ -1,4 +1,4 @@
-import { applyJsonChanges, diffJson } from './json-mutation.js'
+import { applyJsonChangesShared, diffJson } from './json-mutation.js'
 
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
@@ -50,9 +50,10 @@ export function createMvuSettlementEffect(input = {}) {
 /** Apply one effect at the Story Timeline commit seam while preserving unrelated projections. */
 export function applyMvuSettlementEffect(chat, effect) {
   assertIdentity(chat, effect)
-  const applied = applyJsonChanges(chat, effect.changes)
-  for (const root of ALLOWED_ROOTS) {
-    if (Object.hasOwn(applied, root)) chat[root] = structuredClone(applied[root])
+  const changes = effect.changes.filter(change => ALLOWED_ROOTS.has(String(change.path?.[0])))
+  const applied = applyJsonChangesShared(chat, changes)
+  for (const root of new Set(changes.map(change => change.path[0]))) {
+    if (Object.hasOwn(applied, root)) chat[root] = applied[root]
     else delete chat[root]
   }
   return chat

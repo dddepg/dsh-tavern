@@ -181,3 +181,42 @@ test('新 Session 查找不读取已关联的历史存档，仍恢复未关联�
   assert.equal(await registry.resolve('another-new-session'), undefined)
   assert.equal(store.snapshot().chatReads, reads, 'fully linked history needs no materialization')
 })
+
+test('background config resolves aliases, repairs missing links and adopts legacy games once', async () => {
+  const { createSessionChatReader } = await import('../tavern-plugin/lib/domain/session-view-reader.js')
+  const { projectChatBackgroundConfig } = await import('../tavern-plugin/lib/domain/chat-session-state.js')
+  const initial = { id: 'game', sessionId: 'canonical', mode: 'story',
+    backgroundModelSelection: { provider: 'custom', model: 'saved' },
+    timeline: { participants: { background: { status: 'needs-session' } } },
+    messages: [{ role: 'assistant', text: 'keep my story', variables: { gold: 10 } }] }
+  const store = memoryStore({ links: {}, index: { chats: [{ id: 'game' }] }, chats: { game: initial } })
+  let configReads = 0, adoptions = 0
+  store.adapter.readBackgroundConfig = async id => {
+    configReads++
+    const chat = store.snapshot().chats[id]
+    return chat ? projectChatBackgroundConfig(chat) : undefined
+  }
+  const registry = createTavernConversationRegistry({ store: store.adapter })
+  const reader = createSessionChatReader({ registry,
+    needsAdoption: chat => chat.backgroundConfigVersion !== 1,
+    adopt: async chat => {
+      adoptions++
+      const updated = { ...chat, backgroundConfigVersion: 1, conversationFeaturesVersion: 1 }
+      await store.adapter.writeChat(updated)
+      return updated
+    }
+  })
+  const config = await reader.readBackgroundConfig('canonical')
+  assert.equal(config.backgroundModelSelection.model, 'saved')
+  assert.equal(config.backgroundSessionStatus, 'needs-session')
+  assert.equal(config.messages, undefined)
+  assert.equal(store.snapshot().links.canonical, 'game')
+  await store.adapter.updateLinks(links => ({ ...links, alias: 'game' }))
+  config.backgroundModelSelection.model = 'external mutation'
+  assert.equal((await reader.readBackgroundConfig('alias')).backgroundModelSelection.model, 'saved')
+  assert.equal(adoptions, 1)
+  assert.equal(store.snapshot().chatReads, 1, 'only legacy adoption may read the full game')
+  assert.equal(configReads, 2)
+  assert.deepEqual(store.snapshot().chats.game.messages, initial.messages)
+  assert.equal(await reader.readBackgroundConfig('missing'), undefined)
+})

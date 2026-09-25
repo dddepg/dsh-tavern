@@ -1,5 +1,21 @@
 # 安装、更新与数据备份
 
+## Android 一键 APK（Android 11+ / ARM64）
+
+[下载 DSH Tavern Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk) · [下载 SHA-256 校验文件](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk.sha256)
+
+1. 下载 APK，按 Android 提示允许当前浏览器或文件管理器安装应用，然后安装。
+2. 打开「DSH Tavern」，点击启动；首次保持联网并等待运行环境与酒馆安装完成，无需另装 DSHA，也无需输入命令。
+3. 启动完成后点击进入，在酒馆设置中配置文字模型，再导入人物卡。
+4. 以后直接打开此应用并启动、进入；更新酒馆后返回应用的启动页重启。
+
+这是在线安装包，首次启动需要下载最新版酒馆；请保持应用运行。初始化失败时保留错误日志，再点击启动重试。安装日志位于容器内 /root/.dsh/logs/tavern-install.log。
+
+独立 APK 与原版 DSHA 可以同时安装，数据各自独立，不会自动迁移旧聊天。覆盖升级请安装本项目同签名的新 APK；不要为了更新先卸载应用，以免删除应用数据。
+
+Android 仍属实验性支持，不保证一定可用。本包要求 Android 11 及以上、ARM64；已在 MuMu Android 12 验证首次安装、启动、重启及覆盖安装，尚未完成实体手机测试。其他系统版本可参考下方 DSHA 方案。
+
+
 [返回项目首页](../README.md) · [在线使用文档](https://flizzywine.github.io/dsh-tavern/)
 
 ### Windows 一键安装版
@@ -15,7 +31,7 @@
 
 Windows Desktop 更新会在数据根目录的 `harness/tools/desktop-package-manager`（普通 Desktop 为 `DSH_HOME/tools/desktop-package-manager`）准备经过 SHA-256 校验的 Node 22.22.3，仅用于包管理。首次需要联网下载，之后复用；不依赖电脑上其他软件附带的 Node，不更换 DSH。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
 
-Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。Desktop 安装和更新会配置 `dsh-pocket` 并移除冲突的 `dsh-web-mobile`；手机扫码入口在 **设置 → 手机访问**。DSHA 单独保留 `dsh-web-mobile`，CLI 默认不变。切换到下面的 CLI 安装方式不会自动同步这份数据。
+Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。CLI 与 Desktop 安装和更新均内置 **`dsh-pocket 2.10.6`**（固定版本），并移除冲突的 `dsh-web-mobile`；手机扫码入口在 **设置 → 手机访问**，无需自行安装插件。Android / DSHA 不安装 Pocket，继续使用 `dsh-web-mobile`。切换到下面的 CLI 安装方式不会自动同步这份数据。
 
 ### 命令行及宿主内安装
 

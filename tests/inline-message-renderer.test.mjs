@@ -393,7 +393,7 @@ test('Helper Context 首次快照后只发送消息和变量增量', () => {
 })
 
 test('变量回执区分后台结算中和过期结果', function () {
-  assert.match(clientSource, /pending:\s*"变量结算中…"/)
+  assert.match(clientSource, /pending:\s*props\.busy \? "变量结算中…" : "变量结算等待中"/)
   assert.match(clientSource, /stale:\s*"变量结算已过期，未覆盖当前状态"/)
   assert.match(clientSource, /rpc\("retrySettlement", \{ turn: props\.turn, guidance \}, props\.sessionId\)/)
   assert.match(clientSource, /"重试变量结算"/)

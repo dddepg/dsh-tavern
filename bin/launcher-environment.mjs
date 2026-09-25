@@ -38,8 +38,6 @@ export const DEFAULT_COMMIT_URL = 'https://api.github.com/repos/flizzywine/dsh-t
 export const SETTINGS_FILE = path.join(DSH_ROOT, 'settings.yaml')
 export const SIDEBAR_DEFAULTS_VERSION = 8
 export const TAVERN_SIDEBAR_DEFAULTS = {
-  openByDefault: true,
-  defaultWidthPercent: 30,
   tabsEnabled: {
     editor: true,
     git: false,

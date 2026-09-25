@@ -40,3 +40,32 @@ export function visibleTemplateDisplay(display) {
     : part)
   return result
 }
+
+// Ordinary Markdown stays native, but its declared status fragments still need
+// stable identities so a newer card template can replace an older captured one.
+const statusPartsCache = new Map()
+export function annotateTemplateStatusParts(parts, html) {
+  if (!String(html).includes('data-dsh-status-key')) return structuredClone(parts)
+  const key = JSON.stringify([html, parts])
+  if (statusPartsCache.has(key)) return structuredClone(statusPartsCache.get(key))
+  const dom = new JSDOM(html)
+  try {
+    const declarations = [...dom.window.document.querySelectorAll('[data-dsh-status-key]')].map(node => ({
+      key: decodeURIComponent(node.getAttribute('data-dsh-status-key')), content: node.innerHTML
+    }))
+    const result = parts.map(part => {
+      if (part.kind !== 'html') return structuredClone(part)
+      const fragment = dom.window.document.createElement('div')
+      fragment.innerHTML = part.content
+      const content = fragment.innerHTML.trim()
+      const match = declarations.find(declaration => declaration.content.trim() === content)
+      return match ? {...structuredClone(part),statusKey:match.key} : structuredClone(part)
+    })
+    // Bound both entry count and individual size for large imported cards.
+    if (key.length < 32768) {
+      if (statusPartsCache.size >= 64) statusPartsCache.delete(statusPartsCache.keys().next().value)
+      statusPartsCache.set(key,structuredClone(result))
+    }
+    return result
+  } finally { dom.window.close() }
+}

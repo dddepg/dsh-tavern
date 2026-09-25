@@ -99,7 +99,7 @@ export function createPersistentStatusProjector({ maxCacheBytes = 4 * 1024 * 102
   const cache = new Map()
   let bytes = 0, hits = 0, misses = 0
   function compile(marker, rule, options) {
-    const key = createHash('sha256').update(JSON.stringify([marker, rule, options.charName, options.macroState?.userName])).digest('hex')
+    const key = createHash('sha256').update(JSON.stringify([marker, rule, options.charName, options.macroState?.userName, options.allowStaticStatus])).digest('hex')
     const previous = cache.get(key)
     if (previous) {
       hits++; cache.delete(key); cache.set(key, previous)
@@ -110,7 +110,7 @@ export function createPersistentStatusProjector({ maxCacheBytes = 4 * 1024 * 102
     const value = []
     if (rendered.changed) for (const part of projectDisplayParts(rendered.text).parts) {
       const content = resolveDisplayIdentityMacros(contentOf(part), options)
-      if (part.kind !== 'html' || !/<(?:script|iframe|object|embed)\b/i.test(content)) continue
+      if (part.kind !== 'html' || (!options.allowStaticStatus && !/<(?:script|iframe|object|embed)\b/i.test(content))) continue
       value.push({ content, revision: createHash('sha256').update(content).digest('hex').slice(0, 16) })
     }
     const size = JSON.stringify(value).length * 2 + 256

@@ -1,14 +1,18 @@
 /** Compile the explicitly ordered, text-only generateRaw contract without Session writes. */
 export async function generateHelperRaw(config, { callModel, sessionId = '', history = [] }) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('generateRaw 参数必须是对象')
-  // generation_id / should_stream / should_silence：酒馆助手元数据；假流式不推送流式事件，仍一次性返回全文。
+  // 此处一次性返回全文；客户端根据 should_stream 补发兼容流式事件。
   const allowed = new Set(['ordered_prompts', 'user_input', 'max_chat_history', 'should_stream', 'should_silence', 'overrides', 'generation_id'])
   for (const key of Object.keys(config)) if (!allowed.has(key)) throw new Error('generateRaw 暂不支持参数：' + key)
   if (!Array.isArray(config.ordered_prompts) || !config.ordered_prompts.length) throw new Error('generateRaw 需要显式 ordered_prompts')
   const overrides = config.overrides || {}
   for (const [key, value] of Object.entries(overrides)) {
-    if (['world_info_before', 'world_info_after'].includes(key) && value === '') continue
-    if (key === 'chat_history' && value && Object.keys(value).every(k => k === 'with_depth_entries') && value.with_depth_entries === false) continue
+    // Explicitly ordered raw prompts never inject these sources implicitly.
+    // Accept requests to clear them, but do not silently discard real content.
+    if (['world_info_before', 'world_info_after', 'persona_description', 'char_description', 'char_personality', 'scenario', 'dialogue_examples'].includes(key) && value === '') continue
+    if (key === 'chat_history' && value && typeof value === 'object' && !Array.isArray(value)
+      && Object.entries(value).every(([name, entry]) => (name === 'with_depth_entries' && entry === false)
+        || (name === 'author_note' && entry === '') || (name === 'prompts' && Array.isArray(entry) && entry.length === 0))) continue
     throw new Error('generateRaw 暂不支持覆盖项：' + key)
   }
   const limit = config.max_chat_history ?? 'all'

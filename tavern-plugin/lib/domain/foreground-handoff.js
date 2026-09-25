@@ -74,7 +74,7 @@ export function createForegroundHandoff(options = {}) {
     if (typeof store.readChat !== 'function' || typeof tasks.recover !== 'function') return
     for (const chatId of chatIds || []) {
       try {
-        const chat = await store.readChat(chatId)
+        const chat = await (store.readState || store.readChat)(chatId)
         if (chat === undefined) continue
         await tasks.recover(chat)
       } catch (error) {

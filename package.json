@@ -19,12 +19,15 @@
     "restart:tavern": "node ./bin/dsh-tavern.mjs restart",
     "status:tavern": "node ./bin/dsh-tavern.mjs status",
     "test": "node bin/test-tavern.mjs",
-    "test:play": "node testsets/test-play.mjs"
+    "test:play": "node testsets/test-play.mjs",
+    "test:e2e": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs",
+    "test:e2e:card-update": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --card-update",
+    "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs"
   },
   "dependencies": {
     "acorn": "8.15.0",
     "chevrotain": "^11.2.0",
-    "dsh-better-sidebar": "0.17.1",
+    "dsh-better-sidebar": "0.19.1",
     "dsh-pocket": "2.10.6",
     "dsh-tavern-plugin": "link:./tavern-plugin",
     "dsh-tavern-remote": "link:./tavern-plugin/packages/dsh-tavern-remote",

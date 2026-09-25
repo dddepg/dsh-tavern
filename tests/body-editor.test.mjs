@@ -84,7 +84,7 @@ test('failed Chat write leaves Surface intact; durable edit recovers after nativ
 
 test('display captures do not invalidate an open edit, but advancing the conversation does', async () => {
   const h = fixture(), edit = await h.editor.read(h.session.id)
-  h.change(chat => { chat._storageRevision++; chat.messages.at(-1).displayRuntime = { frames: [] } })
+  h.change(chat => { chat._storageRevision++; chat.messages.at(-1).displayRuntime = { frames: [] }; chat.messages.at(-1).tavernPluginData = { template_display: { source: '正文', formattingText: '刷新显示' } } })
   await h.editor.save(h.session.id, { token: edit.token, texts: ['新正文'] })
   assert.equal(h.chat.messages.at(-1).displayRuntime, undefined)
   const next = await h.editor.read(h.session.id)

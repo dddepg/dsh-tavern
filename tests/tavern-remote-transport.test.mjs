@@ -115,3 +115,62 @@ test('Remote signal subscription recovers after the Remote service is temporaril
   ] })
   assert.deepEqual(received, ['done'])
 })
+
+test('运行时控制使用一次性 Remote stream，传递取消且不自动重放失败请求', async () => {
+  let descriptor, provided, contribution
+  const calls = [], cancelled = new AbortController()
+  let closed = 0, fail = false
+  vm.runInNewContext(remoteBundle, { window: { __ModuleLoader__: { load(value) { descriptor = value } } } })
+  const client = descriptor.factory(() => ({}))
+  const remote = { async * control(method, args, signal) {
+    calls.push({ method, args, signal })
+    try {
+      if (fail) throw new Error('socket lost after execution')
+      yield JSON.stringify({ ok: true, completed: true })
+    } finally { closed++ }
+  } }
+  const dispose = await client.apply({
+    remote: { async $mount(value) { contribution = value; return async () => {} } },
+    get() { return remote },
+    provide(_name, service) { provided = service }
+  })
+  const contract = contribution.descriptors.find(item => item.method === 'control')
+  assert.equal(contract.mode, 'stream')
+  assert.equal(contract.cancellation.parameter, 'signal')
+  assert.equal(contract.parameters[0].codec.schema.safeParse('getSession').success, false)
+  const result = await provided.control('completeTavernHelperEvent', { eventId: 'event', leaseToken: 'lease' }, cancelled.signal)
+  assert.equal(result.completed, true)
+  assert.equal(calls[0].signal, cancelled.signal)
+  assert.equal(closed, 1)
+  fail = true
+  await assert.rejects(provided.control('completeTavernHelperEvent', {}, cancelled.signal), /socket lost/)
+  assert.equal(calls.length, 2, 'executor owns recovery; transport must not blindly replay')
+  await dispose()
+  await assert.rejects(provided.control('claimTavernScriptWork', {}), /disposed/)
+  assert.equal(calls.length, 2)
+})
+
+test('控制通道宿主复用原分发，拒绝重视图并在取消后不领取任务', async () => {
+  const start = hostSource.indexOf("  ctx.provide('tavernSessionSignals',")
+  const end = hostSource.indexOf("\n  const webServer", start)
+  let service, calls = 0
+  vm.runInNewContext(hostSource.slice(start, end), {
+    ctx: { provide(_name, value) { service = value } },
+    runtimeGeneration: 'host',
+    async dispatch(method, args) {
+      calls++
+      assert.equal(method, 'claimTavernScriptWork')
+      assert.equal(args.sessionId, 's')
+      return { active: true, event: { id: 'event', optional: undefined } }
+    }
+  })
+  const controller = new AbortController()
+  const result = JSON.parse(await service.control('claimTavernScriptWork', { sessionId: 's' }, controller.signal))
+  assert.equal(result.ok, true)
+  assert.equal(result.runtimeGeneration, 'host')
+  assert.equal(Object.hasOwn(result.event, 'optional'), false)
+  await assert.rejects(service.control('getSession', {}, controller.signal), /不支持/)
+  controller.abort()
+  await assert.rejects(service.control('claimTavernScriptWork', {}, controller.signal), { name: 'AbortError' })
+  assert.equal(calls, 1)
+})

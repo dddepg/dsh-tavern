@@ -8,6 +8,12 @@
 >
 > 本文在[《官方 MVU 本地运行时迁移方案》](official-mvu-runtime-migration.md)之上增加变量生成链路，并落实[《前台 Frame 迁移方案》](foreground-frame-migration-plan.md)中尚未实现的 `BackgroundTaskFrame`。它不改变“官方 MVU 负责变量语义、dsh-tavern 负责持久化”的既有分工。
 
+## 工具传输格式（2026-09-24）
+
+模型提交的 `operations` 使用平坦对象 Schema，`op` 明确为字符串枚举，避免网关将 `anyOf/oneOf` 中的任意 JSON 值收窄成布尔类型。`replace/insert/add/delta` 通过 `valueJson` 字符串传输 JSON 值，例如 `{"op":"replace","path":"/stat_data/金币","valueJson":"999995"}`。对象和数组也先编码为 JSON 字符串；`move` 使用 `from`，`remove` 不需要值。
+
+服务端在执行前解析 `valueJson`，拒绝非法 JSON、非有限数字及同时携带 `valueJson/value` 的歧义提交；解析后的对象继续经过既有 MVU 校验、回滚和持久化流程。旧的在途调用与已保存提交仍接受原始 `value`。此变更不自动修复已经错误写入的历史变量，也不意味着已验证第三方网关的端到端行为。
+
 ## 一句话结论
 
 剧情模型只生成剧情；每轮最终正文提交后，由后台 Agent 根据“当前变量快照 + 本轮最终正文 + 人物卡变量结构与更新规则”强制调用一次 MVU 更新工具。工具把结构化 JSON Patch 交给本地官方 MVU 与人物卡脚本结算，再由 Host Adapter 原子写入当前 Swipe 的变量快照。

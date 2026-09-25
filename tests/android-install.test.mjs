@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -172,11 +172,11 @@ test('Android 安装脚本增量配置两个 Profile，失败不会伪装成成�
   assert.match(installer, /install --host android/)
   assert.match(installer, /DSH_TAVERN_RUNTIME_HOST="android"/)
   assert.doesNotMatch(installer, /dsh-cost-meter/)
-  assert.doesNotMatch(installer, /rm -rf|\|\| true/)
+  assert.doesNotMatch(installer, /rm -rf -- \"\$\{DSH_ROOT\}/)
   assert.doesNotMatch(installer, /tavern-plugin\/lib\/client\.js/)
 })
 
-for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed']) {
+for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed', 'standalone', 'restored', 'restored-failed', 'invalid-install', 'swap-failed']) {
 test(`Android 安装固定 pnpm 并先安装依赖再停止旧服务：${initialVersion}`, async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dsh-android-install-order-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -215,13 +215,25 @@ fi
     await mkdir(path.dirname(managedPnpm), { recursive: true })
     await writeFile(managedPnpm, await readFile(fixturePnpm), { mode: 0o755 })
   }
+  if (initialVersion.startsWith('restored') || ['invalid-install', 'swap-failed'].includes(initialVersion)) {
+    await mkdir(path.dirname(managedPnpm), { recursive: true })
+    await writeFile(managedPnpm, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    await writeFile(path.join(pnpmRoot, 'bin/pn'), 'restored ordinary file')
+  }
   await writeFile(path.join(mockBin, 'npm'), `#!/usr/bin/env bash
 set -euo pipefail
 printf 'npm %s\\n' "\$*" >> "${events}"
-[ "${initialVersion}" != install-failed ] || exit 1
-[ "\$*" = "install --global --prefix ${pnpmRoot} pnpm@11.25.0" ] || exit 92
-mkdir -p "${path.dirname(managedPnpm)}"
-cp "${fixturePnpm}" "${managedPnpm}"
+[ "${initialVersion}" != install-failed ] && [ "${initialVersion}" != restored-failed ] || exit 1
+[ "\$1 \$2 \$3 \$5" = "install --global --prefix pnpm@11.25.0" ] || exit 92
+prefix="\$4"
+[ ! -f "\$prefix/bin/pn" ] || { echo EEXIST >&2; exit 1; }
+mkdir -p "\$prefix/bin"
+cp "${fixturePnpm}" "\$prefix/bin/pnpm"
+if [ "${initialVersion}" = invalid-install ]; then printf 'missing' > "${versionFile}"; fi
+`, { mode: 0o755 })
+  if (initialVersion === 'swap-failed') await writeFile(path.join(mockBin, 'mv'), `#!/usr/bin/env bash
+if [[ "\$2" == *.install.* ]] && [[ "\$2" != *.previous ]] && [ "\$3" = "${pnpmRoot}" ]; then exit 1; fi
+exec /bin/mv "\$@"
 `, { mode: 0o755 })
   await writeFile(path.join(mockBin, 'dsh'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 })
   await writeFile(path.join(mockBin, 'node'), `#!/usr/bin/env bash
@@ -245,17 +257,25 @@ esac
 `, { mode: 0o755 })
 
   const result = spawnSync('bash', [new URL('../android/install.sh', import.meta.url).pathname], {
-    env: { ...process.env, DSH_HOME: dshHome, PATH: `${mockBin}${path.delimiter}${process.env.PATH}` },
+    env: { ...process.env, DSH_HOME: dshHome, DSH_TAVERN_ANDROID_STANDALONE: initialVersion === 'standalone' ? '1' : '0', PATH: `${mockBin}${path.delimiter}${process.env.PATH}` },
     encoding: 'utf8',
   })
-  const recorded = (await readFile(events, 'utf8')).trim().split('\n')
-  if (initialVersion === 'install-failed') {
+  const recorded = (await readFile(events, 'utf8')).replace(/11\.25\.0\.install\.[^ \n]+/g, '11.25.0').trim().split('\n')
+  if (['install-failed', 'restored-failed', 'invalid-install', 'swap-failed'].includes(initialVersion)) {
+    if (['restored-failed', 'invalid-install', 'swap-failed'].includes(initialVersion)) assert.equal(await readFile(path.join(pnpmRoot, 'bin/pn'), 'utf8'), 'restored ordinary file')
     assert.notEqual(result.status, 0)
+    const siblings = await readdir(path.dirname(pnpmRoot)).catch(() => [])
+    assert.equal(siblings.some(name => name.includes('.install.')), false, 'temporary prefixes must be cleaned')
     assert.deepEqual(recorded, [`npm install --global --prefix ${pnpmRoot} pnpm@11.25.0`])
     return
   }
   assert.equal(result.status, 0, result.stderr)
   const expected = initialVersion === 'cached' ? [] : [`npm install --global --prefix ${pnpmRoot} pnpm@11.25.0`]
+  if (initialVersion === 'standalone') {
+    assert.deepEqual(recorded, [...expected, 'dependencies', 'install'])
+    assert.match(result.stdout, /返回 DSH Tavern 应用并重新启动/)
+    return
+  }
   assert.deepEqual(recorded.slice(0, expected.length + 3), [...expected, 'dependencies', 'stop', 'install'])
 })
 }
@@ -290,6 +310,11 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   await writeFile(path.join(source, 'package.json'), JSON.stringify({ name: 'dsh-profile-tavern' }), 'utf8')
   await writeFile(path.join(source, 'bin', 'dsh-tavern.mjs'), '', 'utf8')
   await writeFile(path.join(source, 'android', 'install.sh'), '#!/usr/bin/env bash\nset -euo pipefail\nprintf "installed\\n" >> "${DSH_HOME}/setup-runs"\n', 'utf8')
+  const documentImages = ['docs/images/readme/overview.png', 'tavern-plugin/packages/dsh-image-gen/docs/assets/demo.png']
+  for (const file of documentImages) {
+    await mkdir(path.dirname(path.join(source, file)), { recursive: true })
+    await writeFile(path.join(source, file), 'documentation image')
+  }
   for (const args of [
     ['init', '-b', 'main'],
     ['config', 'user.email', 'test@example.com'],
@@ -306,6 +331,12 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   assert.equal(first.status, 0, first.stderr)
   assert.match(first.stdout, /全部完成/)
 
+  const installedSource = path.join(dshHome, 'apps', 'dsh-tavern')
+  for (const file of documentImages) await assert.rejects(access(path.join(installedSource, file)))
+  // Emulate an installation from before sparse updates, then exercise its migration.
+  const fullCheckout = spawnSync('git', ['-C', installedSource, 'sparse-checkout', 'disable'], { encoding: 'utf8' })
+  assert.equal(fullCheckout.status, 0, fullCheckout.stderr)
+  for (const file of documentImages) await access(path.join(installedSource, file))
   await writeFile(path.join(source, 'version.txt'), 'next\n', 'utf8')
   for (const args of [['add', '.'], ['commit', '-m', 'next']]) {
     const result = spawnSync('git', args, { cwd: source, encoding: 'utf8' })
@@ -313,6 +344,7 @@ test('Android setup 通过同一命令完成首次安装和后续更新', async 
   }
   const second = spawnSync('bash', [new URL('../android/setup.sh', import.meta.url).pathname], { env: environment, encoding: 'utf8' })
   assert.equal(second.status, 0, second.stderr)
+  for (const file of documentImages) await assert.rejects(access(path.join(installedSource, file)))
   assert.equal(await readFile(path.join(dshHome, 'setup-runs'), 'utf8'), 'installed\ninstalled\n')
   assert.equal(await readFile(path.join(dshHome, 'apps', 'dsh-tavern', 'version.txt'), 'utf8'), 'next\n')
 
@@ -375,6 +407,10 @@ test('Git 下载失败时通过 tarball 安装更新，保留旧数据并在安�
     await writeFile(path.join(source, 'version.txt'), version + '\n', 'utf8')
     await writeFile(path.join(source, 'bin', 'dsh-tavern.mjs'), '', 'utf8')
     await writeFile(path.join(source, 'android', 'install.sh'), `#!/usr/bin/env bash\nprintf "${version}\\n" >> "\${DSH_HOME}/setup-runs"\nexit ${installExit}\n`, 'utf8')
+    for (const file of ['docs/images/readme/demo.png', 'tavern-plugin/packages/dsh-image-gen/docs/assets/demo.png']) {
+      await mkdir(path.dirname(path.join(source, file)), { recursive: true })
+      await writeFile(path.join(source, file), 'documentation image')
+    }
     if (version === 'v1') await writeFile(path.join(source, 'removed-in-v2.txt'), 'old\n', 'utf8')
     const packed = spawnSync('tar', ['-czf', archive, '-C', sourceParent, 'dsh-tavern-main'], { encoding: 'utf8' })
     assert.equal(packed.status, 0, packed.stderr)
@@ -393,6 +429,8 @@ test('Git 下载失败时通过 tarball 安装更新，保留旧数据并在安�
   const first = spawnSync('bash', [setupPath], { env: environment, encoding: 'utf8' })
   assert.equal(first.status, 0, first.stderr)
   assert.match(first.stdout, /改用 GitHub 压缩包/)
+  await assert.rejects(access(path.join(appDir, 'docs')))
+  await assert.rejects(access(path.join(appDir, 'tavern-plugin/packages/dsh-image-gen/docs')))
   assert.equal(await readFile(path.join(appDir, 'version.txt'), 'utf8'), 'v1\n')
   await mkdir(path.join(appDir, 'data'), { recursive: true })
   await writeFile(path.join(appDir, 'data', 'legacy.txt'), '用户数据\n', 'utf8')

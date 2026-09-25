@@ -53,7 +53,7 @@ test('Profile 更新替换项目管理项并保留用户额外插件', () => {
   }
 
   const next = mergeProfileManifest({
-    source: sourceManifest(), current, pluginPath: '/app/tavern-plugin', dataRoot: '/data/tavern', host: 'cli', dshVersion: '0.1.2',
+    source: sourceManifest(), current, pluginPath: '/app/tavern-plugin', dataRoot: '/data/tavern', host: 'android', dshVersion: '0.1.2',
   })
 
   assert.equal(next.description, '用户备注')
@@ -80,7 +80,7 @@ for (const recorded of [false, true]) {
       dsh: { profile: { bundles: [oldName, 'user-plugin'] } },
       ...(recorded ? { dshTavern: { managedBundles: [oldName], managedDependencies: [oldName] } } : {}),
     }
-    const options = { source: sourceManifest(), current, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host: 'cli' }
+    const options = { source: sourceManifest(), current, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host: 'android' }
     const next = mergeProfileManifest(options)
     assert.equal(next.dependencies[oldName], undefined)
     assert.equal(next.dsh.profile.bundles.includes(oldName), false)
@@ -104,15 +104,13 @@ for (const host of ['desktop', 'android', 'cli']) {
       }
       const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host }
       const next = mergeProfileManifest({ ...options, current })
-      const selected = host === 'desktop' ? 'dsh-pocket' : 'dsh-web-mobile'
+      const selected = host === 'android' ? 'dsh-web-mobile' : 'dsh-pocket'
       assert.equal(next.dependencies[selected], source.dependencies[selected])
       assert.ok(next.dshTavern.managedBundles.includes(selected))
       assert.ok(next.dshTavern.managedDependencies.includes(selected))
       assert.equal(next.dependencies['user-extra'], '3.0.0')
       assert.ok(next.dsh.profile.bundles.includes('user-extra'))
       for (const name of names) {
-        // CLI preserves a manually installed Pocket; its default remains web-mobile.
-        if (host === 'cli' && name === 'dsh-pocket') continue
         assert.equal(next.dsh.profile.bundles.filter(value => value === name).length, name === selected ? 1 : 0)
         if (name !== selected) assert.equal(next.dependencies[name], undefined)
       }
@@ -123,14 +121,14 @@ for (const host of ['desktop', 'android', 'cli']) {
   }
 }
 
-test('同一源码在 Desktop 与 DSHA 之间切换只保留目标平台移动插件', async () => {
+test('同一源码在 CLI、Desktop 与 DSHA 之间切换只保留目标平台移动插件', async () => {
   const source = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data' }
   let current = {}
-  for (const host of ['android', 'desktop', 'android', 'desktop']) {
+  for (const host of ['android', 'desktop', 'cli', 'android', 'cli', 'desktop']) {
     current = mergeProfileManifest({ ...options, host, current })
-    const selected = host === 'desktop' ? 'dsh-pocket' : 'dsh-web-mobile'
-    const removed = host === 'desktop' ? 'dsh-web-mobile' : 'dsh-pocket'
+    const selected = host === 'android' ? 'dsh-web-mobile' : 'dsh-pocket'
+    const removed = host === 'android' ? 'dsh-pocket' : 'dsh-web-mobile'
     assert.equal(current.dependencies[selected], source.dependencies[selected])
     assert.equal(current.dependencies[removed], undefined)
     assert.ok(current.dsh.profile.bundles.includes(selected))

@@ -1,3 +1,5 @@
+import { createSettlementJobs } from '../tavern-plugin/lib/domain/settlement-jobs.js'
+import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import { collectMvuHelperContext, createMvuSettlementModule } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
 import { createTavernScriptHostAdapter } from '../tavern-plugin/lib/domain/tavern-script-host-adapter.js'
 import { createTavernScriptDispatch } from '../tavern-plugin/lib/domain/tavern-script-dispatch.js'
@@ -44,7 +46,7 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
   const sandbox = vm.createContext({
     collectMvuHelperContext, normalizeBackgroundTasks, structuredClone, Date, AbortController, console: { log() {}, error() {} },
     str: value => value == null ? '' : String(value),
-    backgroundTasks: tasks, storyTimeline: timeline, settlementJobs: new Map(),
+    backgroundTasks: tasks, storyTimeline: timeline,
     readChat: store.readChat, chatForSession: store.readChat, writeChat: store.writeChat,
     prepareNextWorldBookContext: async chat => chat, readChatCard: async () => ({}),
     view: async chat => chat, settlementTurn: () => 2,
@@ -61,9 +63,10 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
     conversationRegistry: { list: async () => [] }, ctx: { effect() {} },
     mvuSettlement: { settleVariables: async () => ({ receipt: { version: 1, status: 'unchanged', changes: [] } }) }
   })
-  vm.runInContext(section('  function mvuReceiptsOf(', '  function withLegacyPresentationProjection('), sandbox)
+  sandbox.mvuReceiptsOf = createSessionStateView({activity:chat=>tasks.activity(chat),evidence:()=>({})}).receipts
   vm.runInContext(section('  function pendingMvuTarget(', '  async function mvuUpdateRules('), sandbox)
   vm.runInContext(section('  async function runSettlement(', '  const mvuSettlementReconciler'), sandbox)
+  sandbox.settlementJobs = createSettlementJobs({run:(...args)=>sandbox.runSettlement(...args),onSettled:(...args)=>sandbox.onSettlementSettled(...args)})
   vm.runInContext(section('  async function retrySettlement(', '  async function pullBackgroundCycle('), sandbox)
   let onReady
   sandbox.tavernScriptDispatch = { subscribeSettled(fn) { onReady = fn }, status() { return { ready: true } } }
@@ -448,7 +451,8 @@ for (const prepared of [false, true]) test(`进程在${prepared ? '结果保存�
   assert.equal(persisted.messages[1].mvu.delivery.version, 1)
   await run.tasks.recover(persisted)
   assert.equal(run.tasks.activity(run.get()).phase, 'pending')
-  run.sandbox.settlementJobs.clear()
+  run.sandbox.settlementJobs.dispose()
+  run.sandbox.settlementJobs = createSettlementJobs({run:(...args)=>run.sandbox.runSettlement(...args),onSettled:(...args)=>run.sandbox.onSettlementSettled(...args)})
   run.sandbox.mvuSettlement.resumeVariables = async input => { executions++; return resultFor(input) }
   await run.sandbox.queueSettlement('chat')
   assert.equal(run.get().messages[1].variables[0].stat_data.hp, 9)
@@ -474,7 +478,25 @@ for (const prepared of [false, true]) test(`进程在${prepared ? '结果保存�
   assert.equal(resumed, 0)
 })
 
-test('正式模型工具、调度器、草稿与剧情提交链路：漏领后从保存任务自动完成 delta 一次', async () => {
+test('手动重新投递保留待提交操作与投递记录，不重新生成变量计划', async () => {
+  const run = await harness()
+  await run.running.defer({ apply(chat) {
+    chat.messages[1].mvu = {
+      pending: true, pendingSubmission: { operations: [{ op: 'delta', path: '/hp', value: -1 }] },
+      delivery: { version: 1, marker: 'preserved' }, receipt: { status: 'pending' }
+    }
+  } })
+  const before = structuredClone(run.get())
+  let queued = 0
+  run.sandbox.queueSettlement = async id => { assert.equal(id, 'chat'); queued++ }
+  await run.sandbox.retrySettlement('session', 2)
+  assert.equal(queued, 1)
+  assert.deepEqual(run.get(), before)
+  await assert.rejects(run.sandbox.retrySettlement('session', 2, '重新生成计划'), /等待.*重新投递|指导意见/)
+  run.reconciler.dispose()
+})
+
+for (const recovery of ['自动恢复', '手动重新投递']) test('正式模型工具、调度器、草稿与剧情提交链路：漏领后' + recovery + '完成 delta 一次', async () => {
   const run = await harness({ beginRunning: false })
   const gate = createTavernScriptDispatch({ claimTimeoutMs: 100 })
   const adapter = createTavernScriptHostAdapter({ resolveChat: run.store.readChat, writeChat: run.store.writeChat,
@@ -493,8 +515,12 @@ test('正式模型工具、调度器、草稿与剧情提交链路：漏领后�
   assert.equal(run.get().messages[1].variables[0].stat_data.hp, 10)
   assert.equal(run.get().messages[1].mvu.pendingSubmission.operations[0].value, -1)
   assert.equal(run.tasks.activity(run.get()).phase, 'pending')
+  assert.equal(run.get().messages[1].mvu.receipt.deferredReason, 'claim-timeout')
   gate.claim('session', 'browser', true)
-  const resumed = run.reconciler.wake('session')
+  if (recovery === '手动重新投递') await run.sandbox.retrySettlement('session', 2)
+  const resumed = recovery === '自动恢复'
+    ? run.reconciler.wake('session')
+    : run.sandbox.queueSettlement('chat') // Coalesce a concurrent delivery request.
   let offer
   for (let i = 0; i < 20; i++) {
     await new Promise(resolve => setImmediate(resolve))
@@ -511,7 +537,7 @@ test('正式模型工具、调度器、草稿与剧情提交链路：漏领后�
   assert.equal(run.get().settleStatus, 'done')
   assert.equal(models, 1)
   assert.equal(gate.complete('session', offer.event.id, [1], 'browser', offer.leaseToken), true, 'duplicate receipt acknowledges the original execution without committing twice')
-  await assert.rejects(adapter.updateMessages('session', [{ message_id: 1, data: { stat_data: { hp: 8 } } }], 0, offer.event.id), /结算事件/)
+  await assert.rejects(adapter.updateMessages('session', [{ message_id: 1, data: { stat_data: { hp: 8 } } }], 0, offer.event.id), { code: 'MVU_SETTLEMENT_EVENT_MISMATCH' })
   assert.equal(run.get().messages[1].variables[0].stat_data.hp, 9)
   run.reconciler.dispose()
 })
@@ -564,4 +590,25 @@ test('正式结算入口将当前正文之前的建角 Helper 消息交给 MVU',
   await run.sandbox.queueSettlement('chat')
   assert.deepEqual(received, [setup])
   assert.equal(run.get().settleStatus, 'done')
+})
+
+for (const stage of ['read', 'prepare']) test(`销毁期间结束的 ${stage} 不能再启动后台结算`, async () => {
+  const run = await harness({ beginRunning: false })
+  let release, entered
+  const held = new Promise(resolve => { release = resolve })
+  const reading = new Promise(resolve => { entered = resolve })
+  run.sandbox[stage === 'read' ? 'readChat' : 'prepareNextWorldBookContext'] = async () => {
+    const snapshot = await run.store.readChat()
+    entered(); await held; return snapshot
+  }
+  let begins = 0
+  const begin = run.tasks.begin
+  run.sandbox.backgroundTasks = { ...run.tasks, begin: (...args) => { begins++; return begin(...args) } }
+  const pending = run.sandbox.queueSettlement('chat')
+  await reading
+  run.sandbox.settlementJobs.dispose()
+  release()
+  await pending.catch(error => { assert.equal(error.name, 'AbortError') })
+  assert.equal(begins, 0)
+  run.reconciler.dispose()
 })

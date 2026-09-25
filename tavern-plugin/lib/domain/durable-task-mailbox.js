@@ -154,6 +154,17 @@ export function createDurableTaskMailbox(options = {}) {
 
   async function sync(chatId, selector = {}, project) {
     return await serialize(chatId, async function () {
+      // Inspect a detached projection first. Only a repair may acquire a writable Chat.
+      if (store.readState) {
+        const state = await store.readState(chatId)
+        if (!state) return { mailboxVersion: 0, task: null, ...(project ? { projection: project(state) } : {}) }
+        const mailbox = mailboxOf(state), task = findTask(mailbox, selector)
+        const repair = task ? await reconcile(state, publicTask(task)) : null
+        if (!task || !repair || !applyPatch(structuredClone(mailbox), structuredClone(task), repair)) {
+          return { mailboxVersion: mailbox.version, task: publicTask(task), ...(project ? { projection: project(state) } : {}) }
+        }
+        // Re-read and reconcile below: a concurrent write may have changed the task.
+      }
       let chat = await store.readChat(chatId)
       const result = (mailboxVersion, task) => ({ mailboxVersion, task, ...(project ? { projection: project(chat) } : {}) })
       if (!chat) return result(0, null)
@@ -171,6 +182,14 @@ export function createDurableTaskMailbox(options = {}) {
 
   async function recover(chatId) {
     return await serialize(chatId, async function () {
+      if (store.readState) {
+        const state = await store.readState(chatId)
+        if (!state) return { mailboxVersion: 0, tasks: [] }
+        const mailbox = mailboxOf(state)
+        if (!Object.values(mailbox.tasks).some(task => task?.status === 'running')) {
+          return { mailboxVersion: mailbox.version, tasks: Object.values(mailbox.tasks).map(publicTask) }
+        }
+      }
       const chat = await store.readChat(chatId)
       if (!chat) return { mailboxVersion: 0, tasks: [] }
       const mailbox = mailboxOf(chat)

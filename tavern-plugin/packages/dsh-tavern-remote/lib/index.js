@@ -44,10 +44,12 @@ let TavernSessionSignalRemote = (() => {
 	let _classSuper = TypertRemoteService;
 	let _instanceExtraInitializers = [];
 	let _follow_decorators;
+	let _control_decorators;
 	return class TavernSessionSignalRemote extends _classSuper {
 		static {
 			const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
 			_follow_decorators = [Remote({ mode: "stream" })];
+			_control_decorators = [Remote({ mode: "stream" })];
 			__esDecorate(this, null, _follow_decorators, {
 				kind: "method",
 				name: "follow",
@@ -56,6 +58,17 @@ let TavernSessionSignalRemote = (() => {
 				access: {
 					has: (obj) => "follow" in obj,
 					get: (obj) => obj.follow
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _control_decorators, {
+				kind: "method",
+				name: "control",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "control" in obj,
+					get: (obj) => obj.control
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
@@ -73,6 +86,9 @@ let TavernSessionSignalRemote = (() => {
 		}
 		follow(sessionIds, signal) {
 			return this.ctx.tavernSessionSignals.follow(sessionIds, signal);
+		}
+		async *control(method, args, signal) {
+			yield await this.ctx.tavernSessionSignals.control(method, args, signal);
 		}
 	};
 })();

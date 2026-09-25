@@ -205,6 +205,24 @@ test('浏览器执行器暂时缺席时立即挂起，并在恢复后复用已�
   assert.equal(executions, 2)
 })
 
+test('领取超时的首次结算与续跑保留具体等待原因', async () => {
+  const module = createMvuSettlementModule({
+    model: { async run(request) {
+      await submitPosture(request)
+      await request.onToolCall(call(patch))
+      return { text: '' }
+    } },
+    runtime: { async settleMvuUpdate() { return { deferred: true, deferredReason: 'claim-timeout' } } }
+  })
+  const first = await module.settleVariables(input)
+  const resumed = await module.resumeVariables({ ...input, submission: first.submission })
+  for (const result of [first, resumed]) {
+    assert.equal(result.receipt.deferredReason, 'claim-timeout')
+    assert.match(result.receipt.summary, /领取超时/)
+    assert.doesNotMatch(result.receipt.summary, /执行器恢复/)
+  }
+})
+
 test('执行前必须确认提交已持久化，写盘失败时不派发脚本', async () => {
   let executions = 0
   const module = createMvuSettlementModule({ runtime: { async settleMvuUpdate() { executions++; return { deferred: true } } },

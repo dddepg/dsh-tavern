@@ -19,7 +19,7 @@ import { createProfileDataStore } from '../../tavern-plugin/lib/profile-data-sto
 import { createSessionStablePrefixStorage, ensureSessionStablePrefix, sessionStablePrefixSections } from '../../tavern-plugin/lib/domain/session-stable-prefix.js'
 import { createStoryTimeline } from '../../tavern-plugin/lib/domain/story-timeline.js'
 
-export async function createInitializationNative(bootPath, { preset } = {}) {
+export async function createInitializationNative(bootPath, { preset, contextWindow = 2000, modelStream } = {}) {
   const bootUrl = pathToFileURL(bootPath)
   const { boot } = await import(bootUrl.href)
   const { LlmAdapter } = await import(new URL('../../dsh-llm/lib/index.js', bootUrl))
@@ -62,8 +62,9 @@ export async function createInitializationNative(bootPath, { preset } = {}) {
   }
   ctx.on('session/flush', flush)
   class FixtureModel extends LlmAdapter {
-    async resolveModel(provider, id) { return { provider, id, name: id, context: { contextWindow: 2000 } } }
+    async resolveModel(provider, id) { return { provider, id, name: id, context: { contextWindow } } }
     async *stream(input) {
+      if (modelStream) { yield* modelStream(input); return }
       requests.push(structuredClone({ system: input.messages.filter(message => message.role === 'system').flatMap(message => message.content).map(block => block.text || '').join('\n\n'), messages: input.messages, purpose: input.purpose }))
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: '继续故事。' } }

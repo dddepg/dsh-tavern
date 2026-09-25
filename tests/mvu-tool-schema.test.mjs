@@ -1,14 +1,30 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { MVU_SUBMIT_UPDATE_TOOL } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
+import { MVU_SUBMIT_UPDATE_TOOL, normalizeMvuToolSubmission } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
 
-test('MVU operation discriminators explicitly declare their type for Google function calling', () => {
-  const branches = MVU_SUBMIT_UPDATE_TOOL.parameters.properties.operations.items.oneOf
-  const operations = []
-  for (const branch of branches) {
-    const op = branch.properties.op
-    assert.equal(op.type, 'string', 'operations.op schema must explicitly declare string type')
-    operations.push(...(op.enum ?? [op.const]))
+test('MVU wire schema uses explicit types without unions that gateways can narrow', () => {
+  const item = MVU_SUBMIT_UPDATE_TOOL.parameters.properties.operations.items
+  assert.equal(item.type, 'object')
+  assert.equal(item.properties.op.type, 'string')
+  assert.deepEqual(item.properties.op.enum, ['replace', 'insert', 'add', 'delta', 'remove', 'move'])
+  assert.equal(item.properties.valueJson.type, 'string')
+  assert.equal(item.properties.value, undefined)
+  assert.doesNotMatch(JSON.stringify(MVU_SUBMIT_UPDATE_TOOL.parameters), /"(?:anyOf|oneOf)"/)
+})
+
+test('MVU wire values preserve equipment objects, currency, arrays and legitimate booleans', () => {
+  for (const value of [{ 名称: '苍白逆旅之刃', 等级: 1 }, 999995, false, true, null, ['装备', 3], 'false', '']) {
+    const result = normalizeMvuToolSubmission({ operations: [{ op: 'replace', path: '/stat_data/value', valueJson: JSON.stringify(value) }] })
+    assert.deepEqual(result.operations, [{ op: 'replace', path: '/stat_data/value', value }])
   }
-  assert.deepEqual(operations, ['replace', 'insert', 'add', 'delta', 'remove', 'move'])
+  assert.deepEqual(normalizeMvuToolSubmission({ operations: [{ op: 'delta', path: '/stat_data/金币', valueJson: '-5' }] }).operations[0].value, -5)
+})
+
+test('invalid or ambiguous encoded values fail before dispatch; legacy persisted operations survive', () => {
+  for (const extra of [{ valueJson: '{' }, { valueJson: false }, { valueJson: '1', value: false }, { valueJson: '1e999' }]) {
+    assert.throws(() => normalizeMvuToolSubmission({ operations: [{ op: 'replace', path: '/hp', ...extra }] }))
+  }
+  assert.throws(() => normalizeMvuToolSubmission({ operations: [{ op: 'delta', path: '/hp', valueJson: 'false' }] }))
+  const operations = [{ op: 'replace', path: '/hp', value: 3 }, { op: 'remove', path: '/old' }, { op: 'move', from: '/a', path: '/b' }]
+  assert.deepEqual(normalizeMvuToolSubmission({ operations }).operations, operations)
 })

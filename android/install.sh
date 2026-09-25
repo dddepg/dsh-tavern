@@ -60,7 +60,33 @@ INSTALLED_PNPM_VERSION=$("${PNPM_COMMAND}" --version 2>/dev/null || :)
 if [ "${INSTALLED_PNPM_VERSION}" != "${PNPM_VERSION}" ]; then
   require_command npm
   printf '\n正在安装 Tavern 专用 pnpm %s……\n' "${PNPM_VERSION}"
-  npm install --global --prefix "${PNPM_ROOT}" "pnpm@${PNPM_VERSION}"
+  # Restored backups can contain ordinary bin files without node_modules.
+  # Build and verify a fresh prefix before replacing the version-owned runtime.
+  (
+    mkdir -p "$(dirname -- "${PNPM_ROOT}")"
+    pnpm_stage=$(mktemp -d "${PNPM_ROOT}.install.XXXXXX")
+    pnpm_backup="${pnpm_stage}.previous"
+    pnpm_committed=0
+    cleanup_pnpm_install() {
+      rm -rf -- "${pnpm_stage}"
+      if [ -e "${pnpm_backup}" ] || [ -L "${pnpm_backup}" ]; then
+        if [ "${pnpm_committed}" = 1 ]; then
+          rm -rf -- "${pnpm_backup}"
+        elif [ ! -e "${PNPM_ROOT}" ] && [ ! -L "${PNPM_ROOT}" ]; then
+          mv -- "${pnpm_backup}" "${PNPM_ROOT}"
+        fi
+      fi
+    }
+    trap cleanup_pnpm_install EXIT
+    npm install --global --prefix "${pnpm_stage}" "pnpm@${PNPM_VERSION}"
+    staged_version=$("${pnpm_stage}/bin/pnpm" --version 2>/dev/null || :)
+    [ "${staged_version}" = "${PNPM_VERSION}" ] || fail "新 pnpm 安装后校验失败，原目录未修改。"
+    if [ -e "${PNPM_ROOT}" ] || [ -L "${PNPM_ROOT}" ]; then
+      mv -- "${PNPM_ROOT}" "${pnpm_backup}"
+    fi
+    mv -- "${pnpm_stage}" "${PNPM_ROOT}"
+    pnpm_committed=1
+  )
 fi
 INSTALLED_PNPM_VERSION=$("${PNPM_COMMAND}" --version 2>/dev/null || :)
 [ "${INSTALLED_PNPM_VERSION}" = "${PNPM_VERSION}" ] || fail "Tavern 专用 pnpm ${PNPM_VERSION} 安装后校验失败（当前：${INSTALLED_PNPM_VERSION:-不可用}）。"
@@ -89,7 +115,7 @@ WEB_PROFILE_DIR="${DSH_ROOT}/profiles/${WEB_PROFILE_NAME}"
 printf '\n正在安装 dsh-tavern 核心依赖……\n'
 pnpm --dir "${REPO_ROOT}" install --frozen-lockfile
 
-if [ -f "${TAVERN_PROFILE_DIR}/package.json" ]; then
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" != 1 ] && [ -f "${TAVERN_PROFILE_DIR}/package.json" ]; then
   printf '\n正在停止旧版酒馆服务……\n'
   DSH_HOME="${DSH_ROOT}" DSH_TAVERN_PORT="${TAVERN_PORT}" \
     node "${REPO_ROOT}/bin/dsh-tavern.mjs" stop
@@ -107,6 +133,11 @@ pnpm --dir "${WEB_PROFILE_DIR}" install
 node "${SCRIPT_DIR}/configure-profiles.mjs" "${REPO_ROOT}" "${TAVERN_PROFILE_DIR}" "${WEB_PROFILE_DIR}"
 run_dsh --profile tavern --dump-config >/dev/null
 run_dsh --profile "${WEB_PROFILE_NAME}" --dump-config >/dev/null
+
+if [ "${DSH_TAVERN_ANDROID_STANDALONE:-0}" = 1 ]; then
+  printf '\n安装完成。请返回 DSH Tavern 应用并重新启动酒馆。\n'
+  exit 0
+fi
 
 printf '\n正在启动 3088 酒馆服务……\n'
 DSH_HOME="${DSH_ROOT}" DSH_TAVERN_PORT="${TAVERN_PORT}" \

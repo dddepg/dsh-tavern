@@ -2,6 +2,10 @@
 import { z } from 'zod'
 
 const TavernJsonValueRemoteCodec$schema = z.union([z.literal(null), z.string(), z.number(), z.literal(false), z.literal(true), z.array(z.lazy(() => TavernJsonValueRemoteCodec$schema)), z.record(z.string(), z.lazy(() => TavernJsonValueRemoteCodec$schema))])
+const TavernJsonValueRemoteCodec$schema2 = z.union([z.literal(null), z.string(), z.number(), z.literal(false), z.literal(true), z.array(z.lazy(() => TavernJsonValueRemoteCodec$schema2)), z.record(z.string(), z.lazy(() => TavernJsonValueRemoteCodec$schema2))])
+const dsh_tavern_remote_tavernSignals_control_parameter_0$schema = z.union([z.literal("claimTavernScriptWork"), z.literal("startTavernScriptWork"), z.literal("getTavernScriptWorkState"), z.literal("heartbeatTavernScriptRuntime"), z.literal("completeTavernHelperEvent"), z.literal("releaseTavernHelperRuntime")])
+const dsh_tavern_remote_tavernSignals_control_parameter_1$schema = z.record(z.string(), z.union([z.literal(null), z.string(), z.number(), z.literal(false), z.literal(true), z.array(z.lazy(() => TavernJsonValueRemoteCodec$schema2)), z.record(z.string(), z.lazy(() => TavernJsonValueRemoteCodec$schema2))]))
+const dsh_tavern_remote_tavernSignals_control_result$schema = z.string()
 const dsh_tavern_remote_tavernSignals_follow_parameter_0$schema = z.array(z.string())
 const dsh_tavern_remote_tavernSignals_follow_result$schema = z.union([z.object({
   'type': z.literal("snapshot").readonly(),
@@ -26,6 +30,43 @@ const dsh_tavern_remote_tavernSignals_follow_result$schema = z.union([z.object({
 export const TYPERT_REMOTE = {
   package: 'dsh-tavern-remote',
   descriptors: [
+    {
+      id: 'dsh-tavern-remote#tavernSignals/control',
+      service: 'tavernSignalRemote',
+      namespace: 'tavernSignals',
+      method: 'control',
+      mode: 'stream',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'method',
+          wire: 'method',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-tavern-remote/types#TavernRuntimeControlMethod',
+            schema: dsh_tavern_remote_tavernSignals_control_parameter_0$schema,
+          },
+        },
+        {
+          name: 'args',
+          wire: 'args',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: 'dsh-tavern-remote#tavernSignals/control:args',
+            schema: dsh_tavern_remote_tavernSignals_control_parameter_1$schema,
+          },
+        },
+      ],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-tavern-remote#tavernSignals/control:result',
+        schema: dsh_tavern_remote_tavernSignals_control_result$schema,
+      },
+      sourceLocation: {"file":"packages/dsh-tavern-remote/src/index.ts","line":27,"column":11},
+    },
     {
       id: 'dsh-tavern-remote#tavernSignals/follow',
       service: 'tavernSignalRemote',

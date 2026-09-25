@@ -350,11 +350,19 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (pendingRegenerations.has(chat.id) || chat.regenInProgress) throw new Error('正文正在重新生成，请先完成恢复或生成')
     if (pendingRollbacks.has(chat.id)) throw new Error('正在回退本轮，请等待完成')
     pendingRollbacks.add(chat.id)
-    try { return await rollbackChat(chat, expectedTurn) }
-    finally { pendingRollbacks.delete(chat.id) }
+    let restoredHandle
+    try {
+      if (!sessions.get(chat.sessionId)?.session && !sessions.getSession?.(chat.sessionId) && typeof sessions.resume === 'function') {
+        restoredHandle = await sessions.resume(chat.sessionId)
+      }
+      return await rollbackChat(chat, expectedTurn, restoredHandle?.agent)
+    } finally {
+      try { await restoredHandle?.dispose?.() }
+      finally { pendingRollbacks.delete(chat.id) }
+    }
   }
 
-  async function rollbackChat(chat, requestedTurn) {
+  async function rollbackChat(chat, requestedTurn, restoredAgent) {
     if (sessionPatch && !sessionPatch.replacementAllowed()) throw new Error(sessionPatch.blockReason())
     await stopRollbackGeneration(chat)
     chat = await readChat(chat.id)
@@ -362,9 +370,9 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     const mode = chat.mode || 'story'
     if (mode !== 'story' && mode !== 'script') throw new Error('仅游玩模式支持回退本轮')
     const card = await readChatCard(chat)
-    const agent = sessions.get(chat.sessionId)
-    if (agent === undefined || agent.session === undefined) throw new Error('无法访问 DSH 会话: ' + chat.sessionId)
-    const session = agent.session
+    const agent = sessions.get(chat.sessionId) || (restoredAgent?.session?.id === chat.sessionId ? restoredAgent : undefined)
+    const session = agent?.session || sessions.getSession?.(chat.sessionId)
+    if (!session) throw new Error('无法访问 DSH 会话: ' + chat.sessionId)
     const events = sessionEvents(session)
     const nodes = session.surface !== undefined && Array.isArray(session.surface.nodes) ? session.surface.nodes : []
     const availability = rollbackAvailability(chat, { events, nodes })
@@ -574,17 +582,24 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   async function undoRollback(sessionId, chatId) {
     const chat = str(chatId) === '' ? await chatForSession(sessionId) : await readChat(chatId)
     if (!chat || pendingRollbacks.has(chat.id)) throw new Error('没有可撤销的回退，或正在处理回退')
-    const agent = sessions.get(chat.sessionId)
-    if (agent?.phase?.kind === 'running' || !canUndoRollback(chat, agent?.session)) throw new Error('撤销回退已失效：对话已有新操作，请刷新页面')
     pendingRollbacks.add(chat.id)
     const handles = []
     const changed = []
     let committed = false
     try {
+      let agent = sessions.get(chat.sessionId)
+      let session = agent?.session || sessions.getSession?.(chat.sessionId)
+      if (!session && typeof sessions.resume === 'function') {
+        const handle = await sessions.resume(chat.sessionId)
+        handles.push(handle)
+        agent = handle.agent
+        session = agent?.session
+      }
+      if (agent?.phase?.kind === 'running' || !canUndoRollback(chat, session)) throw new Error('撤销回退已失效：对话已有新操作，请刷新页面')
       const saved = chat.rollbackUndo
       const before = saved.before || await readChatRevision(chat.id, saved.beforeRevision)
       if (!before || before.id !== chat.id) throw new Error('找不到回退前的恢复点')
-      const targets = [{ session: agent.session, saved: saved.foreground }]
+      const targets = [{ session, saved: saved.foreground }]
       for (const checkpoint of saved.background) {
         let worker = sessions.get(checkpoint.sessionId)
         let background = worker?.session || sessions.getSession?.(checkpoint.sessionId)

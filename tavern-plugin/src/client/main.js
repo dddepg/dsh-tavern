@@ -173,12 +173,14 @@ window.__ModuleLoader__.load({
 		const beginSessionViewRead = createSessionViewReader();
 
 		function rpc(method, args, sessionId, requestOptions) {
+			const runtimeControl = ["claimTavernScriptWork", "startTavernScriptWork", "getTavernScriptWorkState", "heartbeatTavernScriptRuntime", "completeTavernHelperEvent", "releaseTavernHelperRuntime"].includes(method);
+			const controlChannel = runtimeControl && typeof tavernSessionSignals !== "undefined" && typeof tavernSessionSignals.control === "function" ? tavernSessionSignals : null;
 			const started = Date.now();
             const clockStart = performance.now();
             const traced = method === "getSession" || method === "syncSession";
             const trace = traced ? { id: window.crypto?.randomUUID?.() || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === "x" ? n : (n & 3) | 8).toString(16); }), method, sentAt: started, active: ++performanceActiveRequests } : null;
             const payload = Object.assign({}, args || {});
-			if (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method)) {
+			if (!runtimeControl && (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method))) {
 				pagePerformance.observedMs = started - pagePerformanceStarted;
 				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice() });
 				performanceReportAt = started;
@@ -200,7 +202,9 @@ window.__ModuleLoader__.load({
 			if (requestOptions && requestOptions.signal) request.signal = requestOptions.signal;
 			if (requestOptions && requestOptions.keepalive === true) request.keepalive = true;
 			if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "sent");
-			return fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
+			const responsePromise = controlChannel
+				? Promise.resolve().then(() => controlChannel.control(method, JSON.parse(requestBody), requestOptions && requestOptions.signal))
+				: fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
                 if (trace) trace.headersMs = Math.round(performance.now() - clockStart);
                 const result = await readTavernJsonResponse(response);
                 if (trace) {
@@ -212,7 +216,8 @@ window.__ModuleLoader__.load({
 					} catch (_error) {}
 				}
                 return result;
-            }).then(function (result) {
+            });
+			return responsePromise.then(function (result) {
 				tavernRuntimeGenerationMonitor.observe(result && result.runtimeGeneration);
 				if (!result || !result.ok) {
 					const error = new Error(result && result.error ? result.error : "操作失败");
@@ -269,6 +274,27 @@ window.__ModuleLoader__.load({
 		}
 
 		// @include modules/library-refresh.js
+
+        const tavernSidebarOpens = new Map();
+        function openTavernSidebarTab(ctx, seed, scope) {
+            const key = JSON.stringify([scope.sessionId, seed]);
+            if (tavernSidebarOpens.has(key)) return tavernSidebarOpens.get(key);
+            const operation = (async function () {
+                const deadline = Date.now() + 10000;
+                for (;;) {
+                    try { ctx.betterSidebar.openTab(seed, scope); return; }
+                    catch (error) {
+                        // The session list can restore before DSH mounts its native
+                        // sidebar seat. Retry this specific readiness error only.
+                        if (!/sidebarRight: no session surface is mounted/.test(String(error.message || error)) || Date.now() >= deadline) throw error;
+                        await new Promise(resolve => window.setTimeout(resolve, 100));
+                        if (ctx.sessions.list.getSnapshot().current !== scope.sessionId) return;
+                    }
+                }
+            })().catch(error => tavernErrorHub.report("打开酒馆侧栏", error)).finally(() => tavernSidebarOpens.delete(key));
+            tavernSidebarOpens.set(key, operation);
+            return operation;
+        }
 
 		function openPlayChatDebugWorkspace(sourceSessionId, turn) {
 			return new Promise(function (resolve, reject) {
@@ -1083,7 +1109,8 @@ window.__ModuleLoader__.load({
             function capture() {
                 for (const entry of baselines) for (const node of Array.from(entry.root.childNodes || entry.root.children || [])) {
                     if (entry.nodes.has(node) || owned.has(node) || node.hasAttribute?.("data-tavern-retained-frames")) continue;
-                    owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: entry.root === hostDocument.body });
+                    owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: entry.root === hostDocument.body,
+                        root: entry.root, nextSibling: node.nextSibling, parked: false });
                 }
             }
             baseline();
@@ -1093,8 +1120,25 @@ window.__ModuleLoader__.load({
                     if (visible) capture();
                     visible = next;
                     for (const [node, previous] of owned) {
+                        // Hidden nodes still match the fixed IDs used by card scripts
+                        // to detect an existing panel. Remove inactive artifacts from
+                        // the shared document so another conversation can initialize.
+                        // Use native DOM removal: jQuery.remove() discards handlers.
+                        if (!next && node.parentNode === previous.root) {
+                            previous.nextSibling = node.nextSibling;
+                            previous.root.removeChild(node);
+                            previous.parked = true;
+                        }
                         if (previous.body) node.hidden = next ? previous.hidden : true;
                         else if (node.tagName === "STYLE" || node.tagName === "LINK") node.disabled = next ? previous.disabled : true;
+                    }
+                    if (next) for (const [node, previous] of Array.from(owned).reverse()) {
+                        if (!previous.parked) continue;
+                        previous.parked = false;
+                        if (node.parentNode) continue;
+                        if (previous.nextSibling && previous.nextSibling.parentNode === previous.root) {
+                            previous.root.insertBefore(node, previous.nextSibling);
+                        } else previous.root.append(node);
                     }
                     if (next) baseline();
                 },
@@ -1596,9 +1640,12 @@ window.__ModuleLoader__.load({
 			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[all[currentId()]];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(all[i]);}else items=[all[normalizeId(target)]];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else{var message=state.messages[normalizeId(option.message_id)];if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=state.messages[normalizeId(patch.message_id)];if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});return selectedVariables((state.messages||[])[normalizeId(option.message_id)]);};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
 			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")});};var worldbook=' + JSON.stringify(input && input.helperContext && input.helperContext.worldbook || null).replace(/</g, '\\u003c') + ';window.getCharWorldbookNames=function(){return {primary:worldbook&&worldbook.name||null,additional:[]};};window.getWorldbookNames=function(){return worldbook&&worldbook.name?[worldbook.name]:[];};window.TavernHelper=window.TavernHelper||{};["getCurrentCharacterName","getVariables","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
 			const mvuViewObservationShim = input && input.helperContext && input.observeMvuView !== false ? '<script data-dsh-tavern-mvu-view-observer>(function(){var token=' + token + ',reported=false;function report(){if(reported)return;reported=true;window.__dshTavernMvuViewUsed=true;parent.postMessage({type:"dsh-tavern-mvu-view-used",token:token,mvuViewUsed:true},"*");}var getMvuData=window.Mvu&&window.Mvu.getMvuData;if(typeof getMvuData==="function")window.Mvu.getMvuData=function(){report();return getMvuData.apply(window.Mvu,arguments);};var getVariables=window.getVariables;if(typeof getVariables==="function")window.getVariables=function(){report();return getVariables.apply(window,arguments);};})();<\/script>' : '';
-			const runtimeReporter = input && input.runtimeReporting === false ? '' : '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var captureDom=' + JSON.stringify(!(input && input.persistent === true)) + ';var logs=[],network=[],errors=[],timer=0;function trim(list){if(list.length>100)list.splice(0,list.length-100);}function value(input,depth){if(depth>3)return "[深度已截断]";if(input===null||input===undefined||typeof input==="boolean"||typeof input==="number"||typeof input==="string")return typeof input==="string"&&input.length>4000?input.slice(0,4000)+"…[已截断]":input;try{if(input instanceof Error)return {name:String(input.name),message:String(input.message).slice(0,4000),stack:String(input.stack||"").slice(0,4000)};if(Array.isArray(input))return input.slice(0,30).map(function(item){return value(item,depth+1);});if(typeof input==="object"){var out={};Object.keys(input).slice(0,30).forEach(function(key){out[key]=value(input[key],depth+1);});return out;}}catch(e){}return String(input);}function cleanUrl(input){try{var parsed=new URL(String(input),location.href);return parsed.protocol+"//"+parsed.host+parsed.pathname;}catch(e){return String(input||"").split(/[?#]/)[0].slice(0,1000);}}function send(){timer=0;var dom="";try{if(captureDom&&document.body){var copy=document.body.cloneNode(true);Array.prototype.forEach.call(copy.querySelectorAll("script[data-dsh-tavern-frame],script[data-dsh-tavern-storage],script[data-dsh-tavern-layout]"),function(node){node.remove();});dom=copy.innerHTML;}}catch(e){}if(dom.length>100000)dom=dom.slice(0,100000)+"<!-- 已截断 -->";parent.postMessage({type:"dsh-tavern-frame-runtime",token:token,runtime:{capturedAt:Date.now(),dom:dom,console:logs.slice(),network:network.slice(),errors:errors.slice()}} ,"*");}function schedule(){if(timer)return;timer=setTimeout(send,350);}["log","info","warn","error"].forEach(function(level){var original=console[level];console[level]=function(){logs.push({at:Date.now(),level:level,args:Array.prototype.map.call(arguments,function(item){return value(item,0);})});trim(logs);schedule();return original&&original.apply(console,arguments);};});addEventListener("error",function(event){var target=event.target;if(target&&target!==window){errors.push({at:Date.now(),kind:"resource",tag:String(target.tagName||""),url:cleanUrl(target.src||target.href||"")});}else errors.push({at:Date.now(),kind:"error",message:String(event.message||""),source:cleanUrl(event.filename||""),line:Number(event.lineno)||0,column:Number(event.colno)||0});trim(errors);schedule();},true);addEventListener("unhandledrejection",function(event){errors.push({at:Date.now(),kind:"unhandledrejection",message:String(event.reason&&event.reason.message||event.reason||"")});trim(errors);schedule();});if(typeof window.fetch==="function"){var nativeFetch=window.fetch;window.fetch=function(input,init){var started=Date.now(),method=String(init&&init.method||"GET").toUpperCase(),url=cleanUrl(input&&input.url||input);return nativeFetch.apply(this,arguments).then(function(response){network.push({at:started,kind:"fetch",method:method,url:url,status:Number(response.status)||0,durationMs:Date.now()-started});trim(network);if(!response.ok)schedule();return response;},function(error){network.push({at:started,kind:"fetch",method:method,url:url,failed:true,durationMs:Date.now()-started,error:String(error&&error.message||error)});trim(network);schedule();throw error;});};}if(typeof XMLHttpRequest==="function"){var nativeOpen=XMLHttpRequest.prototype.open,nativeSend=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(method,url){this.__dshRequest={started:0,method:String(method||"GET").toUpperCase(),url:cleanUrl(url)};return nativeOpen.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){var request=this.__dshRequest||{method:"GET",url:""};request.started=Date.now();this.addEventListener("loadend",function(){network.push({at:request.started,kind:"xhr",method:request.method,url:request.url,status:Number(this.status)||0,durationMs:Date.now()-request.started});trim(network);if(Number(this.status)>=400)schedule();});return nativeSend.apply(this,arguments);};}addEventListener("load",schedule);schedule();})();<\/script>';
+			// parent.Mvu may throw an Error from another iframe: instanceof alone loses its stack.
+			const runtimeReporter = input && input.runtimeReporting === false ? '' : '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var captureDom=' + JSON.stringify(!(input && input.persistent === true)) + ';var logs=[],network=[],errors=[],timer=0;function trim(list){if(list.length>100)list.splice(0,list.length-100);}function value(input,depth){if(depth>3)return "[深度已截断]";if(input===null||input===undefined||typeof input==="boolean"||typeof input==="number"||typeof input==="string")return typeof input==="string"&&input.length>4000?input.slice(0,4000)+"…[已截断]":input;try{if(input instanceof Error||Object.prototype.toString.call(input)==="[object Error]")return {name:String(input.name),message:String(input.message).slice(0,4000),stack:String(input.stack||"").slice(0,4000)};if(Array.isArray(input))return input.slice(0,30).map(function(item){return value(item,depth+1);});if(typeof input==="object"){var out={};Object.keys(input).slice(0,30).forEach(function(key){out[key]=value(input[key],depth+1);});return out;}}catch(e){}return String(input);}function cleanUrl(input){try{var parsed=new URL(String(input),location.href);return parsed.protocol+"//"+parsed.host+parsed.pathname;}catch(e){return String(input||"").split(/[?#]/)[0].slice(0,1000);}}function send(){timer=0;var dom="";try{if(captureDom&&document.body){var copy=document.body.cloneNode(true);Array.prototype.forEach.call(copy.querySelectorAll("script[data-dsh-tavern-frame],script[data-dsh-tavern-storage],script[data-dsh-tavern-layout]"),function(node){node.remove();});dom=copy.innerHTML;}}catch(e){}if(dom.length>100000)dom=dom.slice(0,100000)+"<!-- 已截断 -->";parent.postMessage({type:"dsh-tavern-frame-runtime",token:token,runtime:{capturedAt:Date.now(),dom:dom,console:logs.slice(),network:network.slice(),errors:errors.slice()}} ,"*");}function schedule(){if(timer)return;timer=setTimeout(send,350);}["log","info","warn","error"].forEach(function(level){var original=console[level];console[level]=function(){logs.push({at:Date.now(),level:level,args:Array.prototype.map.call(arguments,function(item){return value(item,0);})});trim(logs);schedule();return original&&original.apply(console,arguments);};});addEventListener("error",function(event){var target=event.target;if(target&&target!==window){errors.push({at:Date.now(),kind:"resource",tag:String(target.tagName||""),url:cleanUrl(target.src||target.href||"")});}else errors.push({at:Date.now(),kind:"error",message:String(event.message||""),source:cleanUrl(event.filename||""),line:Number(event.lineno)||0,column:Number(event.colno)||0});trim(errors);schedule();},true);addEventListener("unhandledrejection",function(event){errors.push({at:Date.now(),kind:"unhandledrejection",message:String(event.reason&&event.reason.message||event.reason||"")});trim(errors);schedule();});if(typeof window.fetch==="function"){var nativeFetch=window.fetch;window.fetch=function(input,init){var started=Date.now(),method=String(init&&init.method||"GET").toUpperCase(),url=cleanUrl(input&&input.url||input);return nativeFetch.apply(this,arguments).then(function(response){network.push({at:started,kind:"fetch",method:method,url:url,status:Number(response.status)||0,durationMs:Date.now()-started});trim(network);if(!response.ok)schedule();return response;},function(error){network.push({at:started,kind:"fetch",method:method,url:url,failed:true,durationMs:Date.now()-started,error:String(error&&error.message||error)});trim(network);schedule();throw error;});};}if(typeof XMLHttpRequest==="function"){var nativeOpen=XMLHttpRequest.prototype.open,nativeSend=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(method,url){this.__dshRequest={started:0,method:String(method||"GET").toUpperCase(),url:cleanUrl(url)};return nativeOpen.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){var request=this.__dshRequest||{method:"GET",url:""};request.started=Date.now();this.addEventListener("loadend",function(){network.push({at:request.started,kind:"xhr",method:request.method,url:request.url,status:Number(this.status)||0,durationMs:Date.now()-request.started});trim(network);if(Number(this.status)>=400)schedule();});return nativeSend.apply(this,arguments);};}addEventListener("load",schedule);schedule();})();<\/script>';
 			const reporter = '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var last=0;var queued=false;var active=true;function nodeBottom(node){if(!node||typeof node.getBoundingClientRect!=="function")return 0;var style;try{style=getComputedStyle(node);}catch(e){return 0;}if(style.display==="none"||style.visibility==="hidden"||style.position==="fixed")return 0;var rect=node.getBoundingClientRect();if(rect.width===0&&rect.height===0)return 0;var top=rect.top,bottom=rect.bottom+Math.max(0,parseFloat(style.marginBottom)||0);var ancestor=node.parentElement;while(ancestor&&ancestor!==document.documentElement){if(String(ancestor.tagName||" ").toLowerCase()==="details"&&!ancestor.open){var summary=ancestor.querySelector("summary");if(!summary||!summary.contains(node))return 0;}var ancestorStyle;try{ancestorStyle=getComputedStyle(ancestor);}catch(e){ancestorStyle=null;}var overflow=String(ancestorStyle&&(ancestorStyle.overflowY||ancestorStyle.overflow)||"visible");if(overflow!=="visible"){var ancestorRect=ancestor.getBoundingClientRect();top=Math.max(top,ancestorRect.top);bottom=Math.min(bottom,ancestorRect.bottom);if(bottom<=top)return 0;}ancestor=ancestor.parentElement;}return Math.ceil(bottom+(window.scrollY||0));}function measure(){var body=document.body;if(!body)return 48;var bodyRect=body.getBoundingClientRect();var height=Math.max(body.scrollHeight||0,Math.ceil(bodyRect.bottom+(window.scrollY||0)),48);var nodes=[body].concat(Array.prototype.slice.call(body.querySelectorAll("*")));for(var i=0;i<nodes.length;i+=1)height=Math.max(height,nodeBottom(nodes[i]));return height;}function report(){queued=false;if(!active)return;var height=measure();document.documentElement.toggleAttribute("data-dsh-tavern-scroll",height>=32000);if(height===last)return;last=height;parent.postMessage({type:"dsh-tavern-frame-height",token:token,height:height},"*");}function schedule(){if(!active||queued)return;queued=true;if(typeof requestAnimationFrame==="function")requestAnimationFrame(report);else setTimeout(report,0);}if(typeof ResizeObserver==="function"){var observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}addEventListener("load",schedule);addEventListener("toggle",schedule,true);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(schedule);var mutations=new MutationObserver(schedule);function observe(){mutations.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});if(typeof observer!=="undefined"){observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}}addEventListener("message",function(event){var data=event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-frame-measure-active")return;active=data.active!==false;if(active){observe();schedule();}else{mutations.disconnect();if(typeof observer!=="undefined")observer.disconnect();}});observe();schedule();})();<\/script>';
-			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,reported=false;function report(){timer=0;if(reported)return;reported=true;var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;schedule();});})();<\/script>';
+			// Animated/polling cards may never become DOM-idle; bound the wait so
+			// their authenticated variable channel can start receiving updates.
+			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,deadline=0,reported=false;function report(){if(reported)return;reported=true;clearTimeout(timer);clearTimeout(deadline);observer.disconnect();var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;deadline=setTimeout(report,1000);schedule();});})();<\/script>';
 			const layoutNormalizer = '<script data-dsh-tavern-layout>(function(){if(!document.body)return;function clean(){Array.prototype.slice.call(document.body.childNodes).forEach(function(node){var value=String(node.nodeValue||"");if(node.nodeType===3&&!/\\S/.test(value)&&/[\\r\\n]/.test(value))node.nodeValue="";});}clean();if(typeof MutationObserver!=="undefined"){var observer=new MutationObserver(clean);observer.observe(document.body,{childList:true});addEventListener("pagehide",function(){observer.disconnect();},{once:true});}})();<\/script>';
 			const fontRuntime = '<script data-dsh-tavern-font-runtime>(' + installTavernFrameFonts.toString() + ')(' + token + ',' + restoreTavernFrameFontStyles.toString() + ');<\/script>';
             const textColorRuntime = '<script data-dsh-tavern-text-colors>(function(){const colors=(' + installTavernTextColors.toString() + ')(document.body,{enabled:false},' + findTavernQuoteRanges.toString() + ');addEventListener("message",function(event){const data=event.data;if(event.source===parent&&data&&data.token===' + token + '&&(data.type==="dsh-tavern-text-colors"||data.type==="dsh-tavern-font-size")){colors.setColors(data.textColorOverrides);colors.setEnabled(data.type==="dsh-tavern-font-size"?data.textColorsEnabled:data.enabled);}});addEventListener("pagehide",()=>colors.dispose(),{once:true});})();<\/script>';
@@ -1613,6 +1660,9 @@ window.__ModuleLoader__.load({
 				+ (input && input.helperContext && input.persistent === true && input.preserveInstance !== true ? '<script data-dsh-tavern-status-refresh>(' + installTavernStatusRefresh.toString() + ')(' + token + ');<\/script>' : '')
 				+ (input && input.openingPreview ? '<script data-dsh-tavern-opening-preview>(function(){const install=()=>(' + installOpeningPreviewBridge.toString() + ')(' + token + ',' + JSON.stringify(input.openingPreview).replace(/</g, '\\u003c') + ');if(window.__dshTavernHelperReady)window.__dshTavernHelperReady.then(install);else install();})();<\/script>' : '')
 				+ (preparationRuntime && input.trustedCardMode === true ? '<script data-dsh-tavern-opening-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,10);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
+				// Viewers without the execution lease still receive live variables. Legacy
+				// status panels read parent.Mvu; expose their Helper API below the executor.
+				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
 				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
@@ -3145,9 +3195,11 @@ window.__ModuleLoader__.load({
 				const element = document.createElement("script");
 				const completionKey = "__dshTavernModuleComplete_" + Math.random().toString(36).slice(2);
 				let settled = false;
+				let mountTimer = null;
 				function finish(error) {
 					if (settled) return;
 					settled = true;
+					if (mountTimer !== null) window.clearTimeout(mountTimer);
 					window.removeEventListener("error", onError);
 					delete window[completionKey];
 					element.remove();
@@ -3170,7 +3222,19 @@ window.__ModuleLoader__.load({
 				// bindings/re-exports and dynamic imports can resolve local cache URLs.
 				// A completion footer waits for top-level await (a load event does not).
 				element.textContent = String(source) + "\n;window[" + JSON.stringify(completionKey) + "]?.();\n//# sourceURL=" + sourceUrl + "\n";
-				try { document.body.appendChild(element); } catch (error) { finish(error); }
+				// document.open/write can temporarily leave only a parsing <head>.
+				// Wait before attaching; never replay a module that has started.
+				const mountDeadline = Date.now() + 30000;
+				function mount() {
+					if (settled) return;
+					if (!document.body) {
+						if (Date.now() >= mountDeadline) { finish(new Error("开局文档尚未生成 body，脚本无法启动")); return; }
+						mountTimer = window.setTimeout(mount, 10);
+						return;
+					}
+					try { document.body.appendChild(element); } catch (error) { finish(error); }
+				}
+				mount();
 			});
 		}
 
@@ -3227,7 +3291,7 @@ window.__ModuleLoader__.load({
 			return script.tavernReady;
 		}
 
-		function installTavernTrustedHostFacade(host, frameWindow, priority) {
+		function installTavernTrustedHostFacade(host, frameWindow, priority, names) {
 			// A visible mount root supports legacy host detection and panel mounting.
 			// Never fake send_textarea: scripts must reach the real composer.
 			let chatRoot = host.document && host.document.getElementById('chat');
@@ -3255,20 +3319,35 @@ window.__ModuleLoader__.load({
 			}
 			const ownsSortControl = sortControl && typeof sortControl.tavernCompatibilityOwners === 'number';
 			if (ownsSortControl) sortControl.tavernCompatibilityOwners++;
-			const bindings = ["SillyTavern", "TavernHelper", "Mvu", "_", "toastr"].map(function (name) {
+			const frameElement = frameWindow.frameElement, frameDocument = frameWindow.document;
+			const bindings = (names || ["SillyTavern", "TavernHelper", "Mvu", "_", "toastr"]).map(function (name) {
 				const previous = Object.getOwnPropertyDescriptor(host, name);
 				if (previous && !previous.configurable) throw new Error("宿主接口不可替换：" + name);
-				const binding = { name: name, previous: previous, active: true, priority: Number(priority) || 0, frameWindow: frameWindow, toastr: name === "toastr" ? frameWindow.toastr : undefined, get: function () {
+				const binding = { name: name, previous: previous, active: true, priority: Number(priority) || 0, frameWindow: frameWindow, frameElement: frameElement, frameDocument: frameDocument, toastr: name === "toastr" ? frameWindow.toastr : undefined, get: function () {
                     function rank(owner) {
                         const sessionId = owner.frameWindow.frameElement && owner.frameWindow.frameElement.__dshTavernSessionId;
                         return owner.priority + (host.__dshTavernSelectedSessionId && sessionId ? (sessionId === host.__dshTavernSelectedSessionId ? 1 : -1) : 0);
                     }
-                    let selected = binding, descriptor = binding.previous;
+                    // document.open() removes the frame's unload listeners. Do
+                    // not rely on those listeners to retire its host APIs.
+                    let selected = null, newer = null, descriptor = { get: binding.get };
                     while (descriptor && descriptor.get && descriptor.get.tavernHostBinding) {
-                        const older = descriptor.get.tavernHostBinding;
-                        if (older.active && rank(older) > rank(selected)) selected = older;
-                        descriptor = older.previous;
+                        const owner = descriptor.get.tavernHostBinding;
+                        let live = owner.active;
+                        try {
+                            if (owner.frameElement && owner.frameElement.isConnected === false) live = false;
+                            if (owner.frameDocument && owner.frameWindow.document !== owner.frameDocument) live = false;
+                        } catch (_) { live = false; }
+                        if (live) {
+                            if (!selected || rank(owner) > rank(selected)) selected = owner;
+                            newer = owner;
+                        } else {
+                            if (owner.release) owner.release();
+                            if (newer) newer.previous = owner.previous;
+                        }
+                        descriptor = owner.previous;
                     }
+                    if (!selected) return descriptor && (descriptor.get ? descriptor.get.call(host) : descriptor.value);
                     return name === "toastr" ? selected.toastr : selected.frameWindow[name];
                 } };
 				binding.get.tavernHostBinding = binding;
@@ -3276,7 +3355,7 @@ window.__ModuleLoader__.load({
 			});
 			for (const binding of bindings) Object.defineProperty(host, binding.name, { configurable: true, get: binding.get });
 			let released = false;
-			return function () {
+			function release() {
 				if (released) return;
 				released = true;
 				if (ownsSortControl && --sortControl.tavernCompatibilityOwners === 0) sortControl.remove();
@@ -3289,7 +3368,9 @@ window.__ModuleLoader__.load({
 					if (previous) Object.defineProperty(host, binding.name, previous);
 					else delete host[binding.name];
 				}
-			};
+			}
+			for (const binding of bindings) binding.release = release;
+			return release;
 		}
 
 		function releaseTavernHostJQueryHandlers(host, frameWindow) {
@@ -4662,6 +4743,7 @@ window.__ModuleLoader__.load({
 					key: documentKey(), token: nextTavernFrameToken(),
 					helperContext: helperContext, turn: props.turn,
 					heightKey: tavernFrameHeightKey(props), content: props.content,
+					sessionId: props.sessionId,
 					trustedCardMode: props.trustedCardMode, refreshRequested: false
 				};
 				document.html = buildTavernFrameDocument({ content: props.content, token: document.token, openingPreview: props.openingPreview, helperContext: helperContext, trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
@@ -4673,6 +4755,7 @@ window.__ModuleLoader__.load({
                     const previous = frameSizeObservers.get(document.token);
                     if (previous) { previous.disconnect(); frameSizeObservers.delete(document.token); }
 					touchRelay.stop();
+                    if (node) node.__dshTavernSessionId = document.sessionId;
                     channel.attach(node);
                     if (node && typeof hostWindow.IntersectionObserver === "function") {
                         let nearby = true;
@@ -5233,7 +5316,7 @@ window.__ModuleLoader__.load({
 			const status = ["pending", "updated", "partial", "error", "stale", "interrupted", "unchanged"].includes(receipt.status) ? receipt.status : "unchanged";
 			const sideEffectSuffix = sideEffects.length > 0 ? " · 人物卡联动 " + sideEffects.length + " 项" : "";
 			const labels = {
-				pending: "变量结算中…",
+				pending: props.busy ? "变量结算中…" : "变量结算等待中",
 				interrupted: "变量结算已中断",
 				updated: (changes.length > 0 ? "变量已更新 · " + changes.length + " 项" : "变量已更新 · 旧记录无明细") + sideEffectSuffix,
 				partial: "变量部分更新 · " + changes.length + " 项成功 · " + failures.length + " 项失败" + sideEffectSuffix,
@@ -5247,6 +5330,11 @@ window.__ModuleLoader__.load({
 				if (retrying) return;
 				setRetrying(true);
 				try {
+					if (status === "pending") {
+						await rpc("retrySettlement", { turn: props.turn }, props.sessionId);
+						liveTavernView.invalidate(props.sessionId);
+						return;
+					}
 					await askTavernText({
 						title: "重新结算变量", description: "指导意见（选填），仅对本次结算生效。正文保持不变。",
 						placeholder: "例如：这轮还没有交付物品，不要扣除库存。",
@@ -5258,7 +5346,7 @@ window.__ModuleLoader__.load({
 				finally { setRetrying(false); }
 			}
 			const retryButton = props.latest
-				? h("button", { type: "button", className: "dsh-tavern-mvu-retry", disabled: retrying || props.busy || status === "pending", onClick: retry }, props.busy || status === "pending" ? "结算中…" : retrying ? "重试中…" : ["error", "stale", "interrupted", "partial"].includes(status) ? "重试变量结算" : "重新结算变量")
+				? h("button", { type: "button", className: "dsh-tavern-mvu-retry", disabled: retrying || props.busy, onClick: retry }, props.busy ? "结算中…" : retrying ? "重试中…" : status === "pending" ? "重新投递结算" : ["error", "stale", "interrupted", "partial"].includes(status) ? "重试变量结算" : "重新结算变量")
 				: null;
 			const hasDetails = String(receipt.summary || "") !== "" || changes.length > 0 || sideEffects.length > 0 || failures.length > 0 || retryButton;
 			if (!hasDetails) return h("div", { className: "dsh-tavern-mvu-receipt", "data-status": status }, summary);
@@ -5957,6 +6045,7 @@ window.__ModuleLoader__.load({
 			const lastModeSession = React.useRef(null);
 			const fileRef = React.useRef(null);
 			const initialImportRef = React.useRef(null);
+			const initialImportKindRef = React.useRef("source");
 			const playWorkspaceIdRef = React.useRef(workspaceId);
 			const playWorkspaceResolverRef = React.useRef(null);
 			const playPrewarmRef = React.useRef(null);
@@ -5986,6 +6075,7 @@ window.__ModuleLoader__.load({
 			const currentSummary = current ? summaries[current] : null;
 			const readyTavernSession = current && summaries[current] && summaries[current].blank === false && history.some(function (entry) { return entry.sessionId === current && isPlayMode(entry.mode); }) ? current : "";
 			const readyCardSession = current && summaries[current] && summaries[current].blank === false && history.some(function (entry) { return entry.sessionId === current && entry.mode === "card"; }) ? current : "";
+
 			React.useEffect(function () {
 				if (!current || !summaries[current] || !props.sessions.binding(current)) return;
 				const latest = tavernErrorHub.getSnapshot()[0];
@@ -6167,21 +6257,28 @@ window.__ModuleLoader__.load({
 				setOpeningPicker(null);
 				if (id) void call("releaseOpeningPreparation", { id: id }).catch(function () {});
 			}
+			async function loadWorldBookInitialResources() {
+				const response = await call("listWorldBooks");
+				return (response.standalone || []).concat(response.embedded || []).map(function (item) {
+					return { kind: "worldbook", path: item.kind === "card" ? item.cardPath : item.path, title: item.name, detail: item.kind === "card" ? "人物卡内置 · " + item.cardName : "独立世界书" };
+				});
+			}
+			async function loadPresetInitialResources() {
+				const response = await call("listPresets");
+				return (response.presets || []).map(function (item) { return { kind: "preset", path: item.path, title: item.title, detail: "作为编辑目标引用，不会在当前 Agent 中运行" }; });
+			}
+			async function loadSourceInitialResources() {
+				const response = await call("listResources");
+				return (response.resources || []).map(function (item) { return Object.assign({}, item, { kind: "source" }); });
+			}
 			async function loadInitialResources(task) {
-				let resources = [];
-					if (task === "worldbook") {
-						const response = await call("listWorldBooks");
-						resources = (response.standalone || []).concat(response.embedded || []).map(function (item) {
-							return { kind: "worldbook", path: item.kind === "card" ? item.cardPath : item.path, title: item.name, detail: item.kind === "card" ? "人物卡内置 · " + item.cardName : "独立世界书" };
-						});
-					} else if (task === "preset") {
-						const response = await call("listPresets");
-						resources = (response.presets || []).map(function (item) { return { kind: "preset", path: item.path, title: item.title, detail: "作为编辑目标引用，不会在当前 Agent 中运行" }; });
-					} else {
-						const response = await call("listResources");
-						resources = (response.resources || []).map(function (item) { return Object.assign({}, item, { kind: "source" }); });
-					}
-				return resources;
+				if (task === "resource-edit") {
+					const groups = await Promise.all([loadSourceInitialResources(), loadWorldBookInitialResources(), loadPresetInitialResources()]);
+					return groups[0].concat(groups[1], groups[2]);
+				}
+				if (task === "worldbook") return await loadWorldBookInitialResources();
+				if (task === "preset") return await loadPresetInitialResources();
+				return await loadSourceInitialResources();
 			}
 			async function openResourcePicker(task) {
 				setBusy(true); setError("");
@@ -6201,7 +6298,7 @@ window.__ModuleLoader__.load({
 					else if (task === "preset") await call("importPreset", { payload: payload });
 					else await call("importSource", { payload: payload });
 					notifyDataChanged([task === "worldbook" ? "worldbooks" : (task === "preset" ? "presets" : "scripts")]);
-					setInitialResources(await loadInitialResources(task));
+					setInitialResources(await loadInitialResources(cardEntry === "resource-edit" ? "resource-edit" : task));
 					setSelectedInitialResources({});
 				} catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
@@ -6209,7 +6306,7 @@ window.__ModuleLoader__.load({
 			function toggleInitialResource(item) {
 				const key = item.kind + ":" + item.path;
 				setSelectedInitialResources(function (current) {
-					const next = cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? {} : Object.assign({}, current);
+					const next = cardEntry === "resource-edit" ? {} : Object.assign({}, current);
 					if (next[key]) delete next[key];
 					else next[key] = { kind: item.kind, path: item.path, title: item.title };
 					return next;
@@ -6720,32 +6817,56 @@ window.__ModuleLoader__.load({
 					}) : h("div", { className: "dsh-tavern-side-empty", style: { padding: "8px" } }, "暂无")
 				);
 			}
-				const initialResourceTitle = cardEntry === "writing-skill" ? "剧本与素材" : cardEntry === "worldbook" ? "世界书" : cardEntry === "preset" ? "预设" : "剧本";
-			const initialResourcePicker = initialResources.length ? h(React.Fragment, null,
-				initialResourceGroup(initialResourceTitle, initialResources),
-				h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || !chosenInitialResources.length, onClick: function () {
+			function startResourceEditConversation() {
+				const chosen = chosenInitialResources[0];
+				if (!chosen) return;
+				if (chosen.kind === "worldbook") newCardConversation(null, "worldbook", "修改世界书", chosenInitialResources);
+				else if (chosen.kind === "preset") newCardConversation(null, "preset", "修改预设", chosenInitialResources);
+				else newCardConversation(null, "script", "修改剧本", chosenInitialResources);
+			}
+			function startInitialImport(kind) {
+				initialImportKindRef.current = kind;
+				const input = initialImportRef.current;
+				if (!input) return;
+				input.accept = kind === "worldbook" || kind === "preset" ? ".json,application/json" : ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip";
+				input.click();
+			}
+			const initialResourceTitle = cardEntry === "writing-skill" ? "剧本与素材" : "剧本";
+			const resourceEditPicker = h(React.Fragment, null,
+				initialResourceGroup("剧本", initialResources.filter(function (item) { return item.kind === "source"; })),
+				initialResourceGroup("世界书", initialResources.filter(function (item) { return item.kind === "worldbook"; })),
+				initialResourceGroup("预设", initialResources.filter(function (item) { return item.kind === "preset"; })),
+				h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || chosenInitialResources.length !== 1, onClick: startResourceEditConversation }, "用已选目标开始"))
+			);
+			const initialResourcePicker = cardEntry === "resource-edit"
+				? resourceEditPicker
+				: (initialResources.length ? h(React.Fragment, null,
+					initialResourceGroup(initialResourceTitle, initialResources),
+					h("div", { className: "dsh-tavern-picker-foot" }, h("button", { className: "dsh-tavern-question-primary", disabled: busy || !chosenInitialResources.length, onClick: function () {
 						if (cardEntry === "writing-skill") newCardConversation(null, "writing-skill", "创建写作 Skill", chosenInitialResources);
-					else if (cardEntry === "script") newCardConversation(null, "script", "修改剧本", chosenInitialResources);
-					else if (cardEntry === "worldbook") newCardConversation(null, "worldbook", "修改世界书", chosenInitialResources);
-					else if (cardEntry === "preset") newCardConversation(null, "preset", "修改预设", chosenInitialResources);
 						else newCardConversation(null, "extract", "从剧本新建人物卡", chosenInitialResources);
-				} }, "用已选 " + chosenInitialResources.length + (cardEntry === "script" || cardEntry === "extract" ? " 份剧本开始" : " 项开始")))
-			) : h("div", { className: "dsh-tavern-empty" }, "暂无可选" + initialResourceTitle + "，可点击右上角导入。");
-			const initialImportLabel = cardEntry === "worldbook" ? "导入世界书" : cardEntry === "preset" ? "导入预设" : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "script" ? "导入剧本或素材" : "";
-			const initialImportAccept = cardEntry === "worldbook" || cardEntry === "preset" ? ".json,application/json" : ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip";
+					} }, "用已选 " + chosenInitialResources.length + (cardEntry === "extract" ? " 份剧本开始" : " 项开始")))
+				) : h("div", { className: "dsh-tavern-empty" }, "暂无可选" + initialResourceTitle + "，可点击右上角导入。"));
+			const initialImportButtons = cardEntry === "resource-edit"
+				? h(React.Fragment, null,
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("source"); } }, "导入剧本或素材"),
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("worldbook"); } }, "导入世界书"),
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("preset"); } }, "导入预设")
+				)
+				: (cardEntry === "writing-skill" || cardEntry === "extract"
+					? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { startInitialImport("source"); } }, "导入剧本或素材")
+					: null);
 			const cardPicker = h("div", { className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": "选择卡片工作台起始任务" }, pickerError,
-				h("div", { className: "dsh-tavern-card-picker-head" }, cardEntry ? h("button", { className: "dsh-tavern-btn", onClick: function () { setCardEntry(""); } }, "← 返回") : h("span", null, "选择起始任务"), cardEntry === "writing-skill" ? h("span", null, "选择参考素材（至少 1 份）") : cardEntry === "extract" ? h("span", null, "选择初始剧本（至少 1 份）") : cardEntry === "mvu" ? h("span", null, "选择要转换的人物卡") : cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? h("span", null, "选择一个编辑目标") : null, h("span", { className: "dsh-tavern-spacer" }), cardEntry === "edit" || cardEntry === "gentle" || cardEntry === "mvu" ? h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }) : null, initialImportLabel ? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { initialImportRef.current && initialImportRef.current.click(); } }, initialImportLabel) : null, h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
+				h("div", { className: "dsh-tavern-card-picker-head" }, cardEntry ? h("button", { className: "dsh-tavern-btn", onClick: function () { setCardEntry(""); } }, "← 返回") : h("span", null, "选择起始任务"), cardEntry === "writing-skill" ? h("span", null, "选择参考素材（至少 1 份）") : cardEntry === "extract" ? h("span", null, "选择初始剧本（至少 1 份）") : cardEntry === "mvu" ? h("span", null, "选择要转换的人物卡") : cardEntry === "resource-edit" ? h("span", null, "选择一个编辑目标") : null, h("span", { className: "dsh-tavern-spacer" }), cardEntry === "edit" || cardEntry === "gentle" || cardEntry === "mvu" ? h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }) : null, initialImportButtons, h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
 				h("input", { ref: fileRef, type: "file", accept: ".png,.json", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importCard(f); e.target.value = ""; } }),
-				h("input", { ref: initialImportRef, type: "file", accept: initialImportAccept, style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importInitialResource(f, cardEntry); e.target.value = ""; } }),
-					(cardEntry === "edit" || cardEntry === "gentle") ? cardEditRows : cardEntry === "mvu" ? cardMvuRows : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "script" || cardEntry === "worldbook" || cardEntry === "preset" ? initialResourcePicker : h(React.Fragment, null,
+				h("input", { ref: initialImportRef, type: "file", accept: ".txt,.md,.json,.epub,text/plain,text/markdown,application/json,application/epub+zip", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importInitialResource(f, initialImportKindRef.current); e.target.value = ""; } }),
+					(cardEntry === "edit" || cardEntry === "gentle") ? cardEditRows : cardEntry === "mvu" ? cardMvuRows : cardEntry === "writing-skill" || cardEntry === "extract" || cardEntry === "resource-edit" ? initialResourcePicker : h(React.Fragment, null,
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("edit"); } }, h("b", null, "修改人物卡"), h("span", null, "先选择人物卡，再追加修改任务提示词")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("gentle"); } }, h("b", null, "人物卡温和改写"), h("span", null, "人物卡被模型拒绝输出时，适当改写为温和版本，减少拒绝并实测效果")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { setCardEntry("mvu"); } }, h("b", null, "把人物卡转成 MVU 版"), h("span", null, "转换为 MVU 后，状态栏绝对不会掉格式")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("writing-skill"); } }, h("b", null, "创建写作 Skill"), h("span", null, "从素材中提炼写作提示词，明确适用与禁用场景，用于前台正文写作")),
 						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("extract"); } }, h("b", null, "从剧本新建人物卡"), h("span", null, "先选择至少一份剧本，再进入工作台")),
-						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("script"); } }, h("b", null, "修改剧本"), h("span", null, "先选择一份剧本，再进入工作台修改工作版")),
-					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("worldbook"); } }, h("b", null, "修改世界书"), h("span", null, "先选择一本世界书，再进入工作台按条目修改")),
-					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("preset"); } }, h("b", null, "修改预设"), h("span", null, "先选择一个预设，交给卡片 Agent 阅读和修改")),
+						h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { openResourcePicker("resource-edit"); } }, h("b", null, "修改剧本 / 世界书 / 预设"), h("span", null, "先选择一个目标，再进入工作台修改")),
 					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { newCardConversation(null); } }, h("b", null, "空白开始"), h("span", null, "不追加任务提示词，自由使用完整卡片 Agent"))
 				)
 			);
@@ -6840,11 +6961,11 @@ window.__ModuleLoader__.load({
 					},
 					archiveSession: function (sessionId) { return ctx.workspaces.archiveSession(sessionId); },
 					toggleSidebar: function () { if (props.wide) ctx.layout.toggleSidebar(); else props.expandSidebar(); },
-					openConversationSettingsTab: async function (sessionId) { await ctx.betterSidebar.openTab({ type: "dsh-tavern:conversation-settings" }, { sessionId: sessionId }); await ctx.betterSidebar.openTab({ type: "dsh-tavern:status" }, { sessionId: sessionId }); },
-					openCardLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:cards" }, { sessionId: sessionId }); ctx.betterSidebar.updateTab("dsh-tavern:cards", { meta: null }); },
-					openPresetLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:presets" }, { sessionId: sessionId }); },
-					openWorldBookLibraryTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:worldbooks" }, { sessionId: sessionId }); },
-					openResourcesTab: function (sessionId) { ctx.betterSidebar.openTab({ type: "dsh-tavern:resources" }, { sessionId: sessionId }); },
+					openConversationSettingsTab: async function (sessionId) { await openTavernSidebarTab(ctx, { type: "dsh-tavern:conversation-settings" }, { sessionId: sessionId }); await openTavernSidebarTab(ctx, { type: "dsh-tavern:status" }, { sessionId: sessionId }); },
+					openCardLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:cards", meta: null }, { sessionId: sessionId }); },
+					openPresetLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:presets" }, { sessionId: sessionId }); },
+					openWorldBookLibraryTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks" }, { sessionId: sessionId }); },
+					openResourcesTab: function (sessionId) { return openTavernSidebarTab(ctx, { type: "dsh-tavern:resources" }, { sessionId: sessionId }); },
 					appendMention: input.appendMention,
 					injectTaskPrompt: input.injectTaskPrompt,
 					cleanWorkspaceDraft: input.cleanWorkspaceDraft
@@ -8869,8 +8990,7 @@ window.__ModuleLoader__.load({
 					return React.createElement(CardLibraryTab, Object.assign({}, props, {
 						appendMention: function (path, label) { appendMention(props.scope.sessionId, "card", path, label); },
 						openWorldBook: function (source) {
-							ctx.betterSidebar.openTab({ type: "dsh-tavern:worldbooks" }, { sessionId: props.scope.sessionId });
-							ctx.betterSidebar.updateTab("dsh-tavern:worldbooks", { meta: { worldBookSource: source } });
+							openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks", meta: { worldBookSource: source } }, { sessionId: props.scope.sessionId });
 						}
 					}));
 				}
@@ -9468,6 +9588,7 @@ window.__ModuleLoader__.load({
 			const [debugBusy, setDebugBusy] = React.useState(false);
 			const [settlementRetryBusy, setSettlementRetryBusy] = React.useState(false);
 			const [cardUpdateBusy, setCardUpdateBusy] = React.useState(false);
+            const [cardUpdateError, setCardUpdateError] = React.useState("");
 			const running = props.useSession(function (snapshot) { return snapshot.running; });
 			const latestMessageId = props.useChat(latestTavernAssistantMessageId);
 			const stateKey = String(running) + ":" + String(latestMessageId || "");
@@ -9508,10 +9629,10 @@ window.__ModuleLoader__.load({
 			}
 			async function applyUpdatedCard() {
 				if (cardUpdateBusy || !view?.cardUpdate || view.cardUpdate.error) return;
-				if (!await askConfirm("将最新人物卡和世界书应用到当前游戏，下一轮生效，无需重开。已有剧情和变量保留；更新可能使提示词缓存失效，增加 Token 费用和等待时间。是否继续？")) return;
-				setCardUpdateBusy(true);
+				if (!await askConfirm("将预检最新状态栏、EJS、世界书与变量结构，再应用到当前游戏。已有剧情和数值保留，新增变量补默认值；人物卡声明的字段迁移会同步到历史快照，以便回退后继续玩。预检失败不修改存档。更新可能增加 Token 费用和等待时间。是否继续？" + (view.cardUpdate.migrations?.length ? "\n\n声明的变量迁移：\n" + view.cardUpdate.migrations.join("\n") : ""))) return;
+				setCardUpdateBusy(true); setCardUpdateError("");
 				try { await rpc("applyUpdatedCard", { digest: view.cardUpdate.digest }, props.sessionId); liveTavernView.invalidate(props.sessionId); }
-				catch (error) { tavernErrorHub.report("应用人物卡与世界书更新", error); }
+				catch (error) { setCardUpdateError(String(error.message || error)); }
 				finally { setCardUpdateBusy(false); }
 			}
 			async function retrySettlement() {
@@ -9557,9 +9678,10 @@ window.__ModuleLoader__.load({
 				),
 					h("div", { className: "dsh-tavern-status-body" },
 					view.requestMode !== "sillytavern" && view.cardUpdate?.available ? h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡与世界书已有更新" : "世界书已有更新") : "人物卡已有修改"),
-						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用到当前游戏，下一轮生效，无需重开。保留剧情和变量；更新可能使缓存失效，增加 Token 费用和等待时间。"),
-						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用…" : "应用到当前游戏")
+						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : "人物卡信息已变化"),
+						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用前会预检状态栏、EJS、世界书与变量结构。保留剧情和已有数值，补齐新增变量；字段改名或类型变化需在人物卡声明迁移。成功后可继续当前游戏，无需重开。"),
+						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null,
+						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用变化…" : "应用变化到当前游戏")
 					) : null,
 					h(TavernCardAppDock, { sessionId: props.sessionId }),
 					view.settleStatus === "error" ? h("div", { className: "dsh-card-error" },
@@ -10461,7 +10583,6 @@ window.__ModuleLoader__.load({
 			const executeSlash = createTavernFrameSlashExecutor(ctx);
             ctx.effect(() => ctx.betterSidebar.registerTab({
                 id: "dsh-tavern:conversation-settings", title: "本局设置", order: 8, single: true,
-                createTab: () => ({ tab: { id: "dsh-tavern:conversation-settings", type: "dsh-tavern:conversation-settings", title: "本局设置" }, patch: { panelOpen: true } }),
                 component: props => React.createElement(TavernConversationSettingsTab, { sessionId: props.scope.sessionId, sessions: ctx.sessions })
             }), "dsh-tavern: conversation settings tab");
             // Replace shipped host chrome that is noise in the Tavern profile.
@@ -10484,18 +10605,15 @@ window.__ModuleLoader__.load({
             )), "dsh-tavern: immersive header action");
             ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
                 { name: "conversation.session.header.utilities", id: "dsh-tavern-conversation-settings", order: 80 },
-                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => ctx.betterSidebar.openTab({ type: "dsh-tavern:conversation-settings" }, { sessionId }) })
+                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => openTavernSidebarTab(ctx, { type: "dsh-tavern:conversation-settings" }, { sessionId }) })
             )), "dsh-tavern: conversation settings action");
 			ctx.effect(() => ctx.betterSidebar.registerTab({
 				id: "dsh-tavern:status",
 				title: "酒馆状态",
 				order: 7,
 				single: true,
-				createTab: function () {
-					return { tab: { id: "dsh-tavern:status", type: "dsh-tavern:status", title: "酒馆状态" }, patch: { panelOpen: true } };
-				},
 				component: function (props) {
-					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type) { ctx.betterSidebar.openTab({ type: type }, { sessionId: props.scope.sessionId }); } });
+					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type) { openTavernSidebarTab(ctx, { type: type }, { sessionId: props.scope.sessionId }); } });
 				}
 			}), "dsh-tavern: Better Sidebar status tab");
 			ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(

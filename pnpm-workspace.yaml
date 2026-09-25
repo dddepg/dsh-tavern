@@ -8,6 +8,4 @@ ignorePnpmfile: true
 allowBuilds:
   node-pty: false
 minimumReleaseAgeExclude:
-  - dsh-better-sidebar@0.17.1
-patchedDependencies:
-  dsh-better-sidebar@0.17.1: patches/dsh-better-sidebar@0.17.1.patch
+  - dsh-better-sidebar@0.19.1

@@ -317,3 +317,53 @@ test('压缩快照膨胀超过上限时明确失败，保留原文件', async t 
   await assert.rejects(store.read('chat'), { code: 'ERR_BUFFER_TOO_LARGE' })
   assert.deepEqual(await readFile(file), bytes)
 })
+
+test('normalized update returns stay detached from drafts and durable state', async t => {
+  const root=await temporary()
+  t.after(()=>rm(root,{recursive:true,force:true}))
+  const store=createChatJournalStore({dataRoot:root})
+  let draft
+  const created=await store.update('normalized',()=>({id:'normalized',_storageRevision:1,
+    values:{missing:undefined,nan:NaN,date:new Date('2020-01-01T00:00:00Z')},rows:[undefined,Infinity]}))
+  assert.deepEqual(created.values,{nan:null,date:'2020-01-01T00:00:00.000Z'})
+  assert.deepEqual(created.rows,[null,null])
+  created.values.nan=100
+  const saved=await store.update('normalized',current=>{
+    draft=current;current._storageRevision++
+    current.values.extra={toJSON(){return {normalized:true}}}
+    return current
+  })
+  assert.deepEqual(saved.values.extra,{normalized:true})
+  assert.equal(saved.values.nan,null)
+  draft.values.nan=200
+  saved.values.extra.normalized=false
+  const expected=await store.read('normalized')
+  assert.equal(expected.values.nan,null)
+  assert.deepEqual(expected.values.extra,{normalized:true})
+  assert.deepEqual(await createChatJournalStore({dataRoot:root}).read('normalized'),expected)
+})
+
+test('增量写入的 undefined 与磁盘 JSON 一致，后续完整保存和冷读取不会损坏存档', async t => {
+  const root = await temporary()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const store = createChatJournalStore({ dataRoot: root })
+  await bump(store, 'chat', chat => { chat.delivery = {}; chat.flags = [1] })
+  await store.patch('chat', 1, [
+    {op:'set',path:['delivery'],value:{taskId:'task',posture:undefined}},
+    {op:'set',path:['_storageRevision'],value:2}
+  ])
+  // Mirrors a full display capture after a fast background checkpoint.
+  await bump(store, 'chat', chat => { chat.caption='rendered' })
+  const cold = createChatJournalStore({ dataRoot: root })
+  assert.deepEqual((await cold.read('chat')).delivery,{taskId:'task'})
+  await store.patch('chat',3,[
+    {op:'set',path:['delivery','posture'],value:undefined},
+    {op:'set',path:['delivery','taskId'],value:undefined},
+    {op:'set',path:['flags',0],value:undefined},
+    {op:'set',path:['_storageRevision'],value:4}
+  ])
+  const hot=await store.read('chat'), restored=await createChatJournalStore({dataRoot:root}).read('chat')
+  assert.deepEqual(restored,hot)
+  assert.deepEqual(restored.delivery,{})
+  assert.deepEqual(restored.flags,[null])
+})
