@@ -39,7 +39,16 @@ test('人物卡处于半删除状态时可以直接重试', async () => {
   assert.equal(attempts, 2)
 })
 
-test('删除确认明确说明已有对话会保留', () => {
-  assert.match(clientSource, /人物卡工作版和原版都会删除，已有对话会保留/)
+test('人物卡库删除确认只问是否删除，不声称会删对话', () => {
+  assert.match(clientSource, /从人物卡库删除“" \+ card\.name \+ "”吗？/)
   assert.doesNotMatch(clientSource, /相关对话都会删除/)
+})
+
+test('游玩选卡页顶栏可以进入批量删除，并复用已有批量删除流程', () => {
+  const picker = clientSource.slice(clientSource.indexOf('选择人物卡 · 开始游玩'), clientSource.indexOf('还没有人物卡。'))
+  assert.match(picker, /"批量删除"/)
+  assert.match(picker, /cardBatch\.begin\(\)/)
+  assert.match(picker, /cardBatch\.reset\(\)/)
+  assert.match(picker, /cardBatch\.checkbox\(card\)/)
+  assert.match(picker, /cardBatch\.managing\) cardBatch\.toggle\(card\.path\); else preparePlayConversation\(card\)/)
 })

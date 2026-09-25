@@ -3,13 +3,13 @@ import { join } from 'node:path'
 
 export async function sidebarUpgrade({ page, step, savedChat, output, report }) {
   const before = await savedChat()
-  const settings = page.getByRole('button', { name: '本局设置', exact: true })
-  await step('原生侧栏重复打开设置不会增加标签', async () => {
-    await settings.click()
-    const tabs = page.getByText('本局设置', { exact: true }).filter({ visible: true })
+  const status = page.getByRole('button', { name: '酒馆状态', exact: true })
+  await step('原生侧栏重复打开酒馆状态不会增加标签', async () => {
+    await status.click()
+    const tabs = page.getByRole('tab', { name: '酒馆状态', exact: true }).filter({ visible: true })
     await tabs.first().waitFor()
     const count = await tabs.count()
-    await settings.click(); await settings.click()
+    await status.click(); await status.click()
     assert.equal(await tabs.count(), count)
   })
   await step('卡片调试恢复完整对话，预填指令和游玩引用', async () => {
