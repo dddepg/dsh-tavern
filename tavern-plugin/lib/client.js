@@ -11703,64 +11703,7 @@ window.__ModuleLoader__.load({
 
 		function createPlayControlsFeatureModule() {
 			const historyProjection = createTurnHistoryProjection();
-            function SessionInventoryDialog(props) {
-                const [result, setResult] = React.useState(null);
-                const [error, setError] = React.useState("");
-                const [busy, setBusy] = React.useState(false);
-                const [query, setQuery] = React.useState("");
-                const [showHistory, setShowHistory] = React.useState(false);
-                const [page, setPage] = React.useState(0);
-                const generation = React.useRef(0);
-                const h = React.createElement;
-                async function refresh() {
-                    const ticket = ++generation.current;
-                    setBusy(true); setError("");
-                    try {
-                        const value = await rpc("getSessionInventory", {}, props.sessionId);
-                        if (ticket === generation.current) { setResult(value); setPage(0); }
-                    } catch (error) { if (ticket === generation.current) setError(String(error.message || error)); }
-                    finally { if (ticket === generation.current) setBusy(false); }
-                }
-                React.useEffect(() => { refresh(); return () => { generation.current++; }; }, [props.sessionId]);
-                const bytes = value => value == null ? "未知" : (value / 1024 / 1024).toFixed(2) + " MiB";
-                const date = value => value ? new Date(value).toLocaleString() : "未知";
-                const historyCount = (result?.rows || []).filter(row => row.backgroundState === "historical").length;
-                const rows = (result?.rows || []).filter(row => (showHistory || row.backgroundState !== "historical") && (row.sessionId + " " + row.references.map(ref => ref.title).join(" ")).toLowerCase().includes(query.toLowerCase()));
-                return h("div", { role: "dialog", "aria-modal": true, "aria-label": "会话统计", className: "dsh-tavern-modal-backdrop", onKeyDown: event => {
-                    if (event.key === "Escape") { event.stopPropagation(); props.onClose(); }
-                    if (event.key === "Tab") {
-                        const controls = [...event.currentTarget.querySelectorAll("button:not(:disabled), input")];
-                        const first = controls[0], last = controls[controls.length - 1];
-                        if (event.shiftKey && event.target === first) { event.preventDefault(); last?.focus(); }
-                        else if (!event.shiftKey && event.target === last) { event.preventDefault(); first?.focus(); }
-                    }
-                }, style: { position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center" } },
-                    h("section", { className: "dsh-tavern-panel", style: { background: "var(--background, Canvas)", color: "var(--foreground, CanvasText)", padding: 20, width: "min(1100px, 94vw)", maxHeight: "85vh", overflow: "auto" } },
-                        h("h2", null, "会话统计"),
-                        h("p", null, "只读统计，不加载历史。事件数仅统计已加载会话；磁盘大小不是内存占用。关联包含 Tavern 直接关联及通过父会话追溯的来源；来源不代表当前仍在使用，未找到关联不代表孤儿会话。后台身份来自剧情绑定索引；旧索引或独立任务信息不足时显示待确认，不能据此删除。"),
-                        h("button", { type: "button", disabled: busy, onClick: refresh }, busy ? "读取中…" : "刷新"),
-                        h("button", { type: "button", autoFocus: true, onClick: props.onClose }, "关闭"),
-                        error ? h("p", { role: "alert" }, error) : null,
-                        result ? h("p", null, "会话 " + result.totals.sessions + " · 已加载 " + result.totals.loaded + " · 已知磁盘占用 " + bytes(result.totals.knownDiskBytes) + "（" + result.totals.unknownDiskSize + " 条未知） · 进程 RSS " + bytes(result.memory.rss) + " · JS 堆 " + bytes(result.memory.heapUsed) + " · 采样 " + date(result.capturedAt)) : null,
-                        h("input", { "aria-label": "筛选会话", placeholder: "会话 ID 或对话名称", value: query, onChange: event => { setQuery(event.target.value); setPage(0); } }),
-                        h("button", { type: "button", "aria-expanded": showHistory, onClick: () => { setShowHistory(value => !value); setPage(0); } }, (showHistory ? "收起历史后台" : "展开历史后台") + "（" + historyCount + "）"),
-                        h("table", { style: { width: "100%", textAlign: "left" } },
-                            h("thead", null, h("tr", null, ["会话", "状态", "事件数", "磁盘大小", "文件修改时间", "关联对话 / 最后打开"].map(label => h("th", { key: label }, label)))),
-                            h("tbody", null, rows.slice(page * 50, (page + 1) * 50).map(row => h("tr", { key: row.sessionId },
-                                h("td", { style: { overflowWrap: "anywhere" } }, row.sessionId),
-                                h("td", null, ({ current: "当前后台 · ", historical: "历史后台（仅存档） · ", unknown: "后台归属状态待确认 · ", transitioning: "非当前后台，任务仍在运行 · " }[row.backgroundState] || "") + (row.running ? "运行中" : row.loaded ? "已加载" : "未加载") + (row.archived === true ? " · 已归档" : row.archived === null ? " · 归档状态未知" : "")),
-                                h("td", null, row.eventCount == null ? "未知" : row.eventCount),
-                                h("td", null, row.storageError || bytes(row.diskBytes)),
-                                h("td", null, date(row.fileModifiedAt)),
-                                h("td", null, row.references.length ? row.references.map(ref => h("div", { key: ref.chatId }, ref.title + (ref.relation === "ancestor" ? " · 来源会话 " + ref.viaSessionId : " · 直接关联") + " · " + date(ref.lastOpenedAt))) : "未找到关联")
-                            )))),
-                        h("p", null, rows.length + " 条 · 第 " + (page + 1) + " 页"),
-                        h("button", { type: "button", disabled: page === 0, onClick: () => setPage(page - 1) }, "上一页"),
-                        h("button", { type: "button", disabled: (page + 1) * 50 >= rows.length, onClick: () => setPage(page + 1) }, "下一页")
-                    ));
-            }
 			function TavernConversationExportAction(props) {
-				const [inventoryOpen, setInventoryOpen] = React.useState(false);
                 const [available, setAvailable] = React.useState(false);
 				const [busy, setBusy] = React.useState(false);
 				React.useEffect(function () {
@@ -11812,27 +11755,10 @@ window.__ModuleLoader__.load({
 					} catch (err) { tavernErrorHub.report("导出日志", err); }
 					finally { setBusy(false); }
 				}
-                async function exportWorldbookRecall() {
-                    setBusy(true);
-                    try {
-                        const result = await rpc("getWorldBookRecallLog", {}, props.sessionId);
-                        if (!result.log) throw new Error(result.message || "尚无世界书召回日志，请先进行一轮对话。");
-                        const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
-                        const link = document.createElement("a"); link.href = url;
-                        link.download = "世界书召回-第" + result.log.turn + "轮.json";
-                        document.body.appendChild(link); link.click(); link.remove();
-                        window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-                    } catch (error) { tavernErrorHub.report("世界书召回日志", error); }
-                    finally { setBusy(false); }
-                }
-                return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
-                    inventoryOpen ? React.createElement(SessionInventoryDialog, { sessionId: props.sessionId, onClose: () => setInventoryOpen(false) }) : null,
+				return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
                     React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } }, busy ? "导出中…" : "导出 ▾"),
                     React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", "aria-label": "导出", hidden: !open, onClick: function (event) { if (event.target.closest("button:not(:disabled)")) setOpen(false); } },
-                        React.createElement("button", { type: "button", role: "menuitem", onClick: () => setInventoryOpen(true) }, "会话统计"),
                         React.createElement("button", { type: "button", role: "menuitem", "data-tavern-log-export": "", disabled: busy, "aria-label": "日志", title: "下载 Session、MVU、生图与更新日志；含私人剧情，分享前请检查隐私", onClick: exportLogs }, "日志"),
-                        React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "最近一轮的命中词、扫描来源、排序、排除原因与最终投影正文", onClick: exportWorldbookRecall }, "世界书召回日志"),
-                        React.createElement("button", { type: "button", role: "menuitem", title: "最近 10 分钟，最多 120 条；不含输入或聊天内容。刷新页面后清空", onClick: () => tavernInteractionDiagnostics.download() }, "交互诊断"),
                         React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "导出只包含玩家与角色正文的 TXT", onClick: exportText }, "纯对话 TXT")
                     ));
             }
