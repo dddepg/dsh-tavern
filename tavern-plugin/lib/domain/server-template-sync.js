@@ -1,31 +1,47 @@
 /** Coalesce display work without losing a write received during execution. */
-export function createServerTemplateSync({ run, onError, delayMs = 250 }) {
+export function createServerTemplateSync({ run, onError, delayMs = 250, maxRetryDelayMs = 5000 }) {
   const records = new Map()
   let disposed = false
-  function schedule(id, version) {
+  function schedule(id, version, { blocked = false, enabled = true } = {}) {
     if (disposed || !id || id.startsWith('opening:')) return
     let record = records.get(id)
-    if (record && record.version === version) return
-    if (!record) { record = { version, dirty: true }; records.set(id, record) }
-    else { record.version = version; record.dirty = true }
+    if (!enabled) {
+      if (record) clearTimeout(record.timer)
+      records.delete(id)
+      return
+    }
+    if (record && record.version === version && record.blocked === blocked) return
+    if (!record) { record = {}; records.set(id, record) }
+    else clearTimeout(record.timer)
+    Object.assign(record, { version, blocked, dirty: true, timer: null, retryDelay: delayMs })
     arm(id, record)
   }
   function arm(id, record) {
-    if (disposed || record.timer || record.running) return
+    if (disposed || records.get(id) !== record || record.blocked || record.timer || record.running) return
     record.timer = setTimeout(async () => {
       record.timer = null; record.running = true; record.dirty = false
-      try { if ((await run(id))?.deferred) record.dirty = true }
-      catch (error) { onError?.(error) }
+      const version = record.version
+      try {
+        const result = await run(id)
+        if (result?.deferred) {
+          record.dirty = true
+          // A new revision or a completed batch is progress. Only unchanged,
+          // unproductive retries back off; never abandon unfinished history.
+          if (record.version === version && !result.synchronized) {
+            record.retryDelay = Math.min(Math.max(delayMs, maxRetryDelayMs), record.retryDelay * 2)
+          } else record.retryDelay = delayMs
+        }
+      } catch (error) { onError?.(error) }
       finally {
         record.running = false
         if (record.dirty) arm(id, record)
-        // Bound completed-version bookkeeping; never evict queued/running work.
+        // Bound completed-version bookkeeping; never evict queued/blocked work.
         if (records.size > 256) for (const [key, item] of records) {
           if (records.size <= 256) break
-          if (!item.running && !item.timer && key !== id) records.delete(key)
+          if (!item.running && !item.timer && !item.dirty && key !== id) records.delete(key)
         }
       }
-    }, delayMs)
+    }, record.retryDelay)
     record.timer.unref?.()
   }
   return { schedule, dispose() { disposed = true; for (const record of records.values()) clearTimeout(record.timer); records.clear() } }

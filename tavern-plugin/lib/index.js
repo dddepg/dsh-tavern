@@ -245,12 +245,17 @@ export async function apply(ctx) {
   const profileData = createProfileDataStore({ dataRoot })
   const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData, rpc: (method, args) => dispatchMethod(method, args, true) })
   const templateSync = createServerTemplateSync({
-    run: async sessionId => {
-      const chat = await sessionStateForSession(sessionId)
-      if (chat && groupOfMode(chat.mode || 'story') === 'play') return fullTemplateRuntime.synchronize(sessionId)
-    },
+    run: sessionId => fullTemplateRuntime.synchronize(sessionId),
     onError: error => console.warn('dsh-tavern: 服务端模板显示处理失败:', str(error.message || error))
   })
+  // Every scheduling caller already has this committed chat. Do not read a
+  // full history projection again just to check its mode or settlement status.
+  function scheduleTemplateSync(chat) {
+    templateSync.schedule(chat.sessionId, chat._storageRevision, {
+      enabled: groupOfMode(chat.mode || 'story') === 'play',
+      blocked: ['pending', 'running'].includes(chat.settleStatus)
+    })
+  }
   ctx.effect(() => () => templateSync.dispose())
   ctx.effect(() => () => fullTemplateRuntime.dispose())
   const cardOrganization = createCardOrganization(profileData)
@@ -729,7 +734,7 @@ export async function apply(ctx) {
     const saved = await rawWriteChat(chat, metadata)
     await syncChatSummary(saved)
     void coordinationEvents?.publish(saved.sessionId)
-    templateSync.schedule(saved.sessionId, saved._storageRevision)
+    scheduleTemplateSync(saved)
     if (!str(metadata?.source).startsWith('compaction.')) queueAutoCompaction(saved.sessionId)
     return saved
   }
@@ -739,7 +744,7 @@ export async function apply(ctx) {
     await syncChatSummary(saved)
     if (saved !== undefined) {
       void coordinationEvents?.publish(saved.sessionId)
-      templateSync.schedule(saved.sessionId, saved._storageRevision)
+      scheduleTemplateSync(saved)
       if (!str(metadata?.source).startsWith('compaction.')) queueAutoCompaction(saved.sessionId)
     }
     return saved
@@ -750,7 +755,7 @@ export async function apply(ctx) {
     if (saved) {
       await syncChatSummary(saved)
       void coordinationEvents?.publish(saved.sessionId)
-      templateSync.schedule(saved.sessionId, saved._storageRevision)
+      scheduleTemplateSync(saved)
       queueAutoCompaction(saved.sessionId)
     }
     return saved
@@ -1355,7 +1360,7 @@ export async function apply(ctx) {
   ctx.effect(() => () => liveCardUpdate.dispose())
   const incrementalReplyView = createIncrementalReplyView({ readChanges: (id, revision) => chatPersistence.readChangedSlice(id, revision) })
   async function view(chat, card, persistedProjection = false, options = {}) {
-    templateSync.schedule(chat.sessionId, chat._storageRevision)
+    scheduleTemplateSync(chat)
     const runtimeSettings = await requestPerformance.stage('settings', () => readTavernSettings())
     let scriptProgress = null
     if ((chat.mode || 'story') === 'script') {
