@@ -9676,6 +9676,11 @@ window.__ModuleLoader__.load({
 			);
 			if (view.mode === "card") return null;
 			const statusText = view.settleStatus === "running" ? "正在执行后台结算" : (view.settleStatus === "error" ? "后台结算失败" : "后台结算已完成");
+			const cardUpdateNotice = !view.cardUpdate ? "" : view.cardUpdate.error ? "检查更新失败：" + view.cardUpdate.error
+				: view.cardUpdate.worldbookSyncRequired || view.cardUpdate.legacy ? "旧存档需同步"
+				: view.cardUpdate.cardChanged && view.cardUpdate.worldbookChanged ? "人物卡和世界书有变化"
+				: view.cardUpdate.cardChanged ? "人物卡有变化"
+				: view.cardUpdate.worldbookChanged ? "世界书有变化" : "";
 			return h("aside", { className: "dsh-tavern-status" },
 				h("div", { className: "dsh-tavern-status-head" },
 					h("div", { className: "dsh-tavern-status-role" }, view.card.name),
@@ -9685,10 +9690,11 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-tavern-status-body" },
                         h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
 					["story", "script"].includes(view.mode || "story") && view.requestMode !== "sillytavern" && view.cardUpdate ? h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.worldbookSyncRequired ? "世界书版本待同步" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : view.cardUpdate.available ? "人物卡信息已变化" : "人物卡与世界书"),
-						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || (view.cardUpdate.worldbookSyncRequired ? "旧存档需同步一次，才能检测后续更新。" : "") + "保留剧情和数值，替换本局世界书。"),
-						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null,
-						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在重新加载…" : "重新加载")
+						h("div", { className: "dsh-tavern-card-reload" },
+							h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在重新加载人物卡和世界书…" : "重新加载人物卡和世界书"),
+							cardUpdateNotice ? h("span", { className: "dsh-tavern-card-reload-notice", role: "status" }, cardUpdateNotice) : null
+						),
+						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null
 					) : null,
 					h(TavernCardAppDock, { sessionId: props.sessionId }),
 					view.settleStatus === "error" ? h("div", { className: "dsh-card-error" },
