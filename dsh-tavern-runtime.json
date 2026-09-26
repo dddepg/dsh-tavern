@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "475c3e9992ce09017276db8f628f1aa42fb85031",
-  "releaseSequence": 404,
+  "revision": "1e1c8a1f7ea8bb7158bc3c3d9ecc3bb606733926",
+  "releaseSequence": 405,
   "version": "2.2.0",
   "files": [
     {
@@ -40,9 +40,14 @@
       "size": 6628
     },
     {
+      "path": "bin/desktop-host-paths.mjs",
+      "sha256": "860fe5bb361d4ff7694488a734c5a4e4df067aed1e856727b906b33bc0d1326b",
+      "size": 1200
+    },
+    {
       "path": "bin/desktop-package-manager.mjs",
-      "sha256": "639bdf8f587e52e04197e98acac1600525cdd8d1812a90b83aa4b5749d3c53ea",
-      "size": 5903
+      "sha256": "e0760f3ce5178f8502ba3bd978c4f1738446371121f738aca7636d59c22bf60b",
+      "size": 5927
     },
     {
       "path": "bin/dsh-compatibility.mjs",
@@ -76,8 +81,8 @@
     },
     {
       "path": "bin/plugin-dependencies.mjs",
-      "sha256": "b6852611946bd5c193e96daabe2cb79851028722e0a2307f30292df098a782d5",
-      "size": 9386
+      "sha256": "0b4083e7447d21c38bb91eb23dd2134d8152139e64be335fc0d85452f1db2241",
+      "size": 9466
     },
     {
       "path": "bin/plugin-package-guard.mjs",
