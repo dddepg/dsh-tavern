@@ -68,7 +68,7 @@ test('real preset: foreground and background resolve their own isolated compacti
   async function mount(name, agent) {
     const source = await readFile(new URL('../presets/' + name + '/agent.cordis.yml', import.meta.url), 'utf8')
     const group = source.match(/- id: compaction\n[\s\S]*$/)[0]
-      .replace('dsh-tavern-plugin/compaction', new URL('../tavern-plugin/lib/agent-compaction.js', import.meta.url).href)
+      .replace('../../tavern-plugin/lib/agent-compaction.js', new URL('../tavern-plugin/lib/agent-compaction.js', import.meta.url).href)
     const file = join(root, name + '.yml')
     await writeFile(file, group)
     const key = {}, scope = createScope(h.ctx, key)

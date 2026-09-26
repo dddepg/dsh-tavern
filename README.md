@@ -112,7 +112,18 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocket 及其开关。详见 [Pocket 手机访问](docs/pocket-access.md)。
 
-**更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
+**上述安装方式的更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
+
+### 已有 DSH：标准插件安装（试验）
+
+已安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm 和 Git**，且尚未通过专用安装器建立 `tavern` Profile 时，可以运行：
+
+```bash
+dsh plugin --profile tavern add github:flizzywine/dsh-tavern
+dsh --profile tavern
+```
+
+安装到独立的 `tavern` Profile。更新时关闭酒馆，重新运行安装命令，再启动；页面会显示更新命令。现有专用安装请继续原来的更新方式，不要直接叠装。详见[标准插件安装说明](docs/installation.md#标准插件安装试验)。
 
 [完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。
 

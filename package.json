@@ -2,9 +2,6 @@
   "name": "dsh-profile-tavern",
   "version": "2.2.0",
   "private": true,
-  "bin": {
-    "dsh-tavern": "bin/dsh-tavern.mjs"
-  },
   "scripts": {
     "build:client": "node bin/build-tavern-client.mjs",
     "check:client": "node bin/build-tavern-client.mjs --check",
@@ -23,19 +20,20 @@
     "test:e2e": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs",
     "test:e2e:display": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --display-regression",
     "test:e2e:card-update": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --card-update",
-    "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs"
+    "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs",
+    "build:plugin-package": "node bin/build-plugin-package.mjs",
+    "check:plugin-package": "node bin/build-plugin-package.mjs --check"
   },
   "dependencies": {
     "acorn": "8.15.0",
     "chevrotain": "^11.2.0",
-    "dsh-better-sidebar": "0.19.1",
-    "dsh-pocket": "2.10.6",
-    "dsh-tavern-plugin": "link:./tavern-plugin",
-    "dsh-tavern-remote": "link:./tavern-plugin/packages/dsh-tavern-remote",
-    "dsh-web-mobile": "2.3.0",
     "jsdom": "26.1.0",
     "mathjs": "12.4.3",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "marked": "16.3.0",
+    "zod": "^4.4.3",
+    "ws": "8.21.3",
+    "schemastery": "3.18.0"
   },
   "dsh": {
     "profile": {
@@ -47,12 +45,46 @@
         "dsh-tavern-plugin",
         "dsh-tavern-remote"
       ]
+    },
+    "bundle": {
+      "patch": "./plugin.patch.yml"
     }
   },
   "devDependencies": {
     "playwright": "1.58.2",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "scheduler": "0.27.0"
+    "scheduler": "0.27.0",
+    "dsh-tavern-plugin": "link:./tavern-plugin",
+    "dsh-tavern-remote": "link:./tavern-plugin/packages/dsh-tavern-remote",
+    "dsh-pocket": "2.10.6",
+    "dsh-web-mobile": "2.3.0",
+    "dsh-better-sidebar": "0.19.1"
+  },
+  "description": "DSH Tavern: standalone tavern Profile bundle",
+  "files": [
+    "bin/",
+    "config/dsh-compatibility.json",
+    "config/plugin-web.patch.yml",
+    "presets/",
+    "tavern-plugin/",
+    "plugin.patch.yml",
+    "cordis.patch.yml",
+    "patches/",
+    "!**/node_modules/**",
+    "!**/upstream/**",
+    "!**/tests/**",
+    "!**/*.map",
+    "!tavern-plugin/src/**",
+    "!**/docs/**",
+    "config/plugin-web.LICENSE",
+    "tavern-plugin/lib/vendor/st-prompt-template/upstream/settings.html"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flizzywine/dsh-tavern.git"
   }
 }

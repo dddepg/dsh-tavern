@@ -45,6 +45,28 @@ const verifiedUpdate = {
 }
 const runningVersion = { ...knownIdentity, latestVersion: '1.1.0', latestCommit: 'b'.repeat(40), checkSource: 'github', checkWarning: undefined }
 
+test('standard plugin installation delegates updates to DSH without fetching or rewriting package files', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-package-updater-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const profile = path.join(root, 'profiles/tavern')
+  await mkdir(profile, { recursive: true })
+  const manifest = JSON.stringify({ dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-profile-tavern'] } } })
+  await writeFile(path.join(profile, 'package.json'), manifest)
+  const updater = createApplicationUpdater({
+    sourceRoot: root, dshHome: root, dataRoot: path.join(root, 'profile-data/tavern/data'),
+    readLocalIdentity: async () => knownIdentity,
+    fetchManifest() { assert.fail('package-managed updates must not fetch source releases') },
+    spawnProcess() { assert.fail('legacy updater must not touch package-manager installations') },
+  })
+  const status = await updater.status()
+  assert.equal(status.phase, 'package-managed')
+  assert.equal(status.currentVersion, knownIdentity.currentVersion)
+  assert.match(status.updateCommand, /^dsh plugin --profile tavern add github:/)
+  assert.deepEqual(await updater.check(), status)
+  await assert.rejects(updater.start(), /DSH 插件管理器安装/)
+  assert.equal(await readFile(path.join(profile, 'package.json'), 'utf8'), manifest)
+})
+
 test('真实 Git 历史可离线识别新旧，包括 archive 安装的 bare source-cache', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-order-git-'))
   try {

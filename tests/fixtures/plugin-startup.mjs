@@ -20,6 +20,9 @@ const events = new Set()
 try {
   await apply({
     get: name => services.get(name),
+    inject(names, callback) {
+      if (names.every(name => services.has(name))) return callback(this)
+    },
     llm: services.get('llm'),
     effect(callback) {
       const dispose = callback()

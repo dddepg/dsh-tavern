@@ -104,9 +104,10 @@ for (const host of ['desktop', 'android', 'cli']) {
       }
       const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data', host }
       const next = mergeProfileManifest({ ...options, current })
+      assert.equal(next.dsh.bundle, undefined)
       const selected = host === 'android' ? 'dsh-web-mobile' : host === 'desktop' ? 'dsh-pocket' : null
       if (selected) {
-        assert.equal(next.dependencies[selected], source.dependencies[selected])
+        assert.equal(next.dependencies[selected], (source.dependencies[selected] ?? source.devDependencies[selected]))
         assert.ok(next.dshTavern.managedBundles.includes(selected))
         assert.ok(next.dshTavern.managedDependencies.includes(selected))
       }
@@ -131,7 +132,7 @@ test('同一源码在 CLI、Desktop 与 DSHA 之间切换只保留目标平台�
     current = mergeProfileManifest({ ...options, host, current })
     const selected = host === 'android' ? 'dsh-web-mobile' : host === 'desktop' ? 'dsh-pocket' : null
     const removed = host === 'android' ? 'dsh-pocket' : 'dsh-web-mobile'
-    assert.equal(current.dependencies[selected], source.dependencies[selected])
+    assert.equal(current.dependencies[selected], (source.dependencies[selected] ?? source.devDependencies[selected]))
     assert.equal(current.dependencies[removed], undefined)
     if (selected) assert.ok(current.dsh.profile.bundles.includes(selected))
     assert.ok(!current.dsh.profile.bundles.includes(removed))

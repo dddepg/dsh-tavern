@@ -42,7 +42,10 @@ function uniqueStrings(values) {
 export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoot, host, dshVersion }) {
   const sourceDocument = object(source)
   const currentDocument = object(current)
-  const sourceDsh = object(sourceDocument.dsh)
+  const sourceDsh = { ...object(sourceDocument.dsh) }
+  // The source package is also an installable aggregate. A legacy Profile
+  // still composes its individual bundles and must not advertise that patch.
+  delete sourceDsh.bundle
   const currentDsh = object(currentDocument.dsh)
   const sourceProfile = object(sourceDsh.profile)
   const currentProfile = object(currentDsh.profile)
@@ -63,7 +66,14 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
   const userBundles = uniqueStrings(currentProfile.bundles).filter((name) => !previousManagedBundleSet.has(name))
   const bundles = uniqueStrings(sourceBundles.concat(userBundles))
 
-  const sourceDependencies = object(sourceDocument.dependencies)
+  // Local subpackages and host-specific layouts are development dependencies of
+  // the installable aggregate, but remain explicit dependencies of legacy Profiles.
+  const localDependencies = Object.fromEntries(
+    ['dsh-tavern-plugin', 'dsh-tavern-remote', 'dsh-pocket', 'dsh-web-mobile', 'dsh-better-sidebar']
+      .filter(name => sourceDocument.devDependencies?.[name] !== undefined)
+      .map(name => [name, sourceDocument.devDependencies[name]]),
+  )
+  const sourceDependencies = { ...localDependencies, ...object(sourceDocument.dependencies) }
   const currentDependencies = object(currentDocument.dependencies)
   const managedDependencies = sourceBundles.filter((name) => sourceDependencies[name] !== undefined)
   const previousManagedDependencies = uniqueStrings(currentTavern.managedDependencies).length > 0

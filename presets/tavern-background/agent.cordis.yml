@@ -17,7 +17,7 @@
         thresholdRatio: 0.5
 
     - id: tavern-compaction
-      name: dsh-tavern-plugin/compaction
+      name: ../../tavern-plugin/lib/agent-compaction.js
 
     - id: command-compact
       name: '@deepseek-ai/dsh-command-compact'
