@@ -10167,7 +10167,7 @@ window.__ModuleLoader__.load({
                             [ ["问题", "problem"], ["尝试", "attempts"], ["修复方法", "solution"], ["验证依据", "evidence"] ].map(([label, key]) => record[key] ? h("p", { key: key }, h("strong", null, label + "："), record[key]) : null),
                             h("div", { className: "dsh-tavern-memory-actions" },
                                 h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => setDraft(Object.assign({}, record, { id: entry.id, scope: entry.scope, title: entry.title })) }, "修改"),
-                                h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(async () => { if (await askConfirm("归档这条经验？之后不再检索或注入。")) { await rpc("changeCardMemoryExperience", { action: "archive", id: entry.id, scope: entry.scope }, props.sessionId); await refresh(); } }) }, "归档")));
+                                h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(async () => { if (await askConfirm("删除这条改卡经验？删除后不再检索或用于改卡，底层记录仍保留。")) { await rpc("changeCardMemoryExperience", { action: "archive", id: entry.id, scope: entry.scope }, props.sessionId); await refresh(); } }) }, "删除")));
                     }),
                     draft ? h("form", { className: "dsh-tavern-memory-entry", onSubmit: event => { event.preventDefault(); run(async () => { await rpc("changeCardMemoryExperience", Object.assign({}, draft, { action: "save" }), props.sessionId); setDraft(null); await refresh(); }); } },
                         field("标题", "title"), field("问题", "problem"), field("失败或修复尝试", "attempts"), field("修复方法", "solution"), field("验证依据", "evidence"),
