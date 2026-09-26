@@ -1142,3 +1142,12 @@ test('rescued history blocks regeneration and rollback without modifying old tex
  await assert.rejects(h.create().rollback('session','chat'),/救援/)
  assert.deepEqual(h.chat,before)
 })
+
+test('重新生成携带玩家原始图片，提交后仍保留图片', async () => {
+  const h = harness({ checkpoint: true })
+  const image = { type: 'image', attachment: { id: 'original-photo' } }
+  h.chat.messages[1].inputAttachments = [image]
+  const result = await h.create().regenerate('chat', '写短一些', 'session')
+  assert.deepEqual(h.agent.input.content.filter(block => block.type === 'image'), [image])
+  assert.deepEqual(result.messages[1].inputAttachments, [image])
+})

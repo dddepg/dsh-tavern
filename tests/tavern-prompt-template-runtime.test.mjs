@@ -108,3 +108,13 @@ test('真实请求处理保留工具与推理块，并处理独立 system 和正
   assert.deepEqual(result.messages[0].content, [message.content[0], { type: 'text', text: '42' }, message.content[2]])
   assert.equal(message.content[1].text, '<%= 6 * 7 %>')
 })
+
+test('模板渲染只变换文字，保留图片和纯图片消息', async () => {
+  const image = { type: 'image', attachment: { id: 'photo' } }
+  const result = await runtime.renderMessages([
+    { role: 'user', content: '<%= 1 + 1 %>', inputAttachments: [image] },
+    { role: 'user', content: '', inputAttachments: [image] }
+  ])
+  assert.deepEqual(result.messages.map(message => message.content), ['2', ''])
+  assert.deepEqual(result.messages.map(message => message.inputAttachments), [[image], [image]])
+})

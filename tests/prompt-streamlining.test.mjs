@@ -250,9 +250,9 @@ test('外部预设作用于前台游玩，后台与卡片 Agent 保持 DSH 原�
 test('无玩家输入的开场回合不进入正文结算', () => {
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
 
-  assert.match(lifecycle, /const userText = userTextForTurn\(session, payload\.turn\)/)
-  assert.match(lifecycle, /if \(userText === ''\) return/)
-  assert.match(lifecycle, /userText,\s*assistantText:/)
+  assert.match(lifecycle, /const userMessage = userMessageForTurn\(session, payload\.turn\)/)
+  assert.match(lifecycle, /if \(userText === '' && !inputAttachments\(userContent\)\.length\) return/)
+  assert.match(lifecycle, /userText,\s*userContent,\s*assistantText:/)
 })
 
 test('游玩 Agent 接收解析后的玩家输入，不接收原始 Tavern 宏代码', () => {
@@ -266,7 +266,7 @@ test('读取 Session View 不启动后台工作，开场回合由玩家输入边
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
 
   assert.doesNotMatch(sessionView, /queueSettlement|writeChat|settleStatus/)
-  assert.match(lifecycle, /if \(userText === ''\) return/)
+  assert.match(lifecycle, /if \(userText === '' && !inputAttachments\(userContent\)\.length\) return/)
 })
 
 test('游玩固定选择一个开场白，并用它对齐剧本', () => {

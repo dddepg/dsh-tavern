@@ -1,3 +1,4 @@
+import { inputAttachments, projectPlayerContent } from './domain/player-input-content.js'
 import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
 import { projectCardSummary } from './domain/card-preparation.js'
 import { createCardSummaryCache } from './domain/card-summary-cache.js'
@@ -3797,14 +3798,14 @@ export async function apply(ctx) {
     return -1
   }
 
-  function userTextForTurn(session, turn) {
+  function userMessageForTurn(session, turn) {
     const events = sessionEvents(session)
     const start = turnStartIndex(session, turn)
     if (start < 0) return ''
     for (let index = Math.max(0, start + 1); index < events.length; index++) {
       const event = events[index]
       if (!event || event.type !== 'user/message') continue
-      if (isTurnInput(event.data)) return contentText(event.data)
+      if (isTurnInput(event.data)) return event.data
     }
     return ''
   }
@@ -3911,7 +3912,7 @@ export async function apply(ctx) {
     }
   }
 
-  async function compileCompatibilityTurn(chat, userText) {
+  async function compileCompatibilityTurn(chat, userText, attachments = []) {
     const snapshot = await resolveChatRuntimePreset(chat)
     const presetPath = str(snapshot && snapshot.presetPath)
     const preset = presetPath === '' ? createCleanCompatibilityPreset() : snapshot.compatibilityPreset
@@ -3926,8 +3927,9 @@ export async function apply(ctx) {
       preset,
       presetPath,
       presetDocument,
-      history: (chat.messages || []).map(function (item) { return { role: item.role, text: str(item.text), sourceText: str(item.sourceText) } }),
+      history: (chat.messages || []).map(function (item) { return { role: item.role, text: str(item.text), sourceText: str(item.sourceText), inputAttachments: item.inputAttachments } }),
       input: userText,
+      inputAttachments: attachments,
       userName: str(chat.macroState && chat.macroState.userName),
       macroState: chat.macroState,
       worldInfoBefore: worldInfo.before,
@@ -4030,7 +4032,7 @@ export async function apply(ctx) {
       return {
         id: randomUUID(),
         role: item.role,
-        content: [{ type: 'text', text: item.content }],
+        content: projectPlayerContent(item.inputAttachments, item.content, { fallback: false }),
         source: {
           kind: 'plugin', plugin: 'dsh-tavern', form: 'sillytavern-compatibility',
           sections: [{ name: 'tavern:sillytavern:' + label, text: item.content }],
@@ -4239,8 +4241,10 @@ export async function apply(ctx) {
     fullTemplateRuntime.cancel(templateOwner)
     clearRuntimePresetRequestState(payload.agent)
     if (backgroundAgentRunner.owns(sessionId)) return
-    const userText = userTextForTurn(session, payload.turn)
-    if (userText === '') return
+    const userMessage = userMessageForTurn(session, payload.turn)
+    const userText = contentText(userMessage)
+    const userContent = userMessage?.content || []
+    if (userText === '' && !inputAttachments(userContent).length) return
     const requestId = requestIdForTurn(session, payload.turn)
     const assistant = assistantResultForTurn(session, payload.turn)
     if (assistant === null || assistant.text === '') {
@@ -4262,6 +4266,7 @@ export async function apply(ctx) {
       turn: payload.turn,
       requestId,
       userText,
+      userContent,
       assistantText: assistant === null ? '' : assistant.text
     })
     if (saved.reply) replaceAssistantReply(session, assistant, saved.reply.sessionText)

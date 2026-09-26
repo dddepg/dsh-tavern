@@ -1,3 +1,4 @@
+import { inputAttachments } from './player-input-content.js'
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { restoredSurfaceSeqs } from './surface-restoration.js'
@@ -263,8 +264,9 @@ export function replayableFailedTurn(input) {
     if (!Number.isSafeInteger(seq) || seq <= startSeq || seq >= endSeq) continue
     if (!isReplayableInputSource(event.data && event.data.source)) continue
     const userText = contentText(event.data)
-    if (userText === '') continue
-    return Object.freeze({ turn, startSeq, endSeq, userText, source: replayInputSource(event.data && event.data.source) })
+    const attachments = inputAttachments(event.data?.content)
+    if (userText === '' && !attachments.length) continue
+    return Object.freeze({ turn, startSeq, endSeq, userText, ...(attachments.length ? { inputAttachments: attachments } : {}), source: replayInputSource(event.data && event.data.source) })
   }
   return null
 }

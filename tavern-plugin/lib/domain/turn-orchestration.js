@@ -1,3 +1,4 @@
+import { inputAttachments } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { composeTavernRegexScripts } from './card-extension-reading.js'
 import { scriptPromptFrameInputs, consumeScriptPrompts } from './tavern-script-prompts.js'
@@ -526,6 +527,7 @@ export function createTurnOrchestrator(options) {
     const prior = commitFor(chat, turn)
     if (prior !== null) return { saved: true, duplicate: true, mode: chat.mode || 'story', changed: prior.changed === true }
     const userText = str(input.userText).trim()
+    const attachments = inputAttachments(input.userContent)
     const mode = chat.mode || 'story'
     const sourceText = str(input.assistantText).trim()
     let assistantText = sourceText
@@ -643,8 +645,8 @@ export function createTurnOrchestrator(options) {
           scriptReference = committed.reference
           before.scriptRevision = committed.revision
         }
-        if (userText !== '') {
-          const userMessage = { role: 'user', text: userText, ts: now(), native: true }
+        if (userText !== '' || attachments.length) {
+          const userMessage = { role: 'user', text: userText, ts: now(), native: true, ...(attachments.length ? { inputAttachments: attachments } : {}) }
           if (previousMvuVariables !== undefined) Object.assign(userMessage, { swipeId: 0, swipes: [userText], variables: [clone(previousMvuVariables)] })
           if (draft.promptTemplateInput?.turn === turn) Object.assign(userMessage, clone(draft.promptTemplateInput.message), {templateInputSource:userText})
           draft.messages.push(userMessage)

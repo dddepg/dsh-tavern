@@ -1,3 +1,4 @@
+import { projectPlayerContent } from './player-input-content.js'
 import { assertRescueHistoryEditable } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { canUndoRollback, restoreSurface, preflightSurfaceRestore, unchangedSinceRollback } from './surface-restoration.js'
@@ -84,7 +85,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   }
 
   function rollbackBodyMessages(chat) {
-    return (chat.messages || []).map(({ role, turn, text, sourceText, content, greeting, swipes, swipeId }) => ({ role, turn, text, sourceText, content, greeting, swipes, swipeId }))
+    return (chat.messages || []).map(({ role, turn, text, sourceText, content, inputAttachments, greeting, swipes, swipeId }) => ({ role, turn, text, sourceText, content, inputAttachments, greeting, swipes, swipeId }))
   }
 
   function assertRollbackSnapshot(current, expected) {
@@ -204,7 +205,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       agent.followup({
         id: randomUUID(),
         role: 'user',
-        content: [{ type: 'text', text: syntheticText }],
+        content: projectPlayerContent(msgs0[oldAssistantIndex - 1].inputAttachments, syntheticText),
         source: { kind: 'plugin', plugin: 'dsh-tavern-regen', regenerationId: operationId }
       })
       await agent.whenIdle()
@@ -329,7 +330,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       agent.followup({
         id: randomUUID(),
         role: 'user',
-        content: [{ type: 'text', text: target.userText }],
+        content: projectPlayerContent(target.inputAttachments, target.userText),
         source: target.source
       })
       await agent.whenIdle()

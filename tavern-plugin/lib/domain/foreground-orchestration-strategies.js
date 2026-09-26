@@ -1,3 +1,4 @@
+import { inputAttachments, projectPlayerContent } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
 import { projectRuntimePresetRequest } from './runtime-preset-lifecycle.js'
@@ -28,7 +29,7 @@ function replaceTurnInput(messages, text) {
     const message = result[index]
     if (!isTurnInput(message)) continue
     result[index] = Object.assign({}, message, {
-      content: [{ type: 'text', text: str(text).trim() || '（玩家已更新酒馆运行状态）' }]
+      content: projectPlayerContent(message.content, str(text).trim())
     })
     break
   }
@@ -183,7 +184,7 @@ export function createCompatibilityOrchestrationStrategy(options) {
       if (begun && begun.duplicate) throw new Error('该消息已由酒馆处理，请勿重复发送')
       chat = await options.chatForSession(sessionId)
     }
-    const compiled = await options.compileTurn(chat, chat.runtimeInputs?.[String(payload.turn)]?.text ?? userText)
+    const compiled = await options.compileTurn(chat, chat.runtimeInputs?.[String(payload.turn)]?.text ?? userText, inputAttachments(payload.messages.filter(isTurnInput).flatMap(message => message.content || [])))
     await options.persistCompiled({ chat, compiled, turn: payload.turn })
     stagedRequests.set(sessionId, {
       turn: Number(payload.turn) || 0,

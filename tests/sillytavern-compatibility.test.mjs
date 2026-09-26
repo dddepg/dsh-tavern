@@ -175,3 +175,20 @@ test('变量条目不进入请求且提示词正则只处理聊天消息并按�
     ['当前输入', 1, 0]
   ])
 })
+
+test('兼容编译保留历史图片和本轮纯图片输入，严格角色合并也不丢附件', async () => {
+  const { applySillyTavernStrictTools } = await import('../tavern-plugin/lib/domain/sillytavern-strict-tools.js')
+  const oldImage = { type: 'image', attachment: { id: 'old-photo' } }
+  const newImage = { type: 'image', attachment: { id: 'new-photo' } }
+  const result = compileSillyTavernRequest({
+    card: { name: '角色' }, preset: createCleanCompatibilityPreset(), presetDocument: {},
+    history: [{ role: 'user', text: '看图', inputAttachments: [oldImage] }, { role: 'assistant', text: '好的' }],
+    input: '', inputAttachments: [newImage], resolveMacros
+  })
+  assert.deepEqual(result.messages.flatMap(message => message.inputAttachments || []), [oldImage, newImage])
+  const merged = applySillyTavernStrictTools([
+    { role: 'user', content: '第一张', inputAttachments: [oldImage] },
+    { role: 'user', content: '', inputAttachments: [newImage] }
+  ])
+  assert.deepEqual(merged[0].inputAttachments, [oldImage, newImage])
+})

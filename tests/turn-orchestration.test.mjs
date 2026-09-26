@@ -901,3 +901,16 @@ for (const mode of ['story', 'script']) test(mode + ' 缺少人物卡绑定时�
   await assert.rejects(run.orchestrator.prepare({ sessionId: 'session-1', turn: 1, userText: '继续' }), /缺少人物卡绑定/)
   assert.equal(run.plannerCalls.length, 0)
 })
+
+test('纯图片玩家输入保存为正文回合，并保留独立的附件引用', async () => {
+  const run = harness('story')
+  const image = { type: 'image', attachment: { id: 'player-image', mimeType: 'image/png' } }
+  const input = { sessionId: 'session-1', turn: 1, userText: '', userContent: [image] }
+  await run.orchestrator.prepare(input)
+  await run.orchestrator.finalize({ ...input, assistantText: '她看向照片。' })
+  const user = run.chat().messages.find(message => message.role === 'user')
+  assert.equal(user.text, '')
+  assert.deepEqual(user.inputAttachments, [image])
+  image.attachment.id = 'changed'
+  assert.equal(run.chat().messages.find(message => message.role === 'user').inputAttachments[0].attachment.id, 'player-image')
+})

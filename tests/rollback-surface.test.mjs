@@ -409,3 +409,15 @@ test('失败清理仅豁免可证明替换历史系统槽位的更新', () => {
     assert.throws(() => planFailedTurnSurface({ events: events.map(e => e === refresh ? replacement : e), nodes: [4, 1, 5], turn: 2 }), /不是连续区间/)
   }
 })
+
+test('纯图片失败回合可重放完整附件', () => {
+  const image = { type: 'image', attachment: { id: 'photo' } }
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 2 } },
+    { seq: 1, type: 'user/message', data: { content: [image], source: { kind: 'user' } } },
+    { seq: 2, type: 'turn/end', data: { turn: 2, reason: { kind: 'error' } } }
+  ]
+  const target = replayableFailedTurn({ events })
+  assert.equal(target.userText, '')
+  assert.deepEqual(target.inputAttachments, [image])
+})

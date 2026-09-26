@@ -574,3 +574,18 @@ test('普通游玩最终请求读取附加指令并置于外部预设前', () =>
   const result = strategy.projectRequest({ sessionId: 'prefix-order', system: '附加指令\n\n系统内容', messages: [{ role: 'user', content: [{ type: 'text', text: '输入' }] }] })
   assert.equal(result.messages[0].content[0].text, '附加指令\n\n外部预设\n\n系统内容')
 })
+
+for (const text of ['', '请根据图片继续']) test(`前台投影保留图片：${text || '纯图片'}`, async () => {
+  const image = { type: 'image', attachment: { id: 'image-test', mimeType: 'image/png' } }
+  const messages = [{ ...userMessage(text), content: [...(text ? [{ type: 'text', text }] : []), image] }]
+  const original = structuredClone(messages)
+  const strategy = createNativePlayOrchestrationStrategy({
+    modeFor: async () => 'story', filterMessages: value => value, resolvePreset: async () => null,
+    prepareTurn: async ({ userText }) => ({ frame: { userInput: { projectedText: userText ? '处理后的文字' : '' } } }),
+    appendFrame: ({ messages }) => ({ messages, receipt: {} }), recordFrame() {},
+  })
+  const result = await strategy.prepareStep({ sessionId: 'native', chat: {}, payload: { turn: 1, step: 1, messages }, decision: { messages } })
+  assert.deepEqual(result.messages[0].content.filter(block => block.type === 'image'), [image])
+  assert.equal(result.messages[0].content.some(block => block.text === '（玩家已更新酒馆运行状态）'), false)
+  assert.deepEqual(messages, original)
+})
