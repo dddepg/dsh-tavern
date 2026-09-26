@@ -43,11 +43,22 @@ function merge(old,value) {
 }
 export function setValues(target,values,operation='set') {
   if(!isObject(values)||!Object.keys(values).length)draftError('DRAFT_VALUES_INVALID','values 必须是非空的 JSON Pointer 到值的对象')
+  // The map already denotes root paths. A missing leading slash is an
+  // unambiguous spelling correction, including MVU's legitimate $meta key.
+  const normalized={}
+  for(const [key,value] of Object.entries(values)){
+    const path=key&&!key.startsWith('/')?'/'+key:key
+    safe(path)
+    if(Object.hasOwn(normalized,path))draftError('DRAFT_PATH_COLLISION','多个输入键对应同一路径；保留一个明确值',{path})
+    normalized[path]=value
+  }
+  values=normalized
   const paths=Object.keys(values)
   for(const path of paths){safe(path);if(paths.some(other=>other!==path&&under(path,other)))draftError('DRAFT_PATH_OVERLAP','一批修改不能同时包含父字段与子字段',{path})}
   // Validate nested keys too: an object payload must not bypass pointer guards.
   for(const [path,value] of Object.entries(values))for(const field of fieldPaths(value,path))safe(field.path)
   for(const path of paths)put(target,path,operation==='merge'?merge(hasPath(target,path)?get(target,path):undefined,values[path]):values[path])
+  return paths
 }
 export function ensureFieldSchema(draft) {
   draft.fieldSchema ||= {revision:1,fields:fieldPaths(draft.definition.initialState)}
@@ -72,13 +83,14 @@ export function patchOpening(draft,args) {
     // Explicit inheritance only fills missing paths. Existing scene values survive.
     for(const field of draft.fieldSchema.fields)if(!hasPath(state,field.path))put(state,field.path,get(draft.definition.initialState,field.path))
   }
-  if(args.values!==undefined)setValues(state,args.values,args.operation)
+  let changedPaths=[]
+  if(args.values!==undefined)changedPaths=setValues(state,args.values,args.operation)
   else if(args.inheritInitialState!==true)draftError('DRAFT_VALUES_INVALID','请提交本开场初值或明确继承底稿')
   const issues=openingIssues(draft,state,index).filter(issue=>{
     if(issue.code==='DRAFT_FIELD_MISSING')return false
     // Legacy drafts can be repaired incrementally. Unchanged old defects remain
     // visible in progress/validate, but cannot block correcting another field.
-    const touched=Object.keys(args.values||{}).some(path=>under(issue.path,path)||under(path,issue.path))
+    const touched=changedPaths.some(path=>under(issue.path,path)||under(path,issue.path))
     return touched||!hasPath(previous,issue.path)||!hasPath(state,issue.path)||!isDeepStrictEqual(get(previous,issue.path),get(state,issue.path))
   })
   if(issues.length)draftError(issues[0].code,issues[0].message,{issues})

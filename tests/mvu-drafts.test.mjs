@@ -380,3 +380,36 @@ test('自动 begin 在无改动提交后仍可建立新草稿，来源改变不�
  await f.resources.writeWorking(f.sourcePath,JSON.stringify(card))
  await assert.rejects(f.conversion.draft({action:'source',draft:reopened.draft,path:'/description'}),e=>e.code==='DRAFT_SOURCE_CHANGED')
 })
+
+test('简单卡转换接受日志中的省略根斜杠路径，保留正文和无关扩展，九步完成提交',async t=>{
+ const f=await fixture(t,{card:{description:'作者设定保持原样。',personality:'沉稳',scenario:'旅途中',first_mes:'大厅开场\n<mvu-status/>',extensions:{author_note:{keep:true}}}})
+ const original=await f.resources.readText(f.sourcePath)
+ let calls=1;const run=f.conversion.draft
+ f.conversion.draft=(...args)=>{calls++;return run(...args)}
+ // Same argument shape as the repeated diagnostic failures; neutral values.
+ await f.patch('fields',{'时间/时段':'白天','地点/名称':'大厅','$meta':{extensible:true}})
+ await f.patch('opening',undefined,{openingId:'opening-0',inheritInitialState:true})
+ await f.patch('opening',{'时间/时段':'夜晚','地点/名称':'车站'},{openingId:'opening-1',inheritInitialState:true})
+ await f.patch('rules',{场景:'按正文已经发生的移动更新时间地点'})
+ await f.patch('appearance',{html:'<section><h2>旅途</h2><mvu-field path="/时间/时段"></mvu-field><mvu-field path="/地点/名称"></mvu-field></section>'})
+ await f.patch('cleanup',[],{cleanupOrphanEntrances:true})
+ await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
+ const result=await f.conversion.draft(f.commitArgs())
+ assert.equal(result.receipt.validation.valid,true)
+ const output=cardData(await f.resources.readCard(result.targetPath)),source=cardData(await f.resources.readCard(f.sourcePath))
+ for(const key of ['description','personality','scenario'])assert.equal(output[key],source[key])
+ assert.deepEqual(output.extensions.author_note,source.extensions.author_note)
+ assert.ok(output.first_mes.startsWith('大厅开场'))
+ assert.ok(output.alternate_greetings[0].startsWith('车站开场'))
+ assert.equal(await f.resources.readText(f.sourcePath),original)
+ assert.equal(output.extensions.dsh_mvu_conversion.openingStates[1].地点.名称,'车站')
+ assert.equal(calls,9)
+})
+test('根斜杠规范化仍拒绝冲突、父子重叠与危险路径，不保存半次修改',async t=>{
+ const f=await fixture(t),before=await f.read()
+ await assert.rejects(f.patch('fields',{'位置':'大厅','/位置':'车站'}),e=>e.code==='DRAFT_PATH_COLLISION')
+ await assert.rejects(f.patch('fields',{'时间':{},'/时间/时段':'白天'}),e=>e.code==='DRAFT_PATH_OVERLAP')
+ await assert.rejects(f.patch('fields',{'__proto__/polluted':true}),e=>e.code==='DRAFT_PATH_INVALID')
+ assert.equal({}.polluted,undefined)
+ assert.deepEqual(await f.read(),before)
+})
