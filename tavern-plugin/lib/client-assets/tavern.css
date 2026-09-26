@@ -510,6 +510,17 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-plan-name-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }
 .dsh-tavern-plan-model-editor { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
 .dsh-tavern-plan-model-editor input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }
+/* Card extensions have a type badge in addition to the title and state. */
+.dsh-tavern-card-extensions .dsh-tavern-prompt-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+.dsh-tavern-card-extensions .dsh-tavern-prompt-role { font-size: 9px; line-height: 1.4; color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+.dsh-tavern-card-extensions .dsh-tavern-prompt-title .dsh-tavern-prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+.dsh-tavern-card-extensions .dsh-tavern-prompt-tags .dsh-tavern-prompt-tag { display: inline-block; margin-top: 0; color: #c77800; font-size: 9px; }
+@media (max-width: 560px) {
+  .dsh-tavern-card-extensions .dsh-tavern-prompt-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .dsh-tavern-card-extensions .dsh-tavern-prompt-role { grid-column: 1; grid-row: 1; }
+  .dsh-tavern-card-extensions .dsh-tavern-prompt-state, .dsh-tavern-card-extensions .dsh-tavern-prompt-head > .dsh-tavern-mvu-state { grid-column: 2; grid-row: 1; }
+  .dsh-tavern-card-extensions .dsh-tavern-prompt-title { grid-column: 1 / -1; grid-row: 2; }
+}
 .dsh-tavern-prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .dsh-tavern-prompt-tag { padding: 1px 5px; border-radius: 4px; background: rgba(237,151,20,.14); color: #c77800; font-size: 9px; }
 .dsh-tavern-prompt-content { margin: 0; padding: 10px 12px; border-top: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
