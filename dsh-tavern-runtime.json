@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "c9aa1f7ae27f5023585cf2a13b563a231de11532",
-  "releaseSequence": 406,
+  "revision": "a5192503b8dc86113a46377119052556ca338986",
+  "releaseSequence": 407,
   "version": "2.2.0",
   "files": [
     {
@@ -341,8 +341,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "bbae7ea3247b66a326cf3b19704e974034ea3fedfb44fbb217a7fcfb3cfa296d",
-      "size": 1111574
+      "sha256": "04482c5582815991a181ea7344c75867c9d2758bfad3754c92ff5ac283691542",
+      "size": 1111667
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -646,8 +646,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-orchestration-strategies.js",
-      "sha256": "b787c52157d242ac014a40286180f00f222f26b15f83d66b494962a77278cb87",
-      "size": 18127
+      "sha256": "5adb2bc2b3d075c955299aed05c2fe0fd849fa54913fe1ad91337285bd048054",
+      "size": 18232
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-worldbook.js",
@@ -1241,8 +1241,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/skill-visibility.js",
-      "sha256": "5dc8724b9437aba769eed4bea9223ae3f2aba00902b23d936a5b7a55027be331",
-      "size": 219
+      "sha256": "c4973eec9bf76e9b000b83d272a4f155e1ecdf3374c35be59cc959997442a135",
+      "size": 2367
     },
     {
       "path": "tavern-plugin/lib/domain/status-view-declaration.js",
@@ -1541,8 +1541,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "9b959413fa8c905b2453146b7c3690e71658aaab57add432ff8748619091b764",
-      "size": 308096
+      "sha256": "525629a12a1963930da640419be68dfd13c39910eb9a78e93cba4397ce1fda3b",
+      "size": 308334
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -3941,8 +3941,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "c676eff8091145d24b4166011f367c9a884745080cccf4d3a49bad5c1bbbb1af",
-      "size": 797259
+      "sha256": "350736519404de5ff1c3bf71a948d5fe479ffcd4f9adc16b473ca5a5cabf3ea0",
+      "size": 797352
     },
     {
       "path": "tavern-plugin/src/client/modules/background-wait.js",
