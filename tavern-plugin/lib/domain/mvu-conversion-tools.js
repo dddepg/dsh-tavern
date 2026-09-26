@@ -14,6 +14,20 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
     if (chat?.mode !== 'card') throw Error('MVU 转换工具只能在卡片工作台使用')
   }
   tools.register(defineTool({
+    name:'tavern_read_mvu_appearance',
+    description:'读取已有 MVU 副本的托管美化 HTML、绑定和编辑版本。修改标签、布局、样式时先用本工具，无需读取整卡、初值或生成脚本。返回 editable=false 时按说明检查目标卡；长 HTML 按 nextOffset 续读并携带 revision。',
+    parameters:{path:{type:'string',required:true},revision:{type:'string'},offset:{type:'number'},limit:{type:'number'}},
+    output,isConcurrencySafe:()=>true,
+    async execute(args,exec) { await requireWorkbench(exec); return {report:await conversion.readAppearance(args)} }
+  }))
+  tools.register(defineTool({
+    name:'tavern_update_mvu_appearance',
+    description:'局部修改已有 MVU 副本的托管 HTML 美化。传读取时的 revision 和唯一原文替换片段；全部片段对应同一读取版本，不可重叠。自动保留字段、各开场初值和规则，同步持久化定义、生成面板和摘要，原子保存并校验。保留 $N 占位及绑定；不支持改变量定义、来源固化美化或覆盖方案外修改。成功且 validation.valid=true 即完成，无需再转换或真实游玩验收。',
+    parameters:{path:{type:'string',required:true},revision:{type:'string',required:true},replacements:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{expected:{type:'string',required:true},value:{type:'string',required:true}}}}},
+    output,isConcurrencySafe:()=>false,
+    async execute(args,exec) { await requireWorkbench(exec); try { return {report:await conversion.updateAppearance(args)} } catch(error) { return failure(error) } }
+  }))
+  tools.register(defineTool({
     name: 'tavern_convert_to_mvu',
     description: '将人物卡转换为独立 MVU 副本。先 inspect 获取原文、版本和 stateInventory；preflight 只读汇总开场格式、字段覆盖、美化语法与旧入口问题，返回开场模板和建议清理；完整提取后 saveDefinition 持久化字段结构及各开场已有值，再以 definitionRevision 装配，仅缺失长字段用 read.paths 批量补读。apply 已内置预检、原子保存和磁盘验收；仅有定位疑问时额外 preview。已有副本默认合并已保存方案，省略的定义与清理保留。工具从磁盘复制整卡后清理并追加 MVU；参数仅提交改动和变量定义，不回传原卡或保留内容。工具根据保存的字段定义直接生成初值/后台规则、固化原美化、每个开场入口、模型历史隔离与绑定，有原美化时必须指定 appearance，先 freezeAppearance 核验；工具直接复制来源 HTML/CSS，只绑定变量，不接受模型重写外观。无原美化优先用 tavern_design_mvu_appearance，设计失败再用默认模板。标准转换只需目标卡和 Skill 配方，不需要查其他卡或工具源码。同一来源和名称可重复调用；更新现有副本须提供 inspect 返回的 targetRevision。',
     parameters: {

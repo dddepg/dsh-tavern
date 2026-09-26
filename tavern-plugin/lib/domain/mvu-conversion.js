@@ -368,5 +368,60 @@ export function createMvuConversion({ resources }) {
     if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/saveDefinition/preflight/preview/apply')
     const job = tail.then(() => apply(args)); tail = job.catch(() => {}); return job
   }
-  return { convert, verify }
+  async function appearanceTarget(input) {
+    const path = normalizeResourcePath(input.path, 'card')
+    const text = await resources.readText(path)
+    if (text === undefined) throw Error('人物卡不存在，请重新选择目标: ' + path)
+    const document = JSON.parse(text), meta = cardData(document).extensions?.[MVU_CONVERSION_KEY]
+    return { path, text, document, meta, revision:digest(text) }
+  }
+  async function readAppearance(input) {
+    const target = await appearanceTarget(input)
+    if (input.revision && input.revision !== target.revision) throw Error('美化版本已变化，请重新读取')
+    const appearance = target.meta?.appearance
+    const editable = target.meta?.version === 1 && typeof appearance?.html === 'string'
+      && !!target.meta.definitionRevision && target.meta.outputDigest === outputDigest(target.document)
+    return { path:target.path, revision:target.revision, editable,
+      ...(typeof appearance?.html === 'string' ? {html:readConversionValue(appearance.html,{offset:input.offset,limit:input.limit}),bindings:appearance.bindings || [],...(appearance.collectionPath ? {collectionPath:appearance.collectionPath} : {})} : {}),
+      instruction:editable ? '只提交 replacements 中的唯一原文片段与新文本。工具同步定义、面板及校验；保留 $N 占位和绑定，无需读取初值或手工维护摘要。'
+        : '该卡不是可直接局部编辑的托管 HTML 面板，或已有方案外修改。读取目标卡相关字段定位原因；不要直接改写生成元数据或覆盖已有修改。' }
+  }
+  async function updateAppearance(input) {
+    const job = tail.then(async () => {
+      const target = await appearanceTarget(input)
+      if (!input.revision || input.revision !== target.revision) throw Error('美化版本已变化，请重新读取')
+      const {meta} = target
+      if (meta?.version !== 1 || typeof meta.appearance?.html !== 'string' || !meta.definitionRevision) throw Error('仅支持已保存定义的托管 HTML 美化')
+      if (meta.outputDigest !== outputDigest(target.document)) throw Error('目标已有方案外修改，不能覆盖；请读取目标卡核对')
+      if (!Array.isArray(input.replacements) || !input.replacements.length || input.replacements.length > 50) throw Error('replacements 必须包含 1–50 项局部替换')
+      const source = await snapshot(meta.sourcePath)
+      if (source.revision !== meta.sourceRevision) throw Error('来源或世界书已变化，不能用旧方案覆盖目标')
+      const name = target.path.slice('cards/'.length, -'.json'.length)
+      if (targetFor(source,name).path !== target.path) throw Error('目标路径不支持原位编辑')
+      const saved = await resources.readMvuDefinition(meta.definitionRevision)
+      if (!saved || definitionDigest(saved) !== meta.definitionRevision) throw Error('已保存定义不存在或被修改')
+      assertDefinition(saved,meta,source)
+      const html = saved.appearance.html
+      const edits = input.replacements.map((edit,index) => {
+        if (typeof edit.expected !== 'string' || !edit.expected || typeof edit.value !== 'string') throw Error('替换需要非空 expected 和字符串 value')
+        const start = html.indexOf(edit.expected)
+        if (start < 0 || html.indexOf(edit.expected,start+1) !== -1) throw Error('美化原文必须恰好匹配一次，请扩大唯一片段: ' + index)
+        return {start,end:start+edit.expected.length,value:edit.value}
+      }).sort((a,b)=>a.start-b.start)
+      for (let i=1;i<edits.length;i++) if (edits[i].start<edits[i-1].end) throw Error('美化替换范围重叠，请合并修改')
+      let updated = html
+      for (const edit of edits.reverse()) updated = updated.slice(0,edit.start)+edit.value+updated.slice(edit.end)
+      const definition = createDefinition(source,{...saved,fieldMappings:saved.mappings,appearance:{...saved.appearance,html:updated}})
+      const frozenAppearance = freezeMvuAppearance(source.data,definition.appearance)
+      for (const initialState of definition.openingStates) buildMvuArtifacts({...definition,initialState,frozenAppearance})
+      const definitionRevision = definitionDigest(definition)
+      await resources.saveMvuDefinition(definitionRevision,definition)
+      // Reuse the atomic source/target compare-and-save and full disk validation.
+      return apply({action:'apply',sourcePath:source.sourcePath,sourceRevision:source.revision,
+        name,targetRevision:target.revision,definitionRevision})
+    })
+    tail = job.catch(()=>{})
+    return job
+  }
+  return { convert, verify, readAppearance, updateAppearance }
 }
