@@ -42,6 +42,7 @@
         "@deepseek-ai/dsh-web-app",
         "dsh-web-mobile",
         "dsh-better-sidebar",
+        "dsh-dream-skin",
         "dsh-tavern-plugin",
         "dsh-tavern-remote"
       ]
@@ -59,7 +60,8 @@
     "dsh-tavern-remote": "link:./tavern-plugin/packages/dsh-tavern-remote",
     "dsh-pocket": "2.10.6",
     "dsh-web-mobile": "2.3.0",
-    "dsh-better-sidebar": "0.19.1"
+    "dsh-better-sidebar": "0.19.1",
+    "dsh-dream-skin": "link:./tavern-plugin/packages/dsh-dream-skin"
   },
   "description": "DSH Tavern: standalone tavern Profile bundle",
   "files": [

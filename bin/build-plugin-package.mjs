@@ -13,6 +13,8 @@ const content = [
   '- insert:',
   '    - id: better-sidebar',
   '      name: ./tavern-plugin/packages/dsh-better-sidebar/lib/index.js',
+  read('tavern-plugin/packages/dsh-dream-skin/cordis.patch.yml')
+    .replace("name: 'dsh-dream-skin'", 'name: ./tavern-plugin/packages/dsh-dream-skin/lib/index.js'),
   read('tavern-plugin/cordis.patch.yml')
     .replace('name: dsh-tavern-plugin/cordis-inspect', 'name: ./tavern-plugin/lib/cordis-inspect.js')
     .replace('name: dsh-tavern-plugin\n', 'name: ./tavern-plugin/lib/index.js\n'),

@@ -29,6 +29,9 @@ test('standard package ships runtime resources without local links, host copies 
     'tavern-plugin/packages/dsh-image-gen/src/module.js',
     'tavern-plugin/packages/dsh-tavern-remote/lib/typert.host.js',
     'tavern-plugin/packages/dsh-better-sidebar/lib/client-mermaid.js',
+    'tavern-plugin/packages/dsh-dream-skin/lib/index.js',
+    'tavern-plugin/packages/dsh-dream-skin/lib/client.js',
+    'tavern-plugin/packages/dsh-dream-skin/LICENSE',
     'tavern-plugin/lib/vendor/st-prompt-template/upstream/settings.html',
     'tavern-plugin/lib/vendor/st-prompt-template/server-artifact/engine.js',
     'tavern-plugin/lib/vendor/runtime-assets/jquery/jquery.min.js',
@@ -67,6 +70,7 @@ test('real DSH composes the standard package into the same CLI runtime as the le
   const web = load(path.join(hostRoot, 'dsh-web-app/cordis.patch.yml'))
   const legacy = boot.composeEntries([base, web,
     load(path.join(root, 'node_modules/dsh-better-sidebar/cordis.patch.yml')),
+    load(path.join(root, 'tavern-plugin/packages/dsh-dream-skin/cordis.patch.yml')),
     load(path.join(root, 'tavern-plugin/cordis.patch.yml')),
     load(path.join(root, 'tavern-plugin/packages/dsh-tavern-remote/cordis.patch.yml')),
   ])

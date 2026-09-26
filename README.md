@@ -144,6 +144,12 @@ npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)
 
 详细配置见[安装指南中的「手机远程访问」](https://flizzywine.github.io/dsh-tavern/#a02)。
 
+### 皮肤与外观
+
+酒馆自带 [Dream Skin](https://github.com/RevolutionLA/dsh-dream-skin)（内置适配版本 9.23.0），无需另装。在 **设置 → Theme / 外观** 中选择「酒馆 · 暖陶土」浅色或深色，以及其他皮肤。酒馆按钮、面板、边框和正文强调色随当前主题切换。
+
+首次默认无背景图片；切换部分皮肤时会应用对应渐变，也可以自行设置或清空壁纸。已有皮肤、强调色和壁纸设置保留。
+
 ## 开始游玩
 
 1. 在 **设置 → 模型** 中配置模型服务和 API 密钥。

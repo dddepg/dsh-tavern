@@ -22,3 +22,5 @@ docs export-ignore
 # Bundled plugins also carry development-only material.
 **/tests export-ignore
 **/__tests__ export-ignore
+
+tavern-plugin/packages/dsh-dream-skin/lib/*.js -text -whitespace linguist-vendored

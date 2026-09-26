@@ -43,6 +43,9 @@ importers:
       dsh-better-sidebar:
         specifier: 0.19.1
         version: 0.19.1(patch_hash=b29bb1e1e983c7efc5e71e4bad2f1acc4b134f3d5ded25cab9f8eee2111e60a3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      dsh-dream-skin:
+        specifier: link:./tavern-plugin/packages/dsh-dream-skin
+        version: link:tavern-plugin/packages/dsh-dream-skin
       dsh-pocket:
         specifier: 2.10.6
         version: 2.10.6(patch_hash=b87a52109852c2e61a3f4d89a00e580460ebb5b3f89c47d1170b68ad594adb38)

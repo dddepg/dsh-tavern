@@ -492,6 +492,14 @@
 - insert:
     - id: better-sidebar
       name: ./tavern-plugin/packages/dsh-better-sidebar/lib/index.js
+# dsh-dream-skin profile patch layer — insert one loader entry for the plugin
+# package. The entry is a normal cordis loader entry (id + package name); the
+# browser half is picked up by dsh-client-modules through the package's
+# dsh.client declaration, exactly like the shipped ui-* packages.
+- insert:
+    - id: dream-skin
+      name: ./tavern-plugin/packages/dsh-dream-skin/lib/index.js
+
 # dsh-tavern-plugin bundle：项目管理配置随版本升级；Profile patch 只保留用户覆盖。
 # Tavern 默认完全权限；保留原生权限预设，用户仍可主动切回受限模式。
 - id: sandbox-policy
