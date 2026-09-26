@@ -233,7 +233,9 @@ export function createNativePlayOrchestrationStrategy(options) {
     const sessionId = input.sessionId
     const payload = input.payload
     const mode = await options.modeFor(sessionId)
-    const visibleMessages = options.filterMessages(input.decision.messages, mode)
+    const visibleMessages = options.filterMessages(input.decision.messages, mode, {
+      session: payload.agent?.session, disabledWritingSkills: input.chat?.disabledWritingSkills
+    })
     let agentMessages = visibleMessages
     const rawSnapshot = mode === 'story' || mode === 'script' ? await options.resolvePreset(input.chat) : null
     // Render the three phases together; the persisted preset and prior messages stay authoritative.

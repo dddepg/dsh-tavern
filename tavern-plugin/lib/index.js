@@ -149,7 +149,7 @@ import {
   sanitizeAgentProjectionText
 } from './domain/runtime-content-projection.js'
 import { createScriptContinuity } from './domain/script-continuity.js'
-import { filterSkillMessages } from './domain/skill-visibility.js'
+import { appendWritingSkillState } from './domain/skill-visibility.js'
 import { createStoryTimeline } from './domain/story-timeline.js'
 import { createStoryCompactionRequest, usesStoryCompaction } from './domain/story-compaction.js'
 import { installCompactionRequestProjection } from './domain/compaction-request.js'
@@ -755,8 +755,12 @@ export async function apply(ctx) {
     await syncChatSummary(saved)
     if (saved !== undefined) {
       void coordinationEvents?.publish(saved.sessionId)
-      scheduleTemplateSync(saved)
-      if (!str(metadata?.source).startsWith('compaction.')) queueAutoCompaction(saved.sessionId)
+      // A Skill switch changes future availability, not story/template data.
+      // Do not let this settings write trigger maintenance that rewrites history.
+      if (metadata?.source !== 'writing-skill.switch') {
+        scheduleTemplateSync(saved)
+        if (!str(metadata?.source).startsWith('compaction.')) queueAutoCompaction(saved.sessionId)
+      }
     }
     return saved
   }
@@ -4084,7 +4088,7 @@ export async function apply(ctx) {
       systemAppend: () => runtimePrompt('system-append'),
       stagedRequests: runtimePresetSnapshots,
       modeFor: async function (sessionId) { return await turnOrchestrator.modeFor(sessionId) },
-      filterMessages: filterSkillMessages,
+      filterMessages: appendWritingSkillState,
       resolvePreset: resolveChatRuntimePreset,
       prepareTurn: async function (input) { return await foregroundHandoff.prepare(input) },
       appendFrame: function (input) { return foregroundFrameSessionAdapter.append(input) },
