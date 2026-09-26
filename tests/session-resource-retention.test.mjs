@@ -64,3 +64,36 @@ test('旧会话到期仅清理自己的宿主节点，不能删除新会话或�
   assert.deepEqual(document.body.children, [parking,bNode])
   b.dispose(); assert.deepEqual(document.body.children, [parking])
 })
+
+test('切走后异步创建或重新插入的卡片悬浮窗保持隔离，返回保留事件与状态', async () => {
+  const { JSDOM } = await import('jsdom')
+  const dom = new JSDOM('<!doctype html><body><main id="app"></main></body>', { runScripts: 'outside-only' })
+  try {
+    dom.window.eval(readFileSync(new URL('../tavern-plugin/lib/vendor/runtime-assets/jquery/jquery.min.js', import.meta.url), 'utf8'))
+    dom.window.eval(scopeSource + ';window.makeScope=createTavernHostArtifactScope')
+    const a = dom.window.makeScope({ document: dom.window.document })
+    const $ = a.bindJQuery ? a.bindJQuery(dom.window.jQuery) : dom.window.jQuery
+    a.setVisible(false)
+    // Same host-jQuery mounting pattern as the card's external-status-bar.js,
+    // after an asynchronous import finishes in the retained background runtime.
+    const button = $('<button id="rpg_status_bar-toggle">A</button>')
+    let clicks = 0
+    button.on('click', () => clicks++)
+    $('body').append(button)
+    const other = dom.window.document.createElement('button'); other.id = 'other-card'
+    dom.window.document.body.append(other)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(dom.window.document.querySelector('#rpg_status_bar-toggle'), null)
+    assert.equal(other.isConnected, true)
+    a.setVisible(true)
+    button.trigger('click'); assert.equal(clicks, 1)
+    assert.equal(dom.window.document.querySelector('#rpg_status_bar-toggle'), button[0])
+    a.setVisible(false)
+    dom.window.document.body.append(button[0])
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(button[0].isConnected, false)
+    a.dispose(); assert.equal(other.isConnected, true)
+    $("body").append("<button id=retired>late</button>")
+    assert.equal(dom.window.document.querySelector("#retired"), null)
+  } finally { dom.window.close() }
+})
