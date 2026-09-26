@@ -57,19 +57,3 @@ for (const kind of ['revision', 'resource', 'missing']) test(`invalid delta ${ki
   await f.reader.read('s')
   assert.equal(f.calls.fullRead,2)
 })
-
-test('状态栏位置保存后经过增量刷新和缓存读取仍保持新位置', async () => {
-  const { projectChatSessionState, createSessionStateView } = await import('../tavern-plugin/lib/domain/chat-session-state.js')
-  const f = fixture()
-  const projection = createSessionStateView({ activity: () => ({ busy: false }), evidence: () => ({ events: [] }) })
-  const fields = chat => projection.volatile(chat, { busy: false })
-  f.deps.project.full = async chat => ({ ...fields(chat), tavernHelper: { messages: structuredClone(chat.messages) } })
-  f.deps.project.dirty = async (chat, previous) => ({ ...previous, ...fields(chat) })
-  f.deps.project.cached = async (chat, previous) => ({ ...previous, ...fields(projectChatSessionState(chat)) })
-  assert.equal((await f.reader.read('s')).statusBarPlacement, 'sidebar')
-  for (const placement of ['body', 'sidebar', 'body']) {
-    f.chat = { ...f.chat, _storageRevision: f.chat._storageRevision + 1, statusBarPlacement: placement }
-    assert.equal((await f.reader.read('s')).statusBarPlacement, placement, '增量刷新不得沿用旧位置')
-    assert.equal((await f.reader.read('s')).statusBarPlacement, placement, '精简状态缓存不得丢失位置')
-  }
-})

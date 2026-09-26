@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 
@@ -27,3 +30,38 @@ test('完整客户端必须可解析，局部源码测试不能代替入口语�
   const source = await assembleTavernClient()
   assert.doesNotThrow(() => new vm.Script(source, { filename: 'tavern-plugin/lib/client.js' }))
 })
+
+for (const check of [false, true]) {
+  test(`客户端 ${check ? '--check' : 'build'} 拒绝非法语法且保留现有产物`, async t => {
+    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'tavern-client-build-')))
+    t.after(() => rm(root, { recursive: true, force: true }))
+    const builder = path.join(root, 'bin/build-tavern-client.mjs')
+    const template = path.join(root, 'tavern-plugin/src/client/main.js')
+    const output = path.join(root, 'tavern-plugin/lib/client.js')
+    for (const directory of ['bin', 'tavern-plugin/src/client', 'tavern-plugin/lib/client-assets']) {
+      await mkdir(path.join(root, directory), { recursive: true })
+    }
+    await copyFile(new URL('../bin/build-tavern-client.mjs', import.meta.url), builder)
+    await writeFile(path.join(root, 'tavern-plugin/lib/client-assets/tavern.css'), '')
+    const valid = 'const fixture = 1;\n'
+    const invalid = 'const = 1;\n'
+    await writeFile(template, valid)
+    const build = args => spawnSync(process.execPath, [builder, ...args], { encoding: 'utf8', timeout: 10000 })
+    const initial = build([])
+    assert.ifError(initial.error)
+    assert.equal(initial.status, 0, initial.stderr)
+    let previous = await readFile(output, 'utf8')
+    assert.ok(previous.includes(valid))
+    await writeFile(template, invalid)
+    if (check) {
+      // Keep source and output in sync so an outdated-output error cannot pass this test.
+      previous = previous.replace(valid, invalid)
+      await writeFile(output, previous)
+    }
+    const result = build(check ? ['--check'] : [])
+    assert.ifError(result.error)
+    assert.equal(result.status, 1, result.stdout + result.stderr)
+    assert.match(result.stderr, /Unexpected token/)
+    assert.equal(await readFile(output, 'utf8'), previous)
+  })
+}

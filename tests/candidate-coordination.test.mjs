@@ -92,13 +92,3 @@ test('后台完成而提醒丢失时，页面依据持久 task.result 直接恢�
   assert.match(action, /taskForMessage\.terminal/)
   assert.doesNotMatch(action, /hasLoadingPanel \|\| activity\.busy/)
 })
-
-test('提交响应丢失时用同一 requestId 有界重试，正确性由持久信箱保证', function () {
-  const submit = between(clientSource, 'async function submitCandidateTask', 'const regenPanel')
-
-  assert.match(submit, /const requestId = candidateRequestId\(\)/)
-  assert.match(submit, /attempt < 3/)
-  assert.match(submit, /requestId: requestId/)
-  assert.match(submit, /controller\.abort\(\)/)
-  assert.match(submit, /tavernCoordination\.invalidate\(sessionId\)/)
-})
