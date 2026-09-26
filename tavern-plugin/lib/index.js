@@ -1,3 +1,4 @@
+import {registerVariableReadTool} from './domain/read-variables.js'
 import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } from './domain/background-session-retirement.js'
 import { createCardMemory, CARD_MEMORY_TOOLS } from '../packages/dsh-tavern-card-memory/index.js'
 import { inputAttachments, projectPlayerContent } from './domain/player-input-content.js'
@@ -4062,7 +4063,7 @@ export async function apply(ctx) {
     })
   }
 
-  const controlledToolNames = new Set(['tavern_card_draft', 'tavern_convert_to_mvu', 'tavern_design_mvu_appearance', 'tavern_read_mvu_appearance', 'tavern_update_mvu_appearance', 'tavern_validate_mvu_conversion', ...CARD_MEMORY_TOOLS, 'bash', 'pwsh', ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_user_profile_confirm', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response'])
+  const controlledToolNames = new Set(['tavern_read_variables', 'tavern_card_draft', 'tavern_convert_to_mvu', 'tavern_design_mvu_appearance', 'tavern_read_mvu_appearance', 'tavern_update_mvu_appearance', 'tavern_validate_mvu_conversion', ...CARD_MEMORY_TOOLS, 'bash', 'pwsh', ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_user_profile_confirm', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response'])
   const foregroundStrategies = createForegroundOrchestrationStrategies({
     compatibility: {
       beforeTurn: async function (input) {
@@ -4533,6 +4534,7 @@ export async function apply(ctx) {
       }
     }))
 
+    registerVariableReadTool({tools,defineTool,chatForSession})
     registerMvuConversionTools({ tools, defineTool, conversion: createMvuConversion({ resources: fileResources }), chatForSession })
 
     tools.register(defineTool({

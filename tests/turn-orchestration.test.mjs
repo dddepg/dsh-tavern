@@ -720,14 +720,14 @@ test('前台自由故事和剧本模式稳定暴露历史正文检索工具', as
   const story = harness('story')
   const script = harness('script')
 
-  assert.deepEqual(await story.orchestrator.visibleTools('session-1'), ['skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search'])
-  assert.deepEqual(await script.orchestrator.visibleTools('session-1'), ['skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search'])
+  assert.deepEqual(await story.orchestrator.visibleTools('session-1'), ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search'])
+  assert.deepEqual(await script.orchestrator.visibleTools('session-1'), ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search'])
 })
 
 test('游戏前台按快照启用联网搜索，卡片工作台始终启用', async () => {
-  assert.deepEqual(await harness('story').orchestrator.visibleTools('session-1'), ['skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search'])
-  assert.deepEqual(await harness('story', { webSearchEnabled: true }).orchestrator.visibleTools('session-1'), ['skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search', 'web_search'])
-  assert.deepEqual(await harness('script', { webSearchEnabled: true }).orchestrator.visibleTools('session-1'), ['skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'web_search'])
+  assert.deepEqual(await harness('story').orchestrator.visibleTools('session-1'), ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search'])
+  assert.deepEqual(await harness('story', { webSearchEnabled: true }).orchestrator.visibleTools('session-1'), ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search', 'web_search'])
+  assert.deepEqual(await harness('script', { webSearchEnabled: true }).orchestrator.visibleTools('session-1'), ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'web_search'])
   for (const webSearchEnabled of [false, true]) {
     assert.equal((await harness('card', { webSearchEnabled }).orchestrator.visibleTools('session-1')).includes('web_search'), true)
   }
