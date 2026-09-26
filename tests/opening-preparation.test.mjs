@@ -251,7 +251,7 @@ test('开局记录资源版本，不把准备页的本局修改误报为库更�
   assert.equal((await snapshots.updateStatus(chat, card)).available, false)
 })
 
-test('旧存档无源版本时，本局脚本写入不误报库更新', async () => {
+test('旧存档无源版本时提示同步，但保留本局脚本写入', async () => {
   const { createPlayCardSnapshots, cardContentDigest } = await import('../tavern-plugin/lib/domain/play-card-snapshots.js')
   const h = await createHelperWorldbookHost(false)
   try {
@@ -263,7 +263,10 @@ test('旧存档无源版本时，本局脚本写入不误报库更新', async ()
     const changed = structuredClone(old); changed[0].content = '本局变量变化后的内容'
     await h.adapter.replaceWorldbook('audit', '审计书', changed, old)
     const api = createPlayCardSnapshots({ worldBooks: h.library })
-    assert.equal((await api.updateStatus(h.chat, card)).available, false)
+    const status = await api.updateStatus(h.chat, card)
+    assert.equal(status.available, true)
+    assert.equal(status.worldbookSyncRequired, true)
+    assert.equal(status.worldbookChanged, false)
     assert.equal((await h.adapter.getWorldbook('audit', '审计书')).worldbook.entries[0].content, '本局变量变化后的内容')
   } finally { await h.cleanup() }
 })

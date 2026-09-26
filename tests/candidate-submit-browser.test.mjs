@@ -56,6 +56,7 @@ async function mount(t, outcome) {
     const slots = {}, noop = () => () => {}
     const sessionState = { current: '', byId: {} }
     const ctx = {
+      inject() { return { dispose() {} } },
       get() {},
       effect(run, label) {
         if (['dsh-tavern: Tavern workspace browser', 'dsh-tavern: candidate dock actions'].includes(label)) return run()

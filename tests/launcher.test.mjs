@@ -188,14 +188,14 @@ test('Windows UI 更新隐藏 PowerShell 窗口并保持 UTF-8 输出', () => {
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {
-  assert.equal(rootManifest.dependencies['dsh-better-sidebar'], '0.19.1')
+  assert.equal(rootManifest.devDependencies['dsh-better-sidebar'], '0.19.1')
   assert.ok(rootManifest.dsh.profile.bundles.includes('dsh-better-sidebar'))
   assert.match(profileConfigurationSource, /managedDependencies/)
 })
 
 test('Tavern profile also installs the pinned mobile adaptation plugin', () => {
   assert.equal(
-    rootManifest.dependencies['dsh-web-mobile'],
+    rootManifest.devDependencies['dsh-web-mobile'],
     '2.3.0',
   )
   assert.ok(rootManifest.dsh.profile.bundles.includes('dsh-web-mobile'))
@@ -215,7 +215,7 @@ test('Tavern profile isolates conversations from other DSH profiles on fresh ins
   assert.equal(tavernPluginManifest.dsh.bundle.patch, './cordis.patch.yml')
   assert.match(installationSource, /prepareProfilePatch/)
   assert.match(unixInstaller, /node "\$\{APP_DIR\}\/bin\/dsh-tavern\.mjs" install --host "\$\{INSTALL_HOST\}"/)
-  assert.match(windowsInstaller, /Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\) install --host \$InstallHost/)
+  assert.match(windowsInstaller, /Invoke-InstallCommand 'profile\.install' 'node' @\(\(Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\), 'install', '--host', \$InstallHost\)/)
 })
 
 test('Tavern sidebar defaults enable resource tabs, Files and text previews', () => {
@@ -323,7 +323,7 @@ test('Desktop 安装复用内置运行时，不启动独立 3081 服务', () => 
   assert.match(unixInstaller, /install --host "\$\{INSTALL_HOST\}"/)
   assert.match(unixInstaller, /if \[ "\$\{INSTALL_HOST\}" = "desktop" \]/)
   assert.match(windowsInstaller, /\$InstallHost = if \(\$env:DSH_TAVERN_HOST\)/)
-  assert.match(windowsInstaller, /install --host \$InstallHost/)
+  assert.match(windowsInstaller, /'install', '--host', \$InstallHost/)
   assert.match(installationSource, /if \(host === 'cli'\) installCommand\(\)/)
   assert.match(installationSource, /请重启 DSH Desktop/)
 })
@@ -334,8 +334,8 @@ test('一键安装先安装下载包依赖，再运行 Tavern 安装器', () => 
   assert.ok(unixDependencies >= 0)
   assert.ok(unixDependencies < unixLauncher)
 
-  const windowsDependencies = windowsInstaller.indexOf('& $PnpmCommand --dir $AppDir install --frozen-lockfile')
-  const windowsLauncher = windowsInstaller.indexOf("& node (Join-Path $AppDir 'bin\\dsh-tavern.mjs') install")
+  const windowsDependencies = windowsInstaller.indexOf("Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile'")
+  const windowsLauncher = windowsInstaller.indexOf("Invoke-InstallCommand 'profile.install' 'node'")
   assert.ok(windowsDependencies >= 0)
   assert.ok(windowsDependencies < windowsLauncher)
 })
@@ -344,7 +344,7 @@ test('一键安装直接启动 Tavern，不通过包管理器托管后台进程'
   assert.match(unixInstaller, /DSH_HOME=\$\{DSH_ROOT\} node "\$\{APP_DIR\}\/bin\/dsh-tavern\.mjs" start/)
   assert.doesNotMatch(unixInstaller, /pnpm --dir "\$\{APP_DIR\}" run start:tavern/)
 
-  assert.match(windowsInstaller, /& node \(Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\) start/)
+  assert.match(windowsInstaller, /Invoke-InstallCommand 'service\.start' 'node' @\(\(Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\), 'start'\)/)
   assert.doesNotMatch(windowsInstaller, /& \$PnpmCommand --dir \$AppDir run start:tavern/)
 })
 
