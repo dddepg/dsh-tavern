@@ -33,3 +33,26 @@ test('旧版本失败记录仅在被新会话替代后折叠，回退到旧参�
   chat.timeline.participants.background.sessionId='old'
   assert.equal((await retirement.filter(rows,'parent')).length,4)
 })
+
+// Public summaries also feed the native header count. Keep ancestors and live
+// workers discoverable even when their retirement record already exists.
+test('全局会话列表保留运行中代理、带子节点的祖先和普通会话，卸载后恢复原服务', async () => {
+  let running = false
+  const retirement = createBackgroundSessionRetirement({readJson: async () => ({old:{parentId:'parent'}})}, {isRunning: () => running})
+  let records = [
+    {header:{id:'parent',origin:'user'}},
+    {header:{id:'old',origin:'subagent',parentSession:'parent'}},
+    {header:{id:'other',origin:'subagent',parentSession:'parent'}},
+  ]
+  const query = {async listSessions() {return records}}
+  const original = query.listSessions
+  const stop = installRetiredBackgroundFilter(undefined, retirement, query)
+  assert.deepEqual((await query.listSessions()).map(row => row.header.id), ['parent','other'])
+  running = true
+  assert.equal((await query.listSessions()).length, 3)
+  running = false
+  records.push({header:{id:'grandchild',origin:'subagent',parentSession:'old'}})
+  assert.equal((await query.listSessions()).length, 4)
+  stop()
+  assert.equal(query.listSessions, original)
+})

@@ -1846,7 +1846,7 @@ export async function apply(ctx) {
   }
 
   const backgroundRetirement = createBackgroundSessionRetirement(profileData, { readState: sessionStateForSession, isRunning: id => agentRegistry.get(id)?.status === 'running' })
-  ctx.effect(() => installRetiredBackgroundFilter(ctx.get('subagents'), backgroundRetirement))
+  ctx.effect(() => installRetiredBackgroundFilter(ctx.get('subagents'), backgroundRetirement, ctx.get('sessionQuery')))
   const runtimePresetSnapshots = new Map()
   const backgroundAgentRunner = createBackgroundAgentRunner({
     retirement: backgroundRetirement,
@@ -2688,7 +2688,7 @@ export async function apply(ctx) {
     return view(stopped.chat, await readChatCard(stopped.chat))
   }
 
-  async function retrySettlement(sessionId, turn, guidance = '') {
+  async function retrySettlement(sessionId, turn, guidance) {
     const chat = await chatForSession(sessionId)
     if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
     const activity = backgroundTasks.activity(chat)
@@ -2725,7 +2725,7 @@ export async function apply(ctx) {
           throw new Error('这轮旧记录没有结算前快照，无法安全重新结算变量')
         }
       }
-      target.message.mvu = { pending: true, variableRetry: true, guidance: str(guidance).trim(), modified: false, diagnostics: [], events: [] }
+      target.message.mvu = { pending: true, variableRetry: true, guidance: guidance === undefined ? str(target.message.mvu?.guidance).trim() : str(guidance).trim(), modified: false, diagnostics: [], events: [] }
     } else if (activity.phase !== 'failed' || activity.role !== 'settlement') {
       throw new Error('当前最新正文没有失败的后台结算')
     }

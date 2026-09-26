@@ -44,6 +44,12 @@ pnpm test:e2e
 
 最后停止临时服务，通过 Chat Journal 写入可复现的旧解析器损坏展示快照，再启动服务。页面必须恢复脚本执行，同时保留损坏快照原件、历史正文和变量。只有这个故障输入由测试构造，展示修复仍走生产读取和浏览器渲染路径。截图以 `display-` 开头；此专项不替代默认的重生成、编辑、回退和预设切换验收。
 
+## 后台代理生命周期专项
+
+运行 `node tests/e2e/gameplay.mjs --background-lifecycle`。使用固定模型延迟返回，连续两次点击停止后台，确认迟到输出不能修改金币，重试必须更换后台会话。随后在不刷新页面的情况下完成重试，核对指导意见保留、官方 MVU 状态栏与存档金币均为 40、子代理弹窗只有一项且标题计数为 1；重启整个临时服务后再次检查。
+
+`background-attempts.jsonl`、`background-late.jsonl` 记录模型等待及迟到输出尝试，`background-*.png` 和对应文本保留界面证据。该专项验证取消、连续重试与重启；自动超时另由 `background-agent-idle-native.test.mjs` 覆盖，不将其称为浏览器超时验收。
+
 ## 产物和失败检查
 
 每次结果保存到 `output/e2e-gameplay/run-*`：

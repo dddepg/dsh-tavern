@@ -124,7 +124,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
   })
   const parent = await ctx.agents.create({ sessionId: 'scene-parent', agentOptions: { provider: 'scene-fixture', model: 'fixture-text' } })
   const retirement = createBackgroundSessionRetirement(createProfileDataStore({dataRoot: root}), {isRunning: id => ctx.agents.get(id)?.status === 'running'})
-  const stopRetirementFilter = installRetiredBackgroundFilter(ctx.get('subagents'), retirement)
+  const stopRetirementFilter = installRetiredBackgroundFilter(ctx.get('subagents'), retirement, ctx.get('sessionQuery'))
   const runnerOptions = { retirement, ...residentOptions, systemAppend, resolveModelSelection, agents: ctx.agents, flushSession: session => ctx.sessions.flush(session) }
   let runner = createBackgroundAgentRunner(runnerOptions)
   const chat = { id: 'scene-chat', sessionId: 'scene-parent', mode: 'story', posture: '站在窗边，左手扶窗', messages: [{ role: 'assistant', turn: 1, greeting: true, sourceText: '她站在窗边看雨，左手轻轻搭着窗框。', swipes: ['她站在窗边看雨，左手轻轻搭着窗框。', '她坐在椅子上。'], swipeId: 0 }] }

@@ -14,7 +14,7 @@ export function createBackgroundSessionRetirement(store, { readState, isRunning 
       // Older releases did not record retirement. Fold only explicitly terminal,
       // superseded identities from Tavern's authority; never infer from the label alone.
       if (readState) {
-        const parents = new Set(rows.filter(row => row.kind === 'child' && row.label === '酒馆后台 Agent').map(row => row.parentId || parentId))
+        const parents = new Set(rows.filter(row => row.kind === 'child').map(row => row.parentId || parentId).filter(Boolean))
         for (const owner of parents) {
           const chat = await readState(owner)
           const current = chat?.timeline?.participants?.background?.sessionId
@@ -40,11 +40,10 @@ export function createBackgroundSessionRetirement(store, { readState, isRunning 
 }
 
 /** Adapt the pinned DSH discovery boundary; do not rewrite native descriptors or logs. */
-export function installRetiredBackgroundFilter(subagents, retirement) {
-  if (!subagents) return () => {}
+export function installRetiredBackgroundFilter(subagents, retirement, sessionQuery) {
   const restore = []
   for (const method of ['listChildren', 'listDescendants']) {
-    const original = subagents[method]
+    const original = subagents?.[method]
     if (typeof original !== 'function') continue
     const wrapped = async function (parentId, signal) {
       const rows = await original.call(this, parentId, signal)
@@ -54,6 +53,26 @@ export function installRetiredBackgroundFilter(subagents, retirement) {
     }
     subagents[method] = wrapped
     restore.push(() => { if (subagents[method] === wrapped) subagents[method] = original })
+  }
+  // The native header counts global Session summaries independently of the
+  // child catalog. Apply the same visibility rule at its public read boundary.
+  const original = sessionQuery?.listSessions
+  if (typeof original === 'function') {
+    const wrapped = async function (signal) {
+      const records = await original.call(this, signal)
+      const parents = new Set(records.map(row => row.header.parentSession).filter(Boolean))
+      const rows = records.map(record => ({
+        id: record.header.id,
+        kind: record.header.origin === 'subagent' ? 'child' : 'session',
+        parentId: record.header.parentSession,
+        hasChildren: parents.has(record.header.id),
+      }))
+      const visible = new Set((await retirement.filter(rows)).map(row => row.id))
+      signal?.throwIfAborted()
+      return records.filter(record => visible.has(record.header.id))
+    }
+    sessionQuery.listSessions = wrapped
+    restore.push(() => { if (sessionQuery.listSessions === wrapped) sessionQuery.listSessions = original })
   }
   return () => { for (const undo of restore) undo() }
 }
