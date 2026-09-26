@@ -164,6 +164,12 @@ export function createTavernConversationRegistry(options = {}) {
     const summaries = new Map(chatRows(index).map(function (item) { return [str(item && item.id), item] }))
     const rows = []
     for (const sessionId of Object.keys(currentLinks)) {
+      // API test identities are not ordinary sessions in the browser controller.
+      // Check ownership rather than hiding arbitrary user IDs with a test prefix.
+      if (/^test-[0-9a-f-]{36}$/i.test(sessionId) && typeof store.readAutomationOwner === 'function') {
+        const owner = await store.readAutomationOwner(sessionId)
+        if (owner?.sessionId === sessionId) continue
+      }
       const chatId = str(currentLinks[sessionId])
       const summary = summaries.get(chatId)
       if (!summary) continue

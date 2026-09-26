@@ -795,6 +795,7 @@ export async function apply(ctx) {
   }
   conversationRegistry = createTavernConversationRegistry({
     store: {
+      readAutomationOwner: async sessionId => readJson('automation/' + sessionId + '.json'),
       readLinks: async function () { return await readJson('sessions.json') },
       updateLinks: async function (updater) { return await profileData.updateJson('sessions.json', updater) },
       readIndex,
