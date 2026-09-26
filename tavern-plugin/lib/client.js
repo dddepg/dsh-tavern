@@ -13722,6 +13722,12 @@ window.__ModuleLoader__.load({
 					input.setDraft("/debug-card" + targetSection + "\n\n" + supplement.trim() + "\n\n请结合已引用的游玩记录，检查这张人物卡的异常表现，按需读取相关日志和状态，说明原因并给出修改建议。");
 					return;
 				}
+				if (task === "edit") {
+					const editPrompt = String(result && result.text || "").trim();
+					const target = targetPath ? "\n\n目标卡：@\"" + targetPath + "\"" : "";
+					input.setDraft(editPrompt.replace("/edit-card", "/edit-card" + target) + resourceSection + (supplement ? "\n\n" + supplement : ""));
+					return;
+				}
 				const taskText = "【卡片任务：" + label + "】" + targetSection + "\n\n" + String(result && result.text || "").trim() + resourceSection;
 				input.setDraft(taskText + supplement);
 			}
