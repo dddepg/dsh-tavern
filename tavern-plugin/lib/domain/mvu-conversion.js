@@ -1,3 +1,4 @@
+import {inspectMvuEntrances,preflightMvuConversion} from './mvu-conversion-preflight.js'
 import { mvuStructureGuide, mvuDeliveryGuide } from './mvu-conversion-guidance.js'
 import { stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
 import { appearanceSources, freezeMvuAppearance } from './mvu-conversion-appearance.js'
@@ -219,6 +220,12 @@ export function createMvuConversion({ resources }) {
     const skins = appearanceSources(source.data)
     if (!args.appearance && skins.some(skin => skin.enabled)) throw Error('必须先固化原有美化并提供 appearance 映射，不能降级为默认面板')
     const frozenAppearance = args.appearance ? freezeMvuAppearance(source.data,args.appearance) : undefined
+    if (args.cleanupOrphanEntrances) {
+      const cleaned=applyMvuCleanup(clone(source.data),args.cleanup)
+      const {suggestedCleanup}=inspectMvuEntrances(cleaned)
+      // Keep cleanup anchors tied to the original, version-checked source.
+      args.cleanup=[...(args.cleanup||[]),...suggestedCleanup.filter(edit=>!args.cleanup?.some(old=>old.path===edit.path))]
+    }
     const requestHash = digest({ sourceRevision:source.revision,name:target.name,definitionRevision,appearance:args.appearance,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
     if (existingText !== undefined) {
       if (metadata.requestHash === requestHash && metadata.outputDigest === outputDigest(existing)) {
@@ -320,13 +327,24 @@ export function createMvuConversion({ resources }) {
     result.valid &&= bound
     return result
   }
-  function convert(args) {
+  async function convert(args) {
     if (args.action === 'inspect') return inspect(args)
     if (args.action === 'freezeAppearance') return snapshot(args.sourcePath).then(source => {
       if (!args.sourceRevision || args.sourceRevision !== source.revision) throw Error('来源已变化，请重新 inspect')
       const frozen = freezeMvuAppearance(source.data,args.appearance)
       return {sourceRevision:source.revision,appearance:args.appearance,sourceDigest:frozen.sourceDigest,htmlDigest:frozen.htmlDigest,bindings:frozen.bindings,mode:'frozen-source-captures',instruction:'原视图从来源直接固化。saveDefinition 传相同 appearance；不提交 HTML。'}
     })
+    if (args.action === 'preflight') {
+      const source=await snapshot(args.sourcePath)
+      if (!args.sourceRevision || source.revision!==args.sourceRevision)throw Error('来源或世界书已变化，请重新 inspect')
+      let input=args
+      if(args.definitionRevision){
+        const definition=await resources.readMvuDefinition(args.definitionRevision)
+        if(!definition||definitionDigest(definition)!==args.definitionRevision||definition.sourceRevision!==source.revision||definition.sourcePath!==source.sourcePath)throw Error('已保存定义不存在或来源已变化')
+        input={...definition,fieldMappings:definition.mappings,...args}
+      }
+      return preflightMvuConversion(source,input,applyMvuCleanup)
+    }
     if (args.action === 'saveDefinition') {
       const job = tail.then(async () => {
         const source = await snapshot(args.sourcePath)
@@ -339,11 +357,12 @@ export function createMvuConversion({ resources }) {
         const saved = await resources.readMvuDefinition(definitionRevision)
         if (definitionDigest(saved) !== definitionRevision) throw Error('字段定义保存后回读不一致')
         return {definitionRevision,sourceRevision:source.revision,fieldCounts:definition.fields.map(fields=>fields.length),mappedSourceFields:definition.inventory.length,
+          bindings:definition.appearance?.bindings,entrances:inspectMvuEntrances(source.data),
           instruction:'字段定义已落盘。apply 只传 definitionRevision、sourceRevision、name、cleanup 和需要的 targetRevision；初值、规则和外观从定义直接装配，不重新提交。'}
       }); tail=job.catch(()=>{});return job
     }
     if (args.action === 'read' || args.action === 'search') return read(args)
-    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/saveDefinition/preview/apply')
+    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/saveDefinition/preflight/preview/apply')
     const job = tail.then(() => apply(args)); tail = job.catch(() => {}); return job
   }
   return { convert, verify }

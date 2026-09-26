@@ -29,14 +29,14 @@ source/target 都是工具解析后的规范化生效字段；世界书为实际
 
 inspect.stateInventory 自动列出原美化标签协议在所有开场中的字段、原值、来源范围和 ID。每项都须映射到独立的变量路径，工具直接复制原值；同一个开场的不同人物不能映射到同一位置。完整读取所有状态规则，自动清单未覆盖的文本字段，用 sourceFields 指定来源 path/offset/length，再 inspect 同参数取得 ID，纳入 fieldMappings。规则中的类型、更新条件与公式写入 updateRules；完整字段结构体现在 initialState 中。自动识别仅覆盖显式标签，不能据此声称所有自定义格式已经提取完整。
 
-openingStates 可提交按开场顺序排列的完整对象；省略时工具复制 initialState 作为各开场底稿，再按来源映射填入各自已有值。全部开场保留已定义结构。工具将各自完整初值写入开场的 initvar，官方 MVU 按所选开场初始化。需要按人物重复面板时指定 collectionPath，绑定相对成员字段；需要同时展示全局字段时使用下面的根绑定模式；无原美化时，按下一段设计适合人物卡的面板；默认面板作为失败后的回退。
+openingStates 可提交完整初值对象数组，first_mes 在前，alternate_greetings 按序在后；省略时工具复制 initialState 作为各开场底稿，再按来源映射填入各自已有值。全部开场保留已定义结构。工具将各自完整初值写入开场的 initvar，官方 MVU 按所选开场初始化。需要按人物重复面板时指定 collectionPath，绑定相对成员字段；需要同时展示全局字段时使用下面的根绑定模式；无原美化时，按下一段设计适合人物卡的面板；默认面板作为失败后的回退。
 
 绑定模式必须先选定，不能混用：
 
 - **根绑定**：省略 collectionPath，路径如 `/时间`、`/人物/甲/姓名`。可同时显示全局和人物字段；绑定整个 `/人物` 会显示 JSON 文本，并非逐人美化。
 - **集合绑定**：collectionPath 为 `/人物`，路径如 `/姓名`、`/位置`，工具为每位成员重复面板。全部绑定都相对于成员，不能混入顶层 `/时间`。目前接口不支持全局区域与人物重复区域混合；不要删字段或改字段归属来迁就它，需要该布局时报告具体适配缺口。
 
-原卡没有美化时，调用 `tavern_design_mvu_appearance`，一次提交完整初值、各开场定义、更新规则、来源映射，以及 `html`、`bindings` 和可选 `collectionPath`。根据人物卡的时代、题材、氛围设计配色、字体层级、图标、分组和原生 details 折叠；兼顾窄屏、长文本和对比度。HTML/CSS 使用 `$1`、`$2` 文本占位，动态值和多人增删由工具绑定。所有已定义业务字段及集合模板字段都应有展示映射，排版不能成为删字段的理由。HTML 中的标签使用“玩家”“角色”等静态文字；不支持 {{user}}/{{char}}、EJS 或其他动态模板，值只通过 $1/$2 绑定。工具不接受自定义 JavaScript、事件属性或嵌入文档。
+原卡没有美化时，调用 `tavern_design_mvu_appearance`，一次提交完整初值、各开场定义、更新规则、来源映射，以及字段组件：简单面板传 `fields: []` 自动展示全部字段，或传 `{path,label,display}` 数组指定顺序，遗漏业务字段由工具补齐。数组字段使用 `display: "list"`。自定义布局在 `html` 内使用 `<mvu-field path="/字段" display="text"></mvu-field>`（数组改为 list），工具生成占位编号与绑定，此时省略 bindings 和 collectionPath；组件使用完整根路径。旧式布局仍可提交 `html`、`bindings` 和可选 `collectionPath`。根据人物卡的时代、题材、氛围设计配色、字体层级、图标、分组和原生 details 折叠；兼顾窄屏、长文本和对比度。HTML/CSS 使用 `$1`、`$2` 文本占位，动态值和多人增删由工具绑定。所有已定义业务字段及集合模板字段都应有展示映射，排版不能成为删字段的理由。HTML 中的标签使用“玩家”“角色”等静态文字；不支持 {{user}}/{{char}}、EJS 或其他动态模板，值只通过 $1/$2 绑定。工具不接受自定义 JavaScript、事件属性或嵌入文档。
 
 设计工具会保存完整定义并返回 definitionRevision，后续 apply 直接引用，无需再抄写 HTML 或调用 saveDefinition。已有原美化时工具拒绝覆盖，继续走原视图固化。设计校验失败先按错误修正；确实无法完成时，用 saveDefinition 保存无 appearance 的默认面板，交付时说明回退原因。无论设计或回退，字段完整性验收相同。
 
@@ -61,6 +61,8 @@ openingStates 可提交按开场顺序排列的完整对象；省略时工具复
 完成条件：清理位置和依据明确；候选项生成已检查，原卡没有时写“未发现”，仍有不确定内容时列出具体位置。
 
 ## 4. 应用并验收
+
+方案含多个待排查问题时，先调用 `action: "preflight"`，传 sourceRevision、definitionRevision 和 cleanup，一次查看开场格式、字段覆盖、外观语法和旧入口报告；尚未保存定义时可传完整定义及 appearance。预检只读，不代表真实游玩验证。仅当 suggestedCleanup 确认是孤立末尾入口时，可在 apply 传 `cleanupOrphanEntrances: true`；有初值或渲染引用的入口按原文明确清理，不自动删除。
 
 用户已授权转换且原卡唯一时，直接 apply，传回 sourceRevision、definitionRevision、name 和 cleanup；更新副本再传 targetRevision。初值、规则和展示配置由工具读取已保存定义直接写入新卡。apply 内置预检、原子保存和磁盘验收；只有清理定位或删除范围尚有疑问时才额外 preview，不把 preview→apply→validate 作为必跑三步。复用同一 sourcePath 和 name；更新已有副本需要 targetRevision。原卡和共享资源保持不变。
 

@@ -1,4 +1,5 @@
-import { appearanceCoverageError } from './mvu-conversion-guidance.js'
+import { compileMvuComponents } from './mvu-conversion-components.js'
+import { appearanceCoverageError, conversionInputError } from './mvu-conversion-guidance.js'
 import { appearanceSources } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -44,14 +45,23 @@ function leaves(value,path='') {
   if (value && typeof value==='object' && Object.keys(value).length) return Object.entries(value).flatMap(([key,child])=>leaves(child,path+'/'+escapePointer(key)))
   return [{path,type:value===null?'null':Array.isArray(value)?'array':typeof value,value:structuredClone(value)}]
 }
+export function normalizeOpeningStates(input,initialState,count) {
+  let states=input
+  if (states===undefined) states=Array.from({length:count},()=>structuredClone(initialState))
+  else if (isObject(states) && Object.keys(states).length===count && Array.from({length:count},(_,i)=>String(i)).every(key=>Object.hasOwn(states,key))) states=Array.from({length:count},(_,i)=>states[String(i)])
+  if (!Array.isArray(states)||states.length!==count||Array.from({length:count},(_,i)=>!isObject(states[i])).some(Boolean)) {
+    throw conversionInputError('MVU_OPENING_STATES_INVALID','openingStates 必须逐项对应全部开场',{expectedCount:count,missingIndices:Array.from({length:count},(_,i)=>i).filter(i=>!isObject(states?.[i])),hint:'传 first_mes 在前、alternate_greetings 按序的完整对象数组；可省略，工具用 initialState 建立底稿后按来源映射填值。'})
+  }
+  return structuredClone(states)
+}
 export function createDefinition(source,args) {
   if (!isObject(args.initialState) || !Object.keys(args.initialState).length) throw Error('initialState 必须是非空变量对象')
   const inventory=stateInventory(source.data,args.sourceFields)
   const mappings=args.fieldMappings || []
   if (!Array.isArray(mappings)) throw Error('fieldMappings 必须为数组')
   const openingCount=1+(source.data.alternate_greetings?.length || 0)
-  const states=args.openingStates===undefined?Array.from({length:openingCount},()=>structuredClone(args.initialState)):structuredClone(args.openingStates)
-  if (!Array.isArray(states) || states.length!==openingCount || states.some(s=>!isObject(s))) throw Error('openingStates 必须逐项对应全部开场')
+  const states=normalizeOpeningStates(args.openingStates,args.initialState,openingCount)
+  args={...args,appearance:compileMvuComponents(args.appearance,states)}
   // Every declared field exists in every opening. Unknown values belong in the
   // definition explicitly, rather than borrowing another opening's facts.
   const declared=leaves(args.initialState)
