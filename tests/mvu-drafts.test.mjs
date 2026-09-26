@@ -322,9 +322,8 @@ test('美化非法路径以可修复诊断返回，不在草稿已保存后抛�
 test('简化凭据自动管理版本与重试，JSON 键顺序不同仍幂等，旧凭据不能覆盖',async t=>{
  const f=await fixture(t)
  const begin={action:'begin',sourcePath:f.sourcePath}
- const a=await f.conversion.draft(begin,{sessionId:'one'})
- assert.equal((await f.conversion.draft(begin,{sessionId:'one'})).draft,a.draft)
- assert.notEqual((await f.conversion.draft(begin,{sessionId:'two'})).draft,a.draft)
+ const a=await f.conversion.draft(begin)
+ assert.equal((await f.conversion.draft(begin)).draft,a.draft)
  const patch={action:'patch',draft:a.draft,section:'fields',values:{'/位置':'大厅','/日期':'今天'}}
  const b=await f.conversion.draft(patch)
  assert.equal((await f.conversion.draft({values:{'/日期':'今天','/位置':'大厅'},section:'fields',draft:a.draft,action:'patch'})).draft,b.draft)
@@ -412,4 +411,95 @@ test('根斜杠规范化仍拒绝冲突、父子重叠与危险路径，不保�
  await assert.rejects(f.patch('fields',{'__proto__/polluted':true}),e=>e.code==='DRAFT_PATH_INVALID')
  assert.equal({}.polluted,undefined)
  assert.deepEqual(await f.read(),before)
+})
+
+test('会话默认草稿省略凭据，短编号持久化且隔离其他会话',async t=>{
+ const f=await fixture(t),context={sessionId:'short-session'}
+ const begin=await f.conversion.draft({action:'begin',sourcePath:f.sourcePath},context)
+ assert.equal(begin.draft,'d1')
+ await f.conversion.draft({action:'patch',section:'fields',values:{'/地点':'大厅'}},context)
+ const next=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ assert.equal((await next.draft({action:'read',path:'/definition/initialState/地点'},context)).reading.text,'大厅')
+ assert.equal((await next.draft({action:'source',path:'/first_mes'},context)).source.text,'大厅开场')
+ await assert.rejects(next.draft({action:'read'},{sessionId:'other-session'}),e=>e.code==='DRAFT_NOT_SELECTED')
+ await assert.rejects(next.draft({action:'read',draft:'d9'},context),e=>e.code==='DRAFT_NOT_SELECTED')
+ const other=await next.draft({action:'begin',sourcePath:f.sourcePath},{sessionId:'other-session'})
+ assert.equal(other.draft,'d1');assert.notEqual(other.draftId,begin.draftId)
+})
+test('短编号显式切换草稿，迟到的工具调用重放不会切换当前草稿',async t=>{
+ const f=await fixture(t),context={sessionId:'multiple'}
+ await f.conversion.draft({action:'begin',sourcePath:f.sourcePath,name:'A'},{...context,callId:'begin-a'})
+ const args={action:'begin',sourcePath:f.sourcePath,name:'B'}
+ assert.equal((await f.conversion.draft(args,{...context,callId:'begin-b'})).draft,'d2')
+ await f.conversion.draft({action:'read',draft:'d1'},context)
+ assert.equal((await f.conversion.draft(args,{...context,callId:'begin-b'})).draft,'d2')
+ const current=await f.conversion.draft({action:'read'},context)
+ assert.equal(current.draft,'d1');assert.equal(current.drafts.length,2)
+})
+test('会话只使用已读版本，冲突不自动刷新，read 后才允许继续',async t=>{
+ const f=await fixture(t),context={sessionId:'conflict'}
+ const begin=await f.conversion.draft({action:'begin',sourcePath:f.sourcePath},context)
+ await f.conversion.draft({action:'patch',draftId:begin.draftId,draftRevision:begin.draftRevision,requestId:'external',section:'fields',values:{'/地点':'外部修改'}})
+ const patch={action:'patch',section:'fields',values:{'/地点':'新值'}}
+ for(let i=0;i<2;i++)await assert.rejects(f.conversion.draft(patch,context),e=>e.code==='DRAFT_REVISION_CONFLICT'&&e.details.draft==='d1')
+ await f.conversion.draft({action:'read'},context)
+ await f.conversion.draft(patch,context)
+ assert.equal((await f.conversion.draft({action:'read',path:'/definition/initialState/地点'},context)).reading.text,'新值')
+})
+test('无凭据写入跨重启去重，迟到重放不吞掉之后的正常修改',async t=>{
+ const f=await fixture(t),context={sessionId:'retry'}
+ await f.conversion.draft({action:'begin',sourcePath:f.sourcePath},context)
+ const patch={action:'patch',section:'fields',values:{'/地点':'大厅'}}
+ const a=await f.conversion.draft(patch,{...context,callId:'a'})
+ const restarted=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ const repeat=await restarted.draft(patch,context)
+ assert.equal(repeat.draftRevision,a.draftRevision)
+ await restarted.draft({...patch,values:{'/地点':'车站'}},{...context,callId:'b'})
+ await restarted.draft(patch,{...context,callId:'a'})
+ await restarted.draft(patch,{...context,callId:'c'})
+ assert.equal((await restarted.draft({action:'read',path:'/definition/initialState/地点'},context)).reading.text,'大厅')
+ const move={action:'patch',section:'fields',operation:'move',path:'/地点',toPath:'/位置'}
+ const moved=await restarted.draft(move,context)
+ assert.equal((await restarted.draft(move,context)).draftRevision,moved.draftRevision)
+})
+test('无凭据提交回执丢失后恢复，重复提交不重新改写成品',async t=>{
+ const f=await fixture(t);await f.complete();await f.conversion.draft(f.commitArgs())
+ const context={sessionId:'recover-commit'}
+ await f.conversion.draft({action:'begin',sourcePath:f.sourcePath},context)
+ await f.conversion.draft({action:'patch',section:'opening',openingId:'opening-1',values:{'/地点/名称':'码头'}},context)
+ await f.conversion.draft({action:'patch',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}},context)
+ let failed=false
+ const interrupted=createMvuConversion({resources:{...f.resources,saveMvuCard:async args=>{const result=await f.resources.saveMvuCard(args);if(!failed){failed=true;throw Error('模拟回执丢失')}return result}}})
+ await assert.rejects(interrupted.draft({action:'commit'},context),e=>e.details.commitState==='unknown')
+ const restarted=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ const result=await restarted.draft({action:'commit'},context)
+ assert.equal(result.receipt.validation.valid,true)
+ const bytes=await f.resources.readText(result.targetPath)
+ await restarted.draft({action:'commit'},context)
+ assert.equal(await f.resources.readText(result.targetPath),bytes)
+})
+test('同会话并发修改不会用另一次调用推进的版本静默覆盖',async t=>{
+ const f=await fixture(t),context={sessionId:'parallel-short'}
+ await f.conversion.draft({action:'begin',sourcePath:f.sourcePath},context)
+ const other=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ const results=await Promise.allSettled([f.conversion,other].map((conversion,index)=>conversion.draft({action:'patch',section:'fields',values:{'/地点':String(index)}},context)))
+ assert.equal(results.filter(x=>x.status==='fulfilled').length,1)
+ assert.equal(results.find(x=>x.status==='rejected').reason.code,'DRAFT_SESSION_CHANGED')
+})
+
+test('工具入口自动注入会话及调用标识，输入省略 draft，输出仅有短编号',async t=>{
+ const f=await fixture(t,{card:{extensions:{author_note:'保留'}}}),tools=new Map()
+ registerMvuConversionTools({tools:{register:tool=>tools.set(tool.name,tool)},defineTool:x=>x,conversion:f.conversion,chatForSession:async id=>({mode:id==='tool-session'?'card':'story'})})
+ const tool=tools.get('tavern_card_draft'),exec={agent:{session:{id:'tool-session'}}}
+ const begin=await tool.execute({action:'begin',sourcePath:f.sourcePath},{...exec,callId:'begin'})
+ assert.equal(begin.report.draft,'d1');assert.equal(Object.hasOwn(begin.report,'draftId'),false)
+ assert.equal((await tool.execute({action:'begin',sourcePath:f.sourcePath},{...exec,callId:'begin-again'})).report.draft,'d1')
+ const patch={action:'patch',section:'fields',values:{'/位置':'大厅'}}
+ await tool.execute(patch,{...exec,callId:'patch'})
+ await tool.execute(patch,{...exec,callId:'patch'})
+ const read=await tool.execute({action:'source',path:'/extensions'},{...exec,callId:'source'})
+ assert.equal(read.report.draft,'d1')
+ const stored=await f.resources.readMvuDraftSession('tool-session')
+ assert.equal((await f.resources.readMvuDraft(stored.drafts.d1.id)).revision,2)
+ assert.equal(Object.hasOwn(stored.calls[Object.keys(stored.calls)[1]],'args'),false)
 })

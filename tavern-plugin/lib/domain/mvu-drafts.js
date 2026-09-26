@@ -1,3 +1,4 @@
+import {createMvuDraftSession} from './mvu-draft-session.js'
 import {createHash} from 'node:crypto'
 import {normalizeResourcePath} from './file-resources.js'
 import {isObject, MVU_CONVERSION_KEY} from './mvu-conversion-artifacts.js'
@@ -121,7 +122,7 @@ export function createMvuDrafts({resources,conversion}) {
       if(current&&current.beginHash!==requestHash)fail('DRAFT_REQUEST_REUSED','同一 requestId 不能用于不同参数')
       return current||initial
     })
-    return {...summary(draft),sourceCatalog:info.catalog,reading:conversionReading(info.card),stateInventory:info.stateInventory,appearanceSources:info.appearanceSources,instruction:'先按组 patch fields，再逐个 opening 填初值；read 按需读草稿，来源原文用 source，补充来源清单用 inspect；后续只传最新 draft 凭据。草稿保存不代表成品已提交。'}
+    return {...summary(draft),sourceCatalog:info.catalog,reading:conversionReading(info.card),stateInventory:info.stateInventory,appearanceSources:info.appearanceSources,instruction:'先按组 patch fields，再逐个 opening 填初值；read 按需读草稿，来源原文用 source，补充来源清单用 inspect；后续默认当前草稿，多草稿时传返回的短编号。草稿保存不代表成品已提交。'}
   }
   function patch(draft,args) {
     if(draft.phase!=='editing')fail('DRAFT_NOT_EDITABLE','草稿正在提交或已提交；提交中请原样重试，已完成请 begin 新草稿')
@@ -218,7 +219,7 @@ export function createMvuDrafts({resources,conversion}) {
     })
     return summary(draft)
   }
-  return {run:async (args,context)=>{
+  const execute=async (args,context)=>{
     try {args=expandToken(args);return await run(args,context)}
     catch(error) {
       const draft=args.draftId?await resources.readMvuDraft(args.draftId).catch(()=>undefined):undefined
@@ -228,5 +229,6 @@ export function createMvuDrafts({resources,conversion}) {
         hint:draft?.intent?'成品提交结果可能尚未记录；请用原 commit 参数重试，不直接改写成品。':'草稿中已保存的部分保留；按错误位置修改后继续。',...error.details}
       throw error
     }
-  }}
+  }
+  return {run:createMvuDraftSession({resources,run:execute})}
 }

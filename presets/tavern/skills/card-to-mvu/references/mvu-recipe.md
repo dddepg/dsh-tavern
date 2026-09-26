@@ -1,13 +1,13 @@
 # 美化绑定与清理边界
 
-本页的参数片段用于 `tavern_card_draft.patch` 对应分组。读取来源使用 source，更新来源清单使用 inspect，验证与提交使用 validate/commit；这些动作都只需传 draft 凭据，不拼装来源或定义版本。
+本页的参数片段用于 `tavern_card_draft.patch` 对应分组。读取来源使用 source，更新来源清单使用 inspect，验证与提交使用 validate/commit；这些动作默认操作当前草稿，不传凭据或版本；多草稿时可加 draft 短编号选择。
 
 ## 保留原美化
 
 从 begin/inspect 的 appearanceSources 选择路径，外观内容由工具直接从原卡固化。
 
 ```json
-{"action":"patch","draft":"工具返回的最新凭据","section":"appearance","values":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
+{"action":"patch","section":"appearance","values":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
 ```
 
 在 cleanup 分组中明确清理对应旧入口；其他美化保持原样。无法固化时报告具体缺口，不能用基础面板掩盖设计缺失。
@@ -76,7 +76,7 @@
 使用 patch section=appearance 保存 HTML 方案。初值和规则已保存在草稿中，此处只提交外观。
 
 ```json
-{"action":"patch","draft":"工具返回的最新凭据","section":"appearance","values":{"html":"<style>.status{padding:16px;background:#142338;color:#f4f7fb;border-radius:12px;overflow-wrap:anywhere}</style><section class=\"status\"><h3>航行日志</h3><p>位置：<mvu-field path=\"/玩家/位置\"></mvu-field></p><p>体力：<mvu-field path=\"/玩家/体力\"></mvu-field></p></section>"}}
+{"action":"patch","section":"appearance","values":{"html":"<style>.status{padding:16px;background:#142338;color:#f4f7fb;border-radius:12px;overflow-wrap:anywhere}</style><section class=\"status\"><h3>航行日志</h3><p>位置：<mvu-field path=\"/玩家/位置\"></mvu-field></p><p>体力：<mvu-field path=\"/玩家/体力\"></mvu-field></p></section>"}}
 ```
 
 字段必须来自草稿目录，命名组件自动生成绑定编号。多人重复面板使用 collectionPath，bindings.path 为成员相对路径。整集合可绑定为一个值，以 JSON 文本展示；正式设计优先逐字段排版。后续修改样式仍 patch appearance，状态和规则保留，最后统一 commit。

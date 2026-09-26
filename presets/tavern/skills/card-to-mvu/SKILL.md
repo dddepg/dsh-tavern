@@ -13,13 +13,13 @@ description: "把人物卡转换为独立 MVU 副本，或调整转换后的变�
 
 无原美化默认要求 `custom`，需要设计 HTML；有原美化默认 `preserve`，直接绑定原视图。只有用户明确要求简单面板，或设计失败且已说明回退时，才选择 `appearanceRequirement=basic` 并提供 `basicReason`。基础字段面板不等于定制美化完成。进行中确需改变要求时，patch requirements 明确新要求与依据，保留已填写内容。
 
-保存返回的 `draft` 凭据，后续原样传最新值，工具自行管理来源版本与重试。按返回的阅读片段、目录和 `stateInventory` 核对原文；缺失内容用 `tavern_card_draft.source` 传 path 读取，或传 query 搜索。补充 sourceFields 后用 `tavern_card_draft.inspect` 更新来源清单。只读目标卡与其绑定资源；标准转换无需搜索其他卡、磁盘包装或工具源码。
+begin 会选中当前草稿，后续省略 draft，工具按会话记住已读版本并管理重试。需要切换多份草稿时传返回的短编号，例如 `draft="d2"`；read 不带 path 可查看当前草稿和列表。按返回的阅读片段、目录和 `stateInventory` 核对原文；缺失内容用 `tavern_card_draft.source` 传 path 读取，或传 query 搜索。补充 sourceFields 后用 `tavern_card_draft.inspect` 更新来源清单。只读目标卡与其绑定资源；标准转换无需搜索其他卡、磁盘包装或工具源码。
 
 先使用 begin 已返回的原文和目录，只有被截断或尚未提供的非空内容才 source 补读。检查 description、personality、scenario、系统提示、所有开场、mes_example 以及实际存在的世界书、正则和 Helper 脚本；空目录直接跳过，不用 shell、raw 镜像或另一套读取工具重复证明其为空。定位原文中实际存在的状态与候选生成协议，缺失的协议无需清理。稳定事实沿用原卡，变化依据来自原文；未知值明确留空，不编造数值或拿另一个开场的场景补齐。
 
 ## 2. 声明字段目录，再逐开场填值
 
-每次 `patch` 携带最新 `draft`。小卡的必要字段一次提交即可，内容较长或需独立修正时再按组拆分；固定事实留在原文，不为了凑齐字段组搬进变量。字段路径与类型由 `section=fields` 声明，返回的 `fieldSchema` 是唯一目录；`initialState` 是可显式继承的初值底稿。先确定各开场共同使用的结构，再填值。
+每次 `patch` 默认操作当前草稿。小卡的必要字段一次提交即可，内容较长或需独立修正时再按组拆分；固定事实留在原文，不为了凑齐字段组搬进变量。字段路径与类型由 `section=fields` 声明，返回的 `fieldSchema` 是唯一目录；`initialState` 是可显式继承的初值底稿。先确定各开场共同使用的结构，再填值。
 
 - `section=fields`：JSON Pointer 到值的对象，如 `{ "/时间/时段":"白天", "/地点/名称":"大厅" }`。同批使用互不重叠的路径；省略根斜杠时工具会补齐，例如 `$meta` 规范化为 `/$meta`，只有实际需要可扩展结构时才设置它。默认替换所选路径，递归合并对象用 `operation=merge`；null 是空值，删除与改名用专门操作。
 - `section=opening`：按工具给出的 openingId 填写已声明字段，各开场使用相同路径与类型，值可以不同。`inheritInitialState=true` 仅补缺失字段并保留已有值，随后应用本次 values；只有底稿符合该场景时才继承。查看返回的 missingFields，按需补齐，未知值采用明确且一致的表示方式。
@@ -28,7 +28,7 @@ description: "把人物卡转换为独立 MVU 副本，或调整转换后的变�
 
 错层级、错类型会在开场保存时返回具体位置。优先使用 suggestedPaths 中符合语义的目录路径；意外多写的字段应修正，不能通过扩大所有开场和面板来消除报错。确需改名或清除错误字段，使用 fields 的 move/remove，同步处理各开场；操作语义、引用依赖和旧草稿修复见 [草稿工具配方](references/draft-workflow.md)。
 
-`read` 默认返回目录、进度和缺失项，传 path 分页读取局部；续页携带同一 draft。无需每次重读完整底稿与所有开场。草稿是否保存以草稿回执为准，不用成品的 scope=plan 判断。
+`read` 默认返回目录、进度和缺失项，传 path 分页读取局部；连续读完同一部分后再修改草稿。无需每次重读完整底稿与所有开场。草稿是否保存以草稿回执为准，不用成品的 scope=plan 判断。
 
 ## 3. 保存美化和清理
 
@@ -48,11 +48,11 @@ description: "把人物卡转换为独立 MVU 副本，或调整转换后的变�
 
 查看 missing；必要时 `validate` 一次汇总结构问题。定位错误按返回的 section、openingId、path、missingPaths 或清理锚点修正对应部分，不从头重写。结构校验不能替代语义核对；保留原卡所需状态，误建字段则通过明确迁移或删除修正。
 
-`commit` 内部保存定义、预检、原子生成成品并校验；仅传 action=commit 与最新 draft，无需再次调用 saveDefinition/design/apply。`receipt.committed=true` 且 `receipt.validation.valid=true` 才表示成品提交成功。此时结束转换，不再重复 validate、遍历磁盘包装、统计脚本/标签或另起美化流程；只有明确的新问题才做定点检查。报告副本路径、实际改动与校验结果即可，真实游玩仅在用户明确要求时执行；limitations 是覆盖范围，不是待验收清单。成品中的 `<initvar>` 和 `<mvu-status/>` 是预期生成结构，不应当作残留再删。
+`commit` 内部保存定义、预检、原子生成成品并校验；只需传 action=commit，无需再次调用 saveDefinition/design/apply。`receipt.committed=true` 且 `receipt.validation.valid=true` 才表示成品提交成功。此时结束转换，不再重复 validate、遍历磁盘包装、统计脚本/标签或另起美化流程；只有明确的新问题才做定点检查。报告副本路径、实际改动与校验结果即可，真实游玩仅在用户明确要求时执行；limitations 是覆盖范围，不是待验收清单。成品中的 `<initvar>` 和 `<mvu-status/>` 是预期生成结构，不应当作残留再删。
 
 ## 失败恢复与进度
 
-- 响应丢失时原样重试，包括原 draft 凭据；程序自动去重。版本冲突时 read（不带 path）获取最新进度，核对后用新凭据修改；过期凭据不能覆盖新内容。
+- 响应丢失时原样重试；程序保留本次使用的版本并去重。版本冲突时 read（不带 path）获取最新进度，核对后再修改；工具不会擅自采用未读的新版本。
 - `saved=true` 只说明草稿保存。`phase=committing` / `commitState=unknown` 表示提交结果尚未完整记录，使用原 commit 请求重试，工具恢复提交凭据。已提交草稿继续修改时 begin 新草稿，沿用同一来源和副本名。
 - 同一错误码与路径再次出现时，停止盲目重试，按回执中的实际参数位置修正；不通过新建草稿、变换无关字段或 shell 临时文件猜测缓存问题。无法修正时报告具体阻塞，保留草稿。
 - 来源或目标冲突时保留草稿并核对变化，不使用普通文件写入绕过保护。整个副本的删除或重命名走资源库操作，不能只改工作版而留下 originals 占名。

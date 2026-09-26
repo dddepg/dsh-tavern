@@ -1,5 +1,5 @@
 // Revision and request bookkeeping stays inside the draft service. Compatibility
-// callers still receive the full domain report; the model sees one opaque token.
+// callers still receive the full domain report; the model sees a session-local short name.
 function compactDraftReport(value) {
   const {draftId,draftRevision,sourceRevision,requestId,...report}=value
   if(report.report)report.report=compactDraftReport(report.report)
@@ -25,12 +25,12 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }
   tools.register(defineTool({
     name:'tavern_card_draft',
-    description:'MVU 转换统一入口。begin 仅需 sourcePath；之后传返回的 draft 凭据（自带版本）。patch 分组修改，source 读或搜索来源，inspect 更新来源清单，read 看进度，validate 检查，commit 提交。仅卡片工作台可用。响应丢失时原样重试，程序自动去重；冲突时 read 后核对再修改。',
+    description:'MVU 转换统一入口。begin 仅需 sourcePath；后续默认操作本会话当前草稿，不传 draft；多草稿时用 d1/d2 等短编号选择。patch 分组修改，source 读或搜索来源，inspect 更新来源清单，read 看进度，validate 检查，commit 提交。仅卡片工作台可用。响应丢失时原样重试，程序自动去重；冲突时 read 后核对再修改。',
     parameters:{
       action:{type:'string',required:true,enum:['begin','read','source','inspect','patch','validate','commit']},
       sourcePath:{type:'string',description:'begin 的原卡路径，已有 MVU 副本仍以原卡为来源'},
       name:{type:'string',description:'begin 的目标副本名；已有副本自动载入其定义、各开场和美化'},
-      draft:{type:'string',description:'begin 返回的草稿凭据；后续原样传最新值，无需手写版本或请求 ID。read 不带 path 可用旧凭据刷新进度'},
+      draft:{type:'string',description:'可省略，默认当前草稿；多草稿时传本会话返回的 d1/d2 等短编号。read 不带 path 刷新已读版本与草稿列表'},
       appearanceRequirement:{type:'string',enum:['custom','preserve','basic'],description:'begin：无原美化默认 custom（需 HTML 设计）；有原美化默认 preserve。basic 仅用户要求简单面板或已说明的设计回退'},
       basicReason:{type:'string',description:'选择 basic 时必填的依据'},
       section:{type:'string',enum:['fields','opening','rules','appearance','mapping','cleanup','requirements','review']},
@@ -45,7 +45,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       offset:{type:'number'},limit:{type:'number'}
     },
     output,isConcurrencySafe:()=>false,
-    async execute(args,exec) { await requireWorkbench(exec); try {return {report:compactDraftReport(await conversion.draft(args,{sessionId:exec?.agent?.session?.id}))}} catch(error) {return compactDraftReport(failure(error))} }
+    async execute(args,exec) { await requireWorkbench(exec); try {return {report:compactDraftReport(await conversion.draft(args,{sessionId:exec?.agent?.session?.id,callId:exec?.callId}))}} catch(error) {return compactDraftReport(failure(error))} }
   }))
   tools.register(defineTool({
     name:'tavern_read_mvu_appearance',
