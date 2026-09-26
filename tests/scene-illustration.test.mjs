@@ -1,3 +1,8 @@
+import { createChatJournalStore } from '../tavern-plugin/lib/domain/chat-journal-store.js'
+import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persistence.js'
+import { createSessionChatReader } from '../tavern-plugin/lib/domain/session-view-reader.js'
+import { createTavernConversationRegistry } from '../tavern-plugin/lib/domain/tavern-conversation-registry.js'
+import { projectSceneImageState } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -1358,4 +1363,71 @@ test('关闭姿势结算后生图忽略当前及历史快照中的姿势', () =>
   assert.equal(sceneInput(chat, target, { posture: '历史姿态', backgroundTasks: { posture: false } }).posture, '')
   assert.equal(sceneInput(chat, target, { posture: '历史姿态' }).posture, '历史姿态')
   assert.equal(chat.posture, '站在窗边，左手扶窗')
+})
+
+test('状态查询使用生图专用投影，不读取完整存档且关闭后保留已有图片', async t => {
+  const fx = await fixture(t)
+  const key = sceneTarget(fx.chat(), 2).key
+  await fx.service.start('parent', 2, key)
+  const done = await until(async () => { const value = await fx.service.status('parent', 2); return value.status === 'succeeded' && value })
+  fx.chat().sceneImagesEnabled = false
+  fx.deps.sceneStateForSession = async () => projectSceneImageState(fx.chat())
+  fx.deps.chatForSession = async () => assert.fail('状态查询不应全量读档')
+  const status = await fx.service.status('parent', 2)
+  assert.equal(status.enabled, false)
+  assert.equal(status.key, key)
+  assert.deepEqual(status.versions, done.versions)
+})
+
+
+test('193 次生图状态查询贯穿真实存储及 Session adapter，完整克隆为零', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'scene-projection-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const records = createChatJournalStore({ dataRoot: root })
+  const persistence = createChatPersistence({ store: records })
+  const chat = { ...chatFixture(), backgroundConfigVersion: 1, conversationFeaturesVersion: 1,
+    sceneImagesEnabled: false, cardPayload: 'FULL-CHAT-SENTINEL' }
+  chat.messages.unshift(...Array.from({ length: 461 }, (_, i) => ({ role: 'user', text: '历史' + i,
+    mvu: { stat_data: { large: '变量'.repeat(2000) } }, displayText: '展示'.repeat(2000) })))
+  await persistence.write(chat)
+  const fullRead = () => assert.fail('不可回退到完整读取')
+  const registry = createTavernConversationRegistry({ store: {
+    readLinks: async () => ({ parent: chat.id }), updateLinks: fullRead,
+    readIndex: async () => ({ chats: [] }), writeIndex: fullRead, readChat: fullRead,
+    writeChat: fullRead, removeChat: fullRead, readSceneImageState: persistence.readSceneImageState
+  } })
+  const reader = createSessionChatReader({ registry, needsAdoption: () => false, adopt: fullRead })
+  const fx = await fixture(t, { chatForSession: fullRead, sceneStateForSession: reader.readSceneImageState })
+  let fullCopies = 0
+  const clone = structuredClone
+  t.mock.method(globalThis, 'structuredClone', (value, ...args) => {
+    if (value?.cardPayload === 'FULL-CHAT-SENTINEL') fullCopies++
+    return clone(value, ...args)
+  })
+  const expectedKey = sceneTarget(chat, 2).key
+  for (let i = 0; i < 193; i++) {
+    const result = await fx.service.status('parent', 2)
+    assert.equal(result.key, expectedKey)
+    assert.equal(result.enabled, false)
+  }
+  assert.equal(fullCopies, 0)
+  const projected = await reader.readSceneImageState('parent')
+  assert.equal(projected.messages[0].mvu, undefined)
+  assert.equal(projected.messages[0].displayText, undefined)
+  projected.messages[0].text = '修改副本'
+  assert.equal((await reader.readSceneImageState('parent')).messages[0].text, '历史0')
+  await persistence.update(chat.id, current => { current.messages.at(-1).swipeId = 1; current.sceneImagesEnabled = true; return current })
+  const changed = await fx.service.status('parent', 2)
+  assert.notEqual(changed.key, expectedKey)
+  assert.equal(changed.key, sceneTarget(await persistence.read(chat.id), 2).key)
+  assert.equal(changed.enabled, true)
+})
+
+test('关闭本局生图时生成入口在完整读档之前拒绝', async t => {
+  const fx = await fixture(t, {
+    backgroundConfigForSession: async () => ({ sceneImagesEnabled: false }),
+    chatForSession: async () => assert.fail('已关闭生图不能读取完整存档')
+  })
+  await assert.rejects(fx.service.start('parent', 2, 'unused'), /本局设置/)
+  assert.equal(fx.imageCalls(), 0)
 })

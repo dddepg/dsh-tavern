@@ -1,4 +1,4 @@
-import { projectChatBackgroundConfig } from './chat-session-state.js'
+import { projectSceneImageState, projectChatBackgroundConfig } from './chat-session-state.js'
 function identity(chat) {
   const mode = chat.mode || 'story'
   return { revision: Number(chat._storageRevision) || 0, cardPath: String(chat.cardPath ?? ''),
@@ -107,11 +107,17 @@ export function createSessionChatReader({ registry, needsAdoption, adopt }) {
     const state = await registry.resolveState(sessionId)
     return state && needsAdoption(state) ? read(sessionId) : state
   }
+  async function readSceneImageState(sessionId) {
+    const state = await registry.resolveSceneImageState(sessionId)
+    if (!state || !needsAdoption(state)) return state
+    const adopted = await read(sessionId)
+    return adopted ? projectSceneImageState(adopted) : undefined
+  }
   async function readBackgroundConfig(sessionId) {
     const config = await registry.resolveBackgroundConfig(sessionId)
     if (!config || !needsAdoption(config)) return config
     const adopted = await read(sessionId)
     return adopted ? projectChatBackgroundConfig(adopted) : undefined
   }
-  return Object.freeze({ read, readState, readBackgroundConfig })
+  return Object.freeze({ read, readState, readSceneImageState, readBackgroundConfig })
 }

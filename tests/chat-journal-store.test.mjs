@@ -367,3 +367,41 @@ test('增量写入的 undefined 与磁盘 JSON 一致，后续完整保存和冷
   assert.deepEqual(restored.delivery,{})
   assert.deepEqual(restored.flags,[null])
 })
+
+test('并发冷读只物化一次，外部变版后重新合并读取且副本隔离', async t => {
+  const root = await temporary()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const writer = createChatJournalStore({ dataRoot: root })
+  await bump(writer, 'parallel', chat => { chat.cardPayload = 'PARALLEL-COLD-PAYLOAD'; chat.counter = 1 })
+  const reader = createChatJournalStore({ dataRoot: root })
+  const parse = JSON.parse
+  let parses = 0
+  t.mock.method(JSON, 'parse', (text, ...args) => {
+    if (String(text).includes('PARALLEL-COLD-PAYLOAD')) parses++
+    return parse(text, ...args)
+  })
+  const readBatch = () => Promise.all(Array.from({ length: 20 }, () => reader.read('parallel')))
+  const copies = await readBatch()
+  assert.equal(parses, 1, '同版本并发读不应重复解析完整快照')
+  copies[0].counter = 99
+  assert.equal(copies[1].counter, 1)
+  await bump(writer, 'parallel', chat => { chat.counter = 2 })
+  parses = 0
+  assert.ok((await readBatch()).every(chat => chat.counter === 2))
+  assert.equal(parses, 1)
+})
+
+test('并发物化失败不会留下拒绝的 Promise，修复磁盘后可重读', async t => {
+  const root = await temporary()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const writer = createChatJournalStore({ dataRoot: root })
+  await bump(writer, 'retry-read', chat => { chat.counter = 1 })
+  const file = path.join(root, 'chats/retry-read/snapshots/000000000001.json')
+  const good = await readFile(file)
+  await writeFile(file, '{broken')
+  const reader = createChatJournalStore({ dataRoot: root, logger: { warn() {} } })
+  const failures = await Promise.allSettled(Array.from({ length: 5 }, () => reader.read('retry-read')))
+  assert.ok(failures.every(result => result.status === 'rejected'))
+  await writeFile(file, good)
+  assert.equal((await reader.read('retry-read')).counter, 1)
+})

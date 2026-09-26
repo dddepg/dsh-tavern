@@ -797,6 +797,7 @@ export async function apply(ctx) {
       readChat,
       readChatState: chatPersistence.readSessionState,
       readBackgroundConfig: chatPersistence.readBackgroundConfig,
+      readSceneImageState: chatPersistence.readSceneImageState,
       writeChat: rawWriteChat,
       removeChat: async function (chatId) { await chatPersistence.remove(chatId) }
     }
@@ -1940,7 +1941,7 @@ export async function apply(ctx) {
     prompt: runtimePrompt,
     onDiagnostic: imageHostDiagnostic,
     readLegacyConfiguration: legacyImageConfigurationReader(ctx.get('settings')?.documentPath),
-    store: profileData, diagnostics: sceneDiagnostics, chatForSession, selection: modelSelection,
+    store: profileData, diagnostics: sceneDiagnostics, chatForSession, backgroundConfigForSession, sceneStateForSession: sessionChats.readSceneImageState, selection: modelSelection,
     worldbookAtTarget: async (chat, target) => {
       try { return await sceneWorldbooks.read(sceneWorldbookBinding(chat, target)) }
       catch (_error) { return { unavailable: '历史世界书快照读取失败，未读取当前世界书。' } }
@@ -3210,7 +3211,7 @@ export async function apply(ctx) {
       case 'getSceneImageSettings': {
         const settings = await enabledSceneIllustrations().settings(args?.provider)
         if (args?.conversation === true) {
-          const chat = await chatForSession(str(args.sessionId))
+          const chat = await backgroundConfigForSession(str(args.sessionId))
           return { settings: { ...settings, enabled: chat?.sceneImagesEnabled === true } }
         }
         return { settings }
@@ -3223,16 +3224,18 @@ export async function apply(ctx) {
       case 'listSceneImageModels': return await enabledSceneIllustrations().listModels(args)
       case 'sceneImageStatus': return { illustration: await enabledSceneIllustrations().status(args.sessionId, args.turn) }
       case 'recordSceneImageInteraction': {
-        const chat = await chatForSession(str(args.sessionId))
+        enabledSceneIllustrations()
+        const chat = await backgroundConfigForSession(str(args.sessionId))
         if (chat) await recordSceneImageInteraction(sceneDiagnostics, chat.id, args).catch(() => {})
         return { recorded: Boolean(chat) }
       }
       case 'generateSceneImage': {
-        const chat = await chatForSession(str(args.sessionId))
+        const illustrations = enabledSceneIllustrations()
+        const chat = await backgroundConfigForSession(str(args.sessionId))
         const record = (stage, reason) => recordSceneImageInteraction(sceneDiagnostics, chat?.id, { requestId: args.requestId, turn: args.turn, stage, reason }).catch(() => {})
         await record('received')
         try {
-          const illustration = await enabledSceneIllustrations().start(args.sessionId, args.turn, args.key, args)
+          const illustration = await illustrations.start(args.sessionId, args.turn, args.key, args)
           await record('returned')
           return { illustration }
         } catch (error) { await record('failed', 'start-error'); throw error }

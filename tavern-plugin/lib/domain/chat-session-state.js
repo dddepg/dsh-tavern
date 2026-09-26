@@ -207,3 +207,20 @@ export function projectSettlementCheckpoint(chat, messageId, operationId) {
     messages: [chat.messages[messageId]]
   }) }
 }
+
+// Scene identity needs story text, but never MVU snapshots, card data or display artifacts.
+export function projectSceneImageState(chat) {
+  return structuredClone({
+    id: chat.id, sessionId: chat.sessionId, mode: chat.mode,
+    backgroundConfigVersion: chat.backgroundConfigVersion,
+    conversationFeaturesVersion: chat.conversationFeaturesVersion,
+    sceneImagesEnabled: chat.sceneImagesEnabled,
+    messages: (chat.messages || []).map(message => ({
+      role: message.role, turn: message.turn, greeting: message.greeting,
+      text: message.text, sourceText: message.sourceText, swipeId: message.swipeId,
+      // Keep indices stable: only the active swipe participates in scene identity.
+      swipes: Array.isArray(message.swipes) ? message.swipes.map((text, index) =>
+        index === Math.max(0, Number(message.swipeId) || 0) ? text : null) : undefined
+    }))
+  })
+}

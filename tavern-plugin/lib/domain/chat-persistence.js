@@ -1,4 +1,4 @@
-import { projectDisplayRuntimeState, projectChatBackgroundConfig } from './chat-session-state.js'
+import { projectSceneImageState, projectDisplayRuntimeState, projectChatBackgroundConfig } from './chat-session-state.js'
 import { isDeepStrictEqual } from 'node:util'
 
 const STORAGE_REVISION = '_storageRevision'
@@ -250,6 +250,11 @@ export function createChatPersistence(options = {}) {
   async function readSettlementCheckpoint(chatId, messageId, operationId) {
     return records.readSettlementCheckpoint?.(chatId, messageId, operationId)
   }
+  async function readSceneImageState(chatId) {
+    if (records.readSceneImageState) return records.readSceneImageState(chatId)
+    const chat = await read(chatId)
+    return chat ? projectSceneImageState(chat) : undefined
+  }
   async function readBackgroundConfig(chatId) {
     if (records.readBackgroundConfig) return records.readBackgroundConfig(chatId)
     const chat = await read(chatId)
@@ -290,5 +295,5 @@ export function createChatPersistence(options = {}) {
     await records.remove(chatId)
   }
 
-  return Object.freeze({ read, readSessionState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
+  return Object.freeze({ read, readSessionState, readSceneImageState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, write, update, version, remove })
 }

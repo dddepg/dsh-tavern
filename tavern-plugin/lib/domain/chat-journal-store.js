@@ -1,4 +1,4 @@
-import { projectChatSessionState, projectDisplayRuntimeState, projectChatBackgroundConfig, projectSettlementCheckpoint } from './chat-session-state.js'
+import { projectSceneImageState, projectChatSessionState, projectDisplayRuntimeState, projectChatBackgroundConfig, projectSettlementCheckpoint } from './chat-session-state.js'
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual, promisify } from 'node:util'
@@ -67,6 +67,7 @@ export function createChatJournalStore(options = {}) {
   const cacheMaxBytes = limit(options.cacheMaxBytes, 256 * 1024 * 1024)
   const maxCachedChats = limit(options.maxCachedChats, 8)
   const readCache = new Map()
+  const pendingReads = new Map()
   const sizes = new WeakMap()
   let cachedBytes = 0
   function estimateBytes(value) {
@@ -349,9 +350,22 @@ export function createChatJournalStore(options = {}) {
       return entry.state
     }
     forgetState(chatId)
-    const state = await materialize(chatId)
-    if (stamp && stamp === await version(chatId)) rememberState(chatId, stamp, state)
-    return state
+    const pending = pendingReads.get(chatId)
+    if (pending?.stamp === stamp) return pending.promise
+    const load = { stamp }
+    load.promise = (async () => {
+      try {
+        const state = await materialize(chatId)
+        if (stamp && stamp === await version(chatId) && pendingReads.get(chatId) === load) {
+          rememberState(chatId, stamp, state)
+        }
+        return state
+      } finally {
+        if (pendingReads.get(chatId) === load) pendingReads.delete(chatId)
+      }
+    })()
+    pendingReads.set(chatId, load)
+    return load.promise
   }
   async function read(chatId) {
     const state = await cachedState(chatId)
@@ -364,6 +378,10 @@ export function createChatJournalStore(options = {}) {
   async function readSettlementCheckpoint(chatId, messageId, operationId) {
     const state = await cachedState(chatId)
     return state ? projectSettlementCheckpoint(state.chat, messageId, operationId) : undefined
+  }
+  async function readSceneImageState(chatId) {
+    const state = await cachedState(chatId)
+    return state ? projectSceneImageState(state.chat) : undefined
   }
   async function readBackgroundConfig(chatId) {
     const state = await cachedState(chatId)
@@ -613,5 +631,5 @@ export function createChatJournalStore(options = {}) {
 
   // update() owns both boundaries: updater drafts and returned values are
   // detached from cached state and from each other, including aborted writes.
-  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, update, version, remove })
+  return Object.freeze({ detachedUpdate: true, read, readSessionState, readSceneImageState, readSettlementCheckpoint, readBackgroundConfig, readDisplayRuntimeState, readSlice, readChangedSlice, readChangedIndices, readViewDelta, patch, readRevision, update, version, remove })
 }
