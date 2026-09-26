@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,12 +19,33 @@ export async function prepareDesktopPackageManager(options = {}) {
   const home = options.home || env.DSH_HOME
   if (!home || !path.isAbsolute(home)) throw new Error('Desktop 包管理需要明确的 DSH_HOME')
   const executable = env.DSH_DESKTOP_APP_EXECUTABLE || process.execPath
-  const candidates = [
-    ...(env.DSH_DESKTOP_PNPM_ENTRY ? [env.DSH_DESKTOP_PNPM_ENTRY] : []),
-    path.join(path.dirname(executable), 'resources/app/node_modules/pnpm/bin/pnpm.mjs'),
-    path.join(path.dirname(executable), 'resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs'),
-    ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [path.resolve(path.dirname(env.DSH_DESKTOP_DSH_BOOTSTRAP), '../node_modules/pnpm/bin/pnpm.mjs')] : []),
+  const unpack = value => value.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
+  const anchors = [
+    path.join(path.dirname(executable), 'resources/app/package.json'),
+    path.join(path.dirname(executable), 'resources/app.asar.unpacked/package.json'),
+    ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [unpack(env.DSH_DESKTOP_DSH_BOOTSTRAP)] : []),
   ]
+  // The detached updater may run under system Node without Desktop terminal
+  // variables. Follow the existing host link, not an unrelated global pnpm.
+  if (env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR) {
+    try {
+      const require = createRequire(env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR)
+      anchors.push(unpack(realpathSync(require.resolve('@deepseek-ai/dsh-agent'))))
+    } catch {}
+  }
+  const candidates = env.DSH_DESKTOP_PNPM_ENTRY ? [unpack(env.DSH_DESKTOP_PNPM_ENTRY)] : []
+  for (const anchor of anchors) {
+    for (const directory of createRequire(anchor).resolve.paths('pnpm') || []) {
+      const root = path.join(directory, 'pnpm')
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+        const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.pnpm
+        if (manifest.name === 'pnpm' && bin) candidates.push(path.resolve(root, bin))
+      } catch {}
+      // Older Desktop bundles may omit package metadata after packaging.
+      candidates.push(path.join(root, 'bin/pnpm.mjs'), path.join(root, 'bin/pnpm.cjs'))
+    }
+  }
   const entry = options.entry || candidates.find(existsSync)
   if (!entry || !existsSync(entry)) throw new Error('找不到当前 Desktop 自带的 pnpm，请从该 Desktop 的 DSH Terminal 运行安装。')
   const root = path.join(home, 'tools', 'desktop-package-manager')
