@@ -1,3 +1,4 @@
+import { ensureTavernThemeDefaults } from './domain/theme-defaults.js'
 import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
 import { projectCardSummary } from './domain/card-preparation.js'
 import { createCardSummaryCache } from './domain/card-summary-cache.js'
@@ -183,6 +184,9 @@ import { prompt, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt
 // RPC：同源 HTTP 路由 /api/dsh-tavern/<method>（客户端 fetch 调用）
 // DSH 生命周期负责回合状态；模型工具只处理按需读取和明确修改。
 export async function apply(ctx) {
+  try { ensureTavernThemeDefaults() } catch (error) {
+    console.warn('dsh-tavern: 默认空背景设置未写入：' + error.message)
+  }
   const persistence = ctx.get('sessionPersistence')
   try {
     const restoreSubprocess = await installHostSubprocessPatch({ persistence })
