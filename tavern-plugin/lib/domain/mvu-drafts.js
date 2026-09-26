@@ -4,6 +4,20 @@ import {isObject, MVU_CONVERSION_KEY} from './mvu-conversion-artifacts.js'
 import {readConversionValue,conversionReading} from './mvu-conversion-inspection.js'
 import {ensureFieldSchema,openingIssues,appearanceIssues,patchOpening,patchFields,DRAFT_FIELD_CHANGES} from './mvu-draft-fields.js'
 
+const canonical = value => Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().filter(key=>value[key]!==undefined).map(key=>[key,canonical(value[key])])):value
+const draftToken = (id,revision) => Buffer.from(id,'hex').toString('base64url')+'.'+revision.toString(36)
+function expandToken(args) {
+  if(args.draft===undefined)return args
+  if(args.draftId!==undefined||args.draftRevision!==undefined||args.requestId!==undefined)fail('DRAFT_ARGUMENT_INVALID','draft 凭据不能与旧版本参数混用')
+  const match=typeof args.draft==='string'&&args.draft.match(/^([A-Za-z0-9_-]{43})\.([0-9a-z]+)$/)
+  if(!match)fail('DRAFT_TOKEN_INVALID','请原样使用工具返回的 draft 凭据')
+  const draftId=Buffer.from(match[1],'base64url').toString('hex'),draftRevision=parseInt(match[2],36)
+  if(!Number.isSafeInteger(draftRevision)||draftRevision<1||draftToken(draftId,draftRevision)!==args.draft)fail('DRAFT_TOKEN_INVALID','草稿凭据无效')
+  const {draft,...rest}=args
+  const expanded=canonical({...rest,draftId,draftRevision})
+  if(['patch','commit'].includes(args.action))expanded.requestId='auto-'+hash(expanded)
+  return expanded
+}
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 function fail(code,message,details={}) { const error=Error(message);error.code=code;error.details=details;throw error }
 function requestKey(args) {
@@ -12,7 +26,7 @@ function requestKey(args) {
 }
 function validateArguments(args) {
   const common=['action','draftId','draftRevision']
-  const allowed={begin:['action','sourcePath','name','requestId','appearanceRequirement','basicReason'],read:[...common,'path','offset','limit'],validate:common,commit:[...common,'requestId'],patch:[...common,'requestId','section','values']}
+  const allowed={begin:['action','sourcePath','name','requestId','appearanceRequirement','basicReason'],read:[...common,'path','offset','limit'],source:[...common,'path','query','offset','limit'],inspect:common,validate:common,commit:[...common,'requestId'],patch:[...common,'requestId','section','values']}
   const keys=allowed[args.action];if(!keys)fail('DRAFT_ACTION_INVALID','未知 action')
   if(args.action==='patch'){
     if(args.section==='fields')keys.push('operation','path','toPath')
@@ -47,7 +61,7 @@ export function createMvuDrafts({resources,conversion}) {
   }
   function summary(draft) {
     const issues=missing(draft)
-    return {draftId:draft.id,draftRevision:draft.revision,saved:true,phase:draft.phase,sourcePath:draft.sourcePath,sourceRevision:draft.sourceRevision,targetPath:draft.targetPath,
+    return {draft:draftToken(draft.id,draft.revision),draftId:draft.id,draftRevision:draft.revision,saved:true,phase:draft.phase,sourcePath:draft.sourcePath,sourceRevision:draft.sourceRevision,targetPath:draft.targetPath,
       fieldSchema:draft.fieldSchema,ruleReviewRequired:draft.ruleReviewRequired===true,
       progress:{fields:draft.fieldSchema.fields.length,openings:draft.definition.openingStates.map((state,index)=>({openingId:'opening-'+index,sourcePath:index?'/alternate_greetings/'+(index-1):'/first_mes',filled:state!==null,missingFields:state===null?null:openingIssues(draft,state,index).filter(issue=>issue.code==='DRAFT_FIELD_MISSING').map(issue=>issue.path)})),appearanceRequirement:draft.appearanceRequirement,appearanceSaved:!!draft.definition.appearance},
       missing:issues.slice(0,40),missingCount:issues.length,
@@ -71,7 +85,18 @@ export function createMvuDrafts({resources,conversion}) {
     const blocking=report.issues
     return {valid:issues.length+blocking.length===0,issues:[...issues,...blocking],checks:report.checks,suggestedCleanup:report.suggestedCleanup,...(report.effectiveCleanup?{effectiveCleanup:report.effectiveCleanup}:{})}
   }
-  async function begin(args) {
+  async function begin(args,context) {
+    let info
+    if(args.requestId===undefined){
+      info=await conversion.convert({action:'inspect',sourcePath:args.sourcePath,name:args.name,detail:'full'})
+      const seed=canonical({...args,sourcePath:info.sourcePath,sourceRevision:info.sourceRevision,targetRevision:info.targetRevision,session:context?.sessionId||'local'})
+      for(let generation=0;;generation++){
+        const requestId='auto-'+hash([seed,generation])
+        const previous=await resources.readMvuDraft(hash({sourcePath:info.sourcePath,name:args.name||null,requestId}))
+        if(previous?.phase==='committed')continue
+        args=canonical({...args,sourcePath:info.sourcePath,requestId});break
+      }
+    }
     requestKey(args)
     const sourcePath=normalizeResourcePath(args.sourcePath,'card')
     const identity={sourcePath,name:args.name||null,requestId:args.requestId}
@@ -79,7 +104,7 @@ export function createMvuDrafts({resources,conversion}) {
     // Replaying begin never discards an in-progress draft, even if its source changed.
     const previous=await resources.readMvuDraft(id)
     if(previous) {if(previous.beginHash!==requestHash)fail('DRAFT_REQUEST_REUSED','同一 requestId 不能用于不同参数');return summary(previous)}
-    const info=await conversion.convert({action:'inspect',sourcePath,name:args.name,detail:'full'})
+    info ||= await conversion.convert({action:'inspect',sourcePath,name:args.name,detail:'full'})
     if(info.target?.externallyModified||info.target?.error)fail('DRAFT_TARGET_CHANGED','已有副本包含方案外修改；先核对，不能覆盖')
     const meta=info.existingTarget?.extensions?.[MVU_CONVERSION_KEY]
     if(info.existingTarget&&(!meta?.definitionRevision||meta.sourcePath!==sourcePath||meta.sourceRevision!==info.sourceRevision))fail('DRAFT_TARGET_UNSUPPORTED','已有副本缺少当前来源的完整定义；需先核对转换方案')
@@ -96,10 +121,10 @@ export function createMvuDrafts({resources,conversion}) {
       if(current&&current.beginHash!==requestHash)fail('DRAFT_REQUEST_REUSED','同一 requestId 不能用于不同参数')
       return current||initial
     })
-    return {...summary(draft),sourceCatalog:info.catalog,reading:conversionReading(info.card),stateInventory:info.stateInventory,appearanceSources:info.appearanceSources,instruction:'先按组 patch fields，再逐个 opening 填初值；read 按需读草稿，来源原文用转换工具按 sourceRevision 读取。草稿保存不代表成品已提交。'}
+    return {...summary(draft),sourceCatalog:info.catalog,reading:conversionReading(info.card),stateInventory:info.stateInventory,appearanceSources:info.appearanceSources,instruction:'先按组 patch fields，再逐个 opening 填初值；read 按需读草稿，来源原文用 source，补充来源清单用 inspect；后续只传最新 draft 凭据。草稿保存不代表成品已提交。'}
   }
   function patch(draft,args) {
-    if(draft.phase!=='editing')fail('DRAFT_NOT_EDITABLE','草稿正在提交或已提交；提交中请用原 requestId 重试，已完成请 begin 新草稿')
+    if(draft.phase!=='editing')fail('DRAFT_NOT_EDITABLE','草稿正在提交或已提交；提交中请原样重试，已完成请 begin 新草稿')
     const section=args.section,values=args.values
     if(section==='fields')patchFields(draft,args)
     else if(section==='opening')patchOpening(draft,args)
@@ -128,14 +153,21 @@ export function createMvuDrafts({resources,conversion}) {
     } else fail('DRAFT_SECTION_INVALID','未知草稿分组')
     if(section!=='review')draft.review={}
   }
-  async function run(args) {
+  async function run(args,context) {
     validateArguments(args)
-    if(args.action==='begin')return begin(args)
+    if(args.action==='begin')return begin(args,context)
     let draft=await resources.readMvuDraft(args.draftId)
     if(!draft)fail('DRAFT_NOT_FOUND','草稿不存在，请 begin')
     ensureFieldSchema(draft)
+    if(['source','inspect'].includes(args.action)){
+      if(args.draftRevision!==draft.revision)fail('DRAFT_REVISION_CONFLICT','草稿已变化，请 read 获取最新凭据',{draftRevision:draft.revision})
+      await fresh(draft)
+      if(args.action==='source')return {...summary(draft),source:await conversion.convert({action:args.query===undefined?'read':'search',sourcePath:draft.sourcePath,sourceRevision:draft.sourceRevision,path:args.path,query:args.query,offset:args.offset,limit:args.limit})}
+      const info=await conversion.convert({action:'inspect',sourcePath:draft.sourcePath,name:draft.name,sourceFields:draft.definition.sourceFields,detail:'summary'})
+      return {...summary(draft),sourceCatalog:info.catalog,stateInventory:info.stateInventory,appearanceSources:info.appearanceSources}
+    }
     if(args.action==='read') {
-      if(args.draftRevision!==undefined&&args.draftRevision!==draft.revision)fail('DRAFT_REVISION_CONFLICT','草稿版本已变化',{draftRevision:draft.revision})
+      if((args.path!==undefined||args.offset!==undefined)&&args.draftRevision!==undefined&&args.draftRevision!==draft.revision)fail('DRAFT_REVISION_CONFLICT','草稿版本已变化',{draftRevision:draft.revision})
       return {...summary(draft),...(args.path!==undefined?{reading:readConversionValue(draft,{path:args.path,offset:args.offset,limit:args.limit})}:{})}
     }
     if(args.action==='validate') {
@@ -151,7 +183,7 @@ export function createMvuDrafts({resources,conversion}) {
       const replay=current.requests[key]
       if(replay) {if(replay.hash!==requestHash)fail('DRAFT_REQUEST_REUSED','同一 requestId 不能用于不同参数');return current}
       if(current.intent) {
-        if(current.intent.hash!==requestHash)fail('DRAFT_COMMIT_PENDING','存在待完成提交；请用 pendingCommit.requestId 和原参数重试')
+        if(current.intent.hash!==requestHash)fail('DRAFT_COMMIT_PENDING','存在待完成提交；请原样重试上一次 commit 调用')
         return current
       }
       if(args.draftRevision!==current.revision)fail('DRAFT_REVISION_CONFLICT','草稿已变化，请 read 后提交局部修改',{draftRevision:current.revision})
@@ -186,14 +218,14 @@ export function createMvuDrafts({resources,conversion}) {
     })
     return summary(draft)
   }
-  return {run:async args=>{
-    try {return await run(args)}
+  return {run:async (args,context)=>{
+    try {args=expandToken(args);return await run(args,context)}
     catch(error) {
       const draft=args.draftId?await resources.readMvuDraft(args.draftId).catch(()=>undefined):undefined
       error.code ||= 'DRAFT_OPERATION_FAILED'
       error.details={saved:!!draft,commitState:draft?.receipt?'committed':draft?.intent?'unknown':'not-started',
-        ...(draft?{draftId:draft.id,draftRevision:draft.revision,phase:draft.phase}:{}),
-        hint:draft?.intent?'成品提交结果可能尚未记录；请用原 commit 参数与 requestId 重试，不直接改写成品。':'草稿中已保存的部分保留；按错误位置修改后继续。',...error.details}
+        ...(draft?{draft:draftToken(draft.id,draft.revision),draftId:draft.id,draftRevision:draft.revision,phase:draft.phase}:{}),
+        hint:draft?.intent?'成品提交结果可能尚未记录；请用原 commit 参数重试，不直接改写成品。':'草稿中已保存的部分保留；按错误位置修改后继续。',...error.details}
       throw error
     }
   }}

@@ -1,3 +1,13 @@
+// Revision and request bookkeeping stays inside the draft service. Compatibility
+// callers still receive the full domain report; the model sees one opaque token.
+function compactDraftReport(value) {
+  const {draftId,draftRevision,sourceRevision,requestId,...report}=value
+  if(report.report)report.report=compactDraftReport(report.report)
+  if(report.error)report.error=compactDraftReport(report.error)
+  if(report.source)report.source=compactDraftReport(report.source)
+  if(report.pendingCommit)report.pendingCommit={action:'commit',instruction:'原样重试上一次 commit 调用'}
+  return report
+}
 // Keep the conversion contract separate from generic card editing. JSON values
 // carry story-specific state; the tool owns all executable/template scaffolding.
 export function registerMvuConversionTools({ tools, defineTool, conversion, chatForSession }) {
@@ -15,13 +25,12 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }
   tools.register(defineTool({
     name:'tavern_card_draft',
-    description:'MVU 转换的持久草稿工具。begin 锁定原卡与目标版本；patch 按字段组、规则组、开场、美化或清理增量保存，省略部分保留；read 查看进度或分页读取草稿；validate 检查完整性；commit 统一生成并原子保存成品。仅支持 MVU 转换，不用于普通卡字段编辑。fields 声明唯一字段目录；opening 仅填写目录中的同类型值，未知路径立即拒绝。inheritInitialState 仅补缺失字段。move/remove 明确迁移或删除字段，validate 汇总问题与清理建议。所有写入带稳定 requestId，重试使用完全相同参数。保存草稿不等于成品提交；phase=committing 表示已保存提交意图，应原样重试 commit。',
+    description:'MVU 转换统一入口。begin 仅需 sourcePath；之后传返回的 draft 凭据（自带版本）。patch 分组修改，source 读或搜索来源，inspect 更新来源清单，read 看进度，validate 检查，commit 提交。仅卡片工作台可用。响应丢失时原样重试，程序自动去重；冲突时 read 后核对再修改。',
     parameters:{
-      action:{type:'string',required:true,enum:['begin','read','patch','validate','commit']},
+      action:{type:'string',required:true,enum:['begin','read','source','inspect','patch','validate','commit']},
       sourcePath:{type:'string',description:'begin 的原卡路径，已有 MVU 副本仍以原卡为来源'},
       name:{type:'string',description:'begin 的目标副本名；已有副本自动载入其定义、各开场和美化'},
-      requestId:{type:'string',description:'begin/patch/commit 必填，每次新操作使用新 ID；响应丢失时原样重试'},
-      draftId:{type:'string'},draftRevision:{type:'number',description:'patch/validate/commit 必填；read 续页时携带以防混用版本'},
+      draft:{type:'string',description:'begin 返回的草稿凭据；后续原样传最新值，无需手写版本或请求 ID。read 不带 path 可用旧凭据刷新进度'},
       appearanceRequirement:{type:'string',enum:['custom','preserve','basic'],description:'begin：无原美化默认 custom（需 HTML 设计）；有原美化默认 preserve。basic 仅用户要求简单面板或已说明的设计回退'},
       basicReason:{type:'string',description:'选择 basic 时必填的依据'},
       section:{type:'string',enum:['fields','opening','rules','appearance','mapping','cleanup','requirements','review']},
@@ -32,10 +41,11 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       toPath:{type:'string',description:'fields move 的目标 JSON Pointer；有值冲突时拒绝覆盖'},
       cleanupOrphanEntrances:{type:'boolean',description:'patch cleanup 时可启用安全孤立入口清理'},
       path:{type:'string',description:'read 的草稿 JSON Pointer，如 /fieldSchema、/definition/initialState；或 patch fields move/remove 的状态字段路径'},
+      query:{type:'string',description:'source 可选：按文字搜索来源；省略则读取 path'},
       offset:{type:'number'},limit:{type:'number'}
     },
     output,isConcurrencySafe:()=>false,
-    async execute(args,exec) { await requireWorkbench(exec); try {return {report:await conversion.draft(args)}} catch(error) {return failure(error)} }
+    async execute(args,exec) { await requireWorkbench(exec); try {return {report:compactDraftReport(await conversion.draft(args,{sessionId:exec?.agent?.session?.id}))}} catch(error) {return compactDraftReport(failure(error))} }
   }))
   tools.register(defineTool({
     name:'tavern_read_mvu_appearance',

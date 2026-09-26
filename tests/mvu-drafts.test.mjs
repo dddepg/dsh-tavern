@@ -155,10 +155,10 @@ test('工具真实 DSH 参数定义和无损 JSON 回执覆盖草稿、错误与
   assert.notEqual(snapshotJsonValue(tool.output.render(args,result)),undefined)
   return result.report
  }
- await invoke({action:'read',draftId:f.current.draftId})
- assert.equal((await invoke(f.commitArgs())).error.code,'DRAFT_INCOMPLETE')
+ await invoke({action:'read',draft:f.current.draft})
+ assert.equal((await invoke({action:'commit',draft:f.current.draft})).error.code,'DRAFT_INCOMPLETE')
  await f.complete()
- assert.equal((await invoke(f.commitArgs())).receipt.validation.valid,true)
+ assert.equal((await invoke({action:'commit',draft:f.current.draft})).receipt.validation.valid,true)
 })
 test('显式调整美化要求保留已填写内容，降级必须有依据',async t=>{
  const f=await fixture(t);await f.complete()
@@ -317,4 +317,66 @@ test('美化非法路径以可修复诊断返回，不在草稿已保存后抛�
  const result=await f.patch('appearance',{html:'<mvu-field path="not-a-pointer"></mvu-field>'})
  assert.ok(result.missing.some(x=>x.code==='DRAFT_APPEARANCE_INVALID'))
  assert.equal((await f.read()).draftRevision,result.draftRevision)
+})
+
+test('简化凭据自动管理版本与重试，JSON 键顺序不同仍幂等，旧凭据不能覆盖',async t=>{
+ const f=await fixture(t)
+ const begin={action:'begin',sourcePath:f.sourcePath}
+ const a=await f.conversion.draft(begin,{sessionId:'one'})
+ assert.equal((await f.conversion.draft(begin,{sessionId:'one'})).draft,a.draft)
+ assert.notEqual((await f.conversion.draft(begin,{sessionId:'two'})).draft,a.draft)
+ const patch={action:'patch',draft:a.draft,section:'fields',values:{'/位置':'大厅','/日期':'今天'}}
+ const b=await f.conversion.draft(patch)
+ assert.equal((await f.conversion.draft({values:{'/日期':'今天','/位置':'大厅'},section:'fields',draft:a.draft,action:'patch'})).draft,b.draft)
+ const reopened=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ assert.equal((await reopened.draft(patch)).draft,b.draft)
+ await assert.rejects(reopened.draft({...patch,values:{'/位置':'外部覆盖'}}),e=>e.code==='DRAFT_REVISION_CONFLICT')
+ assert.equal((await reopened.draft({action:'read',draft:a.draft})).draft,b.draft)
+ await assert.rejects(reopened.draft({action:'read',draft:a.draft,path:'/definition'}),e=>e.code==='DRAFT_REVISION_CONFLICT')
+ await assert.rejects(reopened.draft({action:'read',draft:'broken'}),e=>e.code==='DRAFT_TOKEN_INVALID')
+ await assert.rejects(reopened.draft({action:'read',draft:b.draft,draftRevision:2}),e=>e.code==='DRAFT_ARGUMENT_INVALID')
+})
+test('简化凭据读取来源与清单，检查与提交只传 action 和 draft，丢失提交回执仍恢复',async t=>{
+ const f=await fixture(t);await f.complete()
+ const source=await f.conversion.draft({action:'source',draft:f.current.draft,path:'/first_mes'})
+ assert.equal(source.source.text,'大厅开场')
+ const inventory=await f.conversion.draft({action:'inspect',draft:f.current.draft})
+ assert.ok(Array.isArray(inventory.stateInventory))
+ assert.equal((await f.conversion.draft({action:'validate',draft:f.current.draft})).validation.valid,true)
+ const save=f.resources.saveMvuCard;let lost=false
+ const failing=createMvuConversion({resources:{...f.resources,saveMvuCard:async args=>{const result=await save(args);if(!lost){lost=true;throw Error('模拟丢失回执')}return result}}})
+ const commit={action:'commit',draft:f.current.draft}
+ await assert.rejects(failing.draft(commit),e=>e.details.commitState==='unknown')
+ const restored=createMvuConversion({resources:createFileResourceStore({dataRoot:f.root})})
+ const result=await restored.draft(commit)
+ assert.equal(result.receipt.validation.valid,true)
+ assert.deepEqual(await restored.draft(commit),result)
+ const begin=await restored.draft({action:'begin',sourcePath:f.sourcePath})
+ assert.equal(begin.phase,'editing')
+ assert.notEqual(begin.draft,result.draft)
+})
+test('简化工具 schema 不暴露版本和请求参数，回执保留同名用户字段',async t=>{
+ const f=await fixture(t),registered=new Map()
+ registerMvuConversionTools({tools:{register:x=>registered.set(x.name,x)},defineTool:x=>x,conversion:f.conversion,chatForSession:async()=>({mode:'card'})})
+ const tool=registered.get('tavern_card_draft')
+ for(const key of ['requestId','draftId','draftRevision','sourceRevision','definitionRevision'])assert.equal(Object.hasOwn(tool.parameters,key),false)
+ let result=(await tool.execute({action:'begin',sourcePath:f.sourcePath},{})).report
+ assert.equal(Object.hasOwn(result,'sourceRevision'),false)
+ assert.ok(result.draft)
+ result=(await tool.execute({action:'patch',draft:result.draft,section:'rules',values:{requestId:'保留用户规则'}},{})).report
+ const read=(await tool.execute({action:'read',draft:result.draft,path:'/rules/requestId'},{})).report
+ assert.equal(read.reading.text,'保留用户规则')
+})
+
+test('自动 begin 在无改动提交后仍可建立新草稿，来源改变不会隐式替换旧草稿快照',async t=>{
+ const f=await fixture(t);await f.complete();await f.conversion.draft(f.commitArgs())
+ const args={action:'begin',sourcePath:f.sourcePath}
+ let next=await f.conversion.draft(args)
+ next=await f.conversion.draft({action:'patch',draft:next.draft,section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}})
+ const done=await f.conversion.draft({action:'commit',draft:next.draft})
+ const reopened=await f.conversion.draft(args)
+ assert.equal(reopened.phase,'editing');assert.notEqual(reopened.draft,done.draft)
+ const card=await f.resources.readCard(f.sourcePath);cardData(card).description='来源被外部修改'
+ await f.resources.writeWorking(f.sourcePath,JSON.stringify(card))
+ await assert.rejects(f.conversion.draft({action:'source',draft:reopened.draft,path:'/description'}),e=>e.code==='DRAFT_SOURCE_CHANGED')
 })

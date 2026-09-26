@@ -1,56 +1,16 @@
-# 转换参数与边界
+# 美化绑定与清理边界
 
-新任务按 Skill 主流程使用 tavern_card_draft；下列字段映射、美化与 cleanup 规则同样适用于草稿的对应分组。saveDefinition/design/apply 调用顺序仅供完整定义兼容接口使用，草稿 commit 已代办这些操作。
+本页的参数片段用于 `tavern_card_draft.patch` 对应分组。读取来源使用 source，更新来源清单使用 inspect，验证与提交使用 validate/commit；这些动作都只需传 draft 凭据，不拼装来源或定义版本。
 
-固定装配由 `tavern_convert_to_mvu` 维护。本文件只解释如何把原卡语义填入工具，不维护另一份 HTML/正则配方。
+## 保留原美化
 
-## 调用示例
-
-先 inspect 一次取得 reading 原文、catalog、sourceRevision 和 destination；仅补读未完整展示的必要字段，read 的 paths 可批量读。更新已有副本时还需 targetRevision；用 scope=plan 看方案、scope=target 看副本。
+从 begin/inspect 的 appearanceSources 选择路径，外观内容由工具直接从原卡固化。
 
 ```json
-{"action":"inspect","sourcePath":"cards/原卡.json","name":"原卡 MVU版本"}
+{"action":"patch","draft":"工具返回的最新凭据","section":"appearance","values":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
 ```
 
-按目录读取一个字段：
-
-```json
-{"action":"read","sourcePath":"cards/原卡.json","sourceRevision":"inspect 返回的版本号","path":"/character_book/entries","offset":0,"limit":30}
-```
-
-默认 inspect 已展开正文；补读多个叶子字段用 paths，例如 `["/character_book/entries/0/content", "/alternate_greetings/0"]`。对象/数组返回下一层目录；字符串返回原文 text、总长度和 nextOffset。search 使用原文 query，不执行正则；每个匹配包含 JSON Pointer、字符位置和短上下文。read/search 都校验版本。位置仅供定位，cleanup 仍用唯一原文边界。
-
-原卡有美化时，先固化；只提交来源路径和捕获字段映射，HTML/CSS 由工具从磁盘复制：
-
-```json
-{"action":"freezeAppearance","sourcePath":"cards/原卡.json","sourceRevision":"inspect 返回的版本号","appearance":{"sourcePath":"/extensions/regex_scripts/0/replaceString","bindings":[{"capture":1,"path":"/玩家/位置"}]}}
-```
-
-saveDefinition 传同一 appearance，并在 cleanup 删除对应旧正则入口。其他美化保持原样；无法固化时停止该转换，不能改用默认面板掩盖缺失。无原美化时优先使用下文的设计工具；默认面板作为设计失败后的回退。
-
-apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 preview。下面的版本号、路径和短片段仅为示例，必须来自 inspect 底稿。复制整卡、清理和安装 MVU 都由工具完成：
-
-```json
-{
-  "action": "saveDefinition",
-  "sourcePath": "cards/原卡.json",
-  "name": "原卡 MVU版本",
-  "sourceRevision": "inspect 返回的版本号",
-  "initialState": {
-    "玩家": {"位置": "门口"},
-    "人物": {"$meta": {"extensible": true, "template": {"姓名": "", "位置": "未明确", "在场": true}}}
-  },
-  "updateRules": "玩家.位置为字符串，正文确认移动后才更新，打算移动不算。人物按姓名索引，新增时提交完整对象；离场改在场为 false，保留档案。",
-  "displayFields": [{"path":"/玩家","label":"玩家"},{"path":"/人物","label":"人物"}],
-  "fieldMappings": []
-}
-```
-
-上例没有标签状态字段，因此映射为空；有 stateInventory 时每项都必须提供 `{sourceId, path}`。先保存字段定义，随后只传返回的版本号生成副本：
-
-```json
-{"action":"apply","sourcePath":"cards/原卡.json","name":"原卡 MVU版本","sourceRevision":"inspect 返回的版本号","definitionRevision":"saveDefinition 返回的版本号","cleanup":[{"op":"replaceText","path":"/description","expected":"每轮末尾输出状态表。","value":""}]}
-```
+在 cleanup 分组中明确清理对应旧入口；其他美化保持原样。无法固化时报告具体缺口，不能用基础面板掩盖设计缺失。
 
 多人物美化示例：`appearance: {sourcePath: "/extensions/regex_scripts/0/replaceString", collectionPath: "/人物", bindings: [{capture: 1, path: "/姓名"}, {capture: 2, path: "/位置"}]}`。每个人物的来源字段分别映射到 `/人物/人物名/姓名` 和 `/人物/人物名/位置`，外观绑定相对于集合成员。
 
@@ -69,7 +29,7 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 
 `remove` / `replace` 由来源版本号保护，省略 `expected`。`replaceBlock` 包含首尾标记，两者必须各自唯一、前后有序；边界有歧义时选择更长但仍简短的标记。无需转录区块内部代码或保留的剧情。
 
-展示路径使用 JSON Pointer，键中的 `~` 和 `/` 分别写作 `~0`、`~1`。省略 displayFields 展示全部非内部字段；选择集合时，新成员会自动展示。原美化通过 appearance 固化，保留原生 details 交互；脚本按钮、动态属性和嵌入文档需专门适配。
+展示路径使用 JSON Pointer，键中的 `~` 和 `/` 分别写作 `~0`、`~1`。基础面板展示全部非内部字段；选择集合时，新成员会自动展示。原美化通过 appearance 固化，保留原生 details 交互；脚本按钮、动态属性和嵌入文档需专门适配。
 
 ## 绑定模式与常见错误
 
@@ -85,46 +45,38 @@ apply 自带预检、保存和磁盘验收；只有需要核对范围时才先 p
 {"collectionPath":"/人物","html":"<article><h3>$1</h3><p>位置：$2</p></article>","bindings":[{"capture":1,"path":"/姓名"},{"capture":2,"path":"/位置"}]}
 ```
 
-这两段是美化参数片段，完整初值和来源参数仍按工具定义提交。集合模式不会回退到根对象取值：`/时间` 指的是每个人物的时间，不是全局时间。目前一套模板不能同时拥有全局区和重复人物区。保留完整字段，选择根模式或报告需要专门适配；不通过删字段绕过覆盖检查。
+这两段直接用作 appearance 分组的 values，初值在 fields/opening 分组中单独填写。集合模式不会回退到根对象取值：`/时间` 指的是每个人物的时间，不是全局时间。目前一套模板不能同时拥有全局区和重复人物区。保留完整字段，选择根模式或报告需要专门适配；不通过删字段绕过覆盖检查。
 
 - `MVU_APPEARANCE_SCOPE_MISMATCH`：path 位于 collectionPath 外；按 hint 调整绑定模式，保留原字段归属。
-- `MVU_APPEARANCE_MISSING_FIELDS`：一次补齐 missingPaths 对应的 bindings 和 HTML 占位。
+- `MVU_APPEARANCE_MISSING_FIELDS`：核对 missingPaths 是否是应保留的目录字段；正确字段补绑定，误建路径用 fields move/remove 修正。
 - `MVU_APPEARANCE_UNSUPPORTED_SYNTAX`：field、token、offset 指出语法位置。例如 `<small>对{{user}}</small>` 改为 `<small>对玩家</small>`；动态状态另设 $1/$2 字段绑定。不用其他卡或源码推测格式。
 
 ## 工具生成的成品结构
 
-工具安装世界书 `[initvar]` 初值条目、`[mvu_update]` 后台规则、各开场完整 `<initvar>` 数据，以及 `<mvu-status/>` 的显示和历史隔离正则。原始开场末尾存在这两个标记是正常结果；初始化数据在展示中隐藏，入口由正则变成面板。以 apply.validation 为准，不把对成品搜索命中标记当作清理失败。
+工具安装世界书 `[initvar]` 初值条目、`[mvu_update]` 后台规则、各开场完整 `<initvar>` 数据，以及 `<mvu-status/>` 的显示和历史隔离正则。原始开场末尾存在这两个标记是正常结果；初始化数据在展示中隐藏，入口由正则变成面板。以 commit 返回的 receipt.validation 为准，不把对成品搜索命中标记当作清理失败。
 
 ## 需要额外判断的卡
 
 - **已有 MVU**：先识别原有初值、Schema、脚本和面板。转换工具遇到残留初值、后台规则或旧状态声明会停止，要求明确合并/清理；它不是通用的已有 MVU 卡升级器。已有复杂 MVU 正常工作时可保留现状，不必强行重装。
 - **多开场**：工具按 openingStates 和来源映射生成每个开场完整的 initvar；检查人物归属和已有值，不能用第一个开场替代其余开场。
 - **外部世界书**：工具复制实际绑定内容到副本，处理合并编号并保留触发条件；原卡未生效的内置书作为保留数据，不因转换而启用。inspect 返回的世界书内容是清理操作的依据。
-- **增量修订**：apply 默认把新 cleanup 追加到已保存方案，完全相同的操作去重；省略 definitionRevision 沿用已保存版本；改定义先 saveDefinition，apply 不重新提交定义内容。底稿始终是原卡，不是副本。修改同字段旧操作时提交 cleanupResetPaths，例如 `["/first_mes"]`，同时提交该字段的完整新清理。需要恢复该字段原文时，只 reset 不追加。
-- **完整重做**：planMode=replace 不继承旧清理，需提交完整清理和已保存的新 definitionRevision。旧版副本没有 cleanup 记录，或 sourceRevision 已改变时只能完整重做。
-- **已有副本被手工改过**：inspect.target.externallyModified 会提示，默认合并被拒绝。先以 scope=target 读取，把需要保留的副本修改纳入完整方案，再以 planMode=replace 和 targetRevision 更新，不能忽略差异直接覆盖。
+- **增量修订**：begin 同一来源和副本名会载入已保存方案；patch 只改指定分组。cleanup 是完整清单，替换时保留仍需要的旧操作；底稿始终是原卡，不是副本。
+- **来源或副本变化**：旧草稿不能覆盖新版本；先核对变化。begin 拒绝载入方案外修改时，使用人物卡读取工具检查实际副本并报告冲突，不能绕过保护直接覆盖。
 - **定位失败**：error.anchor 指明 expected/start/end，matches 是出现次数，candidates 是最多 5 个短上下文。0 次先读原卡字段，检查是否误用了副本附加换行；2 次以上选择更长的唯一标记。不要模糊匹配、盲目改编码或直接写资源文件。
 - **验收清单**：changes 是实际执行的清理操作，removedEntries/preservedEntries 分别列实际删除与原样保留的世界书条目，带条目名与 enabled；禁用不等于可删除。planIntegrity 检查是否有方案外修改，legacyResidue 只检查被修改来源渲染正则中可识别的标签；它们不能替代剧情语义判断。
 - **真实结算**：初值定义通过不代表官方初始化已成功；模板 DOM 模拟使用测试快照，不运行原卡脚本，也不调用模型。真实游玩仅在用户明确要求时另行执行，结果以实际结算回执、持久变量和 UI 为准，不影响静态转换任务完成。
 
 保持一套清晰的变量约束。可扩展集合需要完整模板；已有 Zod 脚本的约束仍需单独核对。后台操作路径相对于 stat_data，例如 `/玩家/位置`，不是 `/stat_data/玩家/位置`。原卡不存在的数值、公式和状态机制不新增。
 
-收尾以 apply.validation 为准，保存成功且自动校验通过后，报告副本路径、实际差异和校验结果即可交付。limitations 是检查范围说明，不是待办；不默认列出真实验收清单，不重复 validate。source/target 是生效字段，磁盘包装里的旧镜像不作为转换失败依据。
+收尾以 commit 返回的 receipt.validation 为准，保存成功且自动校验通过后，报告副本路径、实际差异和校验结果即可交付。limitations 是检查范围说明，不是待办；不默认列出真实验收清单，不重复 validate。source/target 是生效字段，磁盘包装里的旧镜像不作为转换失败依据。
 
 
 ## 无原美化：设计并保存
 
-调用 `tavern_design_mvu_appearance`（独立工具，不是 convert 的 action）：
+使用 patch section=appearance 保存 HTML 方案。初值和规则已保存在草稿中，此处只提交外观。
 
 ```json
-{
-  "sourcePath": "cards/原卡.json",
-  "sourceRevision": "inspect 返回的版本号",
-  "initialState": {"玩家": {"位置": "门口", "体力": 80}},
-  "updateRules": "位置随实际移动更新；体力变化沿用原卡规则。",
-  "html": "<style>.status{padding:16px;background:#142338;color:#f4f7fb;border-radius:12px;overflow-wrap:anywhere}.status h3{margin:0 0 12px}</style><section class=\"status\"><h3>航行日志</h3><p>位置：$1</p><p>体力：$2</p></section>",
-  "bindings": [{"capture":1,"path":"/玩家/位置"},{"capture":2,"path":"/玩家/体力"}]
-}
+{"action":"patch","draft":"工具返回的最新凭据","section":"appearance","values":{"html":"<style>.status{padding:16px;background:#142338;color:#f4f7fb;border-radius:12px;overflow-wrap:anywhere}</style><section class=\"status\"><h3>航行日志</h3><p>位置：<mvu-field path=\"/玩家/位置\"></mvu-field></p><p>体力：<mvu-field path=\"/玩家/体力\"></mvu-field></p></section>"}}
 ```
 
-字段和值仅作参数示例，实际必须来自原卡定义。多人重复面板使用 collectionPath，bindings.path 改为成员相对路径。整集合也可绑定为一个值，但工具会以 JSON 文本展示；正式设计优先逐字段排版。工具返回 definitionRevision 后，按前述 apply 示例装配，不重复传 HTML。新增或修改样式仍调用此工具，保留完整字段定义。
+字段必须来自草稿目录，命名组件自动生成绑定编号。多人重复面板使用 collectionPath，bindings.path 为成员相对路径。整集合可绑定为一个值，以 JSON 文本展示；正式设计优先逐字段排版。后续修改样式仍 patch appearance，状态和规则保留，最后统一 commit。
