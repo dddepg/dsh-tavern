@@ -8964,6 +8964,17 @@ window.__ModuleLoader__.load({
 					)
 				);
 			}
+			function scriptCode(label, value) {
+				const content = String(value || "（空）");
+				const lines = content.split(/\r\n|\r|\n/);
+				return h("details", { className: "dsh-tavern-script-code" },
+					h("summary", null, label, h("span", { className: "dsh-tavern-script-code-count" }, lines.length + " 行 · 只读")),
+					h("div", { className: "dsh-tavern-script-code-scroll", tabIndex: 0, role: "region", "aria-label": label },
+						h("div", { className: "dsh-tavern-script-code-lines", "aria-hidden": true }, lines.map(function (_, index) { return h("div", { key: index }, index + 1); })),
+						h("pre", null, h("code", null, content))
+					)
+				);
+			}
 			function helperScriptRow(item, index) {
 				const snippet = String(item.content || "").replace(/\s+/g, " ").trim() || "空脚本";
 				return h("details", { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-script" },
@@ -8973,8 +8984,8 @@ window.__ModuleLoader__.load({
 						h("span", { className: "dsh-tavern-prompt-state" + (item.enabled ? "" : " off") }, item.enabled ? "已启用" : "已关闭")
 					),
 					h("div", { className: "dsh-tavern-regex-body" },
-						h("div", { className: "dsh-tavern-regex-label" }, "脚本内容"), h("pre", { className: "dsh-tavern-regex-code" }, item.content || "（空）"),
-						item.dataText ? h("div", null, h("div", { className: "dsh-tavern-regex-label" }, "脚本配置"), h("pre", { className: "dsh-tavern-regex-code" }, item.dataText)) : null,
+						scriptCode("脚本内容", item.content),
+						item.dataText ? scriptCode("脚本配置", item.dataText) : null,
 						item.info ? h("div", null, h("div", { className: "dsh-tavern-regex-label" }, "说明"), h("pre", { className: "dsh-tavern-regex-code" }, item.info)) : null,
 						item.exportWith !== null ? h("div", { className: "dsh-tavern-regex-meta" }, "export_with: " + JSON.stringify(item.exportWith)) : null
 					)

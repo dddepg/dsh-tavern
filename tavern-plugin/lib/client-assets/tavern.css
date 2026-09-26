@@ -1770,3 +1770,13 @@ header .nL4_yW_moreButton { display: none !important; }
 .dsh-tavern-memory-field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
 .dsh-tavern-card-memory input, .dsh-tavern-card-memory textarea, .dsh-tavern-card-memory select { box-sizing: border-box; max-width: 100%; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: inherit; background: var(--dsw-alias-bg-base); font: inherit; }
 .dsh-tavern-memory-field textarea { width: 100%; resize: vertical; }
+
+/* Read-only, collapsible source viewer in character card details. */
+.dsh-tavern-script-code { min-width: 0; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-alias-bg-base); }
+.dsh-tavern-script-code > summary { padding: 9px 12px; cursor: pointer; color: var(--dsw-alias-label-primary); font-size: 12px; }
+.dsh-tavern-script-code-count { margin-left: 12px; color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.dsh-tavern-script-code-scroll { display: flex; max-height: 480px; max-height: min(480px, 60vh); overflow: auto; border-top: 1px solid var(--dsw-alias-border-l2); font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
+.dsh-tavern-script-code-lines { flex: 0 0 auto; padding: 12px 10px; text-align: right; color: var(--dsw-alias-label-secondary); border-right: 1px solid var(--dsw-alias-border-l2); user-select: none; }
+.dsh-tavern-script-code-scroll pre { flex: 1 0 auto; margin: 0; padding: 12px; color: var(--dsw-alias-label-primary); font: inherit; white-space: pre; overflow-wrap: normal; word-break: normal; }
+.dsh-tavern-script-code-scroll code { font: inherit; }
+.dsh-tavern-script-code > summary:focus-visible, .dsh-tavern-script-code-scroll:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: -2px; }
