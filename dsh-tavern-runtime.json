@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "1e1c8a1f7ea8bb7158bc3c3d9ecc3bb606733926",
-  "releaseSequence": 405,
+  "revision": "c9aa1f7ae27f5023585cf2a13b563a231de11532",
+  "releaseSequence": 406,
   "version": "2.2.0",
   "files": [
     {
@@ -46,8 +46,8 @@
     },
     {
       "path": "bin/desktop-package-manager.mjs",
-      "sha256": "e0760f3ce5178f8502ba3bd978c4f1738446371121f738aca7636d59c22bf60b",
-      "size": 5927
+      "sha256": "4575d631bfe017e58180163b731a41099e2592be4fb80e66f0421110372a1a2d",
+      "size": 6738
     },
     {
       "path": "bin/dsh-compatibility.mjs",
