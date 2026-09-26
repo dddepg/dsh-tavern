@@ -7848,6 +7848,8 @@ window.__ModuleLoader__.load({
 		}
 		const resourcesLibraryFeature = createResourcesLibraryFeatureModule();
 
+        // @include card-memory.js
+
 		function TavernSkillsTab(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
 			const h = React.createElement;
@@ -10991,6 +10993,7 @@ window.__ModuleLoader__.load({
 			presetLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			resourcesLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:skills", title: "Skill 库", order: 8, single: true, component: props => React.createElement(TavernSkillsTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: Skill library");
+            ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:card-memory", title: "改卡记忆", order: 9, single: true, component: props => React.createElement(TavernCardMemoryTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: card memory");
 			worldBookLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			cardLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			ctx.effect(function () {

@@ -1759,3 +1759,14 @@ header .nL4_yW_moreButton { display: none !important; }
 .dsh-tavern-card-detail .dsh-tavern-card-save {
   padding: 14px 0 4px;
 }
+
+/* Card-only Mnemon management, shared across desktop and narrow WebViews. */
+.dsh-tavern-card-memory { padding: 16px; overflow: auto; min-width: 0; color: var(--dsw-alias-label-primary); }
+.dsh-tavern-card-memory p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.dsh-tavern-memory-entry { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin: 10px 0; }
+.dsh-tavern-memory-entry summary { cursor: pointer; overflow-wrap: anywhere; }
+.dsh-tavern-memory-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dsh-tavern-memory-actions input { flex: 1; min-width: 120px; }
+.dsh-tavern-memory-field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.dsh-tavern-card-memory input, .dsh-tavern-card-memory textarea, .dsh-tavern-card-memory select { box-sizing: border-box; max-width: 100%; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: inherit; background: var(--dsw-alias-bg-base); font: inherit; }
+.dsh-tavern-memory-field textarea { width: 100%; resize: vertical; }

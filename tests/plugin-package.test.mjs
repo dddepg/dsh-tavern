@@ -26,6 +26,8 @@ test('standard package ships runtime resources without local links, host copies 
     'config/dsh-compatibility.json', 'config/plugin-web.LICENSE',
     'tavern-plugin/package.json', 'tavern-plugin/lib/index.js', 'tavern-plugin/lib/client.js',
     'presets/tavern/preset.yml', 'presets/tavern/agent.cordis.yml',
+    'tavern-plugin/packages/dsh-tavern-card-memory/index.js',
+    'tavern-plugin/packages/dsh-tavern-card-memory/package.json',
     'tavern-plugin/packages/dsh-image-gen/src/module.js',
     'tavern-plugin/packages/dsh-tavern-remote/lib/typert.host.js',
     'tavern-plugin/packages/dsh-better-sidebar/lib/client-mermaid.js',

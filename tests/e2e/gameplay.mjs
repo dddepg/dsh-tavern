@@ -1,3 +1,4 @@
+import { cardMemoryChecks } from './card-memory.mjs'
 import {displayRegressionRules, displayRegressionChecks} from './display-regression.mjs'
 import { surfaceRecoveryChecks } from './surface-recovery.mjs'
 import { cardUpdateChecks } from './card-update.mjs'
@@ -145,6 +146,7 @@ try {
           TAVERN_E2E_COMPACTION_DIR: compactionScenario ? output : '',
           TAVERN_E2E_RECOVERY_DIR: recoveryScenario ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
+          TAVERN_E2E_MEMORY_AUDIT: process.argv.includes('--card-memory') ? join(output, 'memory-requests.jsonl') : '',
           TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
           TAVERN_E2E_WRONG_GOLD: process.env.TAVERN_E2E_WRONG_GOLD || '' }, stdio: ['ignore', 'pipe', 'pipe']
       })
@@ -277,7 +279,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else if (!process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
+  } else if (!process.argv.includes('--card-memory') && !process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
@@ -336,6 +338,7 @@ try {
     await playControls({ page, step, savedChat, inspectRound, output, report })
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   }
+  if (process.argv.includes('--card-memory')) await cardMemoryChecks({ page, step, data, output, report, savedChat })
   if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   }

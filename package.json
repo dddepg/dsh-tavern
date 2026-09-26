@@ -22,7 +22,9 @@
     "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs",
     "build:plugin-package": "node bin/build-plugin-package.mjs",
     "check:plugin-package": "node bin/build-plugin-package.mjs --check",
-    "prepublishOnly": "npm run check:client && npm run check:plugin-package"
+    "prepublishOnly": "npm run check:client && npm run check:plugin-package",
+    "test:card-memory": "node --test tests/card-memory.test.mjs",
+    "test:e2e:card-memory": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --card-memory"
   },
   "dependencies": {
     "acorn": "8.15.0",
@@ -33,7 +35,10 @@
     "marked": "16.3.0",
     "zod": "^4.4.3",
     "ws": "8.21.3",
-    "schemastery": "3.18.0"
+    "schemastery": "3.18.0",
+    "dsh-mnemon": "0.5.15",
+    "dsh-mnemon-source-runtime": "0.5.9",
+    "dsh-mnemon-source-documents": "0.5.6"
   },
   "dsh": {
     "profile": {

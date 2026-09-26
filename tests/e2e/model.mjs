@@ -13,6 +13,20 @@ export function apply(ctx) {
     async *stream(input) {
       if (process.env.TAVERN_E2E_COMPACTION_DIR) { yield* compactionStream(input); return }
       const tools = new Set((input.tools || []).map(tool => tool.name))
+      if (process.env.TAVERN_E2E_MEMORY_AUDIT) {
+        await appendFile(process.env.TAVERN_E2E_MEMORY_AUDIT, JSON.stringify({ system: input.system, messages: input.messages, tools: input.tools }) + '\n')
+        if (tools.has('tavern_memory_search')) {
+          const text = JSON.stringify(input.messages)
+          const done = input.messages.some(message => (message.content || []).some(block => block.type === 'tool-result' && block.toolCallId === 'memory-preference-save'))
+          const block = text.includes('E2E_MEMORY_NEXT') ? { type: 'text', text: '已读取改卡偏好。' }
+            : text.includes('E2E_MEMORY_SAVE') && !done ? { type: 'tool-call', id: 'memory-preference-save', name: 'tavern_memory_preference', arguments: JSON.stringify({ action: 'add', content: '保留原卡结构，不重写开场白' }) }
+            : { type: 'text', text: done ? '改卡偏好已保存。' : '卡片工作台就绪。' }
+          yield { type: 'block-start', index: 0, blockType: block.type }
+          yield { type: 'block-end', index: 0, block }
+          yield { type: 'finish', reason: { kind: block.type === 'tool-call' ? 'tool-calls' : 'stop' } }
+          return
+        }
+      }
       const recovery = await recoveryBlocks(input, tools)
       if (recovery) {
         for (const [index, block] of recovery.entries()) {
