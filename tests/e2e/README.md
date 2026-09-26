@@ -50,6 +50,10 @@ pnpm test:e2e
 
 `background-attempts.jsonl`、`background-late.jsonl` 记录模型等待及迟到输出尝试，`background-*.png` 和对应文本保留界面证据。该专项验证取消、连续重试与重启；自动超时另由 `background-agent-idle-native.test.mjs` 覆盖，不将其称为浏览器超时验收。
 
+## 正文强调色专项
+
+运行 `node tests/e2e/gameplay.mjs --text-colors`。真实开局并挂载官方 MVU 状态栏后，检查对白与斜体高亮没有被人物卡资源清理误删，再切换宿主强调色变量为暖陶土和蓝色，核对高亮计算颜色、普通文字原色及存档不变。此专项不调用模型，截图以 `text-colors-` 开头。
+
 ## 产物和失败检查
 
 每次结果保存到 `output/e2e-gameplay/run-*`：

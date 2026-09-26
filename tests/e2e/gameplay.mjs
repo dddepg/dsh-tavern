@@ -130,7 +130,7 @@ try {
     // variables even when it never reaches the frame's DOM-idle threshold.
     const status = '<div id="e2e-gold">金币：加载中</div><script>function refresh(){const v=getAllVariables();document.getElementById("e2e-gold").textContent="金币："+(v.stat_data?.gold??"未初始化")}refresh();setInterval(refresh,200)</script>'
     await writeFile(join(data, 'resources/cards/e2e.json'), JSON.stringify({ spec: 'chara_card_v2', spec_version: '2.0', data: {
-      name: 'E2E 奖励验收', description: '固定验收角色', first_mes: '欢迎领取奖励。\n\n<StatusPlaceHolderImpl/>',
+      name: 'E2E 奖励验收', description: '固定验收角色', first_mes: (process.argv.includes('--text-colors') ? '她说：“欢迎光临。” *窗外下着雨。*' : '欢迎领取奖励。') + '\n\n<StatusPlaceHolderImpl/>',
       mes_example: '', scenario: '', personality: '',
       character_book: { name: '验收初始变量', entries: [{ id: 1, keys: [], comment: '[initvar]初始值', content: 'gold: 0', enabled: true, constant: true, insertion_order: 1 }] },
       extensions: { mvu: {}, regex_scripts: [{ id: 'e2e-status', scriptName: '金币状态', findRegex: '<StatusPlaceHolderImpl/>',
@@ -208,7 +208,29 @@ try {
     await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
       .locator('#e2e-gold').filter({ hasText: /^金币：0$/ }).waitFor()
   })
-  if (recoveryScenario) {
+  if (process.argv.includes('--text-colors')) {
+    await step('实际正文挂载主题对白高亮', async () => {
+      await page.locator('.dsh-tavern-colored-markdown').waitFor()
+      const state=await page.evaluate(()=>({api:typeof Highlight,css:typeof CSS.highlights,styles:document.querySelectorAll('style[data-dsh-tavern-text-colors]').length,ranges:[...CSS.highlights.values()].reduce((n,h)=>n+h.size,0)}))
+      report.textColors=state
+      assert.ok(state.styles>0,'正文必须挂载高亮样式')
+      assert.ok(state.ranges>0,'对白必须生成高亮范围')
+      const original=(await savedChat()).messages
+      for (const [name,accent] of [['terracotta','#cc785c'],['blue','#2196f3']]) {
+        await page.evaluate(accent=>document.body.style.setProperty('--dsw-alias-brand-primary',accent),accent)
+        const colors=await page.evaluate(()=>[...CSS.highlights].filter(([k,h])=>h.size).map(([key,h])=>{
+          const node=[...h][0].startContainer.parentElement
+          return {color:getComputedStyle(node,'::highlight('+key+')').color,plain:getComputedStyle(node).color}
+        }))
+        const expected=name==='terracotta'?'rgb(204, 120, 92)':'rgb(33, 150, 243)'
+        assert.ok(colors.length>=2,'对白及斜体均有高亮')
+        for(const color of colors){assert.equal(color.color,expected);assert.notEqual(color.plain,expected)}
+        report[name]=colors
+        await page.screenshot({path:join(output,'text-colors-'+name+'.png'),fullPage:true})
+      }
+      assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
+    })
+  } else if (recoveryScenario) {
     await surfaceRecoveryChecks({ page, step, savedChat, output, report, root, restartServer })
   } else {
   await step('玩一轮，确认正文、金币与人物姿势', async () => {
