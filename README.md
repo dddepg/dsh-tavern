@@ -116,12 +116,20 @@ Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocke
 
 ### 已有 DSH：标准插件安装（试验）
 
-已安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm 和 Git**，且尚未通过专用安装器建立 `tavern` Profile 时，可以运行：
+已安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm**，且尚未通过专用安装器建立 `tavern` Profile 时，可以运行：
+
+```bash
+dsh plugin --profile tavern add dsh-profile-tavern@latest
+dsh --profile tavern
+```
+
+也可从 GitHub 安装（需要 Git）：
 
 ```bash
 dsh plugin --profile tavern add github:flizzywine/dsh-tavern
-dsh --profile tavern
 ```
+
+npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)。国内镜像可能延迟同步新版本。
 
 安装到独立的 `tavern` Profile。更新时关闭酒馆，重新运行安装命令，再启动；页面会显示更新命令。现有专用安装请继续原来的更新方式，不要直接叠装。详见[标准插件安装说明](docs/installation.md#标准插件安装试验)。
 

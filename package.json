@@ -1,7 +1,6 @@
 {
   "name": "dsh-profile-tavern",
   "version": "2.2.0",
-  "private": true,
   "scripts": {
     "build:client": "node bin/build-tavern-client.mjs",
     "check:client": "node bin/build-tavern-client.mjs --check",
@@ -22,7 +21,8 @@
     "test:e2e:card-update": "node bin/build-tavern-client.mjs --check && node tests/e2e/gameplay.mjs --card-update",
     "test:e2e:compaction": "node bin/build-tavern-client.mjs --check && node tests/e2e/compaction-suite.mjs",
     "build:plugin-package": "node bin/build-plugin-package.mjs",
-    "check:plugin-package": "node bin/build-plugin-package.mjs --check"
+    "check:plugin-package": "node bin/build-plugin-package.mjs --check",
+    "prepublishOnly": "npm run check:client && npm run check:plugin-package"
   },
   "dependencies": {
     "acorn": "8.15.0",
@@ -86,5 +86,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/flizzywine/dsh-tavern.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }
