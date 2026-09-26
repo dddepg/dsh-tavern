@@ -281,7 +281,7 @@ export function createMvuConversion({ resources }) {
     const check = await validateMvuConversion(data)
     const audit = cleanupAudit(source.data,args.cleanup || [],data)
     check.checks.push(audit.check); check.changes = audit.changes; check.removedEntries = audit.removedEntries; check.preservedEntries = audit.preservedEntries; check.valid &&= audit.check.status === 'passed'
-    check.pending.push('原卡语义与未识别旧协议需按 changes 清单确认；原样式需浏览器对照验收')
+    check.limitations.push('自动检查未覆盖未识别旧协议、剧情节奏和实际浏览器外观')
     if (input.action === 'preview') return {path:target.path,saved:false,validation:check}
     if (!check.valid) throw Error('转换预检失败: ' + JSON.stringify(check.checks.filter(item => item.status === 'failed')))
     if ((await snapshot(source.sourcePath)).revision !== source.revision) throw Error('转换期间来源发生变化，请重新 inspect')
@@ -323,8 +323,7 @@ export function createMvuConversion({ resources }) {
       } catch (error) {
         result.checks.push({name:'sourceAudit',status:'failed',detail:error.message}); result.valid = false
       }
-    } else result.pending.push('旧副本未保存完整转换方案，无法核对清理清单与方案外修改')
-    result.pending.push('核对 changes 的删除条目及剧情语义；原样式需浏览器对照验收')
+    } else result.limitations.push('旧副本未保存完整转换方案，无法核对清理清单与方案外修改')
     const binding = await resources.worldBookBindingForCard(path)
     const bound = binding.kind === 'embedded' && binding.cardPath === path
     result.checks.unshift({ name: 'binding', status: bound ? 'passed' : 'failed', detail: bound ? '副本绑定自己的世界书' : '副本未绑定自己的世界书' })

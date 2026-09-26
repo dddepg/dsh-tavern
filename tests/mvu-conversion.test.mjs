@@ -35,7 +35,7 @@ test('转换原卡为自包含副本：隔离保存、精确清理、所有开�
   assert.equal(new Set(data.character_book.entries.map(e=>e.id)).size,3)
   for(const text of [data.first_mes,...data.alternate_greetings])assert.equal(text.split('<mvu-status/>').length,2)
   assert.equal(result.validation.checks.find(x=>x.name==='templateSimulation').status,'passed')
-  assert.ok(result.validation.pending.some(x=>x.includes('真实模型')))
+  assert.ok(result.validation.limitations.some(x=>x.includes('真实模型')))
 })
 
 test('重复调用与并发重试不新建副本、条目或规则',async t=>{

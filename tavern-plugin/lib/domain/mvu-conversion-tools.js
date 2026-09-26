@@ -102,7 +102,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }))
   tools.register(defineTool({
     name: 'tavern_validate_mvu_conversion',
-    description: '只读验收专用工具生成的 MVU 副本：报告实际删除/保留条目、已识别旧渲染残留与方案外修改，从磁盘检查绑定、初值、后台分流、所有开场、面板唯一性与模型历史隔离，并在隔离 DOM 中模拟托管视图的变量更新/恢复。不会调用模型或执行原卡自定义脚本；报告明确列出未实测的真实结算和浏览器项目。',
+    description: '只读验收专用工具生成的 MVU 副本：报告实际删除/保留条目、已识别旧渲染残留与方案外修改，从磁盘检查绑定、初值、后台分流、所有开场、面板唯一性与模型历史隔离，并在隔离 DOM 中模拟托管视图的变量更新/恢复。不会调用模型或执行原卡自定义脚本；limitations 仅说明自动检查未覆盖真实结算和浏览器，不代表待办；保存成功且自动校验通过即可完成转换，真实游玩仅在用户明确要求时另行执行。',
     parameters: { path: { type: 'string', required: true, description: '转换后的 cards/... 副本路径' } },
     output, isConcurrencySafe: () => true,
     async execute(args, exec) { await requireWorkbench(exec); return { report: await conversion.verify(args) } }

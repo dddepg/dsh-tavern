@@ -34,6 +34,6 @@ export function preflightMvuConversion(source,args,applyCleanup) {
   issues.push(...entrances.issues)
   return {ok:issues.length===0,sourceRevision:source.revision,checks,issues,suggestedCleanup:entrances.suggestedCleanup,
     ...(states?{openingStates:states}:{}),fieldComponents:componentFields(args.initialState),
-    ...(appearance?{appearance}:{}),saved:false,pending:['官方 MVU 初始化','后台真实结算','浏览器布局与会话切换'],
+    ...(appearance?{appearance}:{}),saved:false,limitations:['官方 MVU 初始化','后台真实结算','浏览器布局与会话切换'],
     instruction:'此检查不写文件、不代表运行实测。修正 issues 后保存定义；已有有效 MVU 入口不能自动清理。'}
 }
