@@ -1,3 +1,4 @@
+import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } from './domain/background-session-retirement.js'
 import { createCardMemory, CARD_MEMORY_TOOLS } from '../packages/dsh-tavern-card-memory/index.js'
 import { inputAttachments, projectPlayerContent } from './domain/player-input-content.js'
 import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
@@ -1844,8 +1845,11 @@ export async function apply(ctx) {
     return conversationForkReceipt(fork, { lastTurn: turn, messageCount: fork.messages.length })
   }
 
+  const backgroundRetirement = createBackgroundSessionRetirement(profileData, { readState: sessionStateForSession, isRunning: id => agentRegistry.get(id)?.status === 'running' })
+  ctx.effect(() => installRetiredBackgroundFilter(ctx.get('subagents'), backgroundRetirement))
   const runtimePresetSnapshots = new Map()
   const backgroundAgentRunner = createBackgroundAgentRunner({
+    retirement: backgroundRetirement,
     systemAppend: () => runtimePrompt('system-append'),
     imageSystemPrompt: () => runtimePrompt('scene-image-system'),
     resolveModelSelection: async input => backgroundModelSelection(await backgroundConfigForSession(input.sessionId)) || input.selection,
