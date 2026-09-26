@@ -75,6 +75,7 @@ async function openStatus() {
   await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
 }
 async function inspectScreen() {
+  await page.locator('.dsh-tavern-user-bubble').filter({ hasText: '领取任务奖励' }).first().waitFor({ state: 'visible' })
   await page.getByText('你获得了十枚金币。', { exact: false }).filter({ visible: true }).first().waitFor()
   await page.getByText(/变量已更新/).filter({ visible: true }).first().waitFor()
   await openStatus()
@@ -105,7 +106,7 @@ try {
     // the isolated profile's runtime scope rather than the development scope.
     const sidebar = process.env.TAVERN_E2E_SIDEBAR || join(source, 'node_modules/dsh-better-sidebar')
     const sidebarVersion = JSON.parse(await readFile(join(sidebar, 'package.json'), 'utf8')).version
-    const expectedSidebar = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).dependencies['dsh-better-sidebar']
+    const expectedSidebar = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).devDependencies['dsh-better-sidebar']
     if (!process.env.TAVERN_E2E_SIDEBAR) assert.equal(sidebarVersion, expectedSidebar, '侧栏依赖与仓库锁定版本不一致；安装锁定依赖或用 TAVERN_E2E_SIDEBAR 指向独立测试包')
     report.sidebarVersion = sidebarVersion
     await cp(sidebar, join(profile, 'node_modules/dsh-better-sidebar'), { recursive: true, dereference: true })
@@ -187,6 +188,10 @@ try {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true })
     page = await context.newPage()
     page.on('pageerror', error => errors.push(error.message))
+    // Slot error boundaries catch React failures, so pageerror alone misses them.
+    page.on('console', message => {
+      if (message.type() === 'error' && /slot entry crashed|Minified React error/.test(message.text())) errors.push(message.text())
+    })
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
   })
@@ -272,7 +277,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else if (!process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
+  } else if (!process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
