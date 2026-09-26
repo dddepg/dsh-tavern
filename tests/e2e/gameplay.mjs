@@ -1,3 +1,4 @@
+import {setupRealVariables,realVariableLookupChecks} from './real-variable-lookup.mjs'
 import {openingUpdateChecks} from './opening-update.mjs'
 import { backgroundLifecycleChecks } from './background-lifecycle.mjs'
 import { cardMemoryChecks } from './card-memory.mjs'
@@ -139,6 +140,7 @@ try {
         replaceString: '```html\n' + status + '\n```', placement: [2], markdownOnly: true, disabled: false }, ...(displayScenario ? displayRegressionRules() : [])] }
     } }))
   })
+  if(process.argv.includes('--real-variables')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealVariables({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
   await step('启动真实 DSH 与酒馆', async () => {
     async function launchServer() {
       const logOffset = log.length
@@ -232,6 +234,8 @@ try {
       }
       assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
     })
+  } else if (process.argv.includes('--real-variables')) {
+    await realVariableLookupChecks({page,step,savedChat,root,output,report})
   } else if (process.argv.includes('--opening-update')) {
     await openingUpdateChecks({page,step,savedChat,data,output,report,root})
   } else if (recoveryScenario) {
