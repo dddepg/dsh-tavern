@@ -1,5 +1,7 @@
 # 转换参数与边界
 
+新任务按 Skill 主流程使用 tavern_card_draft；下列字段映射、美化与 cleanup 规则同样适用于草稿的对应分组。saveDefinition/design/apply 调用顺序仅供完整定义兼容接口使用，草稿 commit 已代办这些操作。
+
 固定装配由 `tavern_convert_to_mvu` 维护。本文件只解释如何把原卡语义填入工具，不维护另一份 HTML/正则配方。
 
 ## 调用示例

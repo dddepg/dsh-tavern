@@ -18,7 +18,7 @@ export function appearanceCoverageError(missingPaths, collectionPath) {
 
 export const mvuStructureGuide = Object.freeze({
   responsibility: '模型只定义状态语义、来源映射、美化和清理；工具负责成品 MVU 结构。标准转换只读目标卡及 Skill 配方，无需扫描其他卡、磁盘 raw/data 包装或工具源码。',
-  definition: '完整提取后调用 saveDefinition；无原美化时调用 tavern_design_mvu_appearance。返回 definitionRevision 后，apply 只提交版本号、来源版本、名称和 cleanup。',
+  definition: '新任务优先 tavern_card_draft：begin 建立草稿，patch 分组填写字段、各开场、规则和外观，commit 统一保存与校验。完整定义兼容接口仍可 saveDefinition/design 后 apply；不要混用两套写入流程。',
   bindings: {
     root: '省略 collectionPath：所有路径相对于 initialState，可同时绑定 /时间 与 /人物/角色名/姓名；绑定整个集合显示 JSON 文本。',
     collection: '指定 collectionPath=/人物：所有路径相对于每个成员，如 /姓名；自动重复面板，但不能混入 /时间 等集合外字段。'

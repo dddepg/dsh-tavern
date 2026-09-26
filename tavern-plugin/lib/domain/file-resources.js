@@ -158,6 +158,23 @@ export function createFileResourceStore(options = {}) {
     await durableFiles.write(mvuDefinitionPath(revision), JSON.stringify(definition))
   }
 
+  function mvuDraftPath(id) {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('MVU 草稿 ID 无效')
+    return path.join(dataRoot, 'mvu-drafts', id + '.json')
+  }
+  async function readMvuDraft(id) {
+    const value = await durableFiles.read(mvuDraftPath(id))
+    return value === undefined ? undefined : JSON.parse(value.toString('utf8'))
+  }
+  async function updateMvuDraft(id, updater) {
+    let result
+    await durableFiles.update(mvuDraftPath(id), async bytes => {
+      result = await updater(bytes === undefined ? undefined : JSON.parse(bytes.toString('utf8')))
+      return JSON.stringify(result)
+    })
+    return result
+  }
+
   async function writeWorking(relative, data) {
     const normalized = normalizeResourcePath(relative)
     const target = absolute(normalized)
@@ -985,5 +1002,5 @@ export function createFileResourceStore(options = {}) {
     return result
   }
 
-  return Object.freeze({ readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
+  return Object.freeze({ readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
 }

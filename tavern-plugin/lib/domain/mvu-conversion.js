@@ -1,3 +1,4 @@
+import {createMvuDrafts} from './mvu-drafts.js'
 import {inspectMvuEntrances,preflightMvuConversion} from './mvu-conversion-preflight.js'
 import { mvuStructureGuide, mvuDeliveryGuide } from './mvu-conversion-guidance.js'
 import { stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
@@ -423,5 +424,7 @@ export function createMvuConversion({ resources }) {
     tail = job.catch(()=>{})
     return job
   }
-  return { convert, verify, readAppearance, updateAppearance }
+  const conversion = { convert, verify, readAppearance, updateAppearance }
+  conversion.draft = createMvuDrafts({resources,conversion}).run
+  return conversion
 }
