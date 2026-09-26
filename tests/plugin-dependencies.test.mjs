@@ -200,3 +200,22 @@ test('旧插件缺少新增 agent 链接时从已有宿主链接找到完整依�
   assert.equal(deps.length, 5)
   for (const dep of deps) assert.equal(dep.directory, realpathSync(f.packages[dep.name]))
 })
+
+test('Desktop dependencies recover the same installation after unpacked junction targets move into app', t => {
+  const f = fixture(t)
+  const scope = path.join(f.pluginDirectory, 'node_modules', '@deepseek-ai')
+  mkdirSync(scope, { recursive: true })
+  for (const [name, directory] of Object.entries(f.packages)) {
+    symlinkSync(directory, path.join(scope, name.split('/')[1]), 'junction')
+  }
+  const oldRoot = path.resolve(path.dirname(f.bootstrap), '..')
+  const newRoot = path.join(path.dirname(oldRoot), 'app')
+  renameSync(oldRoot, newRoot)
+  const dependencies = resolveHostDependencies({ host: 'desktop', env: {
+    DSH_TAVERN_HOST_DEPENDENCY_ANCHOR: path.join(f.pluginDirectory, 'lib', 'index.js'),
+  } })
+  assert.equal(dependencies.length, Object.keys(f.packages).length)
+  for (const dependency of dependencies) {
+    assert.equal(dependency.directory, realpathSync(path.join(newRoot, 'node_modules', dependency.name)))
+  }
+})

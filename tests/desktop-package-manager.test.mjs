@@ -31,11 +31,11 @@ test('Desktop uses its declared pnpm entry and retries failed downloads with the
  } finally { await rm(home, { recursive: true, force: true }) }
 })
 
-test('detached Desktop update resolves pnpm through linked host dependencies under system Node', async () => {
+for (const staleLink of [false, true]) test(`detached Desktop resolves pnpm with ${staleLink ? 'stale unpacked' : 'valid'} host link`, async () => {
  const { mkdir, symlink } = await import('node:fs/promises')
  const home = await mkdtemp(path.join(os.tmpdir(), 'desktop-detached-'))
  try {
-  const host = path.join(home, 'Desktop', 'resources', 'app.asar.unpacked')
+  const host = path.join(home, 'Desktop', 'resources', staleLink ? 'app' : 'app.asar.unpacked')
   const agent = path.join(host, 'node_modules', '@deepseek-ai', 'dsh-agent')
   const pnpm = path.join(host, 'node_modules', 'pnpm')
   const plugin = path.join(home, 'tavern-plugin')
@@ -45,7 +45,8 @@ test('detached Desktop update resolves pnpm through linked host dependencies und
   await writeFile(path.join(agent, 'index.js'), '')
   await writeFile(path.join(pnpm, 'package.json'), JSON.stringify({ name: 'pnpm', bin: { pnpm: 'bin/pnpm.cjs' } }))
   await writeFile(path.join(pnpm, 'bin', 'pnpm.cjs'), '')
-  await symlink(agent, path.join(plugin, 'node_modules', '@deepseek-ai', 'dsh-agent'), 'junction')
+  const target = staleLink ? agent.replace(`${path.sep}app${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`) : agent
+  await symlink(target, path.join(plugin, 'node_modules', '@deepseek-ai', 'dsh-agent'), 'junction')
   let downloads = 0
   await assert.rejects(prepareDesktopPackageManager({
    host: 'desktop', platform: 'win32', arch: 'x64',

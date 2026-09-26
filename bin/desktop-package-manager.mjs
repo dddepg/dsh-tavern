@@ -1,6 +1,7 @@
+import { desktopHostAnchors } from './desktop-host-paths.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,14 +28,10 @@ export async function prepareDesktopPackageManager(options = {}) {
   ]
   // The detached updater may run under system Node without Desktop terminal
   // variables. Follow the existing host link, not an unrelated global pnpm.
-  if (env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR) {
-    try {
-      const require = createRequire(env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR)
-      anchors.push(unpack(realpathSync(require.resolve('@deepseek-ai/dsh-agent'))))
-    } catch {}
-  }
+  const dependencyAnchor = env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR || fileURLToPath(new URL('../tavern-plugin/lib/index.js', import.meta.url))
+  anchors.push(dependencyAnchor)
   const candidates = env.DSH_DESKTOP_PNPM_ENTRY ? [unpack(env.DSH_DESKTOP_PNPM_ENTRY)] : []
-  for (const anchor of anchors) {
+  for (const anchor of new Set(anchors.flatMap(desktopHostAnchors))) {
     for (const directory of createRequire(anchor).resolve.paths('pnpm') || []) {
       const root = path.join(directory, 'pnpm')
       try {

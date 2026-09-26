@@ -1,3 +1,4 @@
+import { desktopHostAnchors } from './desktop-host-paths.mjs'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -74,7 +75,7 @@ function resolveHostAnchor({ dsh, host = 'cli', env = process.env, execPath = pr
 export function resolveHostDependencies({ dsh, host = 'cli', env = process.env, execPath = process.execPath, platform = process.platform, requiredExports = REQUIRED_HOST_EXPORTS }) {
   let anchor = resolveHostAnchor({ dsh, host, env, execPath, platform })
   if (host === 'desktop') {
-    const candidates = [anchor]
+    const candidates = desktopHostAnchors(anchor)
     // Existing links point into the selected Desktop even when the detached
     // updater runs under system Node without Desktop environment variables.
     for (const name of Object.keys(REQUIRED_HOST_EXPORTS)) {
