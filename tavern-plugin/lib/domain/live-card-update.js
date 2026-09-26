@@ -124,6 +124,28 @@ export function migrateCardSnapshots(chat, defaults, plans = [], removedPaths = 
   return count
 }
 
+// Refresh initialization metadata only; authored story text and earned state remain intact.
+function refreshOpeningInitvar(chat, states) {
+  const rewrite=(text,index)=>{
+    if(typeof text!=='string'||!/<initvar>[\s\S]*?<\/initvar>/i.test(text))return text
+    const state=states[index]
+    if(!state)return text
+    const block='<initvar>\n'+JSON.stringify(state,null,2).replace(/</g,'\\u003c')+'\n</initvar>'
+    return text.replace(/<initvar>[\s\S]*?<\/initvar>/gi,()=>block)
+  }
+  function visit(value) {
+    if(!value||typeof value!=='object')return
+    if(value.greeting===true){
+      const index=value.swipeId||0
+      for(const key of ['text','sourceText','projectionText','displayText','sessionText','templateInputSource'])if(typeof value[key]==='string')value[key]=rewrite(value[key],index)
+      if(Array.isArray(value.swipes))value.swipes=value.swipes.map((text,index)=>rewrite(text,index))
+      return
+    }
+    for(const child of Object.values(value))visit(child)
+  }
+  for(const key of ['messages','timeline','rollbackUndo','promptTemplateInput'])visit(chat[key])
+}
+
 /** Preview executes with detached state and an RPC allowlist, never the live session. */
 export function createLiveCardUpdate({readGlobals = async () => ({})} = {}) {
   const previews = new Map(), cache = new Map()
@@ -217,6 +239,13 @@ export function createLiveCardUpdate({readGlobals = async () => ({})} = {}) {
     const migrated = clone(chat)
     migrated.cardStateDefaults = clone(defaults)
     migrated.cardStateMigrationIds = plans.map(plan => plan.id)
+    const selected=chat.messages.find(message=>message.greeting)?.swipeId||0
+    const states=[];states[selected]=defaults
+    const greeting=chat.messages.find(message=>message.greeting)
+    for(let index=0;index<(greeting?.swipes?.length||0);index++)if(index!==selected){
+      states[index]=await initialDefaults({...chat,messages:[{greeting:true,swipeId:index}]},card)
+    }
+    refreshOpeningInitvar(migrated,states)
     if (unchanged) return migrated
     const count = migrateCardSnapshots(migrated, defaults, plans, removedPaths)
     if ((Object.keys(defaults).length && chat.mvu?.enabled || plans.length || removedPaths.length) && !count) throw Error('当前存档缺少可迁移的 MVU 快照，未应用更新')

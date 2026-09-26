@@ -59,3 +59,23 @@ test('explicit moves still preserve values before automatic additions and remova
     assert.deepEqual(updated.messages[0].variables[0].stat_data,{新:75})
   }finally{runtime.dispose()}
 })
+
+test('重新加载同步开场 initvar 元数据，保留正文与当前变量',async()=>{
+ const runtime=createLiveCardUpdate()
+ try {
+  const old=card({金币:0,旧字段:1}),next=card({金币:99,体力:100})
+  const original=chat(old,{金币:12,旧字段:1})
+  original.messages[0].sourceText='保留原开场\n'+old.first_mes
+  original.messages[0].text=original.messages[0].sourceText
+  original.messages[0].swipes=[original.messages[0].sourceText]
+  original.rollbackUndo.messages=structuredClone(original.messages)
+  const updated=await runtime.prepare(original,next,original)
+  const text=updated.messages[0].sourceText
+  assert.deepEqual(JSON.parse(text.match(/<initvar>([\s\S]*?)<\/initvar>/)[1]),{金币:99,体力:100})
+  assert.ok(text.startsWith('保留原开场\n'))
+  assert.equal(updated.messages[0].swipes[0],text)
+  assert.equal(updated.rollbackUndo.messages[0].sourceText,text)
+  assert.deepEqual(updated.messages[0].variables[0].stat_data,{金币:12,体力:100})
+  assert.equal(original.messages[0].sourceText,'保留原开场\n'+old.first_mes)
+ }finally{runtime.dispose()}
+})
