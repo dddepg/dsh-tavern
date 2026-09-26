@@ -360,7 +360,7 @@ export function createMvuConversion({ resources }) {
         const saved = await resources.readMvuDefinition(definitionRevision)
         if (definitionDigest(saved) !== definitionRevision) throw Error('字段定义保存后回读不一致')
         return {definitionRevision,sourceRevision:source.revision,fieldCounts:definition.fields.map(fields=>fields.length),mappedSourceFields:definition.inventory.length,
-          bindings:definition.appearance?.bindings,entrances:inspectMvuEntrances(source.data),
+          ...(definition.appearance?.bindings ? {bindings:definition.appearance.bindings} : {}),entrances:inspectMvuEntrances(source.data),
           instruction:'字段定义已落盘。apply 只传 definitionRevision、sourceRevision、name、cleanup 和需要的 targetRevision；初值、规则和外观从定义直接装配，不重新提交。'}
       }); tail=job.catch(()=>{});return job
     }

@@ -74,3 +74,15 @@ test('自定义布局已有字段名时，组件仅显示值，不泄漏路径�
    assert.deepEqual(saved.appearance.bindings,[{capture:1,path:'/时间/日期'}])
  } finally {dom.window.close()}
 })
+
+test('无美化定义的回执也是无损 JSON，多个开场保留不同初值',{skip:!process.env.DSH_BOOT_MODULE},async t=>{
+ const {pathToFileURL}=await import('node:url')
+ const {snapshotJsonValue}=await import(new URL('../../dsh-util-values/lib/index.js',pathToFileURL(process.env.DSH_BOOT_MODULE)))
+ const f=await fixture(t)
+ for(const openingStates of [undefined,[f.args.initialState,{...f.args.initialState,位置:'大厅'}]]) {
+  const {report}=await f.registered.get('tavern_convert_to_mvu').execute({...f.args,action:'saveDefinition',...(openingStates?{openingStates}:{})},{})
+  assert.notEqual(snapshotJsonValue({report}),undefined,'工具回执不能包含 undefined')
+  const saved=await f.resources.readMvuDefinition(report.definitionRevision)
+  assert.equal(saved.openingStates[1].位置,openingStates?'大厅':'门口')
+ }
+})
