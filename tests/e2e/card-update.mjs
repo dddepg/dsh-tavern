@@ -18,15 +18,15 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
   async function save() {
     await writeFile(path,JSON.stringify(document)); await page.reload({waitUntil:'domcontentloaded'})
     await page.getByText('酒馆状态',{exact:true}).filter({visible:true}).first().click()
-    await page.getByRole('button',{name:'重新加载',exact:true}).waitFor()
+    await page.getByRole('button',{name:'重新加载人物卡和世界书',exact:true}).waitFor()
   }
   async function apply() {
-    await page.getByRole('button',{name:'重新加载',exact:true}).click()
+    await page.getByRole('button',{name:'重新加载人物卡和世界书',exact:true}).click()
     await page.getByRole('dialog',{name:'确认操作'}).getByRole('button',{name:'确认',exact:true}).click()
   }
   async function applied() {
-    await page.getByRole('button',{name:'正在重新加载…',exact:true}).waitFor({state:'hidden'})
-    await page.getByRole('button',{name:'重新加载',exact:true}).waitFor({state:'visible'})
+    await page.getByRole('button',{name:'正在重新加载人物卡和世界书…',exact:true}).waitFor({state:'hidden'})
+    await page.getByRole('button',{name:'重新加载人物卡和世界书',exact:true}).waitFor({state:'visible'})
     assert.equal((await savedChat()).sessionId,initial.sessionId)
     assert.deepEqual((await savedChat()).cardDefinitionSnapshot.extensions,card.extensions,'应用回执必须对应本次卡片版本')
   }
@@ -80,13 +80,13 @@ export async function cardUpdateChecks({page,step,savedChat,data,output,report})
     assert.equal(current(await savedChat()).rank,'3')
     await status().locator('#ejs-current').filter({hasText:/^EJS 金币：10$/}).waitFor()
   })
-  await step('变量改名、类型转换和删除按声明迁移，保留历史数值',async()=>{
+  await step('变量改名与类型转换按声明迁移，删除字段自动同步存档',async()=>{
     card.character_book.entries[0].content='coins: 999\nstamina: 7\nrank: 0'
     await save(); await apply()
-    await page.getByRole('alert').filter({hasText:'初始定义移除了字段'}).first().waitFor()
-    assert.equal(current(await savedChat()).gold,10,'缺少改名迁移时不能以新初值替代旧金币')
-    card.extensions.dsh_tavern={stateMigrations:[{id:'e2e-wallet-v2',operations:[{op:'move',from:'/gold',path:'/coins'},{op:'convert',path:'/rank',type:'number'},{op:'remove',path:'/stamina'}]}]}
-    // Omitted fields are retained unless explicitly removed; remove the default as well.
+    await page.getByRole('alert').filter({hasText:'变量类型已变化'}).first().waitFor()
+    assert.equal(current(await savedChat()).gold,10,'类型校验失败时整次更新不落盘')
+    card.extensions.dsh_tavern={stateMigrations:[{id:'e2e-wallet-v2',operations:[{op:'move',from:'/gold',path:'/coins'},{op:'convert',path:'/rank',type:'number'}]}]}
+    // Deleting an authored field automatically removes it from current and historical saves.
     card.character_book.entries[0].content='coins: 999\nrank: 0'
     card.extensions.regex_scripts[0].replaceString='```html\n<div id="ejs-current">EJS 金币：<%= getMessageVar("stat_data.coins") %></div>\n```'
     await save(); await apply(); await applied()
