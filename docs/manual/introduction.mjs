@@ -85,6 +85,7 @@ export const installation = `
 | 想用浏览器访问，并自己管理服务；或使用 Linux / WSL2 | [C．命令行版](#a02--section-4) | 需要，先准备 Node.js |
 | Android 11 及以上、ARM64，想直接装酒馆应用 | [D．Android 独立 APK](#a02--section-5) | 不需要 |
 | Android，已经在使用 DSHA，或需要尝试兼容包 | [E．通过 DSHA 安装](#a02--section-6) | 在 DSHA 中执行安装命令 |
+| 已有适配版本的 DSH，准备新建 Tavern Profile | [标准插件安装（试验）](#plugin-installation) | 需要 |
 
 **Windows 不知道怎么选，就选 A；想按你已有的 DSH Desktop 来安装，就选 B。** A 已包含 Desktop，不用再做一遍 B。
 
@@ -565,4 +566,66 @@ DSHA 窗口白屏时先点顶部 **刷新**，仍不正常可点 **直接打开*
 更多问题见[常见问题](#n08)与[排错日志](#n04)。需要手动安装或查找高级目录配置时，参考[完整安装说明](https://github.com/flizzywine/dsh-tavern/blob/main/docs/installation.md)。
 
 安装包校验：[Android APK SHA-256 文件](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk.sha256)。Windows EXE SHA-256：\`a21e2ea4bc7bb8d1154b6d133c3bd6c6ca139006c74140527925104731d02951\`。
+`
+
+export const pluginInstallation = `
+## 适用条件
+
+已安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm**，准备新建独立的 \`tavern\` Profile。当前先支持普通 DSH CLI 的新安装。
+
+已通过专用安装器安装的 CLI、Desktop 或 Android 酒馆，请继续使用各自原有的更新方式，不要向同一个 Profile 叠装。其他安装方式见[安装与启动](#a02)。
+
+## 选择安装来源
+
+在系统终端中运行以下一种安装命令。
+
+### npm：已发布的正式版本
+
+` + code('bash', 'dsh plugin --profile tavern add dsh-profile-tavern@latest') + `
+
+npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)。国内镜像可能延迟同步新版本。
+
+**npm 包仅在正式版本（大版本）发布时同步，不包含期间的小更新和即时修复。** \`@latest\` 指最新已发布的 npm 包，不代表 GitHub 最新代码；重复运行 npm 安装命令也无法获取尚未发布到 npm 的更新。
+
+### GitHub：跟进最新代码
+
+需要 Git。在终端运行：
+
+` + code('bash', 'dsh plugin --profile tavern add github:flizzywine/dsh-tavern') + `
+
+DSH 会创建 Profile、安装完整运行包并启用酒馆。运行包包含 Web 配置、侧栏、人物卡功能、预设和 Skill，无需自行构建。酒馆使用当前 DSH，启动时检查适配版本，不会另装或升级宿主。
+
+## 启动与更新
+
+安装完成后运行：
+
+` + code('bash', 'dsh --profile tavern') + `
+
+打开酒馆网页，看到 Tavern 界面后，继续[配置文字模型](#a03)并[开始第一局](#a04)。
+
+更新时先关闭酒馆，重新运行所选来源的安装命令，再启动。页面中的“查看更新命令”提供对应命令，这种安装方式不使用专用安装器的源码更新器。需要即时修复时，使用 GitHub 来源。
+
+## 数据位置与使用边界
+
+数据位于当前 \`DSH_HOME\` 下的 \`profile-data/tavern/\`；未设置 \`DSH_HOME\` 时通常为 \`~/.dsh/profile-data/tavern/\`。程序由 Profile 的包管理器维护。
+
+这条路线不会迁移旧 CLI 的独立数据，也不附带 Desktop 的 Pocket 手机访问配置或宿主字体文件修改。侧栏终端复用宿主提供的 \`node-pty\`；宿主缺少此依赖时，终端会显示修复提示，酒馆仍可使用。
+`
+
+export const appearance = `
+## 选择皮肤
+
+CLI、Desktop 和 Android 酒馆均自带 [Dream Skin](https://github.com/RevolutionLA/dsh-dream-skin)（内置适配版本 9.23.0），无需另装。
+
+1. 打开 **设置 → Theme / 外观**。
+2. 选择“酒馆 · 暖陶土”浅色或深色，也可以选择其他皮肤。
+3. 返回酒馆查看效果，按钮、面板、边框和正文强调色会随当前主题切换。
+
+## 背景与壁纸
+
+首次默认无背景图片；切换部分皮肤时会应用对应渐变，也可以自行设置或清空壁纸。已有皮肤、强调色和壁纸设置保留。
+
+## 旧版如何使用
+
+通过酒馆原有更新入口升级并重启后即可使用，无需重装 Desktop 或 APK。更新步骤见[安装与更新](#a02)。
 `

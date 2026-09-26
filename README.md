@@ -116,24 +116,7 @@ Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocke
 
 ### 已有 DSH：标准插件安装（试验）
 
-已安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm**，且尚未通过专用安装器建立 `tavern` Profile 时，可以运行：
-
-```bash
-dsh plugin --profile tavern add dsh-profile-tavern@latest
-dsh --profile tavern
-```
-
-也可从 GitHub 安装（需要 Git）：
-
-```bash
-dsh plugin --profile tavern add github:flizzywine/dsh-tavern
-```
-
-npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)。国内镜像可能延迟同步新版本。
-
-**npm 包仅在正式版本（大版本）发布时同步，不包含期间的小更新和即时修复。** `@latest` 指最新已发布的 npm 包，不代表 GitHub 最新代码；重复运行 npm 安装命令也无法获取尚未发布到 npm 的更新。需要跟进最新代码，请使用上面的 GitHub 安装方式，或下文的专用安装方式。
-
-安装到独立的 `tavern` Profile。更新时关闭酒馆，重新运行安装命令，再启动；页面会显示更新命令。现有专用安装请继续原来的更新方式，不要直接叠装。详见[标准插件安装说明](docs/installation.md#标准插件安装试验)。
+已有适配版本 DSH 的用户，可将 Tavern 安装到独立 Profile。安装命令、版本要求及 npm / GitHub 更新差异见[标准插件安装指南](https://flizzywine.github.io/dsh-tavern/#plugin-installation)。
 
 [完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。
 
@@ -145,14 +128,6 @@ npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)
 - **服务器部署、账号密码登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)，为远程 WebUI 添加登录认证；需自行配置可访问的服务器地址，插件不提供内网穿透。
 
 详细配置见[安装指南中的「手机远程访问」](https://flizzywine.github.io/dsh-tavern/#a02)。
-
-### 皮肤与外观
-
-CLI、Desktop 和 Android 酒馆均自带 [Dream Skin](https://github.com/RevolutionLA/dsh-dream-skin)（内置适配版本 9.23.0），无需另装。在 **设置 → Theme / 外观** 中选择「酒馆 · 暖陶土」浅色或深色，以及其他皮肤。酒馆按钮、面板、边框和正文强调色随当前主题切换。
-
-旧版通过酒馆原有更新入口升级并重启后即可使用，无需重装 Desktop 或 APK。
-
-首次默认无背景图片；切换部分皮肤时会应用对应渐变，也可以自行设置或清空壁纸。已有皮肤、强调色和壁纸设置保留。
 
 ## 开始游玩
 
