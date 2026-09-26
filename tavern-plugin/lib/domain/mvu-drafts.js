@@ -1,3 +1,4 @@
+import {patchDraftAppearance} from './mvu-draft-appearance.js'
 import {createMvuDraftSession} from './mvu-draft-session.js'
 import {createHash} from 'node:crypto'
 import {normalizeResourcePath} from './file-resources.js'
@@ -142,8 +143,7 @@ export function createMvuDrafts({resources,conversion}) {
       if(!isObject(values)||!Object.keys(values).length||Object.values(values).some(x=>typeof x!=='string'))fail('DRAFT_VALUES_INVALID','rules values 是分组名到规则文本的对象；空文本删除该组')
       for(const [key,value] of Object.entries(values)) {if(['__proto__','prototype','constructor'].includes(key))fail('DRAFT_PATH_INVALID','无效分组名');if(value.trim())draft.rules[key]=value;else delete draft.rules[key]}
     } else if(section==='appearance') {
-      if(!isObject(values))fail('DRAFT_VALUES_INVALID','appearance values 必须是完整外观方案')
-      draft.definition.appearance=structuredClone(values)
+      draft.definition.appearance=patchDraftAppearance(draft,values)
     } else if(section==='mapping') {
       if(!isObject(values)||Object.keys(values).some(key=>!['sourceFields','fieldMappings'].includes(key))||Object.values(values).some(x=>!Array.isArray(x)))fail('DRAFT_VALUES_INVALID','mapping 仅接收 sourceFields、fieldMappings 数组')
       Object.assign(draft.definition,structuredClone(values))

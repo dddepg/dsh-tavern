@@ -84,3 +84,9 @@ test('美化工具真实 DSH 无损快照及输出 schema 可接受读写回执'
  assert.equal(result.validation.valid,true)
  await invoke('tavern_read_mvu_appearance',{path:f.sourcePath})
 })
+
+test('直接外观工具新增捕获时指向草稿组件流程并保留目标',async t=>{
+ const f=await fixture(t),read=await f.call('tavern_read_mvu_appearance',{path:f.path}),before=await f.resources.readText(f.path)
+ await assert.rejects(f.call('tavern_update_mvu_appearance',{path:f.path,revision:read.revision,replacements:[{expected:'</section>',value:'<span>$10</span></section>'}]}),/tavern_card_draft.*mvu-field/)
+ assert.equal(await f.resources.readText(f.path),before)
+})

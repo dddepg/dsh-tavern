@@ -106,3 +106,5 @@ source 传 query 则搜索原卡，path 可缩小范围；无需 sourcePath/sour
 ```
 
 成功读取后 d1 成为当前草稿，后续 source/patch/validate/commit 可继续省略 draft。短编号只在本会话内有效；重启服务后保留，其他会话不能靠相同编号访问它。旧版长凭据仅保留兼容，新调用无需复制它。
+
+已有草稿 HTML 的局部增补可用 patch section=appearance、values.replacements:[{expected,value}]；expected 对当前草稿恰好匹配一次。新增展示字段用 mvu-field 根路径组件，工具保留旧绑定并自动分配新捕获。整个变量与面板修改保持在草稿内，commit 前不调用直接保存成品的外观工具。

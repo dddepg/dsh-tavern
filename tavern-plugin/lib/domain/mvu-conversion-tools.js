@@ -34,7 +34,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       appearanceRequirement:{type:'string',enum:['custom','preserve','basic'],description:'begin：无原美化默认 custom（需 HTML 设计）；有原美化默认 preserve。basic 仅用户要求简单面板或已说明的设计回退'},
       basicReason:{type:'string',description:'选择 basic 时必填的依据'},
       section:{type:'string',enum:['fields','opening','rules','appearance','mapping','cleanup','requirements','review']},
-      values:{type:'json',description:'fields/opening：JSON Pointer 到值的对象，如 {"/时间":{"时段":"白天"}}；rules：分组名到规则文本，空文本删除该组；appearance：完整 HTML/fields 或 sourcePath/bindings 方案；mapping：sourceFields/fieldMappings 数组；cleanup：完整清理数组；requirements：appearanceRequirement/basicReason，仅明确改变美化要求时使用；review：sourceCoverage/cleanup/appearance 布尔确认。未提交的分组保留'},
+      values:{type:'json',description:'fields/opening：JSON Pointer 到值的对象，如 {"/时间":{"时段":"白天"}}；rules：分组名到规则文本，空文本删除该组；appearance：可传 {replacements:[{expected,value}]} 局部修改草稿 HTML；新增字段用 mvu-field 组件，工具自动分配捕获与绑定；也可提交完整 HTML/fields 或 sourcePath/bindings 方案；mapping：sourceFields/fieldMappings 数组；cleanup：完整清理数组；requirements：appearanceRequirement/basicReason，仅明确改变美化要求时使用；review：sourceCoverage/cleanup/appearance 布尔确认。未提交的分组保留'},
       openingId:{type:'string',description:'opening-0 对应 first_mes，后续按 alternate_greetings 顺序；以工具返回 ID 为准'},
       inheritInitialState:{type:'boolean',description:'opening 显式从底稿仅补缺失字段，保留已有开场值，再应用 values；新增字段也可用此操作同步'},
       operation:{type:'string',enum:['set','merge','replace','move','remove'],description:'fields/opening 默认 set：替换所选路径的值；merge：递归合并对象，null 是值；replace 同 set。fields 专用 move/remove：传 path（move 另传 toPath），同步各开场与结构化绑定；删除仍有引用的字段会拦截'},
@@ -56,7 +56,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }))
   tools.register(defineTool({
     name:'tavern_update_mvu_appearance',
-    description:'局部修改已有 MVU 副本的托管 HTML 美化。传读取时的 revision 和唯一原文替换片段；全部片段对应同一读取版本，不可重叠。自动保留字段、各开场初值和规则，同步持久化定义、生成面板和摘要，原子保存并校验。保留 $N 占位及绑定；不支持改变量定义、来源固化美化或覆盖方案外修改。成功且 validation.valid=true 即完成，无需再转换或真实游玩验收。',
+    description:'仅修改现有绑定的文案和样式，直接保存目标卡；新增变量或已有进行中草稿时，统一使用 tavern_card_draft patch appearance 的 replacements，避免目标版本冲突。局部修改已有 MVU 副本的托管 HTML 美化。传读取时的 revision 和唯一原文替换片段；全部片段对应同一读取版本，不可重叠。自动保留字段、各开场初值和规则，同步持久化定义、生成面板和摘要，原子保存并校验。保留 $N 占位及绑定；不支持改变量定义、来源固化美化或覆盖方案外修改。成功且 validation.valid=true 即完成，无需再转换或真实游玩验收。',
     parameters:{path:{type:'string',required:true},revision:{type:'string',required:true},replacements:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{expected:{type:'string',required:true},value:{type:'string',required:true}}}}},
     output,isConcurrencySafe:()=>false,
     async execute(args,exec) { await requireWorkbench(exec); try { return {report:await conversion.updateAppearance(args)} } catch(error) { return failure(error) } }

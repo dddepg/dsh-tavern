@@ -546,3 +546,26 @@ test('已有卡增删变量复用草稿检查，所有开场同步且原文保�
  }
  assert.equal(card.description,'保留设定')
 })
+
+test('新增字段通过草稿局部 HTML 组件自动扩展捕获，成品仅在 commit 改变',async t=>{
+ const f=await fixture(t);await f.complete()
+ const first=await f.conversion.draft(f.commitArgs()),context={sessionId:'appearance-extension'}
+ const before=await f.resources.readText(first.targetPath)
+ await f.conversion.draft({action:'begin',path:first.targetPath},context)
+ await f.conversion.draft({action:'patch',section:'fields',values:{'/体力':100}},context)
+ for(const openingId of ['opening-0','opening-1'])await f.conversion.draft({action:'patch',section:'opening',openingId,inheritInitialState:true},context)
+ await assert.rejects(f.conversion.draft({action:'patch',section:'appearance',values:{replacements:[{expected:'</section>',value:'$10</section>'}]}},context),/不要手写新的/)
+ await assert.rejects(f.conversion.draft({action:'patch',section:'appearance',values:{html:{text:'bad'}}},context),/html 必须是字符串/)
+ await assert.rejects(f.conversion.draft({action:'patch',section:'appearance',values:{replacements:[{expected:'missing',value:''}]}},context),/恰好出现一次/)
+ const result=await f.conversion.draft({action:'patch',section:'appearance',values:{replacements:[{expected:'</section>',value:'<div>体力<mvu-field path="/体力"></mvu-field></div></section>'}]}},context)
+ assert.equal(result.missing.some(issue=>issue.section==='appearance'),false)
+ assert.equal(await f.resources.readText(first.targetPath),before)
+ await f.conversion.draft({action:'patch',section:'rules',values:{体力:'根据行动消耗体力'}},context)
+ await f.conversion.draft({action:'patch',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}},context)
+ const committed=await f.conversion.draft({action:'commit'},context)
+ assert.equal(committed.receipt.validation.valid,true)
+ const card=cardData(await f.resources.readCard(first.targetPath))
+ const appearance=card.extensions.dsh_mvu_conversion.appearance
+ assert.deepEqual(appearance.bindings.map(({capture,path})=>({capture,path})),[{capture:1,path:'/时间/时段'},{capture:2,path:'/地点/名称'},{capture:3,path:'/体力'}])
+ assert.equal((appearance.html.match(/体力/g)||[]).length,1)
+})

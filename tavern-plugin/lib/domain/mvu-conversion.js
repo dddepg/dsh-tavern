@@ -415,6 +415,9 @@ export function createMvuConversion({ resources }) {
       for (let i=1;i<edits.length;i++) if (edits[i].start<edits[i-1].end) throw Error('美化替换范围重叠，请合并修改')
       let updated = html
       for (const edit of edits.reverse()) updated = updated.slice(0,edit.start)+edit.value+updated.slice(edit.end)
+      const captures = text => [...text.matchAll(/\$(\d{1,2})(?!\d)/g)].map(match=>Number(match[1]))
+      const existingCaptures = new Set(captures(html))
+      if (captures(updated).some(capture=>!existingCaptures.has(capture)) || /<mvu-field\b/i.test(updated)) throw Error('此工具仅编辑已有绑定；新增字段请使用 tavern_card_draft patch section=appearance values.replacements，并插入 mvu-field 组件。已有草稿继续使用当前草稿，勿直接保存目标卡。')
       const definition = createDefinition(source,{...saved,fieldMappings:saved.mappings,appearance:{...saved.appearance,html:updated}})
       const frozenAppearance = freezeMvuAppearance(source.data,definition.appearance)
       for (const initialState of definition.openingStates) buildMvuArtifacts({...definition,initialState,frozenAppearance})
