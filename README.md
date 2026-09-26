@@ -146,7 +146,9 @@ npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)
 
 ### 皮肤与外观
 
-酒馆自带 [Dream Skin](https://github.com/RevolutionLA/dsh-dream-skin)（内置适配版本 9.23.0），无需另装。在 **设置 → Theme / 外观** 中选择「酒馆 · 暖陶土」浅色或深色，以及其他皮肤。酒馆按钮、面板、边框和正文强调色随当前主题切换。
+CLI、Desktop 和 Android 酒馆均自带 [Dream Skin](https://github.com/RevolutionLA/dsh-dream-skin)（内置适配版本 9.23.0），无需另装。在 **设置 → Theme / 外观** 中选择「酒馆 · 暖陶土」浅色或深色，以及其他皮肤。酒馆按钮、面板、边框和正文强调色随当前主题切换。
+
+旧版通过酒馆原有更新入口升级并重启后即可使用，无需重装 Desktop 或 APK。
 
 首次默认无背景图片；切换部分皮肤时会应用对应渐变，也可以自行设置或清空壁纸。已有皮肤、强调色和壁纸设置保留。
 

@@ -120,6 +120,18 @@ for (const host of ['desktop', 'android', 'cli']) {
       assert.deepEqual(mergeProfileManifest({ ...options, current: next }), next)
       const fresh = mergeProfileManifest(options)
       assert.deepEqual(fresh.dsh.profile.bundles.filter(name => names.includes(name)), selected ? [selected] : [])
+      for (const manifest of [next, fresh]) {
+        assert.equal(manifest.dependencies['dsh-dream-skin'], 'link:/app/tavern-plugin/packages/dsh-dream-skin')
+        assert.equal(manifest.dsh.profile.bundles.filter(name => name === 'dsh-dream-skin').length, 1)
+        assert.ok(manifest.dshTavern.managedDependencies.includes('dsh-dream-skin'))
+      }
+      const manualSkin = mergeProfileManifest({ ...options, current: {
+        ...current,
+        dependencies: { ...current.dependencies, 'dsh-dream-skin': '^9.23.0' },
+        dsh: { profile: { bundles: [...current.dsh.profile.bundles, 'dsh-dream-skin'] } },
+      } })
+      assert.equal(manualSkin.dependencies['dsh-dream-skin'], next.dependencies['dsh-dream-skin'])
+      assert.equal(manualSkin.dsh.profile.bundles.filter(name => name === 'dsh-dream-skin').length, 1)
     })
   }
 }
