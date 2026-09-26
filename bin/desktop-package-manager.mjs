@@ -73,13 +73,21 @@ export async function prepareDesktopPackageManager(options = {}) {
     ]
     for (let attempt = 1; !bytes && attempt <= 3; attempt++) {
       const url = urls[Math.min(attempt - 1, urls.length - 1)]
-      options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${url}`)
+      options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${new URL(url).hostname}`)
       try {
         const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        bytes = Buffer.from(await response.arrayBuffer())
+        const chunks=[]; let received=0,reportedAt=0
+        const total=Number(response.headers.get('content-length'))
+        const report=()=>options.onProgress?.(`下载更新运行环境（${new URL(url).hostname}）：已下载 ${(received/1048576).toFixed(1)}${total>0?' / '+(total/1048576).toFixed(1):''} MB`)
+        if(response.body)for await(const chunk of response.body){
+          chunks.push(chunk);received+=chunk.length
+          if(Date.now()-reportedAt>=500){report();reportedAt=Date.now()}
+        }
+        report();bytes=Buffer.concat(chunks)
         break
       } catch (cause) {
+        options.onProgress?.(`更新运行环境下载失败（${new URL(url).hostname}）：${cause.name==='TimeoutError'?'请求超过 120 秒未完成':cause.cause?.code||cause.message}；${attempt<3?'正在切换或重试下载源':'已停止，请检查网络后重试'}。`)
         if (attempt === 3) throw new Error(`Windows 更新运行环境下载失败（已尝试 3 次）：${url}`, { cause })
       }
     }
@@ -96,7 +104,7 @@ export async function prepareDesktopPackageManager(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const result = await prepareDesktopPackageManager({ onProgress: message => console.error(message) })
+    const result = await prepareDesktopPackageManager({ onProgress: message => console.error("DSH_STATUS " + message) })
     if (result) console.log(result.bin)
   } catch (error) { console.error(error); process.exitCode = 1 }
 }
