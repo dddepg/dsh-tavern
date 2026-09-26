@@ -1689,6 +1689,8 @@ window.__ModuleLoader__.load({
 
 		// @include modules/frame-viewport-height.js
 
+		// @include modules/sidebar-start.js
+
 		function buildTavernFrameDocument(input) {
 			const html = rewriteTavernStaticMarkup(String(input && (input.content !== undefined ? input.content : input.html) || ""));
 			const token = JSON.stringify(String(input && input.token || "")).replace(/</g, "\\u003c");
@@ -11038,6 +11040,7 @@ window.__ModuleLoader__.load({
 				const taskText = "【卡片任务：" + label + "】" + targetSection + "\n\n" + String(result && result.text || "").trim() + resourceSection;
 				input.setDraft(taskText + supplement);
 			}
+			registerTavernStartPage(ctx, slots);
 			playControlsFeature.register({ ctx: ctx, slots: slots });
 			assistantRendererFeature.register({ ctx: ctx, slots: slots });
 			// Native history paging owns loading; TavernWindowedNode bounds live bodies without shadowing its slots.

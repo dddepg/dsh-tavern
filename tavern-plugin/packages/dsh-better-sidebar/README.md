@@ -1,9 +1,7 @@
 # Bundled sidebar runtime
 
 Runtime files from `dsh-better-sidebar@0.19.1` (MIT), with the existing
-`patches/dsh-better-sidebar@0.19.1.patch` applied to the host entry and client. The client patch groups the Tavern start
-page by purpose and adds theme-aware icon cards; unknown registered entries remain
-available under Other.
+`patches/dsh-better-sidebar@0.19.1.patch` applied to the host entry.
 Upstream: https://github.com/omdsh-dev/DSH-better-sidebar
 
 The standard Tavern package mounts these prebuilt files by relative path.
