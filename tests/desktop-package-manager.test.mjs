@@ -19,15 +19,18 @@ test('Desktop uses its declared pnpm entry and retries failed downloads with the
  try {
   const entry = path.join(home, 'pnpm.mjs'); await writeFile(entry, '')
   let attempts = 0
+  const urls = []
   const progress = []
   const cause = new Error('connection reset')
   await assert.rejects(prepareDesktopPackageManager({
    host: 'desktop', platform: 'win32', arch: 'x64',
    env: { DSH_HOME: home, DSH_DESKTOP_PNPM_ENTRY: entry, DSH_DESKTOP_APP_EXECUTABLE: path.join(home, 'other-layout', 'Desktop.exe') },
-   fetch: async () => { attempts++; throw cause }, onProgress: text => progress.push(text),
+   fetch: async url => { urls.push(url); attempts++; throw cause }, onProgress: text => progress.push(text),
   }), error => error.cause === cause && /3/.test(error.message))
   assert.equal(attempts, 3)
   assert.equal(progress.length, 3)
+  assert.equal(new URL(urls[0]).hostname, 'nodejs.org')
+  assert.ok(urls.some(url => new URL(url).hostname === 'npmmirror.com'), 'official download failures must try the mirror')
  } finally { await rm(home, { recursive: true, force: true }) }
 })
 

@@ -53,9 +53,26 @@ export async function prepareDesktopPackageManager(options = {}) {
   let valid = false
   try { valid = digest(await readFile(node)) === hashes[arch] } catch {}
   if (!valid) {
-    const url = `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`
     let bytes
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const searchPath = Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] || ''
+    const localNodes = new Set([process.execPath, env.NODE,
+      ...searchPath.split(';').filter(Boolean).map(directory => path.join(directory.replace(/^"|"$/g, ''), 'node.exe')),
+    ].filter(Boolean))
+    for (const candidate of localNodes) {
+      try {
+        const localBytes = await readFile(candidate)
+        if (digest(localBytes) !== hashes[arch]) continue
+        bytes = localBytes
+        options.onProgress?.(`已校验并复用本机 Windows 更新运行环境：${candidate}`)
+        break
+      } catch {}
+    }
+    const urls = [
+      `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
+      `https://npmmirror.com/mirrors/node/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
+    ]
+    for (let attempt = 1; !bytes && attempt <= 3; attempt++) {
+      const url = urls[Math.min(attempt - 1, urls.length - 1)]
       options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${url}`)
       try {
         const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
