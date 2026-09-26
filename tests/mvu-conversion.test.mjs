@@ -501,3 +501,26 @@ test('资源库删除 MVU 副本后可用同名重新转换',async t=>{
   assert.equal(second.path,first.path)
   assert.equal(second.validation.valid,true)
 })
+
+test('删除副本后检查不再显示目标，旧目标读取明确提示不存在，并可重新转换', async t => {
+  const f = await fixture(t)
+  const result = await f.apply()
+  const before = await f.inspect()
+  await f.resources.remove(result.path)
+  const after = await f.inspect()
+  assert.equal(after.target, null)
+  assert.equal(after.targetRevision, null)
+  assert.equal(after.destination.workingExists, false)
+  assert.equal(after.destination.originalExists, false)
+  for (const [scope, targetRevision] of [['target', before.targetRevision], ['plan', before.targetRevision], ['plan', undefined]]) {
+    await assert.rejects(f.conversion.convert({action:'read',sourcePath:f.sourcePath,sourceRevision:after.sourceRevision,targetRevision,scope,path:''}), error => {
+      assert.match(error.message, /目标副本不存在/)
+      assert.equal(error.code, 'MVU_TARGET_MISSING')
+      assert.equal(error.details.targetPath, result.path)
+      return true
+    })
+  }
+  const recreated = await f.apply()
+  assert.equal(recreated.path, result.path)
+  assert.equal(recreated.validation.valid, true)
+})

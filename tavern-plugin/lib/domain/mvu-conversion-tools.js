@@ -20,7 +20,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       action: { type: 'string', required: true, enum: ['inspect', 'read', 'search', 'freezeAppearance', 'saveDefinition', 'preflight', 'preview', 'apply'] },
       sourcePath: { type: 'string', required: true, description: '原卡 cards/... 路径；始终保留原卡' },
       detail: { type: 'string', enum: ['reading','summary','full'], description: 'inspect 默认 reading 一次返回有预算的原文；summary 仅目录，full 为完整原卡及副本' },
-      scope: { type: 'string', enum: ['source','target','plan','definition','preservedWorldbook'], description: 'read/search 默认 source；definition 需 definitionRevision；target/plan 还需 targetRevision，路径均相对于该对象' },
+      scope: { type: 'string', enum: ['source','target','plan','definition','preservedWorldbook'], description: 'read/search 默认 source；definition 需 definitionRevision；target/plan 仅在 inspect.target 非 null 时可读，并需 targetRevision；plan 还需 target.hasSavedPlan=true。targetPath 只是拟保存位置，不代表已存在。路径均相对于该对象' },
       path: { type: 'string', description: 'read/search 的 JSON Pointer；空串为根目录，read 对象返回子目录，字符串分页返回 text' },
       paths: { type:'array', items:{type:'string'}, description:'read 可批量读取 1–20 个字段，省去逐项往返；总原文预算 12000 字符' },
       query: { type: 'string', description: 'search 必填：原文片段，非正则，最多 1000 字符' },

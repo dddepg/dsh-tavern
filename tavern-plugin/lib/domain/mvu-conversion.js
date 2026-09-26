@@ -153,7 +153,7 @@ export function createMvuConversion({ resources }) {
       stateInventory: stateInventory(source.data,args.sourceFields),
       appearanceSources: appearanceSources(source.data),
       capabilities: { customAppearance:true, appearanceMode:"frozen-source-captures", sharedInitialState:false, savedDefinition:true, openingCount:1+(source.data.alternate_greetings?.length || 0), preservedInactiveWorldbook:!!source.preservedBook },
-      instruction: 'reading 已含原文，只续读未完整展示的必要字段，可用 paths 批量读取。source/target 均是规范化生效字段，不检查磁盘包装镜像。用 read/search 按 sourceRevision 读取来源字段；scope=plan 可读已保存方案。apply 默认合并方案：省略的定义及已有清理保留，新清理追加并去重；cleanupResetPaths 先清除指定路径的旧操作。planMode=replace 才整份替换。preview 不落盘。' }
+      instruction: (existing === undefined ? '目标副本不存在；targetPath 只是计划保存位置，不表示文件存在。不要读取 scope=target/plan，按新建副本处理，不提供旧 targetRevision。' : '') + 'reading 已含原文，只续读未完整展示的必要字段，可用 paths 批量读取。source/target 均是规范化生效字段，不检查磁盘包装镜像。用 read/search 按 sourceRevision 读取来源字段；scope=plan 可读已保存方案。apply 默认合并方案：省略的定义及已有清理保留，新清理追加并去重；cleanupResetPaths 先清除指定路径的旧操作。planMode=replace 才整份替换。preview 不落盘。' }
   }
   async function read(args) {
     const source = await snapshot(args.sourcePath)
@@ -165,7 +165,11 @@ export function createMvuConversion({ resources }) {
     } else if (args.scope === 'preservedWorldbook') value = source.preservedBook ?? null
     else if (args.scope === 'target' || args.scope === 'plan') {
       const target = targetFor(source, args.name), text = await resources.readText(target.path)
-      if (text === undefined || !args.targetRevision || digest(text) !== args.targetRevision) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
+      if (text === undefined) throw cleanupError('MVU_TARGET_MISSING', '目标副本不存在，可能已删除或改名；请重新 inspect 确认目标，不要继续读取旧副本或沿用旧 targetRevision', {
+        targetPath: target.path, targetExists: false,
+        recovery: '重新 inspect；若 target 为 null，按新建副本转换，不提供旧 targetRevision。需要读取原卡时使用 scope=source。'
+      })
+      if (!args.targetRevision || digest(text) !== args.targetRevision) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
       const data = cardData(JSON.parse(text))
       const meta = data.extensions?.[MVU_CONVERSION_KEY]
       value = args.scope === 'target' ? data : meta ? Object.fromEntries(['initialState','openingStates','definition','definitionRevision','updateRules','displayFields','cleanup','appearance'].filter(key=>Object.hasOwn(meta,key)).map(key=>[key,meta[key]])) : null
