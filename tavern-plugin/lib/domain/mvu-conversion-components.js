@@ -21,7 +21,7 @@ export function compileMvuComponents(plan, states) {
       const fields=plan.fields.concat(known.filter(field=>!plan.fields.some(selected=>selected.path===field.path||field.path.startsWith(selected.path+'/'))))
       for(const field of fields){
         const node=doc.createElement('mvu-field')
-        node.setAttribute('path',field.path);node.setAttribute('display',field.display||'text');node.setAttribute('label',field.label||field.path)
+        node.setAttribute('path',field.path);node.setAttribute('display',field.display||'text');node.setAttribute('label',field.label ?? field.path.split('/').at(-1).replace(/~1/g,'/').replace(/~0/g,'~'))
         doc.querySelector('section').append(node)
       }
     }
@@ -35,10 +35,13 @@ export function compileMvuComponents(plan, states) {
       if(!keys.length||keys.some(key=>['__proto__','prototype','constructor'].includes(key)))throw Error('组件需要有效的根 JSON Pointer')
       for(const state of states){let value=state;for(const key of keys){if(value==null||!Object.hasOwn(value,key))throw Error('组件字段不存在: '+path);value=value[key]}if(display==='list'&&!Array.isArray(value))throw Error('list 组件要求数组字段: '+path)}
       const capture=bindings.length+1;bindings.push({capture,path,...(display==='list'?{display}:{})})
-      const row=doc.createElement('div'),label=doc.createElement('strong');label.textContent=node.getAttribute('label')||path;row.append(label)
       const value=doc.createElement(display==='list'?'ul':'span')
       if(display==='list'){const item=doc.createElement('li');item.textContent='$'+capture;value.append(item)}else value.textContent='$'+capture
-      row.append(value);node.replaceWith(row)
+      const caption=node.getAttribute('label')
+      if (caption) {
+        const row=doc.createElement('div'),label=doc.createElement('strong')
+        label.textContent=caption;row.append(label,value);node.replaceWith(row)
+      } else node.replaceWith(value)
     }
     return {html:doc.documentElement.outerHTML,bindings}
   } finally {dom.window.close()}

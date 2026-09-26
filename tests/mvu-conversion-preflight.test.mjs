@@ -60,3 +60,17 @@ test('命名组件可保留自定义布局，缺失字段仍明确报告，不�
  const good=await tool.execute({...f.args,html:'<section class="custom"><mvu-field path="/日志" display="list"></mvu-field><mvu-field path="/位置"></mvu-field><mvu-field path="/状态"></mvu-field></section>'},{})
  assert.ok(good.report.definitionRevision,JSON.stringify(good))
 })
+
+test('自定义布局已有字段名时，组件仅显示值，不泄漏路径或重复标签', async t => {
+ const f=await fixture(t)
+ const {report}=await f.registered.get('tavern_design_mvu_appearance').execute({...f.args,initialState:{时间:{日期:'初秋 平日'}},html:'<div class="row"><span>日期</span><mvu-field path="/时间/日期"></mvu-field></div>'},{})
+ assert.ok(report.definitionRevision,JSON.stringify(report))
+ const saved=await f.resources.readMvuDefinition(report.definitionRevision)
+ const {JSDOM}=await import('jsdom')
+ const dom=new JSDOM(saved.appearance.html)
+ try {
+   assert.equal(dom.window.document.querySelector('.row').textContent,'日期$1')
+   assert.equal(dom.window.document.querySelector('.row').lastElementChild.tagName,'SPAN')
+   assert.deepEqual(saved.appearance.bindings,[{capture:1,path:'/时间/日期'}])
+ } finally {dom.window.close()}
+})

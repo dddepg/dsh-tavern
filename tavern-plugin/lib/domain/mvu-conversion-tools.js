@@ -86,7 +86,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       sourcePath:{type:'string',required:true},sourceRevision:{type:'string',required:true},
       initialState:{type:'json',required:true},openingStates:{type:'json'},updateRules:{type:'string',required:true},
       fields:{type:'array',description:'推荐：字段组件，工具自动编号并补齐遗漏业务字段。可传空数组自动生成全部字段；与 html 二选一。',items:{type:'object',additionalProperties:false,properties:{path:{type:'string',required:true},label:{type:'string'},display:{type:'string',enum:['text','list']}}}},
-      html:{type:'string',description:'与人物卡风格相符的 HTML/CSS，推荐用 mvu-field 的 path 指定完整根路径，display=list 展示数组；此时省略 bindings 和 collectionPath。旧式动态值放在文本节点的 $1、$2 等占位中；使用原生 details 折叠。HTML 不支持 {{user}}/{{char}}、EJS、动态属性；标签写“玩家”等静态文字。'},
+      html:{type:'string',description:'与人物卡风格相符的 HTML/CSS，推荐用 mvu-field 的 path 指定完整根路径，display=list 展示数组；组件默认只显示值，显式 label 才附带标签，外层已有字段名时省略 label；此时省略 bindings 和 collectionPath。旧式动态值放在文本节点的 $1、$2 等占位中；使用原生 details 折叠。HTML 不支持 {{user}}/{{char}}、EJS、动态属性；标签写“玩家”等静态文字。'},
       collectionPath:{type:'string',description:'指定后全部 bindings 相对于每个成员，不支持混入集合外全局字段。需要同时显示全局字段时省略本参数，使用完整根路径；不要删除字段来适应模式。'},
       bindings:{type:'array',items:{type:'object',additionalProperties:false,properties:{capture:{type:'number',required:true},path:{type:'string',required:true}}}},
       sourceFields:{type:'array',items:{type:'object',additionalProperties:false,properties:{path:{type:'string',required:true},offset:{type:'number',required:true},length:{type:'number',required:true},label:{type:'string'}}}},
