@@ -4742,7 +4742,7 @@ window.__ModuleLoader__.load({
 			let listener = null;
 			let lifetime = 0;
 			let synchronizationKey = "";
-			let lastFontSize = null;
+			let lastFontSize = null, lastTextAccent = null;
 			let documentInputs = null;
 			let cachedDocumentKey = "";
 			let desired = createDocument();
@@ -4826,24 +4826,19 @@ window.__ModuleLoader__.load({
 				const channel = document && channels.get(document.token);
 				if (channel) channel.sync(helperContext, props.turn, mode);
 			}
-			function sendTextColors(document) {
-                channels.forEach(function (channel, token) {
-                    if (document && token !== document.token) return;
-                    const node = channel.element();
-                    if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-text-colors", token: token, enabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: tavernTextColorOverrides(hostWindow) }, "*");
-                });
-            }
 			function sendFontSize(document) {
 				const body = hostWindow.document && hostWindow.document.body;
 				if (!body || typeof hostWindow.getComputedStyle !== "function") return;
 				const value = parseFloat(hostWindow.getComputedStyle(body).getPropertyValue("--dsh-content-font-size"));
 				const fontSize = props.followContentFont !== false && Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
-				if (!document && fontSize === lastFontSize) return;
+				const textColorOverrides = tavernTextColorOverrides(hostWindow);
+                if (!document && fontSize === lastFontSize && textColorOverrides.quote === lastTextAccent) return;
+                lastTextAccent = textColorOverrides.quote;
 				lastFontSize = fontSize;
 				channels.forEach(function (channel, token) {
 					if (document && token !== document.token) return;
 					const node = channel.element();
-					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-font-size", token: token, fontSize: fontSize, textColorsEnabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: tavernTextColorOverrides(hostWindow) }, "*");
+					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-font-size", token: token, fontSize: fontSize, textColorsEnabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: textColorOverrides }, "*");
 				});
 			}
 			function reconcile() {
@@ -5041,13 +5036,12 @@ window.__ModuleLoader__.load({
                             return executeSlash("/send " + text + "|/trigger", props.sessionId);
                         }, function (error) { tavernErrorHub.report("开始旅程", error); }) : function () {};
 
-                    const colorsChanged = function () { sendTextColors(); };
-                    hostWindow.addEventListener("dsh-tavern-text-colors-changed", colorsChanged);
-                    hostWindow.addEventListener("storage", colorsChanged);
 					let fontObserver = null;
 					if (hostWindow.document && typeof hostWindow.MutationObserver === "function") {
 						fontObserver = new hostWindow.MutationObserver(function () { sendFontSize(); });
-						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { fontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class"] }); });
+                        // Theme token overrides are emitted as stylesheets, not only root attributes.
+                        fontObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
+						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { fontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
 					}
 					return function () {
                         touchRelay.stop();
@@ -5064,8 +5058,6 @@ window.__ModuleLoader__.load({
                         frameSizeObservers.clear();
                         frameVisibility.forEach(stop => stop());
                         frameVisibility.clear();
-                        hostWindow.removeEventListener("dsh-tavern-text-colors-changed", colorsChanged);
-                        hostWindow.removeEventListener("storage", colorsChanged);
 						listener = null; lifetime++;
 						hostWindow.removeEventListener("message", receive);
 						cancelRuntimeReport();
@@ -7421,7 +7413,6 @@ window.__ModuleLoader__.load({
                 React.createElement(TavernConversationWritingSkills, { globalDefaults: true }),
                 React.createElement(CandidatePreferencesSettings),
                 React.createElement(PromptTemplateSettingsEntry),
-                React.createElement(TavernTextColorSettings),
                 React.createElement(ContextCompactionSettings),
 				state.sceneImages ? React.createElement(SceneImageSettings, null) : null,
 				state.error ? React.createElement("div", { className: "dsh-tavern-settings-error", role: "alert" }, "保存失败：" + state.error) : null
@@ -11023,7 +11014,6 @@ window.__ModuleLoader__.load({
 		exports.findTavernQuoteRanges = findTavernQuoteRanges;
         exports.installTavernTextColors = installTavernTextColors;
         exports.TavernColoredMarkdown = TavernColoredMarkdown;
-        exports.TavernTextColorSettings = TavernTextColorSettings;
         exports.apply = apply;
 		exports.createTurnHistoryProjection = createTurnHistoryProjection;
 		exports.createTurnErrorControls = createTurnErrorControls;

@@ -8,15 +8,15 @@ function installTavernTextColors(root, options, findQuotes) {
     const doc = root.ownerDocument, win = doc.defaultView;
     if (!win.CSS || !win.CSS.highlights || typeof win.Highlight !== 'function') return { setEnabled() {}, setColors() {}, dispose() {} };
     const prefix = 'dsh-tavern-text-' + Math.random().toString(36).slice(2);
-    // Claude 陶土色系：浅底用加深 terracotta，深底用暖杏；斜体用偏冷灰紫作对比。
-    const colors = { 'quote-light': '#a9583e', 'quote-dark': '#e8a882', 'em-light': '#6b5b7a', 'em-dark': '#c4b5d4' };
+    const colors = { 'quote-light': true, 'quote-dark': true, 'em-light': true, 'em-dark': true };
     const highlights = new Map();
     const style = doc.createElement('style');
     style.setAttribute('data-dsh-tavern-text-colors', '');
     function setColors(overrides) {
         style.textContent = Object.entries(colors).map(([kind, fallback]) => {
             const value = overrides && overrides[kind.startsWith('quote') ? 'quote' : 'em'];
-            const color = typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+            const color = typeof value === 'string' && win.CSS.supports('color', value) && !/[;{}]/.test(value)
+                ? value : 'var(--dsw-alias-brand-primary, currentColor)';
             return '::highlight(' + prefix + '-' + kind + '){color:' + color + '}';
         }).join('\n');
     }
@@ -119,64 +119,22 @@ function installTavernTextColors(root, options, findQuotes) {
     };
 }
 
-function tavernTextColorsEnabled(host) {
-    try { return host.localStorage.getItem('dsh-tavern-text-colors') !== 'off'; } catch (_) { return true; }
-}
-function setTavernTextColorsEnabled(enabled) {
-    try { window.localStorage.setItem('dsh-tavern-text-colors', enabled ? 'on' : 'off'); } catch (_) {}
-    window.dispatchEvent(new CustomEvent('dsh-tavern-text-colors-changed', { detail: enabled }));
-}
+// Display colors belong to the host theme; legacy per-browser overrides are ignored.
+function tavernTextColorsEnabled() { return true; }
 function tavernTextColorOverrides(host) {
-    try {
-        const value = JSON.parse(host.localStorage.getItem('dsh-tavern-text-color-overrides') || '{}');
-        const result = {};
-        for (const key of ['quote', 'em']) if (value && typeof value[key] === 'string' && /^#[0-9a-f]{6}$/i.test(value[key])) result[key] = value[key];
-        return result;
-    } catch (_) { return {}; }
-}
-function setTavernTextColorOverrides(colors) {
-    try { window.localStorage.setItem('dsh-tavern-text-color-overrides', JSON.stringify(colors)); } catch (_) {}
-    window.dispatchEvent(new CustomEvent('dsh-tavern-text-colors-changed'));
+    const doc = host.document;
+    const probe = doc.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;color:var(--dsw-alias-brand-primary, currentColor)';
+    doc.body.appendChild(probe);
+    const accent = host.getComputedStyle(probe).color;
+    probe.remove();
+    return { quote: accent, em: accent };
 }
 function TavernColoredMarkdown(props) {
     const root = React.useRef(null);
     React.useEffect(function () {
-        const colors = installTavernTextColors(root.current, { enabled: tavernTextColorsEnabled(window), colors: tavernTextColorOverrides(window) }, findTavernQuoteRanges);
-        const changed = () => { colors.setColors(tavernTextColorOverrides(window)); colors.setEnabled(tavernTextColorsEnabled(window)); };
-        window.addEventListener('dsh-tavern-text-colors-changed', changed);
-        window.addEventListener('storage', changed);
-        return function () { window.removeEventListener('dsh-tavern-text-colors-changed', changed); window.removeEventListener('storage', changed); colors.dispose(); };
+        const colors = installTavernTextColors(root.current, {}, findTavernQuoteRanges);
+        return () => colors.dispose();
     }, []);
     return React.createElement('div', { ref: root, className: 'dsh-tavern-colored-markdown' }, React.createElement(DshUi.MarkdownText, props));
-}
-function TavernTextColorSettings() {
-    const [enabled, setEnabled] = React.useState(() => tavernTextColorsEnabled(window));
-    const [overrides, setOverrides] = React.useState(() => tavernTextColorOverrides(window));
-    React.useEffect(function () {
-        const changed = () => { setEnabled(tavernTextColorsEnabled(window)); setOverrides(tavernTextColorOverrides(window)); };
-        window.addEventListener('dsh-tavern-text-colors-changed', changed);
-        window.addEventListener('storage', changed);
-        return function () { window.removeEventListener('dsh-tavern-text-colors-changed', changed); window.removeEventListener('storage', changed); };
-    }, []);
-    const h = React.createElement;
-    return h('div', { className: 'dsh-tavern-settings-group dsh-tavern-text-color-settings' },
-        h('label', { className: 'dsh-tavern-settings-row dsh-tavern-text-color-head' },
-            h('span', { className: 'dsh-tavern-settings-copy' },
-                h('span', { className: 'dsh-tavern-settings-title' }, '正文分色'),
-                h('span', { className: 'dsh-tavern-settings-desc' }, '为引号内对白和斜体文字分别选色，普通文字保持原色。保留人物卡已有配色；仅影响当前浏览器显示。')),
-            h('span', { className: 'dsh-tavern-settings-switch' },
-                h('input', { type: 'checkbox', checked: enabled, 'aria-label': '启用正文分色', onChange: event => { setEnabled(event.target.checked); setTavernTextColorsEnabled(event.target.checked); } }),
-                h('span', { className: 'dsh-tavern-settings-track', 'aria-hidden': true }))),
-        h('div', { className: 'dsh-tavern-text-color-swatches' + (enabled ? '' : ' is-disabled') },
-            ...[['quote', '对白颜色', '#e8a882'], ['em', '斜体颜色', '#c4b5d4']].map(([key, label, fallback]) =>
-                h('label', { key, className: 'dsh-tavern-text-color-swatch' },
-                    h('span', { className: 'dsh-tavern-settings-copy' },
-                        h('span', { className: 'dsh-tavern-settings-title' }, label),
-                        h('span', { className: 'dsh-tavern-settings-desc' }, overrides[key] ? overrides[key].toUpperCase() : '默认：自动适配深浅背景')),
-                    h('span', { className: 'dsh-tavern-text-color-chip', style: { '--swatch': overrides[key] || fallback } },
-                        h('input', { type: 'color', 'aria-label': label, value: overrides[key] || fallback, disabled: !enabled,
-                            onChange: event => { const next = { ...overrides, [key]: event.target.value }; setOverrides(next); setTavernTextColorOverrides(next); } }))))),
-        h('div', { className: 'dsh-tavern-text-color-foot' },
-            h('button', { type: 'button', className: 'dsh-tavern-btn', disabled: !Object.keys(overrides).length,
-                onClick: () => { setOverrides({}); setTavernTextColorOverrides({}); } }, '恢复默认配色')));
 }
