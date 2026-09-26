@@ -15,7 +15,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }
   tools.register(defineTool({
     name:'tavern_card_draft',
-    description:'MVU 转换的持久草稿工具。begin 锁定原卡与目标版本；patch 按字段组、规则组、开场、美化或清理增量保存，省略部分保留；read 查看进度或分页读取草稿；validate 检查完整性；commit 统一生成并原子保存成品。仅支持 MVU 转换，不用于普通卡字段编辑。多开场需逐个填写或明确 inheritInitialState，不会默默共用初值。所有写入带稳定 requestId，重试使用完全相同参数。保存草稿不等于成品提交；phase=committing 表示已保存提交意图，应原样重试 commit。',
+    description:'MVU 转换的持久草稿工具。begin 锁定原卡与目标版本；patch 按字段组、规则组、开场、美化或清理增量保存，省略部分保留；read 查看进度或分页读取草稿；validate 检查完整性；commit 统一生成并原子保存成品。仅支持 MVU 转换，不用于普通卡字段编辑。fields 声明唯一字段目录；opening 仅填写目录中的同类型值，未知路径立即拒绝。inheritInitialState 仅补缺失字段。move/remove 明确迁移或删除字段，validate 汇总问题与清理建议。所有写入带稳定 requestId，重试使用完全相同参数。保存草稿不等于成品提交；phase=committing 表示已保存提交意图，应原样重试 commit。',
     parameters:{
       action:{type:'string',required:true,enum:['begin','read','patch','validate','commit']},
       sourcePath:{type:'string',description:'begin 的原卡路径，已有 MVU 副本仍以原卡为来源'},
@@ -27,9 +27,11 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       section:{type:'string',enum:['fields','opening','rules','appearance','mapping','cleanup','requirements','review']},
       values:{type:'json',description:'fields/opening：JSON Pointer 到值的对象，如 {"/时间":{"时段":"白天"}}；rules：分组名到规则文本，空文本删除该组；appearance：完整 HTML/fields 或 sourcePath/bindings 方案；mapping：sourceFields/fieldMappings 数组；cleanup：完整清理数组；requirements：appearanceRequirement/basicReason，仅明确改变美化要求时使用；review：sourceCoverage/cleanup/appearance 布尔确认。未提交的分组保留'},
       openingId:{type:'string',description:'opening-0 对应 first_mes，后续按 alternate_greetings 顺序；以工具返回 ID 为准'},
-      inheritInitialState:{type:'boolean',description:'opening 可明确复制当前字段底稿再应用 values；只影响当前开场'},
+      inheritInitialState:{type:'boolean',description:'opening 显式从底稿仅补缺失字段，保留已有开场值，再应用 values；新增字段也可用此操作同步'},
+      operation:{type:'string',enum:['set','merge','replace','move','remove'],description:'fields/opening 默认 set：替换所选路径的值；merge：递归合并对象，null 是值；replace 同 set。fields 专用 move/remove：传 path（move 另传 toPath），同步各开场与结构化绑定；删除仍有引用的字段会拦截'},
+      toPath:{type:'string',description:'fields move 的目标 JSON Pointer；有值冲突时拒绝覆盖'},
       cleanupOrphanEntrances:{type:'boolean',description:'patch cleanup 时可启用安全孤立入口清理'},
-      path:{type:'string',description:'read 的草稿 JSON Pointer，如 /definition/initialState、/definition/appearance/html、/rules'},
+      path:{type:'string',description:'read 的草稿 JSON Pointer，如 /fieldSchema、/definition/initialState；或 patch fields move/remove 的状态字段路径'},
       offset:{type:'number'},limit:{type:'number'}
     },
     output,isConcurrencySafe:()=>false,
@@ -92,7 +94,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
           display:{type:'string',enum:['text','list'],description:'list 仅用于独立 ul/ol 内单个 li 文本占位；推荐让字段组件自动生成。'}
         }}}
       } },
-      cleanupOrphanEntrances:{type:'boolean',description:'apply/preview 可选：只自动删除预检认定的独立末尾旧入口；有效初值/渲染逻辑不动。'},
+      cleanupOrphanEntrances:{type:'boolean',description:'preflight/apply/preview 可选：只自动删除预检认定的独立末尾旧入口；有效初值/渲染逻辑不动。'},
       cleanup: { type: 'array', description: '相对于 source 底稿的小改动；版本号校验整个底稿。整项删除只传路径，短改文只传片段，长区块只传首尾标记；同字段支持多处不重叠编辑。无需回传原卡。', items: { type: 'object', additionalProperties: false, properties: {
         op: { type: 'string', required: true, enum: ['replaceText', 'replaceBlock', 'replace', 'remove'] },
         path: { type: 'string', required: true, description: '如 /description 或 /character_book/entries/0；数组下标按 inspect 底稿' },

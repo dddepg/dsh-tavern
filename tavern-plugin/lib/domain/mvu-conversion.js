@@ -1,7 +1,8 @@
+import {DRAFT_FIELD_CHANGES,fieldPaths} from './mvu-draft-fields.js'
 import {createMvuDrafts} from './mvu-drafts.js'
-import {inspectMvuEntrances,preflightMvuConversion} from './mvu-conversion-preflight.js'
+import {inspectMvuEntrances,preflightMvuConversion,resolveMvuCleanup} from './mvu-conversion-preflight.js'
 import { mvuStructureGuide, mvuDeliveryGuide } from './mvu-conversion-guidance.js'
-import { stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
+import { atPath, stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
 import { appearanceSources, freezeMvuAppearance } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -213,8 +214,15 @@ export function createMvuConversion({ resources }) {
       if (!definition || definitionDigest(definition) !== definitionRevision) throw Error('已保存定义不存在或被修改，请重新 saveDefinition')
       if (definition.sourcePath !== source.sourcePath || definition.sourceRevision !== source.revision) throw Error('已保存定义的来源已变化，请重新 saveDefinition')
       if (metadata?.definition && metadata.sourceRevision === source.revision) {
-        for (const [index,fields] of metadata.definition.fields.entries()) for (const field of fields) {
-          if (!definition.fields[index]?.some(next=>next.path===field.path)) throw Error('新定义不能减少已保存字段: '+field.path)
+        for (const [index,fields] of metadata.definition.fields.entries()) {
+          // Arrays are declared fields; their length is an opening value, not a
+          // set of permanently required index paths.
+          const arrays=fieldPaths(metadata.openingStates[index]).filter(field=>field.type==='array'&&definition.openingStates[index]&&(()=>{try{return Array.isArray(atPath(definition.openingStates[index],field.path))}catch{return false}})())
+          for (const field of fields) {
+            const arrayValue=arrays.some(array=>field.path===array.path||field.path.startsWith(array.path+'/'))
+            const explicitChange=input[DRAFT_FIELD_CHANGES]?.some(change=>field.path===change.path||field.path.startsWith(change.path+'/'))
+            if (!definition.fields[index]?.some(next=>next.path===field.path) && !arrayValue && !explicitChange) throw Error('新定义不能减少已保存字段: '+field.path)
+          }
         }
       }
       for (const key of definitionKeys) {
@@ -225,12 +233,7 @@ export function createMvuConversion({ resources }) {
     const skins = appearanceSources(source.data)
     if (!args.appearance && skins.some(skin => skin.enabled)) throw Error('必须先固化原有美化并提供 appearance 映射，不能降级为默认面板')
     const frozenAppearance = args.appearance ? freezeMvuAppearance(source.data,args.appearance) : undefined
-    if (args.cleanupOrphanEntrances) {
-      const cleaned=applyMvuCleanup(clone(source.data),args.cleanup)
-      const {suggestedCleanup}=inspectMvuEntrances(cleaned)
-      // Keep cleanup anchors tied to the original, version-checked source.
-      args.cleanup=[...(args.cleanup||[]),...suggestedCleanup.filter(edit=>!args.cleanup?.some(old=>old.path===edit.path))]
-    }
+    if (args.cleanupOrphanEntrances) args.cleanup=resolveMvuCleanup(source.data,args,applyMvuCleanup).effectiveCleanup
     const requestHash = digest({ sourceRevision:source.revision,name:target.name,definitionRevision,appearance:args.appearance,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
     if (existingText !== undefined) {
       if (metadata.requestHash === requestHash && metadata.outputDigest === outputDigest(existing)) {

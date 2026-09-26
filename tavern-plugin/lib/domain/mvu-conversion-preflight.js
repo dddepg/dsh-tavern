@@ -18,8 +18,17 @@ export function inspectMvuEntrances(data) {
   }
   return {issues,suggestedCleanup}
 }
+export function resolveMvuCleanup(data,args,applyCleanup) {
+  const cleanup=args.cleanup||[]
+  const cleaned=applyCleanup(structuredClone(data),cleanup)
+  const suggestedCleanup=args.cleanupOrphanEntrances?inspectMvuEntrances(cleaned).suggestedCleanup:[]
+  const effectiveCleanup=[...cleanup,...suggestedCleanup]
+  // All anchors still refer to the same original source. Ambiguous or overlapping
+  // edits must be corrected explicitly, never silently exempted from validation.
+  return {effectiveCleanup,suggestedCleanup,cleaned:applyCleanup(structuredClone(data),effectiveCleanup)}
+}
 export function preflightMvuConversion(source,args,applyCleanup) {
-  const checks=[],issues=[];let states,definition,appearance,cleaned
+  const checks=[],issues=[];let states,definition,appearance,resolved
   function check(name,run){try{const value=run();checks.push({name,status:'passed'});return value}catch(error){checks.push({name,status:'failed'});issues.push({check:name,code:error.code||'MVU_PREFLIGHT_INVALID',message:error.message,...error.details})}}
   states=check('openingStates',()=>normalizeOpeningStates(args.openingStates,args.initialState,1+(source.data.alternate_greetings?.length||0)))
   appearance=check('appearance',()=>{
@@ -29,10 +38,10 @@ export function preflightMvuConversion(source,args,applyCleanup) {
   })
   if(states)definition=check('definition',()=>createDefinition(source,{...args,openingStates:states,...(appearance?{appearance}:{})}))
   if(definition)check('artifacts',()=>{const frozenAppearance=definition.appearance?freezeMvuAppearance(source.data,definition.appearance):undefined;for(const initialState of definition.openingStates)buildMvuArtifacts({...definition,initialState,frozenAppearance})})
-  cleaned=check('cleanup',()=>applyCleanup(structuredClone(source.data),args.cleanup))
-  const entrances=inspectMvuEntrances(cleaned||source.data)
+  resolved=check('cleanup',()=>resolveMvuCleanup(source.data,args,applyCleanup))
+  const entrances=inspectMvuEntrances(resolved?.cleaned||source.data)
   issues.push(...entrances.issues)
-  return {ok:issues.length===0,sourceRevision:source.revision,checks,issues,suggestedCleanup:entrances.suggestedCleanup,
+  return {ok:issues.length===0,sourceRevision:source.revision,checks,issues,suggestedCleanup:resolved?.suggestedCleanup.length?resolved.suggestedCleanup:entrances.suggestedCleanup,...(resolved?{effectiveCleanup:resolved.effectiveCleanup}:{}),
     ...(states?{openingStates:states}:{}),fieldComponents:componentFields(args.initialState),
     ...(appearance?{appearance}:{}),saved:false,limitations:['官方 MVU 初始化','后台真实结算','浏览器布局与会话切换'],
     instruction:'此检查不写文件、不代表运行实测。修正 issues 后保存定义；已有有效 MVU 入口不能自动清理。'}

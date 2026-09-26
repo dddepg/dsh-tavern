@@ -2,6 +2,7 @@ import { compileMvuComponents } from './mvu-conversion-components.js'
 import { appearanceCoverageError, conversionInputError } from './mvu-conversion-guidance.js'
 import { appearanceSources } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
+import {fieldPaths} from './mvu-draft-fields.js'
 import { isDeepStrictEqual } from 'node:util'
 import { pointerKeys, isObject } from './mvu-conversion-artifacts.js'
 
@@ -64,7 +65,7 @@ export function createDefinition(source,args) {
   args={...args,appearance:compileMvuComponents(args.appearance,states)}
   // Every declared field exists in every opening. Unknown values belong in the
   // definition explicitly, rather than borrowing another opening's facts.
-  const declared=leaves(args.initialState)
+  const declared=fieldPaths(args.initialState)
   for (const state of states) for(const field of declared) atPath(state,field.path)
   const occupied=new Set()
   for (const item of inventory) {

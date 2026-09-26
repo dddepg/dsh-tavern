@@ -1,6 +1,6 @@
 ---
 name: card-to-mvu
-description: "把人物卡转换为独立 MVU 副本，或调整转换后的变量定义与各开场初值。通过持久草稿分组填写、逐开场保存、保留美化，最后统一校验提交；模型负责理解原卡、设计状态语义和精确清理。"
+description: "把人物卡转换为独立 MVU 副本，或调整转换后的变量定义与各开场初值。通过唯一字段目录、逐开场填值与持久草稿保留美化，最后统一校验提交；模型负责理解原卡、设计状态语义和精确清理。"
 ---
 
 # 人物卡转 MVU
@@ -17,16 +17,18 @@ description: "把人物卡转换为独立 MVU 副本，或调整转换后的变�
 
 覆盖 description、personality、scenario、系统提示、所有开场、mes_example、世界书、正则和 Helper 脚本。找出状态生成、状态展示和候选项生成的位置。稳定事实沿用原卡，变化依据来自原文；未知值明确留空，不编造数值或拿另一个开场的场景补齐。
 
-## 2. 分组保存定义与各开场
+## 2. 声明字段目录，再逐开场填值
 
-使用 `patch`，每次携带最新 `draftRevision` 和新的 `requestId`，按人物或字段组提交，避免逐字段往返或反复回传整份定义。参数例子见 [草稿工具配方](references/draft-workflow.md)，通过 `tavern_read_skill_reference` 按需读取。
+每次 `patch` 携带最新 `draftRevision` 和新的 `requestId`，按时间地点、人物等相关字段组提交。字段路径与类型由 `section=fields` 声明，返回的 `fieldSchema` 是唯一目录；`initialState` 是可显式继承的初值底稿。先确定各开场共同使用的结构，再填值。
 
-- `section=fields`：`values` 是 JSON Pointer 到值的对象，如 `{ "/时间": {"时段":""}, "/地点/名称":"" }`。这是字段结构与初值底稿，修改时其他组保留。
-- `section=rules`：按组保存变化依据，例如 `{ "时间地点":"仅根据已经发生的正文事实更新。" }`；修改一个组保留其余组。
-- `section=opening`：使用工具给出的 `openingId`，逐个填写完整初值。可显式 `inheritInitialState=true` 复制当前底稿，再用 `values` 覆盖本开场差异。工具不会自动让多个开场共用初值；新增字段后查看每个开场的缺失项并补齐。
-- `section=mapping`：按 `stateInventory` 提交 `fieldMappings`，每个来源字段对应唯一状态路径；自动清单未识别的内容用 `sourceFields` 登记原文范围，再通过 inspect 取得其 ID。工具复制来源值，无需重新抄写。
+- `section=fields`：JSON Pointer 到值的对象，如 `{ "/时间/时段":"白天", "/地点/名称":"大厅" }`。同批使用互不重叠的路径。默认替换所选路径，递归合并对象用 `operation=merge`；null 是空值，删除与改名用专门操作。
+- `section=opening`：按工具给出的 openingId 填写已声明字段，各开场使用相同路径与类型，值可以不同。`inheritInitialState=true` 仅补缺失字段并保留已有值，随后应用本次 values；只有底稿符合该场景时才继承。查看返回的 missingFields，按需补齐，未知值采用明确且一致的表示方式。
+- `section=rules`：按组保存变化依据，修改同名组保留其余组。
+- `section=mapping`：按 stateInventory 提交 fieldMappings，每个来源字段对应唯一状态路径；未识别的内容用 sourceFields 登记原文范围，再通过 inspect 取得 ID。工具复制来源值。
 
-`read` 默认返回进度与缺失项，传 `path` 可分页读取草稿某一部分；续页携带版本，避免混读。原始来源、工作草稿和已提交成品是不同对象，不用成品的 `scope=plan` 判断草稿是否保存。
+错层级、错类型会在开场保存时返回具体位置。优先使用 suggestedPaths 中符合语义的目录路径；意外多写的字段应修正，不能通过扩大所有开场和面板来消除报错。确需改名或清除错误字段，使用 fields 的 move/remove，同步处理各开场；操作语义、引用依赖和旧草稿修复见 [草稿工具配方](references/draft-workflow.md)。
+
+`read` 默认返回目录、进度和缺失项，传 path 分页读取局部；续页携带版本。无需每次重读完整底稿与所有开场。草稿是否保存以草稿回执为准，不用成品的 scope=plan 判断。
 
 ## 3. 保存美化和清理
 
@@ -38,13 +40,13 @@ description: "把人物卡转换为独立 MVU 副本，或调整转换后的变�
 
 `patch section=cleanup` 提交当前完整清理清单，原文和路径均以来源版本为准。整项删除用 remove；短片段用 replaceText；长区块用唯一 start/end 的 replaceBlock；范围不可重叠。从原位置直接删除已迁移内容及空标题、空容器，保留剧情事实、视角、文风、作者署名、无关美化和交互。清理旧状态生成与显示协议，以及候选行动的生成协议、示例、正则与脚本；剧情分支本身保留，无法确认的脚本明确报告。
 
-只有明确的独立末尾旧入口才启用 `cleanupOrphanEntrances=true`；真实初值或渲染逻辑需显式清理。以上修改仅进入草稿，成品尚未改变。
+明确的独立末尾旧入口可在 `patch section=cleanup` 设置 `cleanupOrphanEntrances=true`；设置会保留，validate 返回实际清理清单。真实初值或渲染逻辑需显式清理。以上修改仅进入草稿，成品尚未改变。
 
 ## 4. 检查需求并统一提交
 
-完成源字段覆盖、清理范围与外观核对后，`patch section=review` 设置 `sourceCoverage`、`cleanup`、`appearance` 为 true。这是 Agent 基于原文的需求确认，不要求用户额外审批。后续修改会清除确认，需重新核对受影响内容。
+完成源字段覆盖、清理范围与外观核对后，`patch section=review` 设置 `sourceCoverage`、`cleanup`、`appearance` 为 true。这是 Agent 基于原文的需求确认，不要求用户额外审批。字段迁移返回 ruleReviewRequired 时，一并核对规则文本中的旧路径或称呼，再确认 sourceCoverage。后续修改会清除确认，需重新核对受影响内容。
 
-查看 missing；必要时 `validate` 一次汇总结构问题。定位错误按返回的 section、openingId、path、missingPaths 或清理锚点修正对应部分，不从头重写。结构校验不能替代语义核对，也不能为了通过校验删字段或丢弃某个开场。
+查看 missing；必要时 `validate` 一次汇总结构问题。定位错误按返回的 section、openingId、path、missingPaths 或清理锚点修正对应部分，不从头重写。结构校验不能替代语义核对；保留原卡所需状态，误建字段则通过明确迁移或删除修正。
 
 `commit` 内部保存定义、预检、原子生成成品并校验；仅传草稿 ID、版本和新 requestId，无需再次调用 saveDefinition/design/apply。`receipt.committed=true` 且 `receipt.validation.valid=true` 才表示成品提交成功。报告副本路径、实际改动与校验结果即可，真实游玩仅在用户明确要求时执行；limitations 是覆盖范围，不是待验收清单。成品中的 `<initvar>` 和 `<mvu-status/>` 是预期生成结构，不应当作残留再删。
 
