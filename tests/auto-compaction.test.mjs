@@ -1,3 +1,4 @@
+import { projectChatSessionState } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createAutoCompaction, compactionPolicy, installCompactionPolicy } from '../tavern-plugin/lib/domain/auto-compaction.js'
@@ -5,6 +6,7 @@ function fixture() {
   let chat = { id: 'chat', mode: 'story', sessionId: 'front', messages: [], timeline: { branchId: 'main', participants: { background: { sessionId: 'back' } } } }
   let policy = { mode: 'manual' }, activity = { phase: 'idle' }, pressure = 0, fail = '', evidence = 'succeeded'
   const calls = [], deps = {
+    readState: async () => projectChatSessionState(chat),
     readChat: async () => structuredClone(chat), updateChat: async (_id, fn) => { chat = fn(structuredClone(chat)); return structuredClone(chat) },
     policy: async () => policy, activity: () => activity, pressure: async () => pressure === null ? null : { percent: pressure },
     exclusive: async (_id, fn) => fn(), checkpoint: async () => 7, recover: async () => evidence, markBackground: async () => {},
@@ -222,4 +224,14 @@ test('cancellation during the final measurement still publishes committed result
   assert.equal(result.status, 'completed')
   assert.equal(h.blocked(), false)
   assert.deepEqual(h.calls, ['foreground', 'background'])
+})
+
+test('idle automatic checks use detached session metadata without reading full story history',async()=>{
+  const h=fixture();let reads=0
+  h.deps.readState=async()=>({id:'chat',sessionId:'front',mode:'story',contextCompaction:{}})
+  const original=h.deps.readChat;h.deps.readChat=async(...args)=>{reads++;return original(...args)}
+  await h.run();await h.run()
+  assert.equal(reads,0)
+  await h.run({manual:true})
+  assert.ok(reads>0,'actual compression must still load authoritative history')
 })

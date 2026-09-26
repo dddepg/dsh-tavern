@@ -25,7 +25,7 @@ test('任务提示继承用户已有授权，不强制重复确认或禁止适�
 })
 
 test('MVU 转换 Skill 说明专用工具、来源保护和清理边界', () => {
-  assert.match(mvuSkill, /`tavern_convert_to_mvu\.inspect`/)
+  assert.match(mvuSkill, /`tavern_card_draft\.inspect`/)
   assert.match(mvuSkill, /默认保留无关字段/)
   assert.match(mvuSkill, /原卡和共享资源保持不变/)
   assert.match(mvuSkill, /保留内容由工具复制/)

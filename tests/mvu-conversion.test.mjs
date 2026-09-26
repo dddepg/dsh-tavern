@@ -35,7 +35,7 @@ test('转换原卡为自包含副本：隔离保存、精确清理、所有开�
   assert.equal(new Set(data.character_book.entries.map(e=>e.id)).size,3)
   for(const text of [data.first_mes,...data.alternate_greetings])assert.equal(text.split('<mvu-status/>').length,2)
   assert.equal(result.validation.checks.find(x=>x.name==='templateSimulation').status,'passed')
-  assert.ok(result.validation.pending.some(x=>x.includes('真实模型')))
+  assert.ok(result.validation.limitations.some(x=>x.includes('真实模型')))
 })
 
 test('重复调用与并发重试不新建副本、条目或规则',async t=>{
@@ -153,14 +153,13 @@ test('展示配置按 JSON Pointer 处理转义，文本不能注入 HTML 或脚
   assert.throws(()=>buildMvuArtifacts({...def,displayFields:[{path:'/不存在'}]}),/不存在/)
 })
 
-test('两个原生工具只允许卡片工作台调用',async()=>{
+test('MVU 原生工具只允许卡片工作台调用',async()=>{
   const registered=new Map(),calls=[];let mode='story'
   registerMvuConversionTools({tools:{register:tool=>registered.set(tool.name,tool)},defineTool:tool=>tool,chatForSession:async()=>({mode}),conversion:{convert:async args=>{calls.push(args);return {ok:true}},verify:async()=>({valid:true})}})
-  assert.equal(registered.size,3)
   const cleanupSchema = registered.get('tavern_convert_to_mvu').parameters.cleanup.items.properties
   assert.notEqual(cleanupSchema.expected.required, true)
   assert.ok(cleanupSchema.op.enum.includes('replaceBlock'))
-  await assert.rejects(registered.get('tavern_convert_to_mvu').execute({action:'inspect'},{}),/工作台/)
+  for (const tool of registered.values()) await assert.rejects(tool.execute({action:'inspect'},{}),/工作台/)
   mode='card';assert.equal((await registered.get('tavern_convert_to_mvu').execute({action:'inspect'},{})).report.ok,true)
   assert.equal((await registered.get('tavern_validate_mvu_conversion').execute({},{})).report.valid,true)
 })
@@ -500,4 +499,27 @@ test('资源库删除 MVU 副本后可用同名重新转换',async t=>{
   const second=await f.apply()
   assert.equal(second.path,first.path)
   assert.equal(second.validation.valid,true)
+})
+
+test('删除副本后检查不再显示目标，旧目标读取明确提示不存在，并可重新转换', async t => {
+  const f = await fixture(t)
+  const result = await f.apply()
+  const before = await f.inspect()
+  await f.resources.remove(result.path)
+  const after = await f.inspect()
+  assert.equal(after.target, null)
+  assert.equal(after.targetRevision, null)
+  assert.equal(after.destination.workingExists, false)
+  assert.equal(after.destination.originalExists, false)
+  for (const [scope, targetRevision] of [['target', before.targetRevision], ['plan', before.targetRevision], ['plan', undefined]]) {
+    await assert.rejects(f.conversion.convert({action:'read',sourcePath:f.sourcePath,sourceRevision:after.sourceRevision,targetRevision,scope,path:''}), error => {
+      assert.match(error.message, /目标副本不存在/)
+      assert.equal(error.code, 'MVU_TARGET_MISSING')
+      assert.equal(error.details.targetPath, result.path)
+      return true
+    })
+  }
+  const recreated = await f.apply()
+  assert.equal(recreated.path, result.path)
+  assert.equal(recreated.validation.valid, true)
 })

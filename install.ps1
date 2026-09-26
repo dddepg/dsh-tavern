@@ -77,6 +77,9 @@ $RuntimePaths = @(
   'tavern-plugin'
 )
 
+# Machine-readable progress for the Windows launcher; also useful in terminals.
+function Write-InstallStatus([string]$Message) { Write-Host ("DSH_STATUS " + $Message) }
+
 function Test-Command([string]$Name) {
   return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
@@ -190,13 +193,23 @@ try {
   }
   function Invoke-UpdateGit([string]$Step, [string[]]$GitArgs) {
     $Started = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $GitStatus = switch ($Step) { 'git.clone' { '下载代码：首次获取 GitHub 运行代码…' } 'git.fetch' { '下载代码：正在同步 GitHub 最新版本…' } 'git.archive' { '下载代码：正在准备 Git 运行文件…' } default { '下载代码：正在检查 Git 源…' } }
+    Write-InstallStatus $GitStatus
     Write-UpdateLog 'installer.stage.started' $Step
     $PreviousPreference = $ErrorActionPreference
     $Output = @()
     $Code = 1
     try {
       $ErrorActionPreference = 'Continue'
-      $Output = @(& $GitCommand @GitArgs 2>&1)
+      $LastGitProgress = ''
+      $Output = @(& $GitCommand -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=30 @GitArgs 2>&1 | ForEach-Object {
+        $GitLine = [string]$_
+        if ($GitLine -match '(Receiving objects|Resolving deltas):\s+(\d+)%') {
+          $GitProgress = if ($Matches[1] -eq 'Receiving objects') { "GitHub 接收文件：$($Matches[2])%（当前步骤）" } else { "Git 整理文件：$($Matches[2])%（当前步骤）" }
+          if ($GitProgress -ne $LastGitProgress) { Write-InstallStatus $GitProgress; $LastGitProgress = $GitProgress }
+        }
+        $_
+      })
       $Code = $LASTEXITCODE
     } finally { $ErrorActionPreference = $PreviousPreference }
     $OutputFile = Join-Path $TempDir 'git.output'
@@ -250,25 +263,26 @@ try {
   $UsedCdn = $false
   if ($null -ne $GitCommand) {
     try {
-      Write-Host '正在通过 Git 增量同步 DSH Tavern（不下载文档与图片）……'
+      Write-InstallStatus '下载代码：正在连接 GitHub，使用 Git 增量同步…'
       New-Item -ItemType Directory -Force -Path (Split-Path $SourceCache -Parent) | Out-Null
       if (-not (Test-Path (Join-Path $SourceCache 'HEAD'))) {
-        Invoke-UpdateGit 'git.clone' @('clone', '--bare', '--filter=blob:none', '--depth', '1', '--single-branch', '--branch', 'main', $RepositoryUrl, $SourceCache) | Write-Host
+        Invoke-UpdateGit 'git.clone' @('clone', '--progress', '--bare', '--filter=blob:none', '--depth', '1', '--single-branch', '--branch', 'main', $RepositoryUrl, $SourceCache) | Write-Host
       }
       Invoke-UpdateGit 'git.remote' @("--git-dir=$SourceCache", 'remote', 'set-url', 'origin', $RepositoryUrl) | Write-Host
-      Invoke-UpdateGit 'git.fetch' @("--git-dir=$SourceCache", 'fetch', '--depth', '1', 'origin', 'main') | Write-Host
+      Invoke-UpdateGit 'git.fetch' @("--git-dir=$SourceCache", 'fetch', '--progress', '--depth', '1', 'origin', 'main') | Write-Host
       $TargetCommit = (Invoke-UpdateGit 'git.revision' @("--git-dir=$SourceCache", 'rev-parse', 'FETCH_HEAD')).Trim()
       Invoke-UpdateGit 'git.archive' (@('-c', 'core.autocrlf=false', '-c', 'core.eol=lf', "--git-dir=$SourceCache", 'archive', '--format=zip', "--output=$ArchivePath", 'FETCH_HEAD', '--') + $RuntimePaths) | Write-Host
       $UsedGit = $true
     }
     catch {
+      Write-InstallStatus 'GitHub 同步失败或连接过慢，正在切换 jsDelivr 备用源；详细原因见日志。'
       Write-Warning ("Git 增量更新失败，正在尝试 jsDelivr 备用源：" + $_.Exception.Message)
     }
   }
   if ($null -eq $GitCommand) { Write-UpdateLog 'installer.stage.failed' 'git.unavailable' '127'; Write-Warning '未找到 Git，正在尝试备用源。' }
   if (-not $UsedGit) {
     try {
-      Write-Host '正在通过 jsDelivr 备用源下载运行代码……'
+      Write-InstallStatus '下载代码：正在连接 jsDelivr 备用源…'
       Write-UpdateLog 'installer.stage.started' 'source.jsdelivr'
       $CdnSource = Join-Path $TempDir 'cdn-source'
       New-Item -ItemType Directory -Force -Path $CdnSource | Out-Null
@@ -277,14 +291,52 @@ try {
       $RuntimePattern = '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|cordis\.patch\.yml|install\.ps1|install\.sh|bin/|config/|presets/|patches/|tavern-plugin/)'
       $Files = @($Metadata.files | Where-Object { $_.path -match $RuntimePattern -and $_.path -notmatch '(^|/)(\.\.|docs|tests|__tests__|testsets)(/|$)' -and $_.sha256 -match '^[0-9a-fA-F]{64}$' })
       if ($Files.Count -eq 0) { throw 'jsDelivr 未返回运行文件清单。' }
-      foreach ($File in $Files) {
-        $RelativePath = $File.path.Replace('/', [IO.Path]::DirectorySeparatorChar)
-        $Target = Join-Path $CdnSource $RelativePath
-        New-Item -ItemType Directory -Force -Path (Split-Path $Target -Parent) | Out-Null
-        Invoke-WebRequest -UseBasicParsing -Uri ("$CdnRootUrl@$($Metadata.revision)/$($File.path)") -OutFile $Target -TimeoutSec 30
-        $ActualHash = (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($ActualHash -ne ([string]$File.sha256).ToLowerInvariant()) { throw "jsDelivr 文件校验失败：$($File.path)" }
-      }
+      $DownloadManifest = Join-Path $TempDir 'download-manifest.json'
+      [IO.File]::WriteAllText($DownloadManifest, (@{ revision = $Metadata.revision; files = @($Files) } | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding($false)))
+      $CdnDownloader = Join-Path $TempDir 'cdn-download.cjs'
+      [IO.File]::WriteAllText($CdnDownloader, @'
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {createHash}=require('node:crypto');
+const [manifest,base,destination,installed]=process.argv.slice(2);
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const status=message=>console.log('DSH_STATUS '+message);
+const controller=new AbortController();
+(async()=>{
+ const metadata=JSON.parse(await fs.readFile(manifest,'utf8'));
+ const files=metadata.files;
+ if(!/^[a-f0-9]{40}$/i.test(metadata.revision)||!Array.isArray(files)||!files.length)throw Error('无效下载清单');
+ for(const file of files)if(typeof file.path!=='string'||file.path.includes('\\')||file.path.includes(':')||file.path.split('/').some(p=>!p||p==='.'||p==='..')||!/^[a-f0-9]{64}$/i.test(file.sha256))throw Error('无效文件路径或校验值');
+ let next=0,done=0,reused=0,bytes=0;
+ const source=new URL(base).hostname;
+ const report=()=>status(`下载代码（${source}）：${done}/${files.length} 文件，复用 ${reused}，已下载 ${(bytes/1048576).toFixed(1)} MB`);
+ report();
+ await Promise.all(Array.from({length:Math.min(6,files.length)},async()=>{
+  while(next<files.length&&!controller.signal.aborted){
+   const file=files[next++],target=path.join(destination,...file.path.split('/'));
+   let content;
+   try {const local=await fs.readFile(path.join(installed,...file.path.split('/')));if(hash(local)===file.sha256.toLowerCase()){content=local;reused++;}}catch{}
+   if(!content)for(let attempt=1;attempt<=2;attempt++){
+    try {
+     const response=await fetch(`${base}@${metadata.revision}/${file.path.split('/').map(encodeURIComponent).join('/')}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)])});
+     if(!response.ok)throw Error(`HTTP ${response.status}`);
+     content=Buffer.from(await response.arrayBuffer());
+     if(hash(content)!==file.sha256.toLowerCase())throw Error('文件校验不符');
+     bytes+=content.length;break;
+    }catch(error){
+     if(controller.signal.aborted)throw error;
+     const reason=error.name==='TimeoutError'?'请求超过 30 秒未完成':String(error.cause?.code||error.message);
+     status(`下载失败（${source}）：${file.path}，${reason}；尝试 ${attempt}/2${attempt<2?'，正在重试':'，将切换备用方案'}。`);
+     if(attempt===2){controller.abort();throw Error(`下载失败：${file.path}（${reason}）`);}
+    }
+   }
+   if(controller.signal.aborted)return;
+   await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,content);done++;report();
+  }
+ }));
+})().catch(error=>{controller.abort();console.error(error.message);process.exitCode=1});
+'@, (New-Object Text.UTF8Encoding($false)))
+      Invoke-InstallCommand 'source.files' 'node' @($CdnDownloader, $DownloadManifest, $CdnRootUrl, $CdnSource, $AppDir)
       [IO.File]::WriteAllText((Join-Path $CdnSource 'dsh-tavern-runtime.json'), (($Metadata | ConvertTo-Json -Depth 10) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
       $TargetCommit = [string]$Metadata.revision
       Write-UpdateLog 'installer.stage.succeeded' 'source.jsdelivr' '0'
@@ -294,26 +346,27 @@ try {
       $CdnErrorFile = Join-Path $TempDir 'cdn.error'
       [IO.File]::WriteAllText($CdnErrorFile, $_.Exception.ToString(), (New-Object Text.UTF8Encoding($false)))
       Write-UpdateLog 'installer.stage.failed' 'source.jsdelivr' '1' '' $CdnErrorFile
+      Write-InstallStatus 'jsDelivr 下载失败，正在切换 GitHub 压缩包；详细原因见日志。'
       Write-Warning ("jsDelivr 备用源不可用，将回退到精简运行压缩包：" + $_.Exception.Message)
     }
   }
   if (-not $UsedGit -and -not $UsedCdn) {
-    Write-Host '正在下载精简运行压缩包……'
+    Write-InstallStatus '下载代码：前面的源不可用，正在尝试 GitHub 压缩包…'
     $PreviousProgressPreference = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
     try {
       if ($TargetCommit -eq '') {
-        try { $TargetCommit = (Invoke-RestMethod -UseBasicParsing -Uri $CommitUrl -Headers @{ Accept = 'application/vnd.github+json' }).sha }
+        try { $TargetCommit = (Invoke-RestMethod -UseBasicParsing -Uri $CommitUrl -TimeoutSec 15 -Headers @{ Accept = 'application/vnd.github+json' }).sha }
         catch { Write-Warning '无法记录当前提交号，不影响本次安装。' }
       }
       for ($Attempt = 1; $Attempt -le 3; $Attempt++) {
         try {
-          Invoke-WebRequest -UseBasicParsing -Uri $ArchiveUrl -OutFile $ArchivePath
+          Invoke-WebRequest -UseBasicParsing -Uri $ArchiveUrl -OutFile $ArchivePath -TimeoutSec 120
           break
         }
         catch {
           if ($Attempt -eq 3) { throw }
-          Write-Host "下载失败，正在重试（$Attempt/3）……"
+          Write-InstallStatus "压缩包下载失败，2 秒后重试（已尝试 $Attempt/3）；请检查网络或查看日志。"
           Start-Sleep -Seconds 2
         }
       }
@@ -324,12 +377,14 @@ try {
   }
   if (-not $UsedCdn) {
     New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
+    Write-InstallStatus '本地处理：下载完成，正在解压运行文件…'
     Expand-Archive -LiteralPath $ArchivePath -DestinationPath $ExtractDir -Force
     # Only the temporary download is pruned; never remove installed user files.
     @(Get-ChildItem -LiteralPath $ExtractDir -Directory -Recurse -Filter 'docs') |
       Sort-Object { $_.FullName.Length } -Descending |
       ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
   }
+  Write-InstallStatus '本地处理：正在校验安装文件…'
   $SourceDir = if ($UsedCdn) {
     Get-Item -LiteralPath $CdnSource
   } elseif ($UsedGit) {
@@ -387,6 +442,7 @@ try {
     & node $OldLauncher stop *> $null
   }
 
+  Write-InstallStatus '本地处理：正在更新程序文件，保留用户数据…'
   New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
   # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data\ 用户数据会保留。
   Get-ChildItem -LiteralPath $SourceDir.FullName -Force | Copy-Item -Destination $AppDir -Recurse -Force
@@ -403,17 +459,17 @@ try {
   }
 
   if ($InstallHost -eq 'desktop') {
-    Write-Host '正在准备 Windows Desktop 包管理环境……'
+    Write-InstallStatus '准备依赖：正在检查 Windows Desktop 包管理环境…'
     $PackageManagerBin = Invoke-InstallCommand 'desktop.package-manager' 'node' @((Join-Path $AppDir 'bin\desktop-package-manager.mjs')) -CaptureOutput
     $PackageManagerBin = ($PackageManagerBin -join "`n").Trim()
     if (-not (Test-Path -LiteralPath (Join-Path $PackageManagerBin 'pnpm.cmd'))) { throw 'Desktop 包管理入口未生成。' }
     $env:Path = "$PackageManagerBin;$env:Path"
     $PnpmCommand = Join-Path $PackageManagerBin 'pnpm.cmd'
   }
-  Write-Host '正在安装程序依赖……'
-  Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile')
+  Write-InstallStatus '安装依赖：正在连接软件包仓库，已有缓存将直接复用…'
+  Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
 
-  Write-Host '正在配置 Tavern……'
+  Write-InstallStatus '本地配置：正在注册 Tavern 并检查兼容性…'
   Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost)
   if ($InstallHost -eq 'desktop') {
     Write-Host 'DSH Tavern Desktop 版安装完成。'

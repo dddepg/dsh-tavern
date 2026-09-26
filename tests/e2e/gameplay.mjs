@@ -1,5 +1,10 @@
+import {setupRealVariables,realVariableLookupChecks} from './real-variable-lookup.mjs'
+import {openingUpdateChecks} from './opening-update.mjs'
+import { backgroundLifecycleChecks } from './background-lifecycle.mjs'
+import { cardMemoryChecks } from './card-memory.mjs'
 import {displayRegressionRules, displayRegressionChecks} from './display-regression.mjs'
 import { surfaceRecoveryChecks } from './surface-recovery.mjs'
+import { cardVariableUpdateChecks } from './card-variable-update.mjs'
 import { cardUpdateChecks } from './card-update.mjs'
 import { sidebarUpgrade } from './sidebar-upgrade.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
@@ -128,13 +133,14 @@ try {
     // variables even when it never reaches the frame's DOM-idle threshold.
     const status = '<div id="e2e-gold">金币：加载中</div><script>function refresh(){const v=getAllVariables();document.getElementById("e2e-gold").textContent="金币："+(v.stat_data?.gold??"未初始化")}refresh();setInterval(refresh,200)</script>'
     await writeFile(join(data, 'resources/cards/e2e.json'), JSON.stringify({ spec: 'chara_card_v2', spec_version: '2.0', data: {
-      name: 'E2E 奖励验收', description: '固定验收角色', first_mes: '欢迎领取奖励。\n\n<StatusPlaceHolderImpl/>',
+      name: 'E2E 奖励验收', description: '固定验收角色', first_mes: (process.argv.includes('--text-colors') ? '她说：“欢迎光临。” *窗外下着雨。*' : '欢迎领取奖励。') + (process.argv.includes('--opening-update') ? '\n<initvar>{"gold":0,"old":1}</initvar>' : '') + '\n\n<StatusPlaceHolderImpl/>',
       mes_example: '', scenario: '', personality: '',
       character_book: { name: '验收初始变量', entries: [{ id: 1, keys: [], comment: '[initvar]初始值', content: 'gold: 0', enabled: true, constant: true, insertion_order: 1 }] },
       extensions: { mvu: {}, regex_scripts: [{ id: 'e2e-status', scriptName: '金币状态', findRegex: '<StatusPlaceHolderImpl/>',
         replaceString: '```html\n' + status + '\n```', placement: [2], markdownOnly: true, disabled: false }, ...(displayScenario ? displayRegressionRules() : [])] }
     } }))
   })
+  if(process.argv.includes('--real-variables')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealVariables({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
   await step('启动真实 DSH 与酒馆', async () => {
     async function launchServer() {
       const logOffset = log.length
@@ -144,7 +150,9 @@ try {
         cwd: source, env: { ...env, DSH_HOME: root, DSH_CWD: root,
           TAVERN_E2E_COMPACTION_DIR: compactionScenario ? output : '',
           TAVERN_E2E_RECOVERY_DIR: recoveryScenario ? output : '',
+          TAVERN_E2E_BACKGROUND_DIR: process.argv.includes('--background-lifecycle') ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
+          TAVERN_E2E_MEMORY_AUDIT: process.argv.includes('--card-memory') ? join(output, 'memory-requests.jsonl') : '',
           TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
           TAVERN_E2E_WRONG_GOLD: process.env.TAVERN_E2E_WRONG_GOLD || '' }, stdio: ['ignore', 'pipe', 'pipe']
       })
@@ -204,7 +212,33 @@ try {
     await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
       .locator('#e2e-gold').filter({ hasText: /^金币：0$/ }).waitFor()
   })
-  if (recoveryScenario) {
+  if (process.argv.includes('--text-colors')) {
+    await step('实际正文挂载主题对白高亮', async () => {
+      await page.locator('.dsh-tavern-colored-markdown').waitFor()
+      const state=await page.evaluate(()=>({api:typeof Highlight,css:typeof CSS.highlights,styles:document.querySelectorAll('style[data-dsh-tavern-text-colors]').length,ranges:[...CSS.highlights.values()].reduce((n,h)=>n+h.size,0)}))
+      report.textColors=state
+      assert.ok(state.styles>0,'正文必须挂载高亮样式')
+      assert.ok(state.ranges>0,'对白必须生成高亮范围')
+      const original=(await savedChat()).messages
+      for (const [name,accent] of [['terracotta','#cc785c'],['blue','#2196f3']]) {
+        await page.evaluate(accent=>document.body.style.setProperty('--dsw-alias-brand-primary',accent),accent)
+        const colors=await page.evaluate(()=>[...CSS.highlights].filter(([k,h])=>h.size).map(([key,h])=>{
+          const node=[...h][0].startContainer.parentElement
+          return {color:getComputedStyle(node,'::highlight('+key+')').color,plain:getComputedStyle(node).color}
+        }))
+        const expected=name==='terracotta'?'rgb(204, 120, 92)':'rgb(33, 150, 243)'
+        assert.ok(colors.length>=2,'对白及斜体均有高亮')
+        for(const color of colors){assert.equal(color.color,expected);assert.notEqual(color.plain,expected)}
+        report[name]=colors
+        await page.screenshot({path:join(output,'text-colors-'+name+'.png'),fullPage:true})
+      }
+      assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
+    })
+  } else if (process.argv.includes('--real-variables')) {
+    await realVariableLookupChecks({page,step,savedChat,root,output,report})
+  } else if (process.argv.includes('--opening-update')) {
+    await openingUpdateChecks({page,step,savedChat,data,output,report,root})
+  } else if (recoveryScenario) {
     await surfaceRecoveryChecks({ page, step, savedChat, output, report, root, restartServer })
   } else {
   await step('玩一轮，确认正文、金币与人物姿势', async () => {
@@ -223,7 +257,9 @@ try {
     assert.deepEqual(errors, [], '浏览器不得出现未捕获异常')
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
-  if (displayScenario) {
+  if (process.argv.includes('--background-lifecycle')) {
+    await backgroundLifecycleChecks({page,step,savedChat,data,output,report,restartServer})
+  } else if (displayScenario) {
     await displayRegressionChecks({page,step,savedChat,data,output,report,restartServer})
   } else if (compactionScenario) {
     const installLegacyFixture = async () => {
@@ -277,7 +313,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else if (!process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
+  } else if (!process.argv.includes('--card-memory') && !process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update') && !process.argv.includes('--card-variables')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
@@ -336,6 +372,8 @@ try {
     await playControls({ page, step, savedChat, inspectRound, output, report })
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   }
+  if (process.argv.includes('--card-memory')) await cardMemoryChecks({ page, step, data, output, report, savedChat })
+  if (process.argv.includes('--card-variables')) await cardVariableUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   }

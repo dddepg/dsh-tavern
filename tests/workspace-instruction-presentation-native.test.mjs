@@ -45,7 +45,7 @@ test('native DSH discovers instructions, loads a real Skill and executes an edit
   await handle.agent.whenIdle()
   assert.equal(requests.length, 3)
   const first = JSON.stringify(requests[0].messages)
-  assert.match(first, /保留工作区正文/)
+  assert.doesNotMatch(first, /保留工作区正文/)
   assert.doesNotMatch(first, /The following workspace instructions/)
   assert.doesNotMatch(JSON.stringify(requests[0].messages.filter(m => m.source?.kind === 'agent-instructions')), /<system-reminder>/)
   assert.ok(requests[0].tools.some(tool => tool.name === 'skill'))

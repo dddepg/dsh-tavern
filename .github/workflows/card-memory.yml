@@ -1,0 +1,34 @@
+name: Card memory portability
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/card-memory-mnemon]
+    paths:
+      - tavern-plugin/packages/dsh-tavern-card-memory/**
+      - tests/card-memory.test.mjs
+      - .github/workflows/card-memory.yml
+  pull_request:
+    paths:
+      - tavern-plugin/packages/dsh-tavern-card-memory/**
+      - tests/card-memory.test.mjs
+      - .github/workflows/card-memory.yml
+permissions:
+  contents: read
+jobs:
+  local-sources:
+    name: Mnemon Sources (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22.19.0', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # The local Source API must work without DSH, native builds, or optional peers.
+      - run: npm install --prefix tavern-plugin/packages/dsh-tavern-card-memory --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - run: node --test tests/card-memory.test.mjs

@@ -1,3 +1,4 @@
+import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } from '../../tavern-plugin/lib/domain/background-session-retirement.js'
 // Real installed DSH Agent loop/tools/attachments; scripted model and local image API.
 // No paid requests, credentials, or user chats are accessed.
 import { sessionEvents } from '../../tavern-plugin/lib/domain/session-events.js'
@@ -22,7 +23,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
   const { LlmAdapter } = await import(new URL('../../dsh-llm/lib/index.js', bootUrl))
   const root = await mkdtemp(join(tmpdir(), 'tavern-scene-native-'))
   const config = join(root, 'host.yml')
-  const packages = ['dsh-system-prompt', 'dsh-tools', 'dsh-agent', 'dsh-llm', 'dsh-session', 'dsh-session-projection', 'dsh-session-persistence-jsonl', 'dsh-token-meter', 'dsh-agent-loop', 'dsh-attachment-local']
+  const packages = ['dsh-system-prompt', 'dsh-tools', 'dsh-agent', 'dsh-llm', 'dsh-session', 'dsh-session-projection', 'dsh-session-query', 'dsh-subagent', 'dsh-session-persistence-jsonl', 'dsh-token-meter', 'dsh-agent-loop', 'dsh-attachment-local']
   await writeFile(config, packages.map(name => '- id: ' + name + '\n  name: ' + new URL('../../' + name + '/lib/index.js', bootUrl).href + (name === 'dsh-attachment-local' ? '\n  config:\n    dshHome: ' + root : name === 'dsh-session-persistence-jsonl' ? '\n  config:\n    root: ' + join(root, 'sessions') + '\n    compression: none' : '') + '\n').join(''))
   const ctx = await boot('scene-image-native-test', config)
   ctx.baseUrl = bootUrl.href
@@ -122,7 +123,9 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
     async execute() { return 'fixture' }
   })
   const parent = await ctx.agents.create({ sessionId: 'scene-parent', agentOptions: { provider: 'scene-fixture', model: 'fixture-text' } })
-  const runnerOptions = { ...residentOptions, systemAppend, resolveModelSelection, agents: ctx.agents, flushSession: session => ctx.sessions.flush(session) }
+  const retirement = createBackgroundSessionRetirement(createProfileDataStore({dataRoot: root}), {isRunning: id => ctx.agents.get(id)?.status === 'running'})
+  const stopRetirementFilter = installRetiredBackgroundFilter(ctx.get('subagents'), retirement, ctx.get('sessionQuery'))
+  const runnerOptions = { retirement, ...residentOptions, systemAppend, resolveModelSelection, agents: ctx.agents, flushSession: session => ctx.sessions.flush(session) }
   let runner = createBackgroundAgentRunner(runnerOptions)
   const chat = { id: 'scene-chat', sessionId: 'scene-parent', mode: 'story', posture: '站在窗边，左手扶窗', messages: [{ role: 'assistant', turn: 1, greeting: true, sourceText: '她站在窗边看雨，左手轻轻搭着窗框。', swipes: ['她站在窗边看雨，左手轻轻搭着窗框。', '她坐在椅子上。'], swipeId: 0 }] }
   const before = JSON.stringify(chat)
@@ -186,7 +189,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
   const endpoint = 'http://127.0.0.1:' + imageServer.address().port + '/v1'
   await service.configure({ model: 'fixture-image', baseURL: endpoint, apiKey: keys.get(IMAGE_CREDENTIAL) })
   await service.configure({ enabled: true })
-  return { reapBackground: () => runner.reapIdle(), backgroundLoaded: id => ({ agent: !!ctx.agents.get(id), session: !!ctx.sessions.get(id) }), runBackground: input => runner.run(input), get service() { return service }, get agentRunning() { return agentRuns > 0 }, chat, before, requests, imageRequests, parent, endpoint,
+  return { backgroundChildren: async () => (await ctx.get('subagents').remoteExportList('scene-parent')).entries, reapBackground: () => runner.reapIdle(), backgroundLoaded: id => ({ agent: !!ctx.agents.get(id), session: !!ctx.sessions.get(id) }), runBackground: input => runner.run(input), get service() { return service }, get agentRunning() { return agentRuns > 0 }, chat, before, requests, imageRequests, parent, endpoint,
     traceEvents(sessionId) { return structuredClone(sessionEvents(ctx.sessions.get(sessionId))) },
     failNext(status = 503, message = 'test failure') { failNext = { status, message } },
     failNextSave() { failSave = true },
@@ -207,6 +210,6 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
       return ref
     },
     async restart() { await service.dispose(); await runner.dispose(); runner = createBackgroundAgentRunner(runnerOptions); service = createSceneIllustrations(deps) },
-    async dispose() { await service.dispose(); await runner.dispose(); await parent.dispose(); await ctx.fiber.dispose(); await new Promise(resolve => imageServer.close(resolve)); await rm(root, { recursive: true, force: true }) }
+    async dispose() { stopRetirementFilter(); await service.dispose(); await runner.dispose(); await parent.dispose(); await ctx.fiber.dispose(); await new Promise(resolve => imageServer.close(resolve)); await rm(root, { recursive: true, force: true }) }
   }
 }

@@ -18,8 +18,8 @@ function between(source, start, end) {
 }
 
 test('开场白创建失败时在选择弹窗内持续显示具体阶段和错误', () => {
-  const sidebar = between(clientSource, 'function TavernSidebar', 'function TavernResourcesTab')
-  const refresh = between(sidebar, 'function refresh()', 'React.useEffect(function ()')
+  const sidebar = between(clientSource, 'function TavernSidebar(', 'function TavernResourcesTab')
+  const refresh = between(sidebar, 'function refresh(kinds)', 'React.useEffect(function ()')
   const playFlow = between(sidebar, 'async function newConversation', 'async function preparePlayConversation')
   const lifecycle = between(clientSource, 'function createConversationLifecycleModule', 'function isIgnoredTavernError')
 
@@ -55,11 +55,11 @@ test('创建对话失败时服务端记录请求边界但不记录开场白正�
 
 test('人物卡目录只读取卡片名称和剧本绑定，不加载或切分完整剧本', () => {
   const listing = between(serverSource, 'async function listCards()', 'async function getCardOpenings')
-  const sidebar = between(clientSource, 'function TavernSidebar', 'function TavernResourcesTab')
+  const sidebar = between(clientSource, 'function TavernSidebar(', 'function TavernResourcesTab')
 
   assert.match(listing, /fileResources\.scriptBindingsForCards\(cardPaths\)/)
   assert.match(listing, /fileResources\.hasCardImage\(cardPath\)/)
-  assert.match(listing, /workspace\.meta\.importedAt/)
+  assert.match(listing, /card\.importedAt/)
   assert.match(listing, /orderCardsByNewestImport\(cards\)/)
   assert.match(listing, /hasImage/)
   assert.doesNotMatch(listing, /readScript|splitNovelText|sourceChars|chunkCount/)

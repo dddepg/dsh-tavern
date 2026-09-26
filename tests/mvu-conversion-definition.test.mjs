@@ -17,6 +17,7 @@ test('字段清单先落盘；重建工具后装配全部人物及各开场初�
  const conversion=createMvuConversion({resources:f.resources})
  const args={action:'apply',sourcePath:f.sourcePath,sourceRevision:f.inspect.sourceRevision,definitionRevision:saved.definitionRevision,cleanup}
  await assert.rejects(conversion.convert({...args,initialState:{人物:{}}}),/已保存定义/)
+ const preflight=await conversion.convert({...args,action:'preflight'});assert.equal(preflight.ok,true,JSON.stringify(preflight.issues))
  const result=await conversion.convert(args);assert.equal(result.validation.valid,true)
  const card=cardData(await f.resources.readCard(result.path));const meta=card.extensions.dsh_mvu_conversion
  assert.equal(meta.openingStates[0].人物.艾乔.位置,'门口');assert.equal(meta.openingStates[1].人物.雨辰.位置,'大厅')
@@ -82,4 +83,12 @@ test('原卡变化后旧定义失效，同一来源修订定义不能减少字�
  await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
  const changed=await f.conversion.convert({action:'inspect',sourcePath:f.sourcePath})
  await assert.rejects(f.conversion.convert({...input,planMode:'replace',sourceRevision:changed.sourceRevision,targetRevision:changed.targetRevision}),/来源已变化/)
+})
+
+test('数字键开场对象可无歧义归一化，缺项仍拒绝', async t=>{
+ const f=await fixture(t),state=definition().initialState
+ const saved=await save(f,{openingStates:{0:state,1:state}})
+ const ledger=await f.resources.readMvuDefinition(saved.definitionRevision)
+ assert.equal(ledger.openingStates.length,2)
+ await assert.rejects(save(f,{openingStates:{0:state}}),error=>error.code==='MVU_OPENING_STATES_INVALID'&&error.details.missingIndices.includes(1))
 })

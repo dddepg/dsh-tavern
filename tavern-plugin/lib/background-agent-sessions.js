@@ -174,7 +174,7 @@ export function createBackgroundAgentSessions(options, task) {
       && await options.needsNewBackgroundSession(input.sessionId)
     const residentSessionId = needsSession && requestedSessionId === '' ? '' : str(residentSessionByParent.get(key))
     let traceSessionId = requestedSessionId || (persistent ? residentSessionId : '') || makeId()
-    const abandoned = abandonedSessions.has(traceSessionId)
+    const abandoned = abandonedSessions.has(traceSessionId) || Boolean(await options.retirement?.isRetired(traceSessionId))
     if (abandoned) traceSessionId = makeId()
     const descriptor = descriptorFor(input, persistent)
     const parentDepth = Number(parent.session.header && parent.session.header.delegationDepth)
@@ -278,10 +278,15 @@ export function createBackgroundAgentSessions(options, task) {
       if (state.abandoned) {
         // Never reuse a provider consumer that may ignore cancellation.
         abandonedSessions.add(traceSessionId)
+        try { if (persistent && input.task !== 'image') await options.retirement?.retire(traceSessionId, str(input.sessionId)) }
+        catch (error) { console.warn('dsh-tavern: 后台会话退休状态保存失败', traceSessionId, error) }
         residentHandles.delete(traceSessionId)
         if (residentSessionByParent.get(key)===traceSessionId) residentSessionByParent.delete(key)
         requestContexts.delete(traceSessionId); requestSessions.delete(traceSessionId)
-        void Promise.resolve().then(()=>handle.dispose()).catch(()=>{})
+        void Promise.resolve().then(async () => {
+          try { await options.flushSession?.(handle.agent.session) }
+          finally { await handle.dispose() }
+        }).catch(error => console.warn('dsh-tavern: 退休后台会话释放失败', traceSessionId, error))
       } else if (!persistent) {
         requestContexts.delete(traceSessionId)
         requestSessions.delete(traceSessionId)

@@ -90,7 +90,7 @@ test('实验分支始终公开兼容模式，旧关闭信任值不影响运行',
   }
 })
 
-test('设置界面提供分色与现有设置，不恢复旧兼容样式选项', () => {
+test('设置界面不重复提供已并入外观的分色，不恢复旧兼容样式选项', () => {
   const context = { CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
     useState: initial => [initial, () => {}],
     useEffect() {},
@@ -107,7 +107,7 @@ test('设置界面提供分色与现有设置，不恢复旧兼容样式选项',
     for (const child of node.children || []) visit(child)
   }
   visit(root)
-  assert.ok(nodes.some(node => node.type === context.TavernTextColorSettings))
+  assert.equal(nodes.some(node => node.type === context.TavernTextColorSettings), false)
   const inputs = nodes.filter(node => node.type === 'input')
   assert.deepEqual(inputs.map(input => input.props['aria-label']), [])
   const select = nodes.find(node => node.type === 'select' && node.props['aria-label'] === '后台模型')

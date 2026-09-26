@@ -82,7 +82,7 @@ function validatePlans(plans) {
   }
 }
 /** Only card-authored, declarative migrations execute; arbitrary JS never rewrites saves. */
-export function migrateCardSnapshots(chat, defaults, plans = []) {
+export function migrateCardSnapshots(chat, defaults, plans = [], removedPaths = []) {
   validatePlans(plans)
   let count = 0
   function visit(value) {
@@ -105,6 +105,8 @@ export function migrateCardSnapshots(chat, defaults, plans = []) {
         }
         done[plan.id] = digest
       }
+      // Only remove fields deleted from the previous definition, never dynamic save-only data.
+      migrate(value.stat_data, removedPaths.map(path => ({op: 'remove', path})))
       fillMissing(value.stat_data, defaults)
       value.schema = {...value.schema,...generateSchema(clone(value.stat_data), value.schema)}
       for (const key of ['strictTemplate','concatTemplateArray','strictSet']) if (Object.hasOwn(defaults.$meta || {},key)) value.schema[key] = defaults.$meta[key]
@@ -120,6 +122,28 @@ export function migrateCardSnapshots(chat, defaults, plans = []) {
   // Include timeline checkpoints and undo data so rollback keeps compatible snapshots.
   for (const key of ['messages', 'timeline', 'rollbackUndo', 'variables', 'promptTemplateInput']) visit(chat[key])
   return count
+}
+
+// Refresh initialization metadata only; authored story text and earned state remain intact.
+function refreshOpeningInitvar(chat, states) {
+  const rewrite=(text,index)=>{
+    if(typeof text!=='string'||!/<initvar>[\s\S]*?<\/initvar>/i.test(text))return text
+    const state=states[index]
+    if(!state)return text
+    const block='<initvar>\n'+JSON.stringify(state,null,2).replace(/</g,'\\u003c')+'\n</initvar>'
+    return text.replace(/<initvar>[\s\S]*?<\/initvar>/gi,()=>block)
+  }
+  function visit(value) {
+    if(!value||typeof value!=='object')return
+    if(value.greeting===true){
+      const index=value.swipeId||0
+      for(const key of ['text','sourceText','projectionText','displayText','sessionText','templateInputSource'])if(typeof value[key]==='string')value[key]=rewrite(value[key],index)
+      if(Array.isArray(value.swipes))value.swipes=value.swipes.map((text,index)=>rewrite(text,index))
+      return
+    }
+    for(const child of Object.values(value))visit(child)
+  }
+  for(const key of ['messages','timeline','rollbackUndo','promptTemplateInput'])visit(chat[key])
 }
 
 /** Preview executes with detached state and an RPC allowlist, never the live session. */
@@ -192,6 +216,7 @@ export function createLiveCardUpdate({readGlobals = async () => ({})} = {}) {
     const plans = card.extensions?.dsh_tavern?.stateMigrations || []
     validatePlans(plans)
     let unchanged = false
+    const removedPaths = []
     // Older saves may lack the full card definition but still retain the opening
     // worldbook. Use that historical definition, never the edited library, as baseline.
     const oldDefinition = previous?.cardDefinitionSnapshot || (previous?.openingWorldbookSnapshot?.document
@@ -201,21 +226,29 @@ export function createLiveCardUpdate({readGlobals = async () => ({})} = {}) {
       unchanged = hash(oldDefaults) === hash(defaults) && hash(previous.cardDefinitionSnapshot?.extensions?.dsh_tavern?.stateMigrations || []) === hash(plans)
       const oldShape = clone(oldDefaults)
       for (const plan of plans) if (!previous.cardStateMigrationIds?.includes(plan.id)) migrate(oldShape, plan.operations)
-      function checkRemoved(old, next, path = '') {
+      function collectRemoved(old, next, path = '') {
         for (const [key, value] of Object.entries(old)) {
           if (key === '$meta') continue
-          if (!Object.hasOwn(next, key)) throw Error('初始定义移除了字段，请声明 move/remove 迁移或保留字段：' + path + '/' + key)
-          if (object(value) && object(next[key])) checkRemoved(value, next[key], path + '/' + key)
+          const childPath = path + '/' + key.replace(/~/g, '~0').replace(/\//g, '~1')
+          if (!Object.hasOwn(next, key)) removedPaths.push(childPath)
+          else if (object(value) && object(next[key])) collectRemoved(value, next[key], childPath)
         }
       }
-      checkRemoved(oldShape, defaults)
+      collectRemoved(oldShape, defaults)
     }
     const migrated = clone(chat)
     migrated.cardStateDefaults = clone(defaults)
     migrated.cardStateMigrationIds = plans.map(plan => plan.id)
+    const selected=chat.messages.find(message=>message.greeting)?.swipeId||0
+    const states=[];states[selected]=defaults
+    const greeting=chat.messages.find(message=>message.greeting)
+    for(let index=0;index<(greeting?.swipes?.length||0);index++)if(index!==selected){
+      states[index]=await initialDefaults({...chat,messages:[{greeting:true,swipeId:index}]},card)
+    }
+    refreshOpeningInitvar(migrated,states)
     if (unchanged) return migrated
-    const count = migrateCardSnapshots(migrated, defaults, card.extensions?.dsh_tavern?.stateMigrations || [])
-    if ((Object.keys(defaults).length && chat.mvu?.enabled || plans.length) && !count) throw Error('当前存档缺少可迁移的 MVU 快照，未应用更新')
+    const count = migrateCardSnapshots(migrated, defaults, plans, removedPaths)
+    if ((Object.keys(defaults).length && chat.mvu?.enabled || plans.length || removedPaths.length) && !count) throw Error('当前存档缺少可迁移的 MVU 快照，未应用更新')
     return migrated
   }
   async function project(chat, card, display, options) {

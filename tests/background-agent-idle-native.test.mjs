@@ -31,8 +31,13 @@ test('native stalled model times out, releases the queue and retries on a new se
   const input={sessionId:'scene-parent',task:'candidate',persistent:true,selection:{provider:'scene-fixture',model:'fixture-text'},messages:[],tools:[]}
   let failedId
   await assert.rejects(runtime.runBackground(input),error=>{failedId=error.traceSessionId;return /没有有效输出/.test(error.message)})
+  release()
+  await new Promise(resolve=>setTimeout(resolve,50))
+  await runtime.restart()
   const result=await runtime.runBackground({...input,persistentSessionId:failedId})
   assert.notEqual(result.traceSessionId,failedId)
   assert.ok(result.text)
-  release()
+  const children=await runtime.backgroundChildren()
+  assert.ok(children.some(child=>child.id===result.traceSessionId))
+  assert.equal(children.some(child=>child.id===failedId),false)
 })

@@ -1,7 +1,7 @@
 import { recoveryBlocks } from './recovery-model.mjs'
 import { compactionStream, modelCapacity } from './compaction-model.mjs'
 // The only substituted boundary: fixed provider output. Tools execute normally.
-import { appendFile } from 'node:fs/promises'
+import { appendFile, readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 const { LlmAdapter } = await import(pathToFileURL(process.env.TAVERN_E2E_LLM_MODULE))
 export const inject = ['llm']
@@ -13,6 +13,20 @@ export function apply(ctx) {
     async *stream(input) {
       if (process.env.TAVERN_E2E_COMPACTION_DIR) { yield* compactionStream(input); return }
       const tools = new Set((input.tools || []).map(tool => tool.name))
+      if (process.env.TAVERN_E2E_MEMORY_AUDIT) {
+        await appendFile(process.env.TAVERN_E2E_MEMORY_AUDIT, JSON.stringify({ system: input.system, messages: input.messages, tools: input.tools }) + '\n')
+        if (tools.has('tavern_memory_search')) {
+          const text = JSON.stringify(input.messages)
+          const done = input.messages.some(message => (message.content || []).some(block => block.type === 'tool-result' && block.toolCallId === 'memory-preference-save'))
+          const block = text.includes('E2E_MEMORY_NEXT') ? { type: 'text', text: '已读取改卡偏好。' }
+            : text.includes('E2E_MEMORY_SAVE') && !done ? { type: 'tool-call', id: 'memory-preference-save', name: 'tavern_memory_preference', arguments: JSON.stringify({ action: 'add', content: '保留原卡结构，不重写开场白' }) }
+            : { type: 'text', text: done ? '改卡偏好已保存。' : '卡片工作台就绪。' }
+          yield { type: 'block-start', index: 0, blockType: block.type }
+          yield { type: 'block-end', index: 0, block }
+          yield { type: 'finish', reason: { kind: block.type === 'tool-call' ? 'tool-calls' : 'stop' } }
+          return
+        }
+      }
       const recovery = await recoveryBlocks(input, tools)
       if (recovery) {
         for (const [index, block] of recovery.entries()) {
@@ -21,6 +35,18 @@ export function apply(ctx) {
         }
         yield { type: 'finish', reason: { kind: 'stop' } }
         return
+      }
+      let heldAttempt
+      if (process.env.TAVERN_E2E_BACKGROUND_DIR && tools.has('mvu_submit_update')) {
+        const file = process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-control.json'
+        const control = JSON.parse(await readFile(file, 'utf8').catch(() => '{}'))
+        if (control.mode === 'hold') {
+          heldAttempt = control.attempt
+          await appendFile(process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-attempts.jsonl', JSON.stringify({attempt:control.attempt})+'\n')
+          // Deliberately ignore cancellation: the host must reject any late tool call.
+          const deadline=Date.now()+60000
+          while(Date.now()<deadline && JSON.parse(await readFile(file,'utf8')).mode==='hold') await new Promise(resolve=>setTimeout(resolve,50))
+        }
       }
       const done = new Set(input.messages.flatMap(message => message.content || [])
         .filter(block => block.type === 'tool-result').map(block => block.toolCallId))
@@ -47,7 +73,10 @@ export function apply(ctx) {
           presetA: text.includes('E2E_PRESET_A_ACTIVE'), presetB: text.includes('E2E_PRESET_B_ACTIVE'),
           settlement: tools.has('mvu_submit_update') || tools.has('posture_submit') }) + '\n')
       }
+      // Put the state-changing call first so cancellation is tested against an MVU write.
+      if (heldAttempt !== undefined) blocks.sort((a, b) => Number(b.name === 'mvu_submit_update') - Number(a.name === 'mvu_submit_update'))
       for (const [index, block] of blocks.entries()) {
+        if (heldAttempt !== undefined && block.type === 'tool-call') await appendFile(process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-late.jsonl', JSON.stringify({attempt:heldAttempt, tool:block.name})+'\n')
         yield { type: 'block-start', index, blockType: block.type }
         yield { type: 'block-end', index, block }
       }

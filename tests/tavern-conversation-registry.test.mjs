@@ -220,3 +220,15 @@ test('background config resolves aliases, repairs missing links and adopts legac
   assert.deepEqual(store.snapshot().chats.game.messages, initial.messages)
   assert.equal(await reader.readBackgroundConfig('missing'), undefined)
 })
+
+test('自动化拥有的会话不进入日常列表，但仍能解析且不删除数据', async () => {
+  const id = 'test-8c2b3d71-c30e-446f-b7f6-75fc32614b8c'
+  const normal = 'test-11111111-1111-4111-8111-111111111111'
+  const chat = { id: 'automation-chat', sessionId: id, cardName: '自动化' }
+  const store = memoryStore({ links: { [id]: chat.id, [normal]: 'normal-chat' }, index: { chats: [chat, { id: 'normal-chat', cardName: '正常对话' }] }, chats: { [chat.id]: chat } })
+  store.adapter.readAutomationOwner = async key => key === id ? { sessionId: id } : undefined
+  const registry = createTavernConversationRegistry({ store: store.adapter })
+  assert.deepEqual((await registry.list()).map(row => row.sessionId), [normal])
+  assert.deepEqual(await registry.resolve(id), chat)
+  assert.equal(store.snapshot().links[id], chat.id)
+})

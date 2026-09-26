@@ -133,6 +133,6 @@ export async function validateMvuConversion(data) {
     for (const state of meta.openingStates || [meta.initialState]) await simulatePanel(expected.statusHtml, state, meta.frozenAppearance)
     return meta.frozenAppearance ? (meta.frozenAppearance.generated ? '生成视图' : '原视图') + '在 DOM 中显示初值、更新及恢复，保留折叠交互状态' : '固定 HTML 在 DOM 中显示初值，模拟更新及恢复事件后重读最新变量'
   })
-  const pending = ['真实模型后台提交与官方 MVU 结算', '浏览器布局、字号与实际会话切换', '原卡复杂脚本、活动预设/全局正则及剧情语义']
-  return { valid: checks.every(item => item.status === 'passed'), checks, pending, scope: '自动结构/投影检查及托管视图 DOM 模拟；不代表真实游玩验收' }
+  const limitations = ['真实模型后台提交与官方 MVU 结算', '浏览器布局、字号与实际会话切换', '原卡复杂脚本、活动预设/全局正则及剧情语义']
+  return { valid: checks.every(item => item.status === 'passed'), checks, limitations, scope: '自动结构/投影检查及托管视图 DOM 模拟；不代表真实游玩验收' }
 }

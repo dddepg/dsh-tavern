@@ -36,6 +36,7 @@ export async function openTavernSettings(t, { settings, respond } = {}) {
   await page.evaluate(() => {
     let Settings
     window.client.apply({
+      inject() { return { dispose() {} } },
       get() {}, tavernSessionSignals: { subscribe() { return () => {} } },
       effect(run, label) { if (label === 'dsh-tavern: settings section') return run() },
       slots: { inject(_name, run) { return run() }, register(_spec, Component) { Settings = Component } }

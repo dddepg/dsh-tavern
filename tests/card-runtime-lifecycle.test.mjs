@@ -39,7 +39,7 @@ const mvuView = () => {
 test('DSH 字号同步到已就绪 iframe，不替换文档；离开后停止监听', () => {
   const h = host(), sent = []
   let size = '14px', notify, disconnected = false
-  h.window.document = { body: {}, documentElement: {} }
+  h.window.document = { body: { appendChild() {} }, documentElement: {}, createElement() { return { style: {}, remove() {} } } }
   h.window.getComputedStyle = () => ({ getPropertyValue: () => size })
   h.window.MutationObserver = class {
     constructor(callback) { notify = callback }
@@ -807,7 +807,7 @@ test('正式卡片页面追加消息走当前 Session 与生命周期校验', as
 test('右侧状态栏保留卡片原始字号，已有正文设置不改变其缩放比例', () => {
   const h = host(), sent = []
   let size = '28px', notify
-  h.window.document = { body: {}, documentElement: {} }
+  h.window.document = { body: { appendChild() {} }, documentElement: {}, createElement() { return { style: {}, remove() {} } } }
   h.window.getComputedStyle = () => ({ getPropertyValue: () => size })
   h.window.MutationObserver = class { constructor(callback) { notify = callback } observe() {} disconnect() {} }
   const life = h.client.createTavernMessageFrameLifecycle({ content: '<p>状态</p>', eager: true, persistent: true, followContentFont: false }, { window: h.window })

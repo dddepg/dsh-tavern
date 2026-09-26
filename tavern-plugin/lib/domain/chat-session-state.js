@@ -1,3 +1,4 @@
+import { copyJsonTree } from './copy-json-tree.js'
 import { rollbackAvailability, hasRollbackMessages, failedTurnReplayAvailability, foregroundSuppressedTurns, supersededRegenerationErrorTurns } from './rollback-surface.js'
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
@@ -51,7 +52,7 @@ export function projectChatSessionState(chat) {
       } } : {})
     }
   })
-  return structuredClone(selected)
+  return copyJsonTree(selected)
 }
 
 export function settlementTurn(chat) {
@@ -210,7 +211,7 @@ export function projectSettlementCheckpoint(chat, messageId, operationId) {
 
 // Scene identity needs story text, but never MVU snapshots, card data or display artifacts.
 export function projectSceneImageState(chat) {
-  return structuredClone({
+  return copyJsonTree({
     id: chat.id, sessionId: chat.sessionId, mode: chat.mode,
     backgroundConfigVersion: chat.backgroundConfigVersion,
     conversationFeaturesVersion: chat.conversationFeaturesVersion,

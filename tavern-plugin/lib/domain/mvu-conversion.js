@@ -1,5 +1,8 @@
+import {DRAFT_FIELD_CHANGES,fieldPaths} from './mvu-draft-fields.js'
+import {createMvuDrafts} from './mvu-drafts.js'
+import {inspectMvuEntrances,preflightMvuConversion,resolveMvuCleanup} from './mvu-conversion-preflight.js'
 import { mvuStructureGuide, mvuDeliveryGuide } from './mvu-conversion-guidance.js'
-import { stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
+import { atPath, stateInventory, createDefinition, definitionDigest, definitionKeys, assertDefinition } from './mvu-conversion-definition.js'
 import { appearanceSources, freezeMvuAppearance } from './mvu-conversion-appearance.js'
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
@@ -152,7 +155,7 @@ export function createMvuConversion({ resources }) {
       stateInventory: stateInventory(source.data,args.sourceFields),
       appearanceSources: appearanceSources(source.data),
       capabilities: { customAppearance:true, appearanceMode:"frozen-source-captures", sharedInitialState:false, savedDefinition:true, openingCount:1+(source.data.alternate_greetings?.length || 0), preservedInactiveWorldbook:!!source.preservedBook },
-      instruction: 'reading 已含原文，只续读未完整展示的必要字段，可用 paths 批量读取。source/target 均是规范化生效字段，不检查磁盘包装镜像。用 read/search 按 sourceRevision 读取来源字段；scope=plan 可读已保存方案。apply 默认合并方案：省略的定义及已有清理保留，新清理追加并去重；cleanupResetPaths 先清除指定路径的旧操作。planMode=replace 才整份替换。preview 不落盘。' }
+      instruction: (existing === undefined ? '目标副本不存在；targetPath 只是计划保存位置，不表示文件存在。不要读取 scope=target/plan，按新建副本处理，不提供旧 targetRevision。' : '') + 'reading 已含原文，只续读未完整展示的必要字段，可用 paths 批量读取。source/target 均是规范化生效字段，不检查磁盘包装镜像。用 read/search 按 sourceRevision 读取来源字段；scope=plan 可读已保存方案。apply 默认合并方案：省略的定义及已有清理保留，新清理追加并去重；cleanupResetPaths 先清除指定路径的旧操作。planMode=replace 才整份替换。preview 不落盘。' }
   }
   async function read(args) {
     const source = await snapshot(args.sourcePath)
@@ -164,7 +167,11 @@ export function createMvuConversion({ resources }) {
     } else if (args.scope === 'preservedWorldbook') value = source.preservedBook ?? null
     else if (args.scope === 'target' || args.scope === 'plan') {
       const target = targetFor(source, args.name), text = await resources.readText(target.path)
-      if (text === undefined || !args.targetRevision || digest(text) !== args.targetRevision) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
+      if (text === undefined) throw cleanupError('MVU_TARGET_MISSING', '目标副本不存在，可能已删除或改名；请重新 inspect 确认目标，不要继续读取旧副本或沿用旧 targetRevision', {
+        targetPath: target.path, targetExists: false,
+        recovery: '重新 inspect；若 target 为 null，按新建副本转换，不提供旧 targetRevision。需要读取原卡时使用 scope=source。'
+      })
+      if (!args.targetRevision || digest(text) !== args.targetRevision) throw Error('目标副本已有变更，请重新 inspect 并提供 targetRevision')
       const data = cardData(JSON.parse(text))
       const meta = data.extensions?.[MVU_CONVERSION_KEY]
       value = args.scope === 'target' ? data : meta ? Object.fromEntries(['initialState','openingStates','definition','definitionRevision','updateRules','displayFields','cleanup','appearance'].filter(key=>Object.hasOwn(meta,key)).map(key=>[key,meta[key]])) : null
@@ -207,8 +214,15 @@ export function createMvuConversion({ resources }) {
       if (!definition || definitionDigest(definition) !== definitionRevision) throw Error('已保存定义不存在或被修改，请重新 saveDefinition')
       if (definition.sourcePath !== source.sourcePath || definition.sourceRevision !== source.revision) throw Error('已保存定义的来源已变化，请重新 saveDefinition')
       if (metadata?.definition && metadata.sourceRevision === source.revision) {
-        for (const [index,fields] of metadata.definition.fields.entries()) for (const field of fields) {
-          if (!definition.fields[index]?.some(next=>next.path===field.path)) throw Error('新定义不能减少已保存字段: '+field.path)
+        for (const [index,fields] of metadata.definition.fields.entries()) {
+          // Arrays are declared fields; their length is an opening value, not a
+          // set of permanently required index paths.
+          const arrays=fieldPaths(metadata.openingStates[index]).filter(field=>field.type==='array'&&definition.openingStates[index]&&(()=>{try{return Array.isArray(atPath(definition.openingStates[index],field.path))}catch{return false}})())
+          for (const field of fields) {
+            const arrayValue=arrays.some(array=>field.path===array.path||field.path.startsWith(array.path+'/'))
+            const explicitChange=input[DRAFT_FIELD_CHANGES]?.some(change=>field.path===change.path||field.path.startsWith(change.path+'/'))
+            if (!definition.fields[index]?.some(next=>next.path===field.path) && !arrayValue && !explicitChange) throw Error('新定义不能减少已保存字段: '+field.path)
+          }
         }
       }
       for (const key of definitionKeys) {
@@ -219,6 +233,7 @@ export function createMvuConversion({ resources }) {
     const skins = appearanceSources(source.data)
     if (!args.appearance && skins.some(skin => skin.enabled)) throw Error('必须先固化原有美化并提供 appearance 映射，不能降级为默认面板')
     const frozenAppearance = args.appearance ? freezeMvuAppearance(source.data,args.appearance) : undefined
+    if (args.cleanupOrphanEntrances) args.cleanup=resolveMvuCleanup(source.data,args,applyMvuCleanup).effectiveCleanup
     const requestHash = digest({ sourceRevision:source.revision,name:target.name,definitionRevision,appearance:args.appearance,initialState:args.initialState,updateRules:args.updateRules,displayFields:args.displayFields || [],cleanup:args.cleanup || [] })
     if (existingText !== undefined) {
       if (metadata.requestHash === requestHash && metadata.outputDigest === outputDigest(existing)) {
@@ -270,7 +285,7 @@ export function createMvuConversion({ resources }) {
     const check = await validateMvuConversion(data)
     const audit = cleanupAudit(source.data,args.cleanup || [],data)
     check.checks.push(audit.check); check.changes = audit.changes; check.removedEntries = audit.removedEntries; check.preservedEntries = audit.preservedEntries; check.valid &&= audit.check.status === 'passed'
-    check.pending.push('原卡语义与未识别旧协议需按 changes 清单确认；原样式需浏览器对照验收')
+    check.limitations.push('自动检查未覆盖未识别旧协议、剧情节奏和实际浏览器外观')
     if (input.action === 'preview') return {path:target.path,saved:false,validation:check}
     if (!check.valid) throw Error('转换预检失败: ' + JSON.stringify(check.checks.filter(item => item.status === 'failed')))
     if ((await snapshot(source.sourcePath)).revision !== source.revision) throw Error('转换期间来源发生变化，请重新 inspect')
@@ -312,21 +327,31 @@ export function createMvuConversion({ resources }) {
       } catch (error) {
         result.checks.push({name:'sourceAudit',status:'failed',detail:error.message}); result.valid = false
       }
-    } else result.pending.push('旧副本未保存完整转换方案，无法核对清理清单与方案外修改')
-    result.pending.push('核对 changes 的删除条目及剧情语义；原样式需浏览器对照验收')
+    } else result.limitations.push('旧副本未保存完整转换方案，无法核对清理清单与方案外修改')
     const binding = await resources.worldBookBindingForCard(path)
     const bound = binding.kind === 'embedded' && binding.cardPath === path
     result.checks.unshift({ name: 'binding', status: bound ? 'passed' : 'failed', detail: bound ? '副本绑定自己的世界书' : '副本未绑定自己的世界书' })
     result.valid &&= bound
     return result
   }
-  function convert(args) {
+  async function convert(args) {
     if (args.action === 'inspect') return inspect(args)
     if (args.action === 'freezeAppearance') return snapshot(args.sourcePath).then(source => {
       if (!args.sourceRevision || args.sourceRevision !== source.revision) throw Error('来源已变化，请重新 inspect')
       const frozen = freezeMvuAppearance(source.data,args.appearance)
       return {sourceRevision:source.revision,appearance:args.appearance,sourceDigest:frozen.sourceDigest,htmlDigest:frozen.htmlDigest,bindings:frozen.bindings,mode:'frozen-source-captures',instruction:'原视图从来源直接固化。saveDefinition 传相同 appearance；不提交 HTML。'}
     })
+    if (args.action === 'preflight') {
+      const source=await snapshot(args.sourcePath)
+      if (!args.sourceRevision || source.revision!==args.sourceRevision)throw Error('来源或世界书已变化，请重新 inspect')
+      let input=args
+      if(args.definitionRevision){
+        const definition=await resources.readMvuDefinition(args.definitionRevision)
+        if(!definition||definitionDigest(definition)!==args.definitionRevision||definition.sourceRevision!==source.revision||definition.sourcePath!==source.sourcePath)throw Error('已保存定义不存在或来源已变化')
+        input={...definition,fieldMappings:definition.mappings,...args}
+      }
+      return preflightMvuConversion(source,input,applyMvuCleanup)
+    }
     if (args.action === 'saveDefinition') {
       const job = tail.then(async () => {
         const source = await snapshot(args.sourcePath)
@@ -339,12 +364,79 @@ export function createMvuConversion({ resources }) {
         const saved = await resources.readMvuDefinition(definitionRevision)
         if (definitionDigest(saved) !== definitionRevision) throw Error('字段定义保存后回读不一致')
         return {definitionRevision,sourceRevision:source.revision,fieldCounts:definition.fields.map(fields=>fields.length),mappedSourceFields:definition.inventory.length,
+          ...(definition.appearance?.bindings ? {bindings:definition.appearance.bindings} : {}),entrances:inspectMvuEntrances(source.data),
           instruction:'字段定义已落盘。apply 只传 definitionRevision、sourceRevision、name、cleanup 和需要的 targetRevision；初值、规则和外观从定义直接装配，不重新提交。'}
       }); tail=job.catch(()=>{});return job
     }
     if (args.action === 'read' || args.action === 'search') return read(args)
-    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/saveDefinition/preview/apply')
+    if (!['apply','preview'].includes(args.action)) throw Error('action 必须为 inspect/read/search/freezeAppearance/saveDefinition/preflight/preview/apply')
     const job = tail.then(() => apply(args)); tail = job.catch(() => {}); return job
   }
-  return { convert, verify }
+  async function appearanceTarget(input) {
+    const path = normalizeResourcePath(input.path, 'card')
+    const text = await resources.readText(path)
+    if (text === undefined) throw Error('人物卡不存在，请重新选择目标: ' + path)
+    const document = JSON.parse(text), meta = cardData(document).extensions?.[MVU_CONVERSION_KEY]
+    return { path, text, document, meta, revision:digest(text) }
+  }
+  async function readAppearance(input) {
+    const target = await appearanceTarget(input)
+    if (input.revision && input.revision !== target.revision) throw Error('美化版本已变化，请重新读取')
+    const appearance = target.meta?.appearance
+    const editable = target.meta?.version === 1 && typeof appearance?.html === 'string'
+      && !!target.meta.definitionRevision && target.meta.outputDigest === outputDigest(target.document)
+    return { path:target.path, revision:target.revision, editable,
+      ...(typeof appearance?.html === 'string' ? {html:readConversionValue(appearance.html,{offset:input.offset,limit:input.limit}),bindings:appearance.bindings || [],...(appearance.collectionPath ? {collectionPath:appearance.collectionPath} : {})} : {}),
+      instruction:editable ? '只提交 replacements 中的唯一原文片段与新文本。工具同步定义、面板及校验；保留 $N 占位和绑定，无需读取初值或手工维护摘要。'
+        : '该卡不是可直接局部编辑的托管 HTML 面板，或已有方案外修改。读取目标卡相关字段定位原因；不要直接改写生成元数据或覆盖已有修改。' }
+  }
+  async function updateAppearance(input) {
+    const job = tail.then(async () => {
+      const target = await appearanceTarget(input)
+      if (!input.revision || input.revision !== target.revision) throw Error('美化版本已变化，请重新读取')
+      const {meta} = target
+      if (meta?.version !== 1 || typeof meta.appearance?.html !== 'string' || !meta.definitionRevision) throw Error('仅支持已保存定义的托管 HTML 美化')
+      if (meta.outputDigest !== outputDigest(target.document)) throw Error('目标已有方案外修改，不能覆盖；请读取目标卡核对')
+      if (!Array.isArray(input.replacements) || !input.replacements.length || input.replacements.length > 50) throw Error('replacements 必须包含 1–50 项局部替换')
+      const source = await snapshot(meta.sourcePath)
+      if (source.revision !== meta.sourceRevision) throw Error('来源或世界书已变化，不能用旧方案覆盖目标')
+      const name = target.path.slice('cards/'.length, -'.json'.length)
+      if (targetFor(source,name).path !== target.path) throw Error('目标路径不支持原位编辑')
+      const saved = await resources.readMvuDefinition(meta.definitionRevision)
+      if (!saved || definitionDigest(saved) !== meta.definitionRevision) throw Error('已保存定义不存在或被修改')
+      assertDefinition(saved,meta,source)
+      const html = saved.appearance.html
+      const edits = input.replacements.map((edit,index) => {
+        if (typeof edit.expected !== 'string' || !edit.expected || typeof edit.value !== 'string') throw Error('替换需要非空 expected 和字符串 value')
+        const start = html.indexOf(edit.expected)
+        if (start < 0 || html.indexOf(edit.expected,start+1) !== -1) throw Error('美化原文必须恰好匹配一次，请扩大唯一片段: ' + index)
+        return {start,end:start+edit.expected.length,value:edit.value}
+      }).sort((a,b)=>a.start-b.start)
+      for (let i=1;i<edits.length;i++) if (edits[i].start<edits[i-1].end) throw Error('美化替换范围重叠，请合并修改')
+      let updated = html
+      for (const edit of edits.reverse()) updated = updated.slice(0,edit.start)+edit.value+updated.slice(edit.end)
+      const captures = text => [...text.matchAll(/\$(\d{1,2})(?!\d)/g)].map(match=>Number(match[1]))
+      const existingCaptures = new Set(captures(html))
+      if (captures(updated).some(capture=>!existingCaptures.has(capture)) || /<mvu-field\b/i.test(updated)) throw Error('此工具仅编辑已有绑定；新增字段请使用 tavern_card_draft patch section=appearance values.replacements，并插入 mvu-field 组件。已有草稿继续使用当前草稿，勿直接保存目标卡。')
+      const definition = createDefinition(source,{...saved,fieldMappings:saved.mappings,appearance:{...saved.appearance,html:updated}})
+      const frozenAppearance = freezeMvuAppearance(source.data,definition.appearance)
+      for (const initialState of definition.openingStates) buildMvuArtifacts({...definition,initialState,frozenAppearance})
+      const definitionRevision = definitionDigest(definition)
+      await resources.saveMvuDefinition(definitionRevision,definition)
+      // Reuse the atomic source/target compare-and-save and full disk validation.
+      return apply({action:'apply',sourcePath:source.sourcePath,sourceRevision:source.revision,
+        name,targetRevision:target.revision,definitionRevision})
+    })
+    tail = job.catch(()=>{})
+    return job
+  }
+  async function resolveDraftTarget(path) {
+    const target = await appearanceTarget({path})
+    if (target.meta?.version !== 1 || !target.meta.definitionRevision || !target.meta.sourcePath) throw Error('目标缺少完整托管 MVU 定义，无法局部修改变量')
+    if (target.meta.outputDigest !== outputDigest(target.document)) throw Error('目标存在方案外修改，不能覆盖；请先核对目标卡')
+    return {sourcePath:target.meta.sourcePath,name:target.path.slice(6,-5),revision:target.revision}
+  }
+  const conversion = { convert, verify, readAppearance, updateAppearance, resolveDraftTarget }
+  conversion.draft = createMvuDrafts({resources,conversion}).run
+  return conversion
 }

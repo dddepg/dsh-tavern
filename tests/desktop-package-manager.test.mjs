@@ -10,7 +10,9 @@ test('Windows Desktop rejects unverified downloaded executables',async()=>{
  const home=await mkdtemp(path.join(os.tmpdir(),'desktop-package-'))
  try{
  const entry=path.join(home,'pnpm.mjs');await writeFile(entry,'')
- await assert.rejects(prepareDesktopPackageManager({host:'desktop',platform:'win32',arch:'x64',home,entry,fetch:async()=>new Response('not-node')}),/SHA-256/)
+ const progress=[]
+ await assert.rejects(prepareDesktopPackageManager({host:'desktop',platform:'win32',arch:'x64',home,entry,onProgress:message=>progress.push(message),fetch:async()=>new Response('not-node')}),/SHA-256/)
+ assert.ok(progress.some(message=>/已下载.*MB/.test(message)), 'download byte progress must be visible before checksum validation')
  }finally{await rm(home,{recursive:true,force:true})}
 })
 
@@ -28,7 +30,8 @@ test('Desktop uses its declared pnpm entry and retries failed downloads with the
    fetch: async url => { urls.push(url); attempts++; throw cause }, onProgress: text => progress.push(text),
   }), error => error.cause === cause && /3/.test(error.message))
   assert.equal(attempts, 3)
-  assert.equal(progress.length, 3)
+  assert.equal(progress.filter(message=>message.startsWith('正在下载')).length, 3)
+  assert.ok(progress.some(message=>message.includes('connection reset')&&message.includes('重试')), 'network failure must explain the fallback')
   assert.equal(new URL(urls[0]).hostname, 'nodejs.org')
   assert.ok(urls.some(url => new URL(url).hostname === 'npmmirror.com'), 'official download failures must try the mirror')
  } finally { await rm(home, { recursive: true, force: true }) }

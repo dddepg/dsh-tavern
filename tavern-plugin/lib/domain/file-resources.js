@@ -1,6 +1,6 @@
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { createDurableFilePromotion } from '../durable-file-promotion.js'
 import { createResourceMutationJournal } from './resource-mutation-journal.js'
 import { inspectPreset } from './preset-reading.js'
@@ -156,6 +156,41 @@ export function createFileResourceStore(options = {}) {
   }
   async function saveMvuDefinition(revision, definition) {
     await durableFiles.write(mvuDefinitionPath(revision), JSON.stringify(definition))
+  }
+
+  function mvuDraftPath(id) {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('MVU 草稿 ID 无效')
+    return path.join(dataRoot, 'mvu-drafts', id + '.json')
+  }
+  async function readMvuDraft(id) {
+    const value = await durableFiles.read(mvuDraftPath(id))
+    return value === undefined ? undefined : JSON.parse(value.toString('utf8'))
+  }
+  async function updateMvuDraft(id, updater) {
+    let result
+    await durableFiles.update(mvuDraftPath(id), async bytes => {
+      result = await updater(bytes === undefined ? undefined : JSON.parse(bytes.toString('utf8')))
+      return JSON.stringify(result)
+    })
+    return result
+  }
+
+  function mvuDraftSessionPath(sessionId) {
+    if(typeof sessionId!=='string'||!sessionId)throw Error('MVU 草稿需要会话 ID')
+    const id=createHash('sha256').update(sessionId).digest('hex')
+    return path.join(dataRoot,'mvu-draft-sessions',id+'.json')
+  }
+  async function readMvuDraftSession(sessionId) {
+    const bytes=await durableFiles.read(mvuDraftSessionPath(sessionId))
+    return bytes===undefined?undefined:JSON.parse(bytes.toString('utf8'))
+  }
+  async function updateMvuDraftSession(sessionId, updater) {
+    let result
+    await durableFiles.update(mvuDraftSessionPath(sessionId),async bytes=>{
+      result=await updater(bytes===undefined?undefined:JSON.parse(bytes.toString('utf8')))
+      return JSON.stringify(result)
+    })
+    return result
   }
 
   async function writeWorking(relative, data) {
@@ -985,5 +1020,5 @@ export function createFileResourceStore(options = {}) {
     return result
   }
 
-  return Object.freeze({ readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
+  return Object.freeze({ readMvuDraftSession, updateMvuDraftSession, readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
 }

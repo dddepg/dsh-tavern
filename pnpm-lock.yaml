@@ -18,6 +18,15 @@ importers:
       chevrotain:
         specifier: ^11.2.0
         version: 11.2.0
+      dsh-mnemon:
+        specifier: 0.5.15
+        version: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-source-documents:
+        specifier: 0.5.6
+        version: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-source-runtime:
+        specifier: 0.5.9
+        version: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
       jsdom:
         specifier: 26.1.0
         version: 26.1.0
@@ -200,6 +209,12 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
+
+  '@deepseek-ai/cosmokit@1.8.5':
+    resolution: {integrity: sha512-LXsrlem9z8dq4sLflj2yuCuYX7KqhdzF5hZly3eZyuTo8d6oDSOXuEgC5DbQWKW+lksm6zmOutQLsP/ma6wR6A==}
+
+  '@deepseek-ai/schemastery@3.18.4':
+    resolution: {integrity: sha512-SSXO6tYuyrIqKVbmOnIq0s+riUywYzouFMcnBluHF9n4KMo2G8HvEzhCYj6pj2617/glOjbJuVInJ9hfONsjkg==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -647,6 +662,144 @@ packages:
       '@huanlin/dsh-plugin-better-locale':
         optional: true
 
+  dsh-mnemon-provider-byterover@0.5.4:
+    resolution: {integrity: sha512-XEu6dwuGLzQzoZv9Aata+xMGmXBrAMDMycy0YayXtXj2rD78GfgQiL8V3dOFDQkqi3nKSLn70LcxEavpmGhfqQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-hindsight@0.5.4:
+    resolution: {integrity: sha512-T7myWzmHdM8VP0Id6yKhG4o1EWcOkk2jEWLMAfwlCOoos6vjHjcZMyc9RiuYvzrld5Vq5G2WIegvuYF/tqT4dg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-holographic@0.5.4:
+    resolution: {integrity: sha512-y92jU17pDE71Vl440SQsi2IpKoVtCaLAKYgt4NBU5avm9TTeLscVsGRx7U7jQIVEwUkh3G8j3m24VnXQYZk0eQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-honcho@0.5.4:
+    resolution: {integrity: sha512-rfO7GKZ7USYTBOroiOOnY/NRHvUF9m5QuRdb6Rc4IVuKoU9tNJB7I+PtuogS75OWqYRuskcEYBRce2h/BAj3Sg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-mem0@0.5.4:
+    resolution: {integrity: sha512-alI5h2edY5SufWmvU8rjeEwonn9L9OkWZ44K8bDuWIPfsY1qbfIsIQahu5OqcvS88ibBm4hZGeKR1j75M+s4Gg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-mnemon-native@0.5.5:
+    resolution: {integrity: sha512-d/tLkxWOFy2GHYTOPPDkflR+2quIvvFOYk7YHpo+eS63VMaVjEl+++hzAWkeFyRwAkgCbwUR0izchn+JAyQQYg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-openviking@0.5.6:
+    resolution: {integrity: sha512-r5cYcsg4jjosnQ1FKWR9hz+KDwAgYMladO8hE108crSzCQFcv4FXHkQILfKzHrPhza8Puom6moygpSDgIA3TWw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-retaindb@0.5.4:
+    resolution: {integrity: sha512-zX9NShhMwyfbVVdz9pj6XLH2n732mu+8VkxyiEpK1c4ElqyVm2P7Os1KFoOzNzdUHeNuHEHf98pWfKgmdWDFPA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-provider-supermemory@0.5.4:
+    resolution: {integrity: sha512-z70tDyX+J6LwmOFkQJtZqmnO1EUNjOrvAihtPlTQGnQVukZ/mRJ2FpMCFYb69Mteyi/SUaOrx0uAaDJc9ePCoA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon-source-memory-spaces: ^0.5.1
+
+  dsh-mnemon-source-documents@0.5.6:
+    resolution: {integrity: sha512-oCO6d+N2WvtBw228RoUKVIpY51j3p3xVnjZUGz0m6kSMG6WrE2LtE8xA97lGgY4irLOPakHeZK0IVISDELXqyA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      react: ^18.2.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  dsh-mnemon-source-memory-spaces@0.5.9:
+    resolution: {integrity: sha512-RChifAOrm6+JJtyaDrBMcKAAakUz9IctFAl6EQ/Vp2bss+B71UKEDCQ2OlOloSI+ujiXP6Y1N750DcA+OdagJQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      react: ^18.2.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  dsh-mnemon-source-runtime@0.5.9:
+    resolution: {integrity: sha512-3DUke9ZgvRDkEUI7OVikcOjeNDGRd0cNCVjeIUkcWRcWFnCMultlZQcS0FyxXX1wNhRifqWXQtfsLOaTRBmsPA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      react: ^18.2.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  dsh-mnemon-strategy-auto-capture@0.5.4:
+    resolution: {integrity: sha512-l6Xsfjp3/2EXZbTQB1+AdU6GXlCKgG2qhmQN7WhHmAL488APZ88MTKwvKc+1Np89+JWM4UfN1/h2rlOOK6RCdw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      dsh-mnemon-strategy-default-three-tier: ^0.5.1
+
+  dsh-mnemon-strategy-default-three-tier@0.5.6:
+    resolution: {integrity: sha512-AwJSMRYvE6E0JUYIpyiUJJQV9swDzNzTQwrLj0L9eY9ogdS+bdpK2jWCFbFblQCyGB33E8PvXZosgELocsUPLg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+
+  dsh-mnemon-strategy-light-context@0.5.4:
+    resolution: {integrity: sha512-QmQ9s3ie45kGNcXDNmWZKhpzpD2FsdoQtRC8gRGFjtj94Ru8ppnmZnzZtTDGG3gHURuig4Lhcgtqj1vRUG3RcA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      dsh-mnemon-strategy-default-three-tier: ^0.5.1
+
+  dsh-mnemon-strategy-scoped@0.5.4:
+    resolution: {integrity: sha512-kGfA+Z4PTNHVL3PunrG+4QsYBq0C8xSiica6l74qfQC/02hVf86v1nJq4dStPnyVQI4NQ02HkYlDrS2drpZIGA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      dsh-mnemon: ^0.5.1
+      dsh-mnemon-strategy-default-three-tier: ^0.5.1
+
+  dsh-mnemon@0.5.15:
+    resolution: {integrity: sha512-d899409TOODxPNbQ07XwVmGqVzHGzxLHibDIA1gs8HABJoy08wTmNixElk6WXP/uGKMKZwfAzmJsVLRyLU0cUQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+      '@deepseek-ai/dsh-client-ui-primitives': ^0.1.5-rc.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1
+      '@deepseek-ai/dsh-typert-protocol': ^0.1.5-rc.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1
+      react: ^18.2.0
+      react-dom: ^18.2.0
+
   dsh-pocket@2.10.6:
     resolution: {integrity: sha512-yqybeWWutozi1yBLDpSs6ien9SndFPVNK6HlmhJf8q0AOLauzcLntmFyGQ0/v3EzS3V8ftM4yvqcc/o6LcGcGA==}
     engines: {node: '>=22'}
@@ -686,6 +839,9 @@ packages:
 
   escape-latex@1.2.0:
     resolution: {integrity: sha512-nV5aVWW1K0wEiUIEdZ4erkGGH8mDxGyxSeqPzRNtWP7ataw+/olFObw7hujFWlVjNsaDFw5VZ5NzVSIqRgfTiw==}
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   find-up@4.1.0:
     resolution: {integrity: sha512-PpOwAdQ/YlXQ2vj8a3h8IipDuYRi3wceVQQGYWxNINccq40Anw7BlsEXCMbt1Zt+OLA6Fq9suIpIWD0OsnISlw==}
@@ -776,6 +932,15 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  markdown-to-jsx@7.7.17:
+    resolution: {integrity: sha512-7mG/1feQ0TX5I7YyMZVDgCC/y2I3CiEhIRQIhyov9nGBP5eoVrOXXHuL5ZP8GRfxVZKRiXWJgwXkb9It+nQZfQ==}
+    engines: {node: '>= 10'}
+    peerDependencies:
+      react: '>= 0.14.0'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   marked@16.3.0:
     resolution: {integrity: sha512-K3UxuKu6l6bmA5FUwYho8CfJBlsUWAooKtdGgMcERSpF7gcBUrCGsLH7wDaaNOzwq18JzSUDyoEb/YsrqMac3w==}
@@ -1267,6 +1432,13 @@ snapshots:
       '@csstools/css-tokenizer': 3.0.4
 
   '@csstools/css-tokenizer@3.0.4': {}
+
+  '@deepseek-ai/cosmokit@1.8.5': {}
+
+  '@deepseek-ai/schemastery@3.18.4':
+    dependencies:
+      '@deepseek-ai/cosmokit': 1.8.5
+      '@standard-schema/spec': 1.1.0
 
   '@iconify/types@2.0.0': {}
 
@@ -1803,6 +1975,110 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  dsh-mnemon-provider-byterover@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-hindsight@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-holographic@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-honcho@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-mem0@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-mnemon-native@0.5.5(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-openviking@0.5.6(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-retaindb@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-provider-supermemory@0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-source-documents@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      markdown-to-jsx: 7.7.17(react@19.2.0)
+      schemastery: 3.18.0
+    optionalDependencies:
+      react: 19.2.0
+
+  dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      schemastery: 3.18.0
+    optionalDependencies:
+      react: 19.2.0
+
+  dsh-mnemon-source-runtime@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      schemastery: 3.18.0
+    optionalDependencies:
+      react: 19.2.0
+
+  dsh-mnemon-strategy-auto-capture@0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-strategy-default-three-tier: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+
+  dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+
+  dsh-mnemon-strategy-light-context@0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-strategy-default-three-tier: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+
+  dsh-mnemon-strategy-scoped@0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      dsh-mnemon: 0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-strategy-default-three-tier: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+
+  dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+    dependencies:
+      '@deepseek-ai/cosmokit': 1.8.5
+      dsh-mnemon-provider-byterover: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-hindsight: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-holographic: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-honcho: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-mem0: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-mnemon-native: 0.5.5(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-openviking: 0.5.6(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-retaindb: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-provider-supermemory: 0.5.4(dsh-mnemon-source-memory-spaces@0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-source-documents: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-source-memory-spaces: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-source-runtime: 0.5.9(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+      dsh-mnemon-strategy-auto-capture: 0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-strategy-default-three-tier: 0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-strategy-light-context: 0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+      dsh-mnemon-strategy-scoped: 0.5.4(dsh-mnemon-strategy-default-three-tier@0.5.6(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0)))(dsh-mnemon@0.5.15(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+      fflate: 0.8.3
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+      schemastery: 3.18.0
+      schemastery-live: '@deepseek-ai/schemastery@3.18.4'
+      yaml: 2.9.0
+      zod: 4.6.5
+
   dsh-pocket@2.10.6(patch_hash=b87a52109852c2e61a3f4d89a00e580460ebb5b3f89c47d1170b68ad594adb38):
     dependencies:
       qrcode: 1.5.4
@@ -1819,6 +2095,8 @@ snapshots:
   es-toolkit@1.51.0: {}
 
   escape-latex@1.2.0: {}
+
+  fflate@0.8.3: {}
 
   find-up@4.1.0:
     dependencies:
@@ -1914,6 +2192,10 @@ snapshots:
   lodash-es@4.18.1: {}
 
   lru-cache@10.4.3: {}
+
+  markdown-to-jsx@7.7.17(react@19.2.0):
+    optionalDependencies:
+      react: 19.2.0
 
   marked@16.3.0: {}
 
