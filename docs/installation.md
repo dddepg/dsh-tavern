@@ -50,6 +50,8 @@ dsh plugin --profile tavern add github:flizzywine/dsh-tavern
 
 npm 包：[dsh-profile-tavern](https://www.npmjs.com/package/dsh-profile-tavern)。国内镜像可能延迟同步新版本。
 
+**npm 包仅在正式版本（大版本）发布时同步，不包含期间的小更新和即时修复。** `@latest` 指最新已发布的 npm 包，不代表 GitHub 最新代码；重复运行 npm 安装命令也无法获取尚未发布到 npm 的更新。需要跟进最新代码，请使用上面的 GitHub 安装方式，或下文的专用安装方式。
+
 第一条命令由 DSH 创建 Profile、安装完整运行包并启用酒馆；第二条启动网页。酒馆使用当前 DSH，不会另装或升级宿主。运行包包含 Web 配置、侧栏、人物卡功能、预设和 Skill，无需自行构建。启动时检查 DSH 适配版本。
 
 数据位于当前 `DSH_HOME` 下的 `profile-data/tavern/`；未设置 `DSH_HOME` 时通常为 `~/.dsh/profile-data/tavern/`。程序由 Profile 的包管理器维护。更新时先关闭酒馆，重新运行第一条安装命令，再启动。页面中的「查看更新命令」提供同一条命令，不使用原来的源码更新器。
