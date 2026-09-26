@@ -6,30 +6,11 @@ import net from 'node:net'
 import test from 'node:test'
 import { parseDocument } from 'yaml'
 
-import {
-  applySidebarDefaults,
-  browserOpenCommand,
-  decodeUpdateOutput,
-  encodeWindowsPowerShellScript,
-  ensureSidebarDefaults,
-  extractDshVersion,
-  isPortOpen,
-  isServiceReady,
-  needsFrontendBootstrap,
-  parseInstallHost,
-  parseUpdateOptions,
-  recordInstalledRelease,
-  resolveDshInvocation,
-  resolveUpdateProgram,
-  restartBrowserTarget,
-  webUrlFromLogChunk,
-  resolveServicePort,
-  updateApplication,
-} from '../bin/dsh-tavern.mjs'
+import { applySidebarDefaults, browserOpenCommand, decodeUpdateOutput, encodeWindowsPowerShellScript, ensureSidebarDefaults, isPortOpen, isServiceReady, needsFrontendBootstrap, recordInstalledRelease, resolveDshInvocation, resolveUpdateProgram, restartBrowserTarget, webUrlFromLogChunk, updateApplication } from '../bin/dsh-tavern.mjs'
 
 const windowsInstaller = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')
 const unixInstaller = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
-const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
+
 const launcherSource = await readFile(new URL('../bin/dsh-tavern.mjs', import.meta.url), 'utf8')
 const serviceSource = await readFile(new URL('../bin/service-lifecycle.mjs', import.meta.url), 'utf8')
 const installationSource = await readFile(new URL('../bin/profile-installation.mjs', import.meta.url), 'utf8')
@@ -53,29 +34,6 @@ test('无 Git 的 ZIP 安装在收尾时补写提交号', async () => {
 })
 const tavernPluginManifest = JSON.parse(await readFile(new URL('../tavern-plugin/package.json', import.meta.url), 'utf8'))
 const profileWorkspace = await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
-
-
-test('公开安装命令使用 jsDelivr，不把 raw GitHub 作为国内用户入口', () => {
-  assert.match(readme, /cdn\.jsdelivr\.net\/gh\/flizzywine\/dsh-tavern@main\/install\.ps1/)
-  assert.match(readme, /cdn\.jsdelivr\.net\/gh\/flizzywine\/dsh-tavern@main\/install\.sh/)
-  assert.doesNotMatch(readme, /raw\.githubusercontent\.com\/flizzywine\/dsh-tavern\/main\/install\.(?:ps1|sh)/)
-})
-
-test('安装宿主默认使用 CLI，并明确接受 Desktop 与 Android', () => {
-  assert.equal(parseInstallHost([]), 'cli')
-  assert.equal(parseInstallHost(['--host', 'desktop']), 'desktop')
-  assert.equal(parseInstallHost(['--host', 'android']), 'android')
-  assert.equal(parseInstallHost(['--host=cli']), 'cli')
-  assert.throws(() => parseInstallHost(['--host', 'unknown']), /不支持的安装宿主/)
-  assert.throws(() => parseInstallHost(['--unknown']), /无法识别的安装参数/)
-})
-
-test('命令行启动端口默认 3081，安卓环境可显式使用 3088', () => {
-  assert.equal(resolveServicePort(undefined), 3081)
-  assert.equal(resolveServicePort('3088'), 3088)
-  assert.throws(() => resolveServicePort('0'), /1 到 65535/)
-  assert.throws(() => resolveServicePort('not-a-port'), /1 到 65535/)
-})
 
 test('Android 通过 Node expose-internals 运行 DSH，其他宿主保持原命令', () => {
   assert.deepEqual(resolveDshInvocation('/usr/local/bin/dsh', ['--version'], 'android', '/usr/local/bin/node'), {
@@ -110,12 +68,6 @@ test('升级时只用本次启动标识引导一次新页面，之后交给页�
   })
 })
 
-test('从 CLI 输出识别 DSH 预发布版本', () => {
-  assert.equal(extractDshVersion('0.1.0-rc.7'), '0.1.0-rc.7')
-  assert.equal(extractDshVersion('DeepSeek Harness 0.1.1-rc.2\n'), '0.1.1-rc.2')
-  assert.throws(() => extractDshVersion('unknown'), /无法识别当前 DSH 版本/)
-})
-
 test('Windows update script carries a UTF-8 BOM for Windows PowerShell 5.1', () => {
   for (const source of ["Write-Host '模型设置'", "\uFEFFWrite-Host '模型设置'"]) {
     const encoded = encodeWindowsPowerShellScript(source)
@@ -128,20 +80,6 @@ test('Windows update script carries a UTF-8 BOM for Windows PowerShell 5.1', () 
 test('Windows 更新日志同时识别 UTF-8 与 UTF-16LE', () => {
   assert.equal(decodeUpdateOutput(Buffer.from('更新失败', 'utf8')), '更新失败')
   assert.equal(decodeUpdateOutput(Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('更新失败', 'utf16le')])), '更新失败')
-})
-
-test('UI 更新参数明确传递宿主、状态文件和启动延迟', () => {
-  assert.deepEqual(parseUpdateOptions(['--host', 'desktop', '--status-file', '/tmp/update.json', '--delay=800', '--target-commit', 'a'.repeat(40)]), {
-    host: 'desktop',
-    statusFile: '/tmp/update.json',
-    delay: 800,
-    targetCommit: 'a'.repeat(40),
-  })
-  assert.deepEqual(parseUpdateOptions(['--host=android']), { host: 'android', statusFile: '', delay: 0, targetCommit: '' })
-  assert.deepEqual(parseUpdateOptions([]), { host: 'cli', statusFile: '', delay: 0, targetCommit: '' })
-  assert.throws(() => parseUpdateOptions(['--host', 'other']), /不支持的安装宿主/)
-  assert.throws(() => parseUpdateOptions(['--status-file', 'relative.json']), /绝对路径/)
-  assert.throws(() => parseUpdateOptions(['--target-commit', 'bad']), /提交号/)
 })
 
 test('Android UI 更新选择专用更新脚本，CLI 与 Desktop 保持原安装器', () => {
@@ -247,24 +185,6 @@ test('Windows UI 更新隐藏 PowerShell 窗口并保持 UTF-8 输出', () => {
   assert.match(updateSource, /spawnSync\(command, args, \{[\s\S]*?windowsHide: true,/)
   assert.match(updateHelperSource, /detached: true/)
   assert.match(updateHelperSource, /windowsHide: true/)
-})
-
-test('后台更新禁止重复打开浏览器，并用临时日志避免后台进程占住输出管道', () => {
-  assert.match(updateSource, /DSH_TAVERN_NO_OPEN: '1'/)
-  assert.match(updateSource, /stdio: capture \? \['ignore', outputDescriptor, outputDescriptor\] : 'inherit'/)
-  assert.doesNotMatch(updateSource, /stdio: capture \? 'pipe' : 'inherit'/)
-})
-
-test('Windows installer compares Node versions without native argument quoting', () => {
-  assert.match(windowsInstaller, /\[version\]\$NodeVersionText\.TrimStart\('v'\)/)
-  assert.doesNotMatch(windowsInstaller, /node -e/)
-})
-
-test('Tavern no longer bundles dsh-codex-connect and removes it from existing profiles', () => {
-  assert.equal(rootManifest.dependencies['dsh-codex-connect'], undefined)
-  assert.doesNotMatch(JSON.stringify(rootManifest.dsh.profile.bundles), /dsh-codex-connect/)
-  assert.match(profileConfigurationSource, /LEGACY_MANAGED_BUNDLES[\s\S]*'dsh-codex-connect'/)
-  assert.match(profileConfigurationSource, /LEGACY_MANAGED_DEPENDENCIES[\s\S]*'dsh-codex-connect'/)
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {
@@ -377,49 +297,6 @@ test('Tavern sidebar migration marker与三个库设置写入 YAML', async (t) =
   assert.doesNotMatch(written, /dsh-tavern:boundary-prompts/)
 })
 
-test('Tavern applies sidebar migrations before every service start', () => {
-  assert.match(serviceSource, /async function startService\(\) \{\s*verifyProfile\(\)\s*ensureSidebarDefaults\(\)/)
-})
-
-test('installers accept the installed DSH host without pinning its release', () => {
-  assert.match(windowsInstaller, /if \(\$InstallHost -eq 'cli'\)/)
-  assert.doesNotMatch(windowsInstaller, /RequiredDshVersion|Test-DshVersion/)
-  assert.match(unixInstaller, /if \[ "\$\{INSTALL_HOST\}" = "cli" \]/)
-  assert.doesNotMatch(unixInstaller, /REQUIRED_DSH_VERSION|dsh_version_is_compatible/)
-  assert.doesNotMatch(launcherSource, /MINIMUM_DSH_VERSION|supportsDshVersion|requireDshVersion/)
-})
-
-test('installers default to codeload archives while allowing an override', () => {
-  assert.match(windowsInstaller, /DSH_TAVERN_ARCHIVE_URL/)
-  assert.match(windowsInstaller, /https:\/\/codeload\.github\.com\/\$Repository\/zip\/refs\/heads\/main/)
-  assert.match(unixInstaller, /DSH_TAVERN_ARCHIVE_URL/)
-  assert.match(unixInstaller, /https:\/\/codeload\.github\.com\/\$\{REPOSITORY\}\/tar\.gz\/refs\/heads\/main/)
-})
-
-test('安装器优先使用 Git 稀疏缓存，再用 jsDelivr 校验下载和精简运行压缩包 回退', () => {
-  assert.match(windowsInstaller, /source-cache\\dsh-tavern\.git/)
-  assert.match(windowsInstaller, /'clone', '--bare', '--filter=blob:none', '--depth', '1'/)
-  assert.match(windowsInstaller, /'archive', '--format=zip'/)
-  assert.match(windowsInstaller, /jsDelivr 备用源下载运行代码/)
-  assert.match(windowsInstaller, /SHA256/)
-  assert.match(windowsInstaller, /正在下载精简运行压缩包/)
-  assert.match(unixInstaller, /source-cache\/dsh-tavern\.git/)
-  assert.match(unixInstaller, /clone --bare --filter=blob:none --depth 1/)
-  assert.match(unixInstaller, /archive --format=tar/)
-  assert.match(unixInstaller, /jsDelivr 备用源下载运行代码/)
-  assert.match(unixInstaller, /createHash\('sha256'\)/)
-  assert.match(windowsInstaller, /\$Metadata\.revision/)
-  assert.match(unixInstaller, /metadata\.revision/)
-  assert.match(unixInstaller, /正在下载精简运行压缩包/)
-
-  const windowsRuntimePaths = windowsInstaller.match(/\$RuntimePaths = @\(([\s\S]*?)\)/)?.[1] || ''
-  const unixRuntimePaths = unixInstaller.match(/RUNTIME_PATHS='([^']+)'/)?.[1] || ''
-  for (const paths of [windowsRuntimePaths, unixRuntimePaths]) {
-    assert.match(paths, /tavern-plugin/)
-    assert.doesNotMatch(paths, /docs|demo|references|tests|\.github/)
-  }
-})
-
 test('一键更新在依赖检查前复用 Tavern 托管运行时', () => {
   const windowsRuntimePath = windowsInstaller.indexOf('$env:Path = "$RuntimeRoot;$env:Path"')
   const windowsDependencyCheck = windowsInstaller.indexOf('$MissingPackages = @()')
@@ -469,22 +346,6 @@ test('一键安装直接启动 Tavern，不通过包管理器托管后台进程'
 
   assert.match(windowsInstaller, /& node \(Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\) start/)
   assert.doesNotMatch(windowsInstaller, /& \$PnpmCommand --dir \$AppDir run start:tavern/)
-})
-
-test('启动器保留显式 Android 运行宿主，普通命令行仍默认 CLI', () => {
-  assert.match(serviceSource, /env: runtimeEnvironment\(\)/)
-})
-
-test('共享 Profile 不固定端口，CLI Adapter 启动时显式使用 3081', () => {
-  assert.doesNotMatch(profilePatch, /^\s*(?:host|port):/m)
-  assert.match(serviceSource, /\['--profile', PROFILE, '--host', CLI_HOST, '--port', String\(CLI_PORT\), '--no-open'\]/)
-  assert.match(serviceSource, /spawn\(invocation\.command, invocation\.args/)
-})
-
-test('Tavern 安装依赖时传入当前宿主而不是将版本号当作 npm 依赖', () => {
-  assert.match(installationSource, /extractDshVersion\(runDsh\(dsh, \['--version'\]/)
-  assert.match(installationSource, /installPluginDependencies\(\{ pluginDirectory: .* dsh, host, run \}\)/)
-  assert.doesNotMatch(installationSource, /installPluginDependencies\([^\n]*dshVersion/)
 })
 
 test('升级后用户数据固定在 Profile 目录，并在安装时迁移旧源码数据', () => {

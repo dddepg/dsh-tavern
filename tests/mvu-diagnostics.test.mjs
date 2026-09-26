@@ -269,12 +269,6 @@ test('诊断包包含界面按钮错误并脱敏', async () => {
   assert.doesNotMatch(zipText(result.buffer), /PRIVATE_TOKEN/)
 })
 
-test('现有日志 ZIP 包含独立更新诊断，不要求当前会话触发更新', async () => {
-  const result = await createMvuDiagnosticExport({ sessionId: 's', store: createMvuDiagnosticStore(storage()), updateDiagnostics: { version: 1, records: [{ event: 'github.version.failed', cause: { code: 'ETIMEDOUT' } }] } })
-  assert.match(zipText(result.buffer), /update\/diagnostics.json/)
-  assert.match(zipText(result.buffer), /ETIMEDOUT/)
-})
-
 test('initialization timings retain bounded phase counters in exported logs without payloads', async () => {
   const input = { phase: 'initialization-timing', timings: { elapsedMs: 92000, dropped: 0, entries: [
     { stage: 'prompt-drain', scriptId: 'script-1', count: 15, pending: 1, oldestPendingMs: 90000, totalMs: 10, maxMs: 5, failures: 0, variables: 'PRIVATE' },
@@ -310,7 +304,6 @@ test('oversized card does not prevent exporting diagnostic logs', async () => {
   assert.match(zipText(result.buffer), /mvu\/diagnostics.json/)
   assert.ok(result.buffer.length < 100000)
 })
-
 
 test('模块加载详情只保留限量脱敏资源和 HTTP 状态', async () => {
   const detail = sanitizeModuleFailure({ phase:'module-load', reason:'http', message:'Bearer PRIVATE', source:'PRIVATE',

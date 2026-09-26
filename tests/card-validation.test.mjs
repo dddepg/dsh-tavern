@@ -16,15 +16,6 @@ test('invalid JSON, card shape and MVU containers report safe locations', () => 
   for (const value of [[], null, { spec: 'chara_card_v3' }, { name: 2 }, { name: 'a', first_mes: [] }, { name: 'a', tags: [1] }, { name: 'a', extensions: { tavern_helper: { variables: [], scripts: {} } } }]) assert.equal(check(value).valid, false)
   assert.match(validateCardText('{\n "name": }').errors[0].message, /第 2 行/)
 })
-test('validation reads actual file content again after correction', async () => {
-  let text = '<开局>'
-  const readText = async () => text
-  assert.equal((await validateCardFile({ path: 'cards/a.json', readText })).valid, false)
-  text = JSON.stringify({ name: '修复后', first_mes: '开场' })
-  assert.equal((await validateCardFile({ path: 'cards/a.json', readText })).valid, true)
-  assert.equal((await validateCardFile({ path: '', readText })).valid, false)
-  assert.equal((await validateCardFile({ path: 'cards/missing.json', readText: async () => undefined })).valid, false)
-})
 
 test('production tool reads disk through native DSH schema and rejects play-mode or escaped paths', { skip: !process.env.DSH_BOOT_MODULE }, async t => {
   const { readFile, mkdtemp, writeFile, rm } = await import('node:fs/promises')

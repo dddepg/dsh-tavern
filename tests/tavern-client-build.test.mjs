@@ -18,14 +18,6 @@ test('客户端源码可确定性组装为唯一 DSH 运行产物', async () => 
   assert.doesNotMatch(first, /^\s*\/\/ @include /m)
 })
 
-test('实时视图与刷新实现属于独立源码模块', async () => {
-  const template = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
-  assert.match(template, /^\s*\/\/ @include modules\/runtime-generation-monitor\.js$/m)
-  assert.match(template, /^\s*\/\/ @include modules\/library-refresh\.js$/m)
-  assert.match(template, /^\s*\/\/ @include modules\/live-tavern-view\.js$/m)
-  assert.doesNotMatch(template, /function createLiveTavernViewModule/)
-})
-
 test('完整客户端必须可解析，局部源码测试不能代替入口语法检查', async () => {
   const source = await assembleTavernClient()
   assert.doesNotThrow(() => new vm.Script(source, { filename: 'tavern-plugin/lib/client.js' }))

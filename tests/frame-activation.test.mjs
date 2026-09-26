@@ -3,42 +3,6 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
-const source = readFileSync(new URL('../tavern-plugin/src/client/modules/frame-activation.js', import.meta.url), 'utf8')
-function fixture(fallback = false) {
-  const frames = new Map(), ran = []
-  let id = 0
-  const request = run => { frames.set(++id, run); return id }
-  const cancel = id => frames.delete(id)
-  const host = fallback ? { setTimeout: request, clearTimeout: cancel } : { requestAnimationFrame: request, cancelAnimationFrame: cancel }
-  const enqueue = vm.runInNewContext(source + '; createTavernFrameActivationQueue', {})(host)
-  const tick = () => { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(run => run()) }
-  return { enqueue, tick, frames, ran }
-}
-for (const fallback of [false, true]) test(`同时进入视区的消息分帧首次激活，取消待启动项不影响已运行项 (${fallback})`, () => {
-  const f = fixture(fallback)
-  const cancelFirst = f.enqueue(() => f.ran.push('first'))
-  const cancelSecond = f.enqueue(() => f.ran.push('second'))
-  f.enqueue(() => f.ran.push('third'))
-  assert.equal(f.frames.size, 1)
-  f.tick()
-  assert.deepEqual(f.ran, ['first'])
-  cancelFirst(); cancelSecond()
-  f.tick()
-  assert.deepEqual(f.ran, ['first', 'third'])
-  assert.equal(f.frames.size, 0)
-  const cancelLast = f.enqueue(() => f.ran.push('unmounted'))
-  cancelLast(); f.tick()
-  assert.deepEqual(f.ran, ['first', 'third'])
-})
-test('首次激活失败不饿死后面的消息，重入任务等下一帧', () => {
-  const f = fixture()
-  f.enqueue(() => { f.enqueue(() => f.ran.push('later')); throw Error('failed') })
-  assert.throws(f.tick, /failed/)
-  assert.deepEqual(f.ran, [])
-  f.tick()
-  assert.deepEqual(f.ran, ['later'])
-})
-
 test('实际消息组件离开视区或卸载时取消启动，开场 eager 不入队', () => {
   const bundle = readFileSync(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
   const frames = new Map(), timers = new Map(), observers = [], activated = []

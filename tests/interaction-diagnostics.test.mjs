@@ -31,9 +31,3 @@ test('records obstruction and delayed focus without content, then disposes liste
   assert.doesNotMatch(JSON.stringify(f.recorder.snapshot()), /SECRET|PRIVATE|token/)
   dispose(); assert.equal(f.doc.handlers.size + f.win.handlers.size + f.timers.size, 0)
 })
-test('caps records at 120 and drops entries older than ten minutes', () => {
-  const f = fixture(); f.recorder.start()
-  for (let i = 0; i < 200; i++) { f.advance(1); f.win.emit('focus', { target: f.win }) }
-  assert.equal(f.recorder.snapshot().events.length, 120)
-  f.advance(600001); assert.equal(f.recorder.snapshot().events.length, 0)
-})

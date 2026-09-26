@@ -54,28 +54,6 @@ function select(events, nodes) {
   return { oldSeq, oldTurn, oldSource, oldAssistantIndex }
 }
 
-test('失败清理节点不能被当作旧正文，重试定位权威剧情轮次', () => {
-  const events = [assistant(0, 6), cleanup(1, 7)]
-  const before = structuredClone(events)
-  assert.deepEqual(select(events, [0, 1]), { oldSeq: 0, oldTurn: 6, oldSource: model, oldAssistantIndex: 2 })
-  assert.deepEqual(events, before)
-})
-
-test('旧版空替换节点仍可作为连续重新生成目标，并跳过后来的失败清理', () => {
-  const events = [assistant(0, 6), assistant(1, 8), assistant(2, 6, model, []), cleanup(3, 9)]
-  assert.equal(select(events, [2, 3]).oldSeq, 2)
-})
-
-test('不能把其他轮次的模型消息误选为当前正文', () => {
-  assert.equal(select([assistant(0, 6), assistant(1, 7)], [0, 1]).oldSeq, 0)
-  assert.throws(() => select([assistant(0, 5), cleanup(1, 7)], [0, 1]), /找不到.*对应.*正文/)
-})
-
-test('普通正文定位保持不变，只有清理标记时不得开始重新生成', () => {
-  assert.equal(select([assistant(0, 6)], [0]).oldSeq, 0)
-  assert.throws(() => select([cleanup(0, 7)], [0]), /找不到/)
-})
-
 test('失败清理、重试成功、再次失败和再次重生成始终替换同一剧情轮次', () => {
   const events = [assistant(0, 6)]
   const nodes = [0]

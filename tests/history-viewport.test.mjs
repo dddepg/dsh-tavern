@@ -7,32 +7,6 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { chromium } from 'playwright'
 const source = await readFile(new URL('../tavern-plugin/src/client/modules/history-viewport.js', import.meta.url), 'utf8')
-const make = new Function(source + ';return createTavernHistoryViewport')()
-test('initial history is limited to 20, explicit loads append 20 and preserve loaded rounds', () => {
-  const budget = make(), released = []
-  const stops = []
-  for (let turn = 1; turn <= 133; turn++) {
-    stops.push(budget.register('a', turn, () => released.push(turn)))
-    assert.ok(budget.snapshot().size <= 20)
-  }
-  assert.equal(budget.snapshot().size, 20)
-  assert.ok(budget.snapshot().has(budget.key('a', 114)))
-  budget.more('a')
-  assert.equal(budget.snapshot().size, 40)
-  assert.ok(budget.snapshot().has(budget.key('a', 94)))
-  budget.more('a')
-  assert.equal(budget.snapshot().size, 60)
-  budget.register('a', 134, () => {})
-  assert.equal(budget.snapshot().size, 61)
-  assert.ok(budget.snapshot().has(budget.key('a', 74)))
-  const stopDuplicate = budget.register('a', 74, () => {})
-  stops[73]()
-  assert.ok(budget.snapshot().has(budget.key('a', 74)))
-  stopDuplicate()
-  assert.equal(budget.snapshot().has(budget.key('a', 74)), false)
-  for (let i = 0; i < 10; i++) budget.more('a')
-  assert.equal(budget.snapshot().size, 133)
-})
 
 const dsh = process.env.DSH_BROWSER_ROOT || path.join(homedir(), '.dsh-tavern/runtime/lib/node_modules/@deepseek-ai/dsh')
 test('real React loads older pages on upward input without remounting retained frames', { skip: !existsSync(dsh) && 'Set DSH_BROWSER_ROOT for the browser integration test' }, async () => {

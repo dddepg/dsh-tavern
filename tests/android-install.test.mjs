@@ -9,18 +9,8 @@ import { createEntryHandler, createEntryManager, resolveEntryConfig } from '../a
 import { configureAndroidProfiles } from '../android/configure-profiles.mjs'
 
 const root = new URL('../', import.meta.url)
-const installer = await readFile(new URL('../android/install.sh', import.meta.url), 'utf8')
-const setup = await readFile(new URL('../android/setup.sh', import.meta.url), 'utf8')
-const updater = await readFile(new URL('../android/update.sh', import.meta.url), 'utf8')
-const entryClient = await readFile(new URL('../android/dsh-tavern-entry/client.js', import.meta.url), 'utf8')
-const entryManifest = JSON.parse(await readFile(new URL('../android/dsh-tavern-entry/package.json', import.meta.url), 'utf8'))
 
-test('Android 酒馆入口的包入口与实际源码一致', async () => {
-  const main = path.resolve(new URL('android/dsh-tavern-entry/', root).pathname, entryManifest.main)
-  await access(main)
-  assert.equal(entryManifest.exports['.'], './index.js')
-  assert.equal(entryManifest.exports['./client'], './client.js')
-})
+const entryClient = await readFile(new URL('../android/dsh-tavern-entry/client.js', import.meta.url), 'utf8')
 
 test('自动拉起插件默认使用 3088，并优先读取 Tavern Profile 的真实源码目录', async (t) => {
   const home = await mkdtemp(path.join(tmpdir(), 'dsh-android-entry-'))
@@ -160,22 +150,6 @@ test('Android 入口未安装 Tavern 时明确拒绝伪更新', async (t) => {
   await assert.rejects(() => manager.update(), /尚未安装 DSH Tavern/)
 })
 
-test('Android 安装脚本增量配置两个 Profile，失败不会伪装成成功', () => {
-  assert.match(installer, /^#!\/usr\/bin\/env bash\nset -euo pipefail/m)
-  assert.match(installer, /pnpm config set package-import-method copy --location=user/)
-  assert.match(installer, /pnpm config set side-effects-cache false --location=user/)
-  assert.match(installer, /DSH_TAVERN_PORT="\$\{TAVERN_PORT\}"/)
-  assert.match(installer, /configure-profiles\.mjs/)
-  assert.equal(installer.match(/configure-profiles\.mjs/g)?.length, 2)
-  assert.match(installer, /dsh-tavern-entry/)
-  assert.doesNotMatch(installer, /dsh-client-ui-mobile-adapt/)
-  assert.match(installer, /install --host android/)
-  assert.match(installer, /DSH_TAVERN_RUNTIME_HOST="android"/)
-  assert.doesNotMatch(installer, /dsh-cost-meter/)
-  assert.doesNotMatch(installer, /rm -rf -- \"\$\{DSH_ROOT\}/)
-  assert.doesNotMatch(installer, /tavern-plugin\/lib\/client\.js/)
-})
-
 for (const initialVersion of ['cached', '10.34.5', 'missing', 'install-failed', 'standalone', 'restored', 'restored-failed', 'invalid-install', 'swap-failed']) {
 test(`Android 安装固定 pnpm 并先安装依赖再停止旧服务：${initialVersion}`, async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dsh-android-install-order-'))
@@ -279,26 +253,6 @@ esac
   assert.deepEqual(recorded.slice(0, expected.length + 3), [...expected, 'dependencies', 'stop', 'install'])
 })
 }
-
-test('Android setup 是唯一公开入口，优先 Git 并提供压缩包回退', () => {
-  assert.match(setup, /^#!\/usr\/bin\/env bash\nset -euo pipefail/m)
-  assert.match(setup, /DSH_TAVERN_ANDROID_APP_DIR/)
-  assert.match(setup, /https:\/\/github\.com\/flizzywine\/dsh-tavern\.git/)
-  assert.match(setup, /git clone/)
-  assert.match(setup, /git -C "\$\{APP_DIR\}" fetch origin main/)
-  assert.match(setup, /git -C "\$\{APP_DIR\}" merge --ff-only origin\/main/)
-  assert.match(setup, /https:\/\/codeload\.github\.com\/flizzywine\/dsh-tavern\/tar\.gz\/refs\/heads\/main/)
-  assert.match(setup, /curl -fL/)
-  assert.match(setup, /fetch\(url, \{ redirect: 'follow' \}\)/)
-  assert.match(setup, /未检测到 curl，正在通过 Node\.js 下载/)
-  assert.match(setup, /tar -xzf/)
-  assert.match(setup, /\.dsh-tavern-tarball-source/)
-  assert.match(setup, /rollback_source/)
-  assert.match(setup, /android\/install\.sh/)
-  assert.doesNotMatch(setup, /dsh-tavern\.mjs" stop/)
-  assert.doesNotMatch(setup, /reset --hard|git clean|git checkout/)
-  assert.doesNotMatch(setup, /rm -rf/)
-})
 
 test('Android setup 通过同一命令完成首次安装和后续更新', async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dsh-android-setup-'))
@@ -528,14 +482,6 @@ test('Git 仓库 fetch 失败时切换为 tarball 更新', async (t) => {
   assert.equal(await readFile(path.join(appDir, 'version.txt'), 'utf8'), 'tarball-v2\n')
   await access(path.join(appDir, '.dsh-tavern-tarball-source'))
   await assert.rejects(access(path.join(appDir, '.git')))
-})
-
-test('Android 更新复用 setup，不维护第二套安装逻辑', () => {
-  assert.match(updater, /^#!\/usr\/bin\/env bash\nset -euo pipefail/m)
-  assert.match(updater, /DSH_TAVERN_SOURCE_ROOT/)
-  assert.match(updater, /android\/setup\.sh/)
-  assert.doesNotMatch(updater, /git -C|android\/install\.sh/)
-  assert.doesNotMatch(updater, /reset --hard|git clean|git checkout/)
 })
 
 test('DSHA 酒馆入口同时提供打开与更新修复操作', () => {

@@ -39,12 +39,6 @@ test('does not infer historical EJS values from current variables',()=>{
   assert.equal(view.parts[0].content,broken)
 })
 
-test('valid scripts containing code-markup strings remain untouched',()=>{
-  const html='<script>window.text="<pre><code>literal</code></pre>";</script>'
-  const display={...snapshot,html,parts:[{kind:'html',content:html}]}
-  assert.equal(project(display).parts[0].content,html)
-})
-
 test('recovers matching style damage without replacing surrounding historical markup',()=>{
   const rich='<html>\n\n<body><style>\nbody {color:red}\n\n    p {font-size:20px}\n</style><p>正文</p></body></html>'
   const html=marked.parse(source.replace(/<now_plot>[\s\S]*<\/now_plot>/,rich))

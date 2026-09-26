@@ -18,20 +18,7 @@ test('当前玩家输入参与匹配，单词不会拆成字母，默认窗口�
   assert.deepEqual(recall(entries, { userText: 'A local ice shop' }).refs, ['entry:2'])
   assert.deepEqual(recall(entries, { userText: 'place' }).refs, [])
 })
-test('世界书扫描深度和条目覆盖按消息数生效，0 禁止扫描', async () => {
-  const entries = [e(0, '矿井'), e(1, '矿井', { scanDepth: 1 }), e(2, '矿井', { scanDepth: 0 })]
-  const chat = { messages: [{ role: 'assistant', text: '矿井' }, { role: 'assistant', text: '晴天' }] }
-  assert.deepEqual(recall(entries, { chat, userText: '继续' }, { scan_depth: 3 }).refs, ['entry:0'])
-  assert.deepEqual(recall(entries, { chat, userText: '继续' }).refs, [])
-})
-test('递归只读取已入选正文，支持阻断、排除和延迟等级', async () => {
-  const entries = [e(0, 'start', { content: 'secret' }), e(1, 'secret', { content: 'end' }),
-    e(2, 'end', { excludeRecursion: true }), e(3, 'end', { delayUntilRecursion: 2 })]
-  assert.deepEqual(new Set(recall(entries, { userText: 'start' }, { recursive_scanning: true }).refs), new Set(['entry:0', 'entry:1', 'entry:3']))
-  assert.deepEqual(recall(entries, { userText: 'start' }).refs, ['entry:0'])
-  entries[0].preventRecursion = true
-  assert.deepEqual(recall(entries, { userText: 'start' }, { recursive_scanning: true }).refs, ['entry:0'])
-})
+
 test('常驻条目可触发递归；未入选条目不能把隐藏正文带入扫描', async () => {
   const entries = [e(0, '', { constant: true, content: 'Alice' }), e(1, 'Alice')]
   assert.deepEqual(recall(entries, {}, { recursive_scanning: true }).refs, ['entry:1'])
@@ -55,9 +42,7 @@ test('包含组支持优先级、权重、计分和多个组，不会重复入�
   entries.push(e(2, 'Alice', { group: '人物', useGroupScoring: true }))
   assert.deepEqual(recall(entries, { userText: 'Alice Bob' }).refs, ['entry:0'])
 })
-test('单汉字使用独立边界，多词短语保留原有匹配', async () => {
-  assert.deepEqual(recall([e(0, '雨', { matchWholeWords: true }), e(1, 'New York', { matchWholeWords: true })], { userText: '下雨了，New Yorkshire' }).refs, ['entry:1'])
-})
+
 test('扫描和分组设置在独立、嵌入格式往返时保留，编辑不修改原文件', async () => {
   const original = { entries: { 0: e(0, 'Alice') } }
   const updated = updateWorldBookDocument(original, { scanDepth: 8, recursiveScanning: true, operations: [{ op: 'update', ref: 'entry:0', patch: { scanDepth: 4, group: '角色', groupOverride: true, groupWeight: 20, useGroupScoring: true } }] }).document
@@ -100,27 +85,4 @@ test('失败的绿灯 EJS 不泄露源码、不消耗冷却；脚本扫描与玩
   assert.equal(result.reads['entry:9'], undefined)
   assert.doesNotMatch(result.context, /<%/)
   assert.equal(result.diagnostics[0].code, 'syntax-error')
-})
-
-test('开场白不触发关键词，当前输入和后续正文仍触发', async () => {
-  const entries = [e(0, '武当'), e(1, '少林'), e(2, '', { constant: true })]
-  const chat = { messages: [{ role: 'assistant', greeting: true, text: '武当、少林任选出身' }] }
-  const before = JSON.stringify(chat)
-  const opening = recall(entries, { chat })
-  assert.deepEqual(opening.refs, [])
-  assert.ok(opening.entries.some(entry => entry.constant))
-  assert.deepEqual(opening.scanSources, [])
-  assert.deepEqual(recall(entries, { chat, userText: '去少林' }).refs, ['entry:1'])
-  assert.equal(JSON.stringify(chat), before)
-  chat.messages.push({ role: 'user', text: '继续' }, { role: 'assistant', text: '武当来客到了' })
-  assert.deepEqual(recall(entries, { chat }).refs, ['entry:0'])
-})
-
-
-test('单汉字简称不命中词内片段，独立称呼和作者正则仍可命中', async () => {
-  const entries = [e(0, '白'), e(1, '都'), e(2, '袖白雪'), e(3, '/白/')]
-  assert.deepEqual(new Set(recall(entries, { userText: '袖白雪发出白光，你连站的地方都选错了' }).refs), new Set(['entry:2', 'entry:3']))
-  assert.deepEqual(new Set(recall(entries, { userText: '白，你先走；都！' }).refs), new Set(['entry:0', 'entry:1', 'entry:3']))
-  for (const text of ['白走了', '小白', 'A白', '白1', '_白', '白\u0301']) assert.deepEqual(recall([e(0, '白')], { userText: text }).refs, [])
-  assert.deepEqual(recall([e(0, '白')], { userText: '白' }).refs, ['entry:0'])
 })

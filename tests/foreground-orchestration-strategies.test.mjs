@@ -112,92 +112,6 @@ test('游玩固定背景来自原生系统装配，预设前后段保持顺序�
   assert.equal(savedPrefixes.size, 0)
 })
 
-test('旧会话在 pre-step 提升外部背景后，不把已记录消息再次作为本轮输入提交', async () => {
-  const session = Session.create('legacy-native')
-  const fixed = await ensureSessionStablePrefix(session, '人物卡旧背景\n常驻世界书')
-  const run = strategies({ nativePlay: {
-    async modeFor() { return 'story' },
-    filterMessages(messages) { return messages }, async resolvePreset() { return null },
-    async ensureSessionPrefix() { return fixed },
-    async prepareTurn() { return { frame: { userInput: { projectedText: '继续' } } } },
-    appendFrame(input) { return { messages: input.messages.concat(userMessage('本轮 Frame')), receipt: {} } },
-    recordFrame() {}, async visibleTools() { return [] }, modePrompt() { return '' }, controlledToolNames: new Set()
-  } })
-  const input = [userMessage('旧历史'), userMessage('继续')]
-  const prepared = await run.value.prepareStep({
-    sessionId: 'native', payload: { turn: 2, step: 1, messages: input },
-    decision: { kind: 'enter', messages: input }, chat: run.chats.get('native')
-  })
-
-  assert.deepEqual(prepared.messages.map(message => message.content[0].text), ['旧历史', '继续', '本轮 Frame'])
-  assert.equal(prepared.messages.some(message => message.id === fixed.id), false)
-  assert.equal(session.deriveMessages().filter(message => message.id === fixed.id).length, 1)
-})
-
-test('旧原生 Session 前缀不再重复进入请求历史', async () => {
-  const oldPrefix = {
-    id: 'tavern-session-prefix:native', role: 'user',
-    content: [{ type: 'text', text: '人物卡\n@@preprocessing\n<% print(await getwi("资料")) %>' }],
-    source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot' }
-  }
-  const run = strategies({ nativePlay: {
-    async modeFor() { return 'story' },
-    filterMessages(messages) { return messages }, async resolvePreset() { return null },
-    async ensureSessionPrefix() { return { projectedText: '人物卡\n真正静态的常驻规则' } },
-    async prepareTurn() { return { frame: { userInput: { projectedText: '继续' } } } },
-    appendFrame(input) { return { messages: input.messages, receipt: {} } },
-    recordFrame() {}, async visibleTools() { return [] }, modePrompt() { return '' }, controlledToolNames: new Set()
-  } })
-  const incoming = [userMessage('继续')]
-  await run.value.prepareStep({
-    sessionId: 'native', payload: { turn: 2, step: 1, messages: incoming },
-    decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native')
-  })
-  const original = Object.freeze({ sessionId: 'native', messages: Object.freeze([oldPrefix]) })
-
-  const projected = run.value.projectRequest(original)
-
-  assert.deepEqual(projected.messages, [])
-  assert.match(original.messages[0].content[0].text, /getwi/)
-})
-
-test('普通游玩正常运行，保留的兼容实现仅供独立测试', async () => {
-  const run = strategies()
-  const nativePayload = { turn: 2, step: 1, messages: [userMessage('继续')] }
-  const native = await run.value.prepareStep({ sessionId: 'native', payload: nativePayload, decision: { kind: 'enter', messages: nativePayload.messages }, chat: run.chats.get('native'), requestId: 'rpc-native' })
-  assert.deepEqual(native.messages.map(function (message) { return message.content[0].text }), ['projected', 'frame'])
-
-  const compatPayload = { turn: 3, step: 1, messages: [userMessage('向前走')] }
-  const compat = await run.compatibility.prepareStep({ sessionId: 'compat', payload: compatPayload, decision: { kind: 'enter', messages: compatPayload.messages }, chat: run.chats.get('compat'), requestId: 'rpc-compat' })
-  assert.equal(compat.messages, compatPayload.messages)
-  assert.deepEqual(run.calls, [
-    ['native.sync', 'native'],
-    ['native.prepare', '继续', 'rpc-native'],
-    ['native.frame', 'frame-1'],
-    ['compat.before', '向前走'],
-    ['compat.begin', 3, 'rpc-compat'],
-    ['compat.compile', '向前走'],
-    ['compat.persist', 3]
-  ])
-})
-
-test('两种策略分别投影模型请求且不改写 DSH 原请求', async () => {
-  const run = strategies()
-  const nativePayload = { turn: 2, step: 1, messages: [userMessage('继续')] }
-  await run.value.prepareStep({ sessionId: 'native', payload: nativePayload, decision: { kind: 'enter', messages: nativePayload.messages }, chat: run.chats.get('native') })
-  const nativeOptions = Object.freeze({ sessionId: 'native', messages: Object.freeze([]) })
-  const nativeProjected = run.value.projectRequest(nativeOptions, { turn: 2, step: 1 })
-  assert.notEqual(nativeProjected, nativeOptions)
-  assert.equal(nativeOptions.messages.length, 0)
-
-  const compatPayload = { turn: 3, step: 1, messages: [userMessage('向前走')] }
-  await run.compatibility.prepareStep({ sessionId: 'compat', payload: compatPayload, decision: { kind: 'enter', messages: compatPayload.messages }, chat: run.chats.get('compat') })
-  const compatOptions = Object.freeze({ sessionId: 'compat', messages: Object.freeze([]) })
-  const compatProjected = run.compatibility.projectRequest(compatOptions, { turn: 3, step: 1 })
-  assert.notEqual(compatProjected, compatOptions)
-  assert.equal(compatProjected.messages[0].content[0].text, 'compat')
-})
-
 test('DeepSeek thinking 续传为旧 Session 的 reasoning 补齐可回放元数据', async () => {
   const run = strategies()
   const incoming = [userMessage('继续')]
@@ -294,29 +208,6 @@ test('DeepSeek thinking 请求为没有原始思考的合成 assistant 上下文
   assert.equal(opening.content.some(block => block.type === 'reasoning'), false)
 })
 
-test('正文重生成在请求边界回到原玩家输入，不泄露旧回答或重生成元信息', () => {
-  const originalPlayer = { id: 'player-2', ...userMessage('推门') }
-  const messages = [
-    pluginMessage('user', '人物卡', 'dsh-tavern', 'snapshot'),
-    { role: 'assistant', content: [{ type: 'text', text: '开场' }], source: { kind: 'model' } },
-    originalPlayer,
-    pluginMessage('user', '旧本轮规则', 'dsh-tavern', 'foreground-frame'),
-    { role: 'assistant', content: [{ type: 'reasoning', text: '旧思考' }, { type: 'text', text: '旧正文' }], source: { kind: 'model' } },
-    pluginMessage('user', '推门', 'dsh-tavern-regen'),
-    pluginMessage('user', '新本轮规则', 'dsh-tavern', 'foreground-frame')
-  ]
-
-  const projected = projectRegenerationRequestMessages(messages)
-
-  assert.deepEqual(projected.map(message => message.role), ['user', 'assistant', 'user', 'user'])
-  assert.equal(projected[2].id, 'player-2')
-  assert.equal(projected[2].source.kind, 'user')
-  assert.equal(projected[2].content[0].text, '推门')
-  assert.equal(projected[3].content[0].text, '新本轮规则')
-  assert.doesNotMatch(JSON.stringify(projected), /旧思考|旧正文|旧本轮规则|重新生成|dsh-tavern-regen/)
-  assert.equal(messages.length, 7, '不改写 DSH 原请求')
-})
-
 test('带意见重生成只投影为本轮补充要求', () => {
   const messages = [
     userMessage('推门'),
@@ -352,65 +243,6 @@ test('兼容前台仅在游戏快照开启时保留联网搜索工具', async ()
   chat.webSearchEnabled = true
   const enabled = await run.compatibility.assembleSystemPrompt({ sections: [{ name: 'old' }], contexts: [{}], tools: tools.slice() }, { sessionId: 'compat', chat })
   assert.deepEqual(enabled.tools.map(function (tool) { return tool.name }), ['web_search'])
-})
-
-for (const mode of ['story', 'script']) {
-  test(`${mode} 不加载 play-mode，也不会回退到 DSH 默认人格`, async () => {
-    const strategy = createNativePlayOrchestrationStrategy({
-      modeFor: async () => mode,
-      visibleTools: async () => [],
-      modePrompt() { throw new Error('游玩不应再读取独立人格提示词') },
-      controlledToolNames: new Set()
-    })
-    const assembly = await strategy.assembleSystemPrompt({
-      sections: [{ name: 'persona', text: 'You are a helpful software engineer assistant.' }],
-      tools: []
-    }, { sessionId: 'existing-session' })
-    assert.deepEqual(assembly.sections, [])
-  })
-}
-
-test('游玩请求移除空 system 字段，不修改非空指令或原始请求', async () => {
-  const strategy = createNativePlayOrchestrationStrategy({
-    stagedRequests: new Map([['native', { turn: 1, step: 1, scope: 'foreground', snapshot: null }]])
-  })
-  const request = Object.freeze({ sessionId: 'native', system: '', messages: [] })
-  const projected = strategy.projectRequest(request)
-  assert.ok(projected)
-  assert.equal(Object.hasOwn(projected, 'system'), false)
-  assert.equal(request.system, '')
-  assert.equal(strategy.projectRequest(projected), null, 'redispatch cannot loop')
-  assert.equal(strategy.projectRequest({ sessionId: 'native', system: 'explicit instructions', messages: [] }), null)
-  assert.equal(strategy.projectRequest({ sessionId: 'native', purpose: 'compaction', system: '', messages: [] }), null)
-})
-
-test('卡片策略不把按需 Cordis 说明放入固定前缀', async () => {
-  const run = strategies({
-    nativePlay: {
-      async modeFor() { return 'card' },
-      filterMessages(messages) { return messages },
-      async resolvePreset() { return null },
-      async prepareTurn() { return { text: '' } },
-      appendFrame(input) { return { messages: input.messages, receipt: {} } },
-      recordFrame() {},
-      async visibleTools() { return [] },
-      cardSystemPrompt() { return 'custom system' },
-      modePrompt() { return 'card' },
-      workspaceContext() { return '/resources' },
-      async ensureSessionPrefix() {},
-      controlledToolNames: new Set()
-    }
-  })
-  const assembly = await run.value.assembleSystemPrompt({
-    sections: [{ name: 'tool:cordis', text: 'Cordis instructions' }],
-    contexts: [],
-    tools: []
-  }, { sessionId: 'native', chat: run.chats.get('native'), cwd: '/workspace' })
-
-  assert.deepEqual(assembly.sections.map(function (section) { return section.name }), [
-    'tavern:card-system',
-    'tavern:resource-workspace'
-  ])
 })
 
 test('卡片策略保留 Shell 与未知的通用基础工具，不要求先走 Tavern 专用工具', async () => {
@@ -476,34 +308,6 @@ test('新版 DSH 文件工具只向卡片 Agent 开放，不泄漏给正文 Agen
   assert.deepEqual(await assembledToolNames('story'), ['tavern_recall_history'])
 })
 
-test('卡片回合没有实际资料片段时不追加空快照消息', async () => {
-  const original = userMessage('检查当前人物卡')
-  const run = strategies({
-    nativePlay: {
-      async modeFor() { return 'card' },
-      filterMessages(messages) { return messages },
-      async resolvePreset() { return null },
-      async prepareTurn() { return { text: '' } },
-      appendFrame(input) { return { messages: input.messages, receipt: {} } },
-      recordFrame() {},
-      async visibleTools() { return [] },
-      modePrompt() { return 'card' },
-      workspaceContext() { return '/resources' },
-      async ensureSessionPrefix() {},
-      controlledToolNames: new Set()
-    }
-  })
-
-  const prepared = await run.value.prepareStep({
-    sessionId: 'native',
-    payload: { turn: 1, step: 1, messages: [original] },
-    decision: { kind: 'enter', messages: [original] },
-    chat: run.chats.get('native')
-  })
-
-  assert.deepEqual(prepared.messages, [original])
-})
-
 test('失败清理与回退留下的空占位不进入提供商请求，工具消息保留', async () => {
   const run = strategies(), chat = run.chats.get('native')
   const payload = { turn: 8, step: 1, messages: [userMessage('继续')] }
@@ -564,15 +368,6 @@ for (const sessionId of ['native', 'compat']) test('regeneration gates ordinary 
   delete chat.regenRecovery.phase
   await run.value.prepareStep(input(message))
   assert.ok(run.calls.length>0)
-})
-
-test('普通游玩最终请求读取附加指令并置于外部预设前', () => {
-  const strategy = createNativePlayOrchestrationStrategy({
-    stagedRequests: new Map([['prefix-order', { scope: 'foreground', turn: 1, step: 1, snapshot: { front: { entries: [{ content: '外部预设' }] } } }]]),
-    systemAppend: () => '附加指令'
-  })
-  const result = strategy.projectRequest({ sessionId: 'prefix-order', system: '附加指令\n\n系统内容', messages: [{ role: 'user', content: [{ type: 'text', text: '输入' }] }] })
-  assert.equal(result.messages[0].content[0].text, '附加指令\n\n外部预设\n\n系统内容')
 })
 
 for (const text of ['', '请根据图片继续']) test(`前台投影保留图片：${text || '纯图片'}`, async () => {

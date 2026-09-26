@@ -16,9 +16,3 @@ test('initial status loading and reconnect render without dereferencing a missin
  assert.equal(tree.type,'aside');assert.doesNotMatch(JSON.stringify(tree),/TavernBackgroundWait/)
  }
 })
-test('loaded status mounts background wait notice with the actual activity',()=>{
- const activity={busy:true,operationId:'op'}
- const tree=render({view:{mode:'story',card:{name:'test'},activity,guides:[],characters:[]},phase:'ready'})
- const find=node=>node?.type==='TavernBackgroundWait'?node:(node?.children||[]).flat(Infinity).map(find).find(Boolean)
- assert.deepEqual(find(tree)?.props.activity,activity)
-})

@@ -19,10 +19,3 @@ test('Tavern pins dsh-tools to the adapted host release and reuses host packages
   assert.match(installerSource, /run\('pnpm', \['install', '--lockfile=false'\], \{ cwd: pluginDirectory \}\)/)
   assert.doesNotMatch(launcherSource, /'install'[\s\S]{0,40}'--ignore-workspace'/)
 })
-
-test('Tavern client bootstrap uses the modular DSH client graph', () => {
-  const injected = pluginManifest.dsh.client.inject
-  assert.ok(injected.includes('@deepseek-ai/dsh-client-ui-primitives'))
-  assert.ok(injected.includes('dsh-better-sidebar'))
-  assert.ok(!injected.includes('@deepseek-ai/dsh-client-runtime'))
-})

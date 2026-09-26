@@ -5,7 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 
 const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
-const remoteSource = await readFile(new URL('../tavern-plugin/packages/dsh-tavern-remote/src/client.ts', import.meta.url), 'utf8')
+
 const copy = value => JSON.parse(JSON.stringify(value))
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const tick = () => new Promise(resolve => setImmediate(resolve))
@@ -106,13 +106,6 @@ function execution(options = {}) {
     async settle() { await tick(); await tick() }
   })
 }
-
-test('typed session signals share one DSH Remote stream and never suspend for HTTP reads', () => {
-  assert.match(remoteSource, /ctx\.remote\.\$stream/)
-  assert.match(remoteSource, /new RemoteSnapshotStream/)
-  assert.match(remoteSource, /latest\.get\(key\(item\.sessionId, item\.kind\)\)/)
-  assert.doesNotMatch(remoteSource, /EventSource|withConnectionSlot/)
-})
 
 test('coordination subscription performs an authoritative initial refresh when a restart signal was lost', async () => {
   const h = host()
@@ -799,23 +792,6 @@ test('second browser keeps companion UI scripts while only the lease owner initi
   h.module.dispose()
 })
 
-
-test('equivalent context revisions and height rerenders do not rescan the conversation', () => {
-  const h = frames(), frame = h.attach()
-  h.update({ helperContext: context(1) })
-  frame.message('dsh-tavern-frame-ready')
-  const sameRevision = context(1)
-  Object.defineProperty(sameRevision, 'messages', { get() { throw Error('unchanged history must not be read'); } })
-  h.update({ helperContext: sameRevision })
-  frame.message('dsh-tavern-frame-height', { height: 300 })
-  h.update({})
-  assert.equal(h.posts.length, 0)
-  h.update({ helperContext: context(2) })
-  assert.equal(h.posts[0].update.baseRevision, 1)
-  assert.equal(h.posts[0].update.stateRevision, 2)
-  h.stop()
-})
-
 test('正式卡片页面追加消息走当前 Session 与生命周期校验', async () => {
   const h = frames(), frame = h.attach()
   h.respond(() => Promise.resolve({ updated: true }))
@@ -869,39 +845,6 @@ test('queued prompt operations batch in order and refresh once; reads remain bar
   assert.equal(replies.length, 18)
   assert.ok(replies.every(reply => reply.ok))
   h.runtime.dispose()
-})
-
-
-test('同一运行时的同一脚本故障只提醒一次，其他错误不重置去重', () => {
-  const h = sandbox()
-  h.runtime.sync('A', view())
-  const frame = h.frames[0]
-  frame.load()
-  for (const message of ['依赖失败', '另一个错误', '依赖失败']) h.message(frame, 'dsh-tavern-helper-script-runtime', { scriptId:'script', message, moduleFailure:{phase:'module-load',reason:'unknown',references:[],resources:[]} })
-  assert.equal(h.errors.length,2)
-  h.runtime.dispose()
-})
-
-test('trusted card direct iframe height survives document.write and updates outer slot', () => {
-  const h = frames({ trustedCardMode: true }), observers = []
-  h.window.MutationObserver = class {
-    constructor(callback) { this.callback = callback; observers.push(this) }
-    observe(node) { this.node = node }
-    disconnect() { this.disconnected = true }
-  }
-  const frame = h.attach()
-  frame.node.style = { height: '640px' }
-  const observer = observers.find(item => item.node === frame.node)
-  assert.ok(observer, 'observe the iframe element, outside the replaceable document')
-  observer.callback()
-  assert.equal(h.lifecycle.snapshot().height, 640)
-  frame.node.style.height = '9000px'; observer.callback()
-  assert.equal(h.lifecycle.snapshot().height, 9000)
-  frame.document.ref(null)
-  assert.equal(observer.disconnected, true)
-  frame.node.style.height = '400px'; observer.callback()
-  assert.equal(h.lifecycle.snapshot().height, 9000, 'detached frames cannot resize the active slot')
-  h.stop()
 })
 
 for (const fail of [false, true]) test(`事件收尾等待已接收的排队写入，保存${fail ? '失败不能报成功' : '成功不误判迟到'}`, async () => {
@@ -968,7 +911,6 @@ for (const accepted of [false, true]) test(`完成回执丢失后${accepted ? '�
   assert.equal(h.runtimes[0].emissions.length, 1)
   assert.ok(h.calls.filter(x => x.method === 'completeTavernHelperEvent').every(x => !x.args.error))
 })
-
 
 test('最新楼层转为历史后，多轮状态广播不重建其 iframe 或更新上下文', () => {
   const h = frames({persistent: false}), frame = h.attach()

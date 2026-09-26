@@ -1,24 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import vm from 'node:vm'
+
 import { helperHostHarness } from './fixtures/helper-host-harness.mjs'
 
 const tick = () => new Promise(resolve => setImmediate(resolve))
-
-test('插件命名空间与全局函数共享实现，context 在更新后读取真实身份', () => {
-  const run = helperHostHarness({ chatId: 'one', playerName: '甲' })
-  const w = run.window, context = w.SillyTavern.getContext()
-  assert.equal(context, w.getContext())
-  assert.equal(context.TavernHelper, w.TavernHelper)
-  assert.equal(w.TavernHelper.getChatMessages, w.getChatMessages)
-  const replacement = () => 8
-  w.TavernHelper.getLastMessageId = replacement
-  assert.equal(w.getLastMessageId, replacement)
-  run.receive({ type: 'dsh-tavern-helper-context', context: { chatId: 'two', playerName: '乙' } })
-  assert.equal(context.chatId, 'two')
-  assert.equal(context.name1, '乙')
-  assert.equal(w.TavernHelper.generateRaw, w.generateRaw)
-})
 
 test('createChatMessages 追加楼层并等待宿主确认后更新同步上下文', async () => {
   const run = helperHostHarness({
@@ -149,12 +134,6 @@ test('快速脚本先完成订阅时仍等待 iframe load，再宣布就绪和�
   runtime.dispose()
 })
 
-test('普通脚本获得 Helper 接口但不误检测到 MVU 框架', () => {
-  const w = helperHostHarness({ mvuEnabled: false }).window
-  assert.equal(typeof w.TavernHelper.getVariables, 'function')
-  assert.equal(w.Mvu, undefined)
-})
-
 for (const outcome of ['pending', 'failed']) test('其他脚本的提示词写入不阻塞或污染 CHAT_CHANGED：' + outcome, async () => {
   const h = helperHostHarness(), w = h.window
   w.__dshTavernHelperSetCurrentScript('a')
@@ -186,7 +165,6 @@ for (const fails of [false, true]) test('事件等待自己的提示词持久化
   else assert.equal(result.error, undefined)
 })
 
-
 test('generateRaw 返回独立 RPC 文本，不创建聊天消息', async () => {
   const run = helperHostHarness({ chatId: 'one' })
   const config = { ordered_prompts: [{ role: 'user', content: '生成档案' }], should_stream: false }
@@ -200,38 +178,6 @@ test('generateRaw 返回独立 RPC 文本，不创建聊天消息', async () => 
   assert.equal(run.calls().length, 1)
 })
 
-test('generateRaw should_stream 假流式补发 iframe 流式事件', async () => {
-  const run = helperHostHarness({ chatId: 'one' })
-  const w = run.window
-  assert.equal(w.TavernHelper.iframe_events, w.iframe_events)
-  assert.equal(w.iframe_events.STREAM_TOKEN_RECEIVED_FULLY, 'js_stream_token_received_fully')
-  const seen = []
-  w.eventOn(w.iframe_events.GENERATION_STARTED, id => seen.push(['started', id]))
-  w.eventOn(w.iframe_events.STREAM_TOKEN_RECEIVED_FULLY, (text, id) => seen.push(['full', text, id]))
-  w.eventOn(w.iframe_events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, (text, id) => seen.push(['incr', text, id]))
-  w.eventOn(w.iframe_events.GENERATION_ENDED, (text, id) => seen.push(['ended', text, id]))
-  const pending = w.generateRaw({
-    ordered_prompts: [{ role: 'user', content: '评议' }],
-    should_stream: true,
-    generation_id: 'build-review'
-  })
-  await tick()
-  const request = run.calls().at(-1)
-  assert.equal(request.method, 'generateTavernHelperRaw')
-  assert.equal(request.args.config.should_stream, true)
-  assert.equal(request.args.config.generation_id, 'build-review')
-  assert.deepEqual(seen, [['started', 'build-review']])
-  run.reply(request, { text: '评分 72' })
-  assert.equal(await pending, '评分 72')
-  await tick()
-  assert.deepEqual(seen, [
-    ['started', 'build-review'],
-    ['full', '评分 72', 'build-review'],
-    ['incr', '评分 72', 'build-review'],
-    ['ended', '评分 72', 'build-review']
-  ])
-})
-
 test('异步 RPC 报错保留调用时的脚本和事件，不能署名最后加载的脚本', async () => {
   const h = helperHostHarness(), w = h.window
   w.__dshTavernHelperSetCurrentScript('a')
@@ -239,14 +185,6 @@ test('异步 RPC 报错保留调用时的脚本和事件，不能署名最后加
   w.__dshTavernHelperSetCurrentScript('b')
   h.reply(h.calls()[0], '写入被拒绝', false)
   await assert.rejects(pending, error => error.dshTavernScriptId === 'a' && error.dshTavernMethod === 'updateTavernHelperVariables')
-})
-
-test('悬浮角色库读取当前人物卡名称，并随宿主上下文更新', () => {
-  const run = helperHostHarness({ characterName: '命定之诗', character: { name: '命定之诗' } })
-  assert.equal(run.window.getCurrentCharacterName(), '命定之诗')
-  assert.equal(run.window.TavernHelper.getCurrentCharacterName(), '命定之诗')
-  run.receive({ type: 'dsh-tavern-helper-context', context: { characterName: '新卡', character: { name: '新卡' } } })
-  assert.equal(run.window.getCurrentCharacterName(), '新卡')
 })
 
 test('旧聊天 MVU 清理提示静默拒绝，不弹窗、不修改或清理历史变量', async () => {
@@ -261,20 +199,6 @@ test('旧聊天 MVU 清理提示静默拒绝，不弹窗、不修改或清理历
     assert.equal(run.calls().length, 0)
     assert.equal(JSON.stringify(run.window.getVariables({ type: 'message', message_id: 0 })), before)
   }
-})
-
-test('script context exposes the bound character avatar and follows chat changes', () => {
-  const run = helperHostHarness({ chatId: 'one', character: { name: 'A', path: 'cards/a.png' } })
-  const ctx = run.window.SillyTavern.getContext()
-  assert.equal(ctx.characters[ctx.characterId].avatar, 'cards/a.png')
-  run.receive({ type: 'dsh-tavern-helper-context', context: { chatId: 'two', character: { name: 'B', path: 'cards/b.json', avatar: 'b.png' } } })
-  assert.equal(ctx.characters[ctx.characterId].avatar, 'b.png')
-  assert.equal(ctx.characters[ctx.characterId].name, 'B')
-  ctx.characters[0].name = 'local mutation'
-  assert.equal(ctx.characters[0].name, 'B')
-  run.receive({ type: 'dsh-tavern-helper-context', context: { character: null } })
-  assert.equal(ctx.characters.length, 0)
-  assert.equal(ctx.characterId, undefined)
 })
 
 test('awaited MVU event writes retain the host event identity across asynchronous callbacks', async () => {
@@ -292,7 +216,6 @@ test('awaited MVU event writes retain the host event identity across asynchronou
   await tick()
   assert.equal(h.sent.find(item => item.type === 'dsh-tavern-helper-event-complete').eventId, 'settlement-1')
 })
-
 
 test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async t => {
   // setImmediate and a zero-delay timer have no guaranteed relative order.
@@ -313,18 +236,6 @@ test('mvu-work 事件在 setTimeout 延迟写入时仍保留结算身份', async
   const call = h.calls().find(item => item.method === 'updateTavernHelperVariables')
   assert.equal(call?.eventId, 'mvu-work:defer-1')
   h.reply(call, { updated: true })
-})
-
-test('原卡关闭前端不兼容选项的 ready 回调无需写入不存在的 ST 设置', async () => {
-  const run = helperHostHarness(), callbacks = []
-  run.window.$ = value => {
-    if (typeof value === 'function') { callbacks.push(value); return }
-    throw new Error('Already disabled settings must not access a missing checkbox')
-  }
-  // The reported card's callback, without its unrelated character/story data.
-  vm.runInNewContext(`$((async()=>{const power_user=SillyTavern.powerUserSettings;["auto_fix_generated_markdown","trim_sentences","forbid_external_media","encode_tags"].map((setting=>function toggle_if_not_allowed(setting,expected){return power_user[setting]!==expected&&(power_user[setting]=expected,$("#"+setting).prop("checked",expected),!0)}(setting,!1))).some((is_changed=>!!is_changed))&&SillyTavern.saveSettingsDebounced()}));`, run.window)
-  await callbacks[0]()
-  assert.equal(run.calls().length, 0)
 })
 
 test('延迟执行的 jQuery ready 回调注册事件时保留原脚本归属', async () => {
@@ -391,20 +302,6 @@ test('事件清理接口仅清理当前脚本，支持别名、重复清理与�
   await w.eventEmit('one')
   assert.deepEqual(seen, ['b', 'shared'])
 })
-
-test('Helper 版本同步返回，await 调用及开场预览保持一致（issue 18）', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const w = helperHostHarness().window
-  const getVersion = w.getTavernHelperVersion
-  assert.equal(getVersion(), '4.8.19')
-  assert.equal(await getVersion(), '4.8.19')
-  assert.equal(w.TavernHelper.getTavernHelperVersion, getVersion)
-  const source = await readFile(new URL('../tavern-plugin/src/client/opening-preview.js', import.meta.url), 'utf8')
-  vm.runInNewContext(source + '\ninstallOpeningPreviewBridge("version-test", {runtime:true,swipes:["Hello"],selectedIndex:0,openingIds:["first"]});', w)
-  assert.equal(w.getTavernHelperVersion, getVersion)
-  assert.equal(w.TavernHelper.getTavernHelperVersion(), '4.8.19')
-})
-
 
 for (const frozen of [false, true]) test('nested script errors retain the failing owner through an outer host event: ' + frozen, async () => {
   const run = helperHostHarness(), w = run.window

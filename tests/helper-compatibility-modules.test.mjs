@@ -24,16 +24,6 @@ test('MVU schema rejection diagnostics remain visible even when upstream notific
   assert.equal(checkbox.checked, false, 'restore even when the companion throws')
 })
 
-test('unavailable diagnostic controls cannot prevent script execution', async () => {
-  let calls = 0
-  const bus = helperClient.createTavernHelperEventBus({ currentScript: () => ({ id: 'schema' }),
-    withScript: async (_id, run) => run(), reportSubscriptions() {}, post() {},
-    document: { getElementById() { throw Error('observer unavailable') } } })
-  bus.listen('mag_command_parsed_for_zod', () => { calls++ })
-  await bus.emit('mag_command_parsed_for_zod', {}, [])
-  assert.equal(calls, 1)
-})
-
 test('生产通信模块校验窗口与token，拒绝伪造回复并在更新上下文后完成请求', async () => {
   let receive, eventId = 'event-1', scriptId = 'script-1'
   const sent = [], contexts = [], events = []

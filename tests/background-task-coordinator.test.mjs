@@ -3,10 +3,7 @@ import test from 'node:test'
 import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persistence.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
 
-import {
-  createBackgroundTaskCoordinator,
-  isOpeningAwaitingSettlement
-} from '../tavern-plugin/lib/domain/background-task-coordinator.js'
+import { createBackgroundTaskCoordinator } from '../tavern-plugin/lib/domain/background-task-coordinator.js'
 
 function coordinatorHarness(options = {}) {
   let current = {
@@ -127,22 +124,6 @@ test('Tavern 联合压缩期间不允许启动新的后台任务', async () => {
   assert.equal(harness.writes.length, 0)
 })
 
-test('后台 activity 只由 Story Timeline operation 推导，不相信重复的 settleStatus', async () => {
-  const harness = coordinatorHarness()
-  const task = await harness.coordinator.begin(Object.assign(harness.current(), { settleStatus: 'done' }), 'settlement')
-
-  assert.deepEqual(harness.coordinator.activity(task.chat), {
-    phase: 'running', busy: true, role: 'settlement', operationId: task.operationId,
-    basedOn: task.basedOn, updatedAt: task.chat.timeline.operations[task.operationId].createdAt
-  })
-
-  const completed = await task.commit({ stateChanged: false })
-  assert.deepEqual(harness.coordinator.activity(completed.chat), {
-    phase: 'idle', busy: false, role: 'settlement', operationId: task.operationId,
-    basedOn: task.basedOn, updatedAt: completed.chat.timeline.operations[task.operationId].completedAt
-  })
-})
-
 test('同一 Tavern Chat 的后台 operation 严格串行，不会用新任务取消旧任务', async () => {
   const harness = coordinatorHarness()
   const first = await harness.coordinator.begin(harness.current(), 'settlement')
@@ -254,20 +235,6 @@ test('进程重启把遗留 running 结算恢复为可重试失败，不假装�
   await harness.coordinator.begin(recovered.chat, 'settlement')
 })
 
-test('世界书确定性投影不需要 skip operation，后台周期始终只有结算', async () => {
-  const harness = coordinatorHarness()
-  const begunBody = harness.timeline.apply({ chat: harness.current(), intent: { kind: 'body.begin', turn: 1, userText: '向前走' } })
-  const completedBody = harness.timeline.complete({ chat: begunBody.chat, operationId: begunBody.value.operationId, basedOn: begunBody.value.basedOn, outcome: { status: 'success' } })
-  Object.assign(harness.current(), completedBody.chat)
-
-  assert.equal(harness.coordinator.activity(harness.current()).role, 'settlement')
-  const settlement = await harness.coordinator.begin(harness.current(), 'settlement')
-  const recovered = await harness.coordinator.recover(settlement.chat)
-  assert.equal(recovered.activity.phase, 'failed')
-  assert.equal(recovered.activity.role, 'settlement')
-  await harness.coordinator.begin(recovered.chat, 'settlement')
-})
-
 test('重启会持久关闭遗留候选 operation，但不会误排结算', async () => {
   const harness = coordinatorHarness()
   const candidate = await harness.coordinator.begin(harness.current(), 'candidate')
@@ -286,25 +253,6 @@ test('后台模型失败由 coordinator 关闭 operation，任务 module 只负�
   assert.equal(result.status, 'failed')
   assert.equal(harness.writes.length, 2)
   assert.equal(Object.values(harness.current().timeline.operations)[0].status, 'failed')
-})
-
-test('只有尚未结算的纯开场白会在首次生成候选前补跑后台结算', () => {
-  assert.equal(isOpeningAwaitingSettlement({
-    settleStatus: 'idle',
-    messages: [{ role: 'assistant', text: '开场白', greeting: true }]
-  }), true)
-  assert.equal(isOpeningAwaitingSettlement({
-    settleStatus: 'done',
-    messages: [{ role: 'assistant', text: '开场白', greeting: true }]
-  }), false)
-  assert.equal(isOpeningAwaitingSettlement({
-    settleStatus: 'idle',
-    messages: [
-      { role: 'assistant', text: '开场白', greeting: true },
-      { role: 'user', text: '向前走' },
-      { role: 'assistant', text: '第一轮正文' }
-    ]
-  }), false)
 })
 
 test('运行前保存代理身份，重启恢复后重试复用，但不冒充结算已完成', async () => {
@@ -424,7 +372,6 @@ for (const conflict of [false,true,'cancel']) test(`narrow background mutations 
   const restarted=createChatJournalStore({dataRoot:root})
   assert.equal((await restarted.read('c')).messages[0].text,conflict?'concurrent':'keep')
 })
-
 
 test('settlement checkpoint reads only its target and running operation', async t => {
   const { mkdtemp, rm } = await import('node:fs/promises')

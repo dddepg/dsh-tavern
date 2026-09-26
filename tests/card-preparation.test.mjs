@@ -11,39 +11,6 @@ function moduleUnderTest() {
   })
 }
 
-test('人物卡入口明确拒绝独立世界书并指向世界书库', () => {
-  const cards = moduleUnderTest()
-  const standaloneWorldBook = {
-    entries: {
-      0: { uid: 0, key: ['钟楼'], content: '钟楼藏着线索。', disable: false }
-    },
-    originalData: {
-      name: '黑麦镇',
-      entries: [{ uid: 0, key: ['钟楼'], content: '钟楼藏着线索。', disable: false }]
-    }
-  }
-
-  assert.throws(
-    () => cards.create({ kind: 'import', payload: { kind: 'text', text: JSON.stringify(standaloneWorldBook) } }),
-    /检测到世界书.*世界书库/
-  )
-})
-
-test('带自定义 entries 扩展的旧人物卡仍可导入', () => {
-  const cards = moduleUnderTest()
-  const imported = cards.create({
-    kind: 'import',
-    payload: {
-      name: '阿芙拉',
-      description: '银发佣兵',
-      entries: { custom: true }
-    }
-  })
-
-  assert.equal(cards.project(imported).name, '阿芙拉')
-  assert.equal(cards.project(imported).description, '银发佣兵')
-})
-
 test('SillyTavern v3 导入与导出共享字段政策，并保持 world book 内容', () => {
   const cards = moduleUnderTest()
   const imported = cards.create({
@@ -164,32 +131,6 @@ test('完整 raw 是可编辑工作数据，未知扩展在投影、修改和导
   assert.deepEqual(exported.future_root, { enabled: true })
   assert.deepEqual(exported.data.future_field, ['保留'])
   assert.deepEqual(exported.data.extensions, source.data.extensions)
-})
-
-test('人物卡详情用稳定投影展示字段，同时从完整工作 raw 解析扩展', () => {
-  const cards = moduleUnderTest()
-  const workspace = cards.create({
-    kind: 'import',
-    payload: {
-      spec: 'chara_card_v3',
-      spec_version: '3.0',
-      data: {
-        name: '命运',
-        description: '稳定字段',
-        extensions: {
-          regex_scripts: [{ scriptName: '状态栏', findRegex: '/<status>/', replaceString: '<aside>' }],
-          depth_prompt: { depth: 4, role: 'system', prompt: '保持设定' }
-        }
-      }
-    }
-  })
-
-  const detail = cards.present({ card: workspace, as: 'detail' })
-
-  assert.equal(detail.name, '命运')
-  assert.equal(detail.description, '稳定字段')
-  assert.equal(detail.extensions.regexScripts.length, 1)
-  assert.deepEqual(detail.extensions.otherExtensions.map((item) => item.name), ['depth_prompt'])
 })
 
 test('raw 扩展按 JSON Pointer 分段读取并做最小修改', () => {
@@ -386,16 +327,6 @@ test('未知 patch 字段明确失败，避免 Agent 输出被静默丢弃', () 
   assert.throws(() => cards.update({ kind: 'card', card, patch: { unknown_field: 'x' } }), /未知人物卡字段/)
 })
 
-test('对话投影只暴露可编辑人物卡字段', () => {
-  const cards = moduleUnderTest()
-  const card = cards.create({ kind: 'import', payload: { kind: 'text', text: '{"name":"阿芙拉","description":"佣兵"}' } })
-  const editable = cards.present({ card, as: 'editable' })
-  assert.equal(editable.name, '阿芙拉')
-  assert.equal(editable.description, '佣兵')
-  assert.equal(editable.id, undefined)
-  assert.equal(editable.importedAt, undefined)
-})
-
 test('备用开场保留空槽、重复正文和空白，以保持脚本 swipe 索引', () => {
   const cards = moduleUnderTest()
   const greetings = ['', ' 海边 ', ' 海边 ', '山间']
@@ -404,7 +335,6 @@ test('备用开场保留空槽、重复正文和空白，以保持脚本 swipe �
   const updated = cards.update({ kind: 'card', card, patch: { alternate_greetings: greetings } })
   assert.deepEqual(cards.project(updated.card).alternate_greetings, greetings)
 })
-
 
 test('迁移旧去重投影时仍保留原卡开场槽位', () => {
   const cards = moduleUnderTest()

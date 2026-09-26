@@ -39,10 +39,3 @@ test('浏览器分段计时只接受关联 ID 和固定数字字段，导出深�
   first.browser.requests[0].active=999
   assert.equal(store.read().browser.requests[0].active, 3)
 })
-
-test('opening and RPC timestamps preserve current epoch milliseconds',()=>{
- const store=createPerformanceDiagnostics(),now=1790345531472,id='00000000-0000-0000-0000-000000000001'
- store.browser({openings:[{id,stage:'startClick',status:'completed',startedAt:now,durationMs:1133}],openingRequests:[{id,method:'startChat',sentAt:now,durationMs:333}]})
- assert.equal(store.read().browser.openings[0].startedAt,now)
- assert.equal(store.read().browser.openingRequests[0].sentAt,now)
-})

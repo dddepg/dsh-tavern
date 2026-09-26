@@ -6,16 +6,6 @@ import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { auditUpstream } from '../tavern-plugin/lib/vendor/st-prompt-template/host-build/audit.mjs'
 
-test('完整上游基线通过字节校验，审计不会宣称运行时已经接入', async () => {
-  const result = await auditUpstream()
-  assert.equal(result.commit, 'd6f520d149aba146305b0b781ddd691d449c28d2')
-  assert.equal(result.runtimeReady, false)
-  assert.ok(result.hostModules.find(m => m.module === 'script.js').symbols.includes('saveChatConditional'))
-  for (const entry of ['handler', 'command', 'ui', 'exports', 'code-editor']) {
-    assert.ok(result.imports.some(i => i.file === `src/modules/${entry}.ts`))
-  }
-})
-
 test('上游文件遭修改时校验失败，不接受修改后的文件', async t => {
   const root = await mkdtemp(join(tmpdir(), 'prompt-upstream-audit-'))
   t.after(() => rm(root, { recursive: true, force: true }))

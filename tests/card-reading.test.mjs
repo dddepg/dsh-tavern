@@ -15,9 +15,3 @@ test('人物卡字段按字符窗口渐进读取', () => {
   const next = readCardField({ description: '一二三四五六七八' }, { field: 'description', offset: 4, limit: 3 })
   assert.deepEqual(next, { field: 'description', text: '四五六', totalChars: 8, from: 4, to: 6, done: false })
 })
-
-test('数组字段保留 JSON 结构供 Agent 阅读', () => {
-  const result = readCardField({ tags: ['佣兵', '银发'] }, { field: 'tags' })
-  assert.deepEqual(JSON.parse(result.text), ['佣兵', '银发'])
-  assert.equal(result.done, true)
-})

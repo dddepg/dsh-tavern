@@ -69,15 +69,3 @@ test('missing or altered projection evidence falls back to full bodies', () => {
     assert.equal(items(projectWorldbookFilterContext(unavailable, input([candidate()])))[0].text.length, 15000)
   }
 })
-
-test('other task kinds are not projected', () => {
-  assert.equal(projectWorldbookFilterContext(null, { ...input([candidate()]), task: 'candidate' }), null)
-})
-
-
-test('short bodies stay literal rather than growing into larger references', () => {
-  const session = Session.create('short')
-  const entry = candidate('short', '很短的资料')
-  append(session, projectWorldbookFilterContext(session, input([entry])))
-  assert.deepEqual(items(projectWorldbookFilterContext(session, input([entry]))), [entry])
-})

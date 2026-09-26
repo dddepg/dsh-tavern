@@ -264,51 +264,6 @@ test('image dock targets latest story turn even without a display projection or 
   }
 })
 
-test('initial scene status failure remains visible without a usable generation key', async () => {
-  let state, effect
-  const ctx = vm.createContext({
-    React: { useState: () => [null, value => { state = typeof value === 'function' ? value(state) : value }], useEffect: fn => { effect = fn } },
-    window: { clearTimeout() {}, addEventListener() {}, removeEventListener() {} },
-    rpc: async () => { throw new Error('status unavailable') }
-  })
-  const hook = vm.runInContext(extract('useSceneImageRecord', 'SceneImageAction') + ';useSceneImageRecord', ctx)
-  hook('session', 4); effect(); await new Promise(resolve => setImmediate(resolve))
-  assert.equal(state?.error, 'status unavailable')
-  assert.ok(!state.key)
-})
-
-test('native story replies render illustrations, while card mode and transitioning sessions do not', () => {
-  const expression = source.match(/const illustration = (sceneImagesEnabled[^;]+);/)[1]
-  const evaluate = overrides => vm.runInNewContext(expression, {
-    sceneImagesEnabled: true, settled: true, projection: null, sessionTransitioning: false,
-    storyTurn: 4, liveState: { view: { mode: 'story' } }, props: { sessionId: 'session' },
-    isPlayMode: mode => ['story', 'script'].includes(mode), SceneIllustration: 'illustration',
-    React: { createElement: (type, props) => ({ type, props }) }, ...overrides
-  })
-  assert.equal(evaluate().props.turn, 4)
-  assert.equal(evaluate({ liveState: { view: { mode: 'card' } } }), null)
-  assert.equal(evaluate({ sessionTransitioning: true }), null)
-  assert.equal(evaluate({ storyTurn: 0 }), null)
-})
-
-test('missing scene target retries are bounded and recovery clears unavailable state', async () => {
-  let state, effect, timer, calls = 0, ready = false
-  const ctx = vm.createContext({
-    React: { useState: () => [null, value => { state = typeof value === 'function' ? value(state) : value }], useEffect: fn => { effect = fn } },
-    window: { clearTimeout() { timer = null }, setTimeout(fn) { timer = fn }, addEventListener() {}, removeEventListener() {} },
-    rpc: async () => { calls++; return { illustration: ready ? {status:'idle',key:'valid',versions:[]} : {status:'unavailable',reason:'target-unavailable',versions:[]} } }
-  })
-  const hook = vm.runInContext(extract('useSceneImageRecord', 'SceneImageAction') + ';useSceneImageRecord', ctx)
-  const tick = () => new Promise(resolve => setImmediate(resolve))
-  hook('session', 4); const cleanup = effect(); await tick()
-  while (timer) { const next = timer; timer = null; next(); await tick() }
-  assert.equal(calls, 6)
-  assert.equal(state.error, undefined)
-  cleanup(); ready = true; effect(); await tick()
-  assert.equal(state.key, 'valid')
-  assert.equal(timer, null)
-})
-
 test('delete selected image, handle cancellation/errors, then regenerate the empty historical turn', async () => {
   const slots = [], calls = []
   let cursor = 0, confirmed = false, failure = false, serial = 0

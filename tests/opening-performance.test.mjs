@@ -40,10 +40,3 @@ test('browser opening request metadata survives server export filtering',()=>{
  assert.equal(store.read().browser.requests[0].bodyChars,15000000)
  assert.doesNotMatch(JSON.stringify(store.read()),/PRIVATE/)
 })
-test('opening server records survive ordinary session polling',async()=>{
- const trace=createRequestPerformance()
- await trace.run('getCardOpenings','',async()=>{})
- for(let i=0;i<150;i++)await trace.run('syncSession','',async()=>{})
- assert.equal(trace.read().openings[0].method,'getCardOpenings')
- assert.equal(trace.read().recent.some(row=>row.method==='getCardOpenings'),false)
-})

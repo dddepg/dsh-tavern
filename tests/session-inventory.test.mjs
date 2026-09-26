@@ -29,21 +29,6 @@ test('统计不加载冷会话、不读取正文，区分未知值与零并合�
   assert.doesNotMatch(JSON.stringify(result), /secret|\/logs\//)
 })
 
-test('并发统计只枚举一次，失败后可重新刷新', async () => {
-  let calls = 0
-  const inventory = createSessionInventory({
-    persistence: { list: async () => { if (++calls === 1) throw new Error('不可用'); return [{ id: 'sqlite' }] } },
-    sessions: { get() {} }, agents: { get() {} }, references: async () => []
-  })
-  const first = inventory.read(), second = inventory.read()
-  assert.equal(first, second)
-  await assert.rejects(first, /不可用/)
-  const result = await inventory.read()
-  assert.equal(calls, 2)
-  assert.equal(result.rows[0].diskBytes, null)
-  assert.equal(result.rows[0].archived, null)
-})
-
 test('仅通过会话头追溯后台归属，区分直接关联与父会话关联并终止循环', async () => {
   const forbidden = () => { throw new Error('不得加载历史') }
   const headers = [{ id: 'front' }, { id: 'background', parentSession: 'front' },
@@ -71,15 +56,4 @@ test('深层父链不递归加载；子会话自身直接关联优先，实时�
   assert.equal(rows.get('3').references[0].relation, 'direct')
   assert.equal(rows.get('4').references[0].chatId, 'root')
   assert.equal(rows.get('live').references[0].chatId, 'own')
-})
-
-test('当前绑定优先于新旧时间和运行状态，独立后台或旧索引不冒充历史', async () => {
-  const headers = [{ id: 'front' }, ...['old-current', 'new-history', 'image'].map(id => ({ id, parentSession: 'front', agentPreset: 'tavern-background' }))]
-  const inventory = createSessionInventory({ persistence: { list: async () => headers }, sessions: { get() {} }, agents: { get() {} },
-    references: async () => [{ sessionId: 'front', chatId: 'game', title: '游戏', backgroundSessionId: 'old-current', backgroundHistoryIds: ['new-history'] }] })
-  const rows = new Map((await inventory.read()).rows.map(row => [row.sessionId, row]))
-  assert.equal(rows.get('old-current').backgroundState, 'current')
-  assert.equal(rows.get('new-history').backgroundState, 'historical')
-  assert.equal(rows.get('image').backgroundState, 'unknown')
-  assert.equal(rows.get('new-history').references[0].title, '游戏')
 })

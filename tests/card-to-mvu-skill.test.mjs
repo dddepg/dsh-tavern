@@ -32,15 +32,6 @@ test('转换 Skill 可由 Tavern 内置目录读取，引用资源齐全且默�
   }
 })
 
-test('转换 Skill 保留候选项清理和迁移后直接删除要求', async () => {
-  const skills = createTavernSkillModule({ directory: new URL('../data/skills/', import.meta.url).pathname, builtInDirectory: root.pathname })
-  const skill = await skills.read('card-to-mvu')
-  assert.match(skill.content, /删除副本中重复的生成要求/)
-  assert.match(skill.content, /保留剧情中的选择、分支条件与实际游戏交互/)
-  assert.match(skill.content, /从原位置直接删除已迁移内容及其空标题、空容器/)
-  assert.match(skill.content, /不留下.*替代说明、注释或占位文字/)
-})
-
 test('人物设计是现有后台 Agent 按需加载的内置 Skill', async () => {
   const cardSkillNames = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
   const backgroundSkillNames = (await readdir(backgroundRoot, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()

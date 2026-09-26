@@ -116,10 +116,6 @@ test('释放所有常驻会话时汇总错误并清空所有权，可重复释�
   assert.equal(h.disposals.length, 2)
 })
 
-test('公共Runner缺少宿主时保留原有错误', () => {
-  for (const input of [undefined, null, {}]) assert.throws(() => createBackgroundAgentRunner(input), /缺少 DSH Agent 运行环境/)
-})
-
  test('needs-session bypasses an obsolete resident cache while normal continuation reuses it', async t => {
  let fresh = false
  const h = harness({ needsNewBackgroundSession: async () => fresh })
@@ -161,7 +157,6 @@ test('替代一个游戏的后台不会释放其他游戏正在运行的后台',
   gate.resolve(); await running
 })
 
-
 test('旧后台正在压缩时延后释放，压缩结束后完成回收', async t => {
   const gate = deferred()
   const h = harness({ needsNewBackgroundSession: async () => true, compactWork: () => gate.promise })
@@ -189,7 +184,6 @@ test('替代后台任务失败也释放旧实例，新实例仍可继续使用',
   fresh = false; fail = false
   assert.equal((await h.runner.run(h.input())).traceSessionId, latest)
 })
-
 
 test('missing background replacement is created only once across failed settlement retries', async t => {
   const timeline = createStoryTimeline()

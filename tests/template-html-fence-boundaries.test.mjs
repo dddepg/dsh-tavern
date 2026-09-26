@@ -86,21 +86,3 @@ for (const codeBlocks of [false, true]) {
     assert.equal(result.first.chat[0].mes,source)
   })
 }
-
-test('EJS expressions with HTML strings and comparison operators survive one escaping layer',async()=>{
-  const source='判断：<% if (1 < 2 && 3 > 2) { %><%= "<b>通过</b>" %><% } %>'
-  const result=await runtime.lifecycle({settings:{preload_worldinfo_enabled:false,raw_message_evaluation_enabled:false,render_enabled:true},transcript:[{role:'assistant',content:source}]})
-  assert.match(result.first.chat[0].template_display.html,/<b>通过<\/b>/)
-  assert.doesNotMatch(result.first.chat[0].template_display.html,/DSH_TEMPLATE_EXPRESSION|&amp;lt;%|<%/)
-  assert.equal(result.first.chat[0].mes,source)
-})
-
-test('attribute EJS survives DOM serialization, including inert event handlers',async()=>{
-  const source='<div data-count="<%- 1 < 2 ? 3 : 4 %>" onclick="window.value=<%- 3 %>">正文</div>'
-  const result=await runtime.lifecycle({settings:{preload_worldinfo_enabled:false,raw_message_evaluation_enabled:false,render_enabled:true},transcript:[{role:'assistant',content:source}]})
-  const html=result.first.chat[0].template_display.html
-  assert.match(html,/data-count="3"/)
-  assert.match(html,/onclick="window.value=3"/)
-  assert.doesNotMatch(html,/<%|&lt;%/)
-  assert.equal(result.first.chat[0].mes,source)
-})

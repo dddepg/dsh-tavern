@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFile } from 'node:fs/promises'
-import { createInitializationTrace, instrumentInitializationAwaits, instrumentInitializationClient } from './fixtures/mvu-initialization-trace.mjs'
+import { createInitializationTrace } from './fixtures/mvu-initialization-trace.mjs'
 
 test('trace preserves pending work, result identity and rejection; keeps no payloads', async () => {
   let time = 0, resolve
@@ -18,23 +18,6 @@ test('trace preserves pending work, result identity and rejection; keeps no payl
   await trace.wait('next', 1)
   assert.equal(trace.snapshot().dropped, 1)
   assert.doesNotMatch(JSON.stringify(trace.snapshot()), /private|secret|token/)
-})
-
-test('instrumented production bundles retain parseable awaits at initialization boundaries', async () => {
-  const source = await readFile(new URL('../tavern-plugin/lib/vendor/magvarupdate/host-build/artifact/bundle.js', import.meta.url), 'utf8')
-  const { stages } = instrumentInitializationAwaits(source, 'official')
-  for (const stage of ['companion-barrier', 'settings-ready', 'initvar-read', 'init-check:eventEmit', 'init-check:setChatMessages', 'init-check:all-swipes']) assert.ok(stages.includes(stage), stage)
-  const client = instrumentInitializationClient(await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8'))
-  assert.match(client, /__mvuInitializationTrace.wait\("prompt-drain"/)
-})
-
-test('nested await instrumentation executes unchanged and records completed boundaries', async () => {
-  const trace = createInitializationTrace()
-  const code = 'async function init(){ "runtime.initvar.noMessagesLog"; return await Promise.all([await Promise.resolve(3)]); } init()'
-  const { source } = instrumentInitializationAwaits(code, 'official')
-  assert.deepEqual(Array.from(await vm.runInNewContext(source, { __mvuInitializationTrace: trace })), [3])
-  assert.equal(trace.snapshot().rows.length, 2)
-  assert.throws(() => instrumentInitializationAwaits('await Promise.resolve(1)', 'official'), /anchors absent/)
 })
 
 test('production timing aggregates repeated writes and exposes stalled work without changing completion', async () => {

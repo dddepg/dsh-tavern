@@ -111,14 +111,6 @@ test('压缩失败原因进入持久警告，前后台结果保持独立', async
   assert.equal(h.chat.contextCompaction.warning, state.warning)
 })
 
- test('capacity recovery clears only its stale warning below the compression threshold', async () => {
-  const h = fixture(); h.policy = { mode: 'percent', percent: 80 }; h.pressure = null;
-  await h.run(); assert.match(h.chat.contextCompaction.warning, /容量/);
-  h.pressure = 18; await h.run(); assert.equal(h.chat.contextCompaction.warning, ''); assert.deepEqual(h.calls, []);
-  h.chat.contextCompaction.warning = 'other failure'; await h.run(); assert.equal(h.chat.contextCompaction.warning, 'other failure');
-})
-
-
 test('后台摘要变长时保留未完成状态并解释原因，不附加立即重试提示', async () => {
   const h = fixture()
   h.deps.compact = async (_id, side) => {

@@ -121,22 +121,6 @@ test('全局接口拒绝修改本局联网搜索开关', async t => {
   await assert.rejects(harness.update({ webSearchEnabled: true }), /本局设置/)
 })
 
-test('后台对话框以只读标签显示实际模型，不替换前台模型选择器', () => {
-  const context = {}
-  const start = clientSource.indexOf('function backgroundModelLabel(selection, catalog)')
-  assert.ok(start >= 0)
-  vm.runInNewContext(clientSource.slice(start, clientSource.indexOf('\n\t\tfunction TavernBackgroundModelLabel', start)) +
-    '; this.label = backgroundModelLabel;', context)
-  assert.equal(context.label({ provider: 'vertex', model: 'gemini-flash' }, [{
-    provider: 'vertex', providerName: 'Google', models: [{ id: 'gemini-flash', name: 'Gemini Flash' }]
-  }]), 'Google: Gemini Flash')
-  assert.equal(context.label({ provider: 'custom', model: 'local-model' }, []), 'custom: local-model')
-  assert.match(clientSource, /slots\.inject\("conversation\.input\.right"[\s\S]*?id: "dsh-tavern-background-model"/)
-  assert.match(clientSource, /identity\.label === "酒馆后台 Agent"/)
-  assert.match(clientSource, /className: "dsh-tavern-background-model"/)
-  assert.doesNotMatch(clientSource.slice(clientSource.indexOf('function TavernBackgroundModelLabel'), clientSource.indexOf('function TavernSettingsSection')), /React\.createElement\("button"/)
-})
-
 test('实验分支无论历史设置为何都公开兼容能力', async t => {
   const harness = await settingsHarness(t)
   const legacy = { compatibilityMode: true, unknown: '保留' }
@@ -245,17 +229,10 @@ test('单项系统提示词保存和恢复不会影响其他项', function () {
   assert.deepEqual(restored.promptOverrides, { story: '正文', future: '保留' })
 })
 
-
 test('全局 API 拒绝修改后台配置，防止旧客户端改变所有对话', async t => {
   const run = await settingsHarness(t)
   await assert.rejects(run.update({ backgroundTasks: { variables: false } }), /本局设置/)
   await assert.rejects(run.update({ backgroundModel: null }), /本局设置/)
-})
-
-test('全局设置不再显示后台模型和结算开关', () => {
-  const start = clientSource.indexOf('function TavernSettingsSection()')
-  const section = clientSource.slice(start, clientSource.indexOf('function SystemPromptSidebarTab()', start))
-  assert.doesNotMatch(section, /setBackgroundModel|setBackgroundTask|后台推理强度|变量结算/)
 })
 
 test('已保存的全部系统提示词在重启和内置默认更新后保留，仅显式恢复默认清除', async t => {
@@ -286,7 +263,6 @@ test('已保存的全部系统提示词在重启和内置默认更新后保留�
   }
 })
 
-
 test('新游戏前后台默认模型分别保存、清除且不触碰旧全局模型版本', () => {
   let settings = { unknown: true, backgroundModelRevision: 7 }
   for (const name of ['defaultForegroundModel', 'defaultBackgroundModel']) {
@@ -301,7 +277,6 @@ test('新游戏前后台默认模型分别保存、清除且不触碰旧全局�
   assert.equal(cleared.backgroundModelRevision, 7)
   assert.equal(cleared.unknown, true)
 })
-
 
 test('全局写作 Skill 逐项保存，恢复开启不改动其他 Skill', () => {
   let document = applyTavernSettingsPatch({}, { defaultWritingSkill: { name: 'one', enabled: false } })

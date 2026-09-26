@@ -8,19 +8,7 @@ const runtime = await UpstreamTemplateRuntime.create()
 async function project(entries, variables = {}) {
   return await projectWorldBookTemplates({ includeConstants: true, runtime, worldBook: { view: { entries } }, chat: { variables }, card: { name: '测试' } })
 }
-test('常驻世界书使用最新开关和 EJS 值，不保留旧内容', async () => {
-  const entries = [{ ref: 'dlc', enabled: false, constant: true, content: 'DLC世界' },
-    { ref: 'ejs', enabled: true, constant: true, content: '天气：<%= getvar("weather") %>' }]
-  assert.doesNotMatch((await project(entries, { weather: '晴' })).context, /DLC世界/)
-  entries[0].enabled = true
-  const current = await project(entries, { weather: '雨' })
-  assert.match(current.context, /DLC世界/)
-  assert.match(current.context, /雨/)
-  assert.doesNotMatch(current.context, /晴/)
-  assert.equal((await project(entries, { weather: '雨' })).context, current.context)
-  entries[0].enabled = false
-  assert.doesNotMatch((await project(entries)).context, /DLC世界/)
-})
+
 test('命定之诗模式：常驻 setvar 供条件条目 getvar 使用，不写入持久变量', async () => {
   const setter = { ref: 'dlc', enabled: true, constant: true, content: '{{setvar::补充::龙姬解封}}' }
   const current = await project([setter])

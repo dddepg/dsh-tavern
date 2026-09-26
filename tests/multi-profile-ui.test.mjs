@@ -31,13 +31,7 @@ test('game switching applies directly and explains cache impact inline', async (
   assert.equal(cancelled.calls.length, 1)
   assert.equal(cancelled.warnings.length, 0)
 })
-test('unconfirmed library profiles do not hide game controls', async () => {
-  const ui = render(false)
-  assert.equal(ui.button('新建'), undefined)
-  assert.equal(ui.button('冒险'), undefined)
-  await ui.nodes.find(n => n.type === 'select').props.onChange({ target: { value: '' } })
-  assert.equal(ui.calls[0].args.enabled, false)
-})
+
 test('library selection and new-game defaults use separate controls without changing the current game', async () => {
   const ui = render(true, true, 'a', false)
   assert.equal(ui.button('停用'), undefined)

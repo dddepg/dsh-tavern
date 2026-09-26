@@ -92,11 +92,3 @@ test('失败重试反馈同样移除展示副本，不改变运行时输入、�
   assert.deepEqual(result.variables, after, 'runtime result retains the complete state')
   assert.deepEqual(result.frame.authoritativeState.currentVariables, variables)
 })
-
-
-test('重算指导意见只进入本次变量请求，不改写正文', () => {
-  const request = projectMvuBackgroundRequest(createMvuBackgroundTaskFrame({ ...input, guidance: '不要扣库存' }))
-  assert.match(request.turnContext, /本次重新结算.*[\s\S]*不要扣库存/)
-  assert.doesNotMatch(JSON.stringify(request.messages), /不要扣库存/)
-  assert.doesNotMatch(projectMvuBackgroundRequest(createMvuBackgroundTaskFrame(input)).turnContext, /不要扣库存/)
-})

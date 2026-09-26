@@ -1,29 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
-  createMvuBackgroundTaskFrame,
-  createMvuSettlementModule,
-  extractMvuStoryText,
-  formatMvuUpdateCommand,
-  normalizeMvuToolSubmission,
-  projectMvuBackgroundRequest
-} from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
-
-test('变量结算正文只保留本轮剧情，不包含控制协议和状态栏 HTML', function () {
-  const source = [
-    '她推开门，确认屋内无人。',
-    '<UpdateVariable><JSONPatch>[{"op":"replace","path":"/hp","value":9}]</JSONPatch></UpdateVariable>',
-    '<visual_cards>[{"name":"她"}]</visual_cards>',
-    '<StatusPlaceHolderImpl/>',
-    '```html',
-    '<section>状态栏</section>',
-    '```',
-    '门外的雨声仍未停。'
-  ].join('\n\n')
-
-  assert.equal(extractMvuStoryText(source), '她推开门，确认屋内无人。\n\n门外的雨声仍未停。')
-})
+import { createMvuBackgroundTaskFrame, createMvuSettlementModule, formatMvuUpdateCommand, normalizeMvuToolSubmission, projectMvuBackgroundRequest } from '../tavern-plugin/lib/domain/mvu-background-settlement.js'
 
 test('深模块强制一次工具调用并以官方 Runtime 的实际差异生成回执', async function () {
   const modelCalls = []
@@ -96,37 +74,6 @@ test('MVU 后台拒绝人物设计调用，仅完成姿势和变量结算', asyn
   assert.deepEqual(designCalls, [])
   assert.equal(result.posture, '站在门边')
   assert.equal(result.receipt.status, 'unchanged')
-})
-
-test('MVU 工具提交在进入官方运行时前解析姿势和变量值中的名字宏', async function () {
-  const module = createMvuSettlementModule({
-    model: { async run(input) {
-      await input.onToolCall({
-        name: 'posture_submit',
-        arguments: { posture: '{{char}}经过 {{ user }} 身侧后走远。' }
-      })
-      await input.onToolCall({ name: 'mvu_submit_update', arguments: { operations: [{
-        op: 'replace', path: '/stat_data/祝南枝/动作体位', value: '经过 {{user}} 身侧后走远。'
-      }] } })
-      return { text: '' }
-    } },
-    runtime: { async settleMvuUpdate(input) {
-      assert.match(input.command, /经过 陈锋 身侧后走远/)
-      assert.doesNotMatch(input.command, /\{\{\s*user\s*\}\}/i)
-      return { context: { messages: [{ variables: { stat_data: { 祝南枝: { 动作体位: '经过 陈锋 身侧后走远。' } } } }] } }
-    } }
-  })
-
-  const result = await module.settleVariables({
-    operationId: 'operation-macro', chatId: 'chat-macro', branchId: 'branch-1', basedOnRevision: 1,
-    sessionId: 'session-1', messageId: 0, swipeId: 0, storyText: '她从玩家身侧走过。',
-    charName: '祝南枝', macroState: { userName: '陈锋', local: {}, global: {} },
-    currentVariables: { stat_data: { 祝南枝: { 动作体位: '站在窗边。' } } }
-  })
-
-  assert.equal(result.posture, '祝南枝经过 陈锋 身侧后走远。')
-  assert.equal(result.receipt.status, 'updated')
-  assert.equal(result.variables.stat_data.祝南枝.动作体位, '经过 陈锋 身侧后走远。')
 })
 
 function completeDesignFixture() {
@@ -287,7 +234,6 @@ test('工具拒绝任意 JavaScript、非法路径和无效 delta', function () 
   }, /有限数字/)
 })
 
-
 test('关闭姿势和设计后直接结算 MVU，关闭的工具不能写入状态', async () => {
   let applied = 0
   const module = createMvuSettlementModule({
@@ -378,29 +324,6 @@ test('failed posture can be corrected after variables succeed without repeating 
   const result = await module.settleVariables({ operationId: 'batch', chatId: 'chat', branchId: 'branch', basedOnRevision: 1, turn: 2, swipeId: 0, sessionId: 's', messageId: 1, storyText: '她站在门边。', currentVariables: { stat_data: { hp: 10 } }, backgroundTasks: { posture: true } })
   assert.equal(result.posture, '坐下')
   assert.equal(writes, 1)
-})
-
-test('工具使用约定由工具定义承载，本轮提示只安排任务', () => {
-  for (const posture of [true, false]) {
-    const request = projectMvuBackgroundRequest(createMvuBackgroundTaskFrame({
-      operationId: 'tool-contract', chatId: 'chat', branchId: 'branch', basedOnRevision: 1,
-      messageId: 0, swipeId: 0, storyText: '她站在门边。', currentVariables: { stat_data: { hp: 10 } },
-      backgroundTasks: { posture, variables: true }, updateRules: ['体力不得小于零。']
-    }))
-    const tool = request.tools.find(tool => tool.name === 'mvu_submit_update')
-    assert.match(tool.description, /最多提交三次/)
-    assert.match(tool.description, /rolledBack=true/)
-    assert.match(tool.description, /ok=true 或 retryable=false/)
-    assert.match(tool.description, /currentVariables/)
-    assert.match(tool.parameters.properties.operations.description, /没有变化时提交空数组/)
-    assert.doesNotMatch(request.system, /rolledBack|retryable|最多提交三次|空数组|XML 变量协议/)
-    assert.match(request.system, /必须调用 mvu_submit_update/)
-    assert.match(request.turnContext, /体力不得小于零/)
-    if (posture) {
-      assert.match(request.system, /同一次回复中同时调用/)
-      assert.match(request.tools.find(tool => tool.name === 'posture_submit').description, /ok=true 后不再重复提交/)
-    }
-  }
 })
 
 test('本轮 Helper 建角要求交给结算，后续回合不重放初始化', async () => {

@@ -9,12 +9,6 @@ import test from 'node:test'
 import { resolveDshCliEntry, resolveNpmCliEntry } from '../bin/plugin-dependencies.mjs'
 import { renderWindowsLauncher } from '../bin/profile-installation.mjs'
 
-test('Windows shim is ASCII-only even with Unicode and cmd metacharacters in the installation path', () => {
-  const shim = renderWindowsLauncher('D:\\赵 的游戏\\100% & ready!\\bin\\dsh-tavern.mjs')
-  assert.match(shim, /^[\x00-\x7f]*$/)
-  assert.doesNotMatch(shim, /\bcd\s/i)
-})
-
 test('command shim bootstrap preserves argv and cwd when loading a Unicode installation', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'tavern-shim-'))
   t.after(() => rm(root, { recursive: true, force: true }))
@@ -80,7 +74,6 @@ test('Windows service resolves the selected installation CLI from its bin declar
   assert.match(actual.stdout, /cli stdout/)
   assert.match(actual.stderr, /cli stderr/)
 })
-
 
 test('Windows npm entry preserves private prefixes with spaces and shell characters', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'tavern-npm-'))

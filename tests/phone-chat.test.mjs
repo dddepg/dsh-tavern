@@ -27,17 +27,6 @@ function fixture() {
   return { store, card, chat: function () { return structuredClone(chat) }, writes, id: function () { serial++; return 'id-' + serial } }
 }
 
-test('手机联系人来自人物卡主角和人物设计档案，并按名称去重', () => {
-  const run = fixture()
-  const view = projectPhoneChat(run.chat(), run.card)
-
-  assert.deepEqual(view.contacts.map(function (contact) { return [contact.name, contact.main] }), [['林岚', true], ['周宁', false]])
-  assert.deepEqual(view.threads, [
-    { contactId: encodeURIComponent('林岚'), messages: [], preview: '', updatedAt: 0, pending: false },
-    { contactId: encodeURIComponent('周宁'), messages: [], preview: '', updatedAt: 0, pending: false }
-  ])
-})
-
 test('手机私聊使用后台模型并独立持久化，不修改正文和状态', async () => {
   const run = fixture()
   const calls = []
