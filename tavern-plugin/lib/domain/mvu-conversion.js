@@ -427,7 +427,13 @@ export function createMvuConversion({ resources }) {
     tail = job.catch(()=>{})
     return job
   }
-  const conversion = { convert, verify, readAppearance, updateAppearance }
+  async function resolveDraftTarget(path) {
+    const target = await appearanceTarget({path})
+    if (target.meta?.version !== 1 || !target.meta.definitionRevision || !target.meta.sourcePath) throw Error('目标缺少完整托管 MVU 定义，无法局部修改变量')
+    if (target.meta.outputDigest !== outputDigest(target.document)) throw Error('目标存在方案外修改，不能覆盖；请先核对目标卡')
+    return {sourcePath:target.meta.sourcePath,name:target.path.slice(6,-5),revision:target.revision}
+  }
+  const conversion = { convert, verify, readAppearance, updateAppearance, resolveDraftTarget }
   conversion.draft = createMvuDrafts({resources,conversion}).run
   return conversion
 }

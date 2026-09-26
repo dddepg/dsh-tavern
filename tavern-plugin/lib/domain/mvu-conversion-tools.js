@@ -25,10 +25,10 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
   }
   tools.register(defineTool({
     name:'tavern_card_draft',
-    description:'MVU 转换统一入口。begin 仅需 sourcePath；后续默认操作本会话当前草稿，不传 draft；多草稿时用 d1/d2 等短编号选择。patch 分组修改，source 读或搜索来源，inspect 更新来源清单，read 看进度，validate 检查，commit 提交。仅卡片工作台可用。响应丢失时原样重试，程序自动去重；冲突时 read 后核对再修改。',
+    description:'MVU 转换与变量修改统一入口。修改已有托管 MVU 卡：begin 传 path，自动载入原定义；转换普通卡：begin 传 sourcePath；后续默认操作本会话当前草稿，不传 draft；多草稿时用 d1/d2 等短编号选择。patch 分组修改，source 读或搜索来源，inspect 更新来源清单，read 看进度，validate 检查，commit 提交。仅卡片工作台可用。响应丢失时原样重试，程序自动去重；冲突时 read 后核对再修改。',
     parameters:{
       action:{type:'string',required:true,enum:['begin','read','source','inspect','patch','validate','commit']},
-      sourcePath:{type:'string',description:'begin 的原卡路径，已有 MVU 副本仍以原卡为来源'},
+      sourcePath:{type:'string',description:'begin 转换普通卡的原卡路径；修改已有 MVU 卡直接传 path'},
       name:{type:'string',description:'begin 的目标副本名；已有副本自动载入其定义、各开场和美化'},
       draft:{type:'string',description:'可省略，默认当前草稿；多草稿时传本会话返回的 d1/d2 等短编号。read 不带 path 刷新已读版本与草稿列表'},
       appearanceRequirement:{type:'string',enum:['custom','preserve','basic'],description:'begin：无原美化默认 custom（需 HTML 设计）；有原美化默认 preserve。basic 仅用户要求简单面板或已说明的设计回退'},
@@ -40,7 +40,7 @@ export function registerMvuConversionTools({ tools, defineTool, conversion, chat
       operation:{type:'string',enum:['set','merge','replace','move','remove'],description:'fields/opening 默认 set：替换所选路径的值；merge：递归合并对象，null 是值；replace 同 set。fields 专用 move/remove：传 path（move 另传 toPath），同步各开场与结构化绑定；删除仍有引用的字段会拦截'},
       toPath:{type:'string',description:'fields move 的目标 JSON Pointer；有值冲突时拒绝覆盖'},
       cleanupOrphanEntrances:{type:'boolean',description:'patch cleanup 时可启用安全孤立入口清理'},
-      path:{type:'string',description:'read 的草稿 JSON Pointer，如 /fieldSchema、/definition/initialState；或 patch fields move/remove 的状态字段路径'},
+      path:{type:'string',description:'begin 的现有 MVU 卡路径（与 sourcePath/name 二选一）；read 的草稿 JSON Pointer，如 /fieldSchema、/definition/initialState；或 patch fields move/remove 的状态字段路径'},
       query:{type:'string',description:'source 可选：按文字搜索来源；省略则读取 path'},
       offset:{type:'number'},limit:{type:'number'}
     },

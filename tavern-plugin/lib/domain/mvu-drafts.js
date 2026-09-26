@@ -27,7 +27,7 @@ function requestKey(args) {
 }
 function validateArguments(args) {
   const common=['action','draftId','draftRevision']
-  const allowed={begin:['action','sourcePath','name','requestId','appearanceRequirement','basicReason'],read:[...common,'path','offset','limit'],source:[...common,'path','query','offset','limit'],inspect:common,validate:common,commit:[...common,'requestId'],patch:[...common,'requestId','section','values']}
+  const allowed={begin:['action','path','sourcePath','name','requestId','appearanceRequirement','basicReason'],read:[...common,'path','offset','limit'],source:[...common,'path','query','offset','limit'],inspect:common,validate:common,commit:[...common,'requestId'],patch:[...common,'requestId','section','values']}
   const keys=allowed[args.action];if(!keys)fail('DRAFT_ACTION_INVALID','未知 action')
   if(args.action==='patch'){
     if(args.section==='fields')keys.push('operation','path','toPath')
@@ -88,6 +88,14 @@ export function createMvuDrafts({resources,conversion}) {
   }
   async function begin(args,context) {
     let info
+    if(args.path!==undefined){
+      if(args.sourcePath!==undefined||args.name!==undefined)fail('DRAFT_ARGUMENT_INVALID','修改已有卡时只传 path，不同时传 sourcePath/name')
+      const target=await conversion.resolveDraftTarget(args.path)
+      info=await conversion.convert({action:'inspect',sourcePath:target.sourcePath,name:target.name,detail:'full'})
+      if(info.targetPath!==normalizeResourcePath(args.path,'card')||info.targetRevision!==target.revision)fail('DRAFT_TARGET_CHANGED','目标已变化，请重新读取')
+      const {path,...rest}=args
+      args={...rest,sourcePath:target.sourcePath,name:target.name}
+    }
     if(args.requestId===undefined){
       info=await conversion.convert({action:'inspect',sourcePath:args.sourcePath,name:args.name,detail:'full'})
       const seed=canonical({...args,sourcePath:info.sourcePath,sourceRevision:info.sourceRevision,targetRevision:info.targetRevision,session:context?.sessionId||'local'})
@@ -111,10 +119,11 @@ export function createMvuDrafts({resources,conversion}) {
     if(info.existingTarget&&(!meta?.definitionRevision||meta.sourcePath!==sourcePath||meta.sourceRevision!==info.sourceRevision))fail('DRAFT_TARGET_UNSUPPORTED','已有副本缺少当前来源的完整定义；需先核对转换方案')
     const saved=meta?await resources.readMvuDefinition(meta.definitionRevision):null
     if(meta&&(!saved||hash(saved)!==meta.definitionRevision))fail('DRAFT_DEFINITION_INVALID','已保存定义缺失或被改动')
-    const requirement=args.appearanceRequirement||(info.appearanceSources.some(x=>x.enabled)?'preserve':saved?.appearance?.sourcePath?'preserve':'custom')
+    const requirement=args.appearanceRequirement||(info.appearanceSources.some(x=>x.enabled)?'preserve':saved?.appearance?.sourcePath?'preserve':saved&&!saved.appearance?.html?'basic':'custom')
     if(!['custom','preserve','basic'].includes(requirement))fail('DRAFT_REQUIREMENT_INVALID','无效美化要求')
-    if(requirement==='basic'&&!(typeof args.basicReason==='string'&&args.basicReason.trim()))fail('DRAFT_REQUIREMENT_INVALID','选择基础面板需说明用户要求或设计回退依据')
-    const initial={id,beginHash:requestHash,revision:1,phase:'editing',sourcePath,sourceRevision:info.sourceRevision,targetPath:info.targetPath,targetRevision:info.targetRevision,name:info.targetPath.slice(6,-5),appearanceRequirement:requirement,basicReason:args.basicReason||'',
+    const basicReason=args.basicReason||(saved&&requirement==='basic'?'保留已有基础面板':'')
+    if(requirement==='basic'&&!(typeof basicReason==='string'&&basicReason.trim()))fail('DRAFT_REQUIREMENT_INVALID','选择基础面板需说明用户要求或设计回退依据')
+    const initial={id,beginHash:requestHash,revision:1,phase:'editing',sourcePath,sourceRevision:info.sourceRevision,targetPath:info.targetPath,targetRevision:info.targetRevision,name:info.targetPath.slice(6,-5),appearanceRequirement:requirement,basicReason,
       definition:{initialState:saved?.initialState||{},openingStates:saved?.openingStates||Array.from({length:info.capabilities.openingCount},()=>null),sourceFields:saved?.sourceFields||[],fieldMappings:saved?.mappings||[],...(saved?.appearance?{appearance:saved.appearance}:{}),displayFields:saved?.displayFields||[]},
       rules:saved?{既有规则:saved.updateRules}:{},cleanup:meta?.cleanup||[],cleanupOrphanEntrances:false,review:{},requests:{},intent:null,receipt:null}
     ensureFieldSchema(initial)

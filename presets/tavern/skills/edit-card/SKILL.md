@@ -1,6 +1,6 @@
 ---
 name: edit-card
-description: "修改已有的人物卡：调整设定、开场、文风，或修改已有 MVU 面板的标签、布局和样式。根据目标局部读取、提交变更并校验；普通卡转 MVU 使用 card-to-mvu，游玩故障诊断使用 debug-card。"
+description: "修改已有的人物卡：调整设定、开场、文风、MVU 变量结构与初值，或修改已有 MVU 面板的标签、布局和样式。根据目标局部读取、提交变更并校验；普通卡转 MVU 使用 card-to-mvu，游玩故障诊断使用 debug-card。"
 ---
 
 # 修改人物卡
@@ -11,6 +11,7 @@ description: "修改已有的人物卡：调整设定、开场、文风，或修
 
 先用一句话说明本次要改什么、正在读取哪部分。只读取目标字段，需要关联证据时再扩大范围。
 
+- 已有 MVU 卡的变量增删、改名、移动或开场初值：读取 [变量修改配方](references/mvu-variables.md)，用 tavern_card_draft 的 begin path 载入目标定义并局部修改。
 - 已有 MVU 面板的标签、重复字段名、布局或样式：调用 `tavern_read_mvu_appearance`，参数 `path` 为目标副本。`editable=true` 时走下方美化流程。
 - 普通设定、开场和文风：用 `tavern_read_card` 读取相关字段，通过 `tavern_update_card` 保存需要的变更，再用 `tavern_validate_card` 校验。
 - 美化返回 `editable=false`：按返回说明读取目标卡相关扩展。普通正则美化使用通用改卡工具；已转换卡出现方案外修改、缺失定义或来源固化美化时，先说明具体限制和保留方案，不把生成元数据当普通扩展直接修改。

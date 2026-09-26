@@ -503,3 +503,46 @@ test('工具入口自动注入会话及调用标识，输入省略 draft，输�
  assert.equal((await f.resources.readMvuDraft(stored.drafts.d1.id)).revision,2)
  assert.equal(Object.hasOwn(stored.calls[Object.keys(stored.calls)[1]],'args'),false)
 })
+
+test('从目标路径编辑已保存 MVU 卡，局部初值修改保留其他开场、外观与来源',async t=>{
+ const f=await fixture(t);await f.complete()
+ const first=await f.conversion.draft(f.commitArgs())
+ const before=cardData(await f.resources.readCard(first.targetPath)),source=await f.resources.readText(f.sourcePath)
+ const context={sessionId:'edit-existing'}
+ await f.conversion.draft({action:'begin',path:first.targetPath},context)
+ await f.conversion.draft({action:'patch',section:'opening',openingId:'opening-1',values:{'/地点/名称':'公园'}},context)
+ await f.conversion.draft({action:'patch',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}},context)
+ const edited=await f.conversion.draft({action:'commit'},context)
+ assert.equal(edited.receipt.validation.valid,true)
+ assert.equal(edited.targetPath,first.targetPath)
+ const after=cardData(await f.resources.readCard(first.targetPath))
+ assert.equal(after.description,before.description)
+ assert.equal(after.first_mes,before.first_mes)
+ assert.match(after.alternate_greetings[0],/公园/)
+ assert.equal(await f.resources.readText(f.sourcePath),source)
+ assert.equal((await f.resources.list('card')).length,2)
+ await assert.rejects(f.conversion.draft({action:'begin',path:first.targetPath,sourcePath:f.sourcePath},context),e=>e.code==='DRAFT_ARGUMENT_INVALID')
+ await assert.rejects(f.conversion.draft({action:'begin',path:f.sourcePath},context),/托管 MVU/)
+})
+
+test('已有卡增删变量复用草稿检查，所有开场同步且原文保留',async t=>{
+ const f=await fixture(t);await f.complete()
+ const first=await f.conversion.draft(f.commitArgs()),context={sessionId:'edit-fields'}
+ await f.conversion.draft({action:'begin',path:first.targetPath},context)
+ await assert.rejects(f.conversion.draft({action:'patch',section:'fields',operation:'remove',path:'/地点'},context),e=>e.code==='DRAFT_FIELD_REFERENCED')
+ await f.conversion.draft({action:'patch',section:'fields',values:{'/体力':100}},context)
+ for(const openingId of ['opening-0','opening-1'])await f.conversion.draft({action:'patch',section:'opening',openingId,inheritInitialState:true},context)
+ await f.conversion.draft({action:'patch',section:'appearance',values:{html:'<section><h2>场景</h2><mvu-field path="/时间/时段"></mvu-field><mvu-field path="/体力"></mvu-field></section>'}},context)
+ await f.conversion.draft({action:'patch',section:'fields',operation:'remove',path:'/地点'},context)
+ await f.conversion.draft({action:'patch',section:'rules',values:{既有规则:'依据正文更新时间与体力'}},context)
+ await f.conversion.draft({action:'patch',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}},context)
+ const result=await f.conversion.draft({action:'commit'},context)
+ assert.equal(result.receipt.validation.valid,true)
+ const card=cardData(await f.resources.readCard(first.targetPath))
+ for(const [index,opening] of [card.first_mes,...card.alternate_greetings].entries()){
+  const state=JSON.parse(opening.match(/<initvar>\s*([\s\S]*?)\s*<\/initvar>/)[1])
+  assert.deepEqual(state,{时间:{时段:index?'夜晚':'白天'},体力:100})
+  assert.ok(opening.includes(index?'车站开场':'大厅开场'))
+ }
+ assert.equal(card.description,'保留设定')
+})
