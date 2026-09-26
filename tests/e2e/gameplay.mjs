@@ -2,6 +2,7 @@ import { backgroundLifecycleChecks } from './background-lifecycle.mjs'
 import { cardMemoryChecks } from './card-memory.mjs'
 import {displayRegressionRules, displayRegressionChecks} from './display-regression.mjs'
 import { surfaceRecoveryChecks } from './surface-recovery.mjs'
+import { cardVariableUpdateChecks } from './card-variable-update.mjs'
 import { cardUpdateChecks } from './card-update.mjs'
 import { sidebarUpgrade } from './sidebar-upgrade.mjs'
 import { compactedEditedLegacySession } from '../fixtures/compacted-legacy-session.mjs'
@@ -305,7 +306,7 @@ try {
       assert.deepEqual(await readFile(join(directory, 'session.jsonl.zstd.bak-tavern-premigrate')), await readFile(join(output, 'legacy-input.jsonl.zstd')))
     }
     await compactionChecks({ page, step, savedChat, output, report, restartServer, installLegacyFixture, scenario: compactionScenario })
-  } else if (!process.argv.includes('--card-memory') && !process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update')) {
+  } else if (!process.argv.includes('--card-memory') && !process.argv.includes('--message-rendering-only') && !process.argv.includes('--sidebar-only') && !process.argv.includes('--card-update') && !process.argv.includes('--card-variables')) {
     await step('生成候选项并选择行动，再玩一轮', async () => {
       await page.getByRole('button', { name: '生成候选项', exact: true }).click()
       await page.getByText('5 个候选项', { exact: true }).waitFor()
@@ -365,6 +366,7 @@ try {
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
   }
   if (process.argv.includes('--card-memory')) await cardMemoryChecks({ page, step, data, output, report, savedChat })
+  if (process.argv.includes('--card-variables')) await cardVariableUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   }
