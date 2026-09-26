@@ -2021,7 +2021,7 @@ export async function apply(ctx) {
     return count
   }
   autoCompaction = createAutoCompaction({
-    readChat: chatForSession, updateChat,
+    readChat: chatForSession, readState: sessionStateForSession, updateChat,
     policy: async () => (await readTavernSettings()).contextCompaction,
     activity: chat => backgroundTasks.activity(chat),
     exclusive: backgroundTasks.exclusive,

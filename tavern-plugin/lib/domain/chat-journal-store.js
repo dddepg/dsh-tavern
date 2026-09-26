@@ -1,3 +1,4 @@
+import { copyJsonTree } from './copy-json-tree.js'
 import { projectSceneImageState, projectChatSessionState, projectDisplayRuntimeState, projectChatBackgroundConfig, projectSettlementCheckpoint } from './chat-session-state.js'
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -5,7 +6,7 @@ import { isDeepStrictEqual, promisify } from 'node:util'
 import { gzip, gunzip } from 'node:zlib'
 import path from 'node:path'
 
-import { applyJsonChanges, applyJsonChangesShared, diffJson } from './json-mutation.js'
+import { applyJsonChangesShared, diffJson } from './json-mutation.js'
 
 const STORAGE_REVISION = '_storageRevision'
 const SNAPSHOT_PATTERN = /^(\d{12})\.json(?:\.gz)?$/
@@ -236,9 +237,9 @@ export function createChatJournalStore(options = {}) {
       error.code = 'DSH_TAVERN_REVISION_NOT_FOUND'
       throw error
     }
-    // Replay the ordered changes in one clone. Cloning the full card once per
-    // journal frame makes initialization slower with every small script write.
-    chat = applyJsonChanges(chat, changes)
+    // The parsed snapshot is private to this materialization. Replay by copying
+    // changed ancestors; historical variables need no additional full clone.
+    chat = applyJsonChangesShared(chat, changes)
     chat[STORAGE_REVISION] = revision
     return { chat, revision, snapshot: selected, open, openFrameCount, openValidBytes, openInvalidLine, legacy: selected === null }
   }
@@ -369,7 +370,7 @@ export function createChatJournalStore(options = {}) {
   }
   async function read(chatId) {
     const state = await cachedState(chatId)
-    return state ? structuredClone(state.chat) : undefined
+    return state ? copyJsonTree(state.chat) : undefined
   }
   async function readSessionState(chatId) {
     const state = await cachedState(chatId)
@@ -525,7 +526,7 @@ export function createChatJournalStore(options = {}) {
     const target = Number(revision)
     if (!Number.isSafeInteger(target) || target < 0) throw new Error('Chat storage revision 不合法: ' + String(revision))
     const state = await materialize(chatId, target)
-    return state === null ? undefined : jsonClone(state.chat)
+    return state === null ? undefined : copyJsonTree(state.chat)
   }
 
   async function update(chatId, updater, metadata = {}) {
@@ -534,10 +535,10 @@ export function createChatJournalStore(options = {}) {
       const paths = layout(chatId)
       const currentState = await cachedState(paths.id)
       const current = currentState == null ? undefined : currentState.chat
-      const produced = await updater(jsonClone(current))
-      if (produced === undefined) return jsonClone(current)
+      const produced = await updater(copyJsonTree(current))
+      if (produced === undefined) return copyJsonTree(current)
       // Normalize once before persistence. The already-JSON result can be
-      // detached with structuredClone without another full JSON string.
+      // detached by copying its JSON containers without another full JSON string.
       const next = jsonClone(produced)
       if (next === undefined || next === null || typeof next !== 'object' || Array.isArray(next)) throw new Error('Chat Journal 只能保存 JSON object')
       if (currentState == null) {
@@ -547,13 +548,13 @@ export function createChatJournalStore(options = {}) {
         rememberState(chatId, await version(chatId), { chat: next, revision, legacy: false,
           snapshot: { path: snapshotPath, name: path.basename(snapshotPath), revision },
           open: null, openFrameCount: 0, openValidBytes: 0, openInvalidLine: 0 })
-        return structuredClone(next)
+        return copyJsonTree(next)
       }
       const baseRevision = currentState.revision
       const revision = revisionOf(next)
       if (revision !== baseRevision + 1) throw new Error('Chat Journal 写入 revision 非连续，期望 ' + (baseRevision + 1) + '，实际 ' + revision)
       const changes = diffJson(current, next)
-      if (changes.length === 0) return jsonClone(current)
+      if (changes.length === 0) return copyJsonTree(current)
       if (currentState.legacy) await migrateLegacy(paths, current)
       if (currentState.open !== null && currentState.openInvalidLine > 0) {
         await truncate(currentState.open.path, currentState.openValidBytes)
@@ -580,7 +581,7 @@ export function createChatJournalStore(options = {}) {
         snapshot: rotated || currentState.snapshot, open: rotated ? null : open,
         openFrameCount: rotated ? 0 : currentState.openFrameCount + 1, openInvalidLine: 0 },
         rememberChanges(recentChanges, revision, changes))
-      return structuredClone(next)
+      return copyJsonTree(next)
     })
   }
 

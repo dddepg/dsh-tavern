@@ -324,9 +324,13 @@ test('normalized update returns stay detached from drafts and durable state', as
   const store=createChatJournalStore({dataRoot:root})
   let draft
   const created=await store.update('normalized',()=>({id:'normalized',_storageRevision:1,
-    values:{missing:undefined,nan:NaN,date:new Date('2020-01-01T00:00:00Z')},rows:[undefined,Infinity]}))
+    values:{missing:undefined,nan:NaN,date:new Date('2020-01-01T00:00:00Z')},rows:[undefined,Infinity], keys:JSON.parse('{"__proto__":{"safe":true},"constructor":{"label":"own"}}')}))
   assert.deepEqual(created.values,{nan:null,date:'2020-01-01T00:00:00.000Z'})
   assert.deepEqual(created.rows,[null,null])
+  assert.equal(Object.hasOwn(created.keys,'__proto__'),true)
+  assert.equal(Object.getPrototypeOf(created.keys),Object.prototype)
+  created.keys.__proto__.safe=false
+  assert.equal((await store.read('normalized')).keys.__proto__.safe,true)
   created.values.nan=100
   const saved=await store.update('normalized',current=>{
     draft=current;current._storageRevision++
