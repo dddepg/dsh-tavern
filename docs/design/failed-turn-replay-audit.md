@@ -228,3 +228,53 @@ tests 3141 · pass 3081 · fail 44
 ### 实例部署
 
 实例 `apps/dsh-tavern` 停在合并前的 `cb9c9fec` 文件集，因此**只把本次修复的 5 个文件按同一语义补丁打进实例**（新增 `reply-completeness.js`；`index.js` / `turn-orchestration.js` / `foreground-handoff.js` / `rollback-surface.js` 局部替换，逐处锚点唯一），备份在 `backups/truncation-fix-2026-09-25T00-51-24`。上游 107 个提交没有一并打进实例（依赖、补丁与数据迁移需要在安装器流程里做）。重启后 `getSessionPatchStatus` 正常，`getSession` 视图字段正常。
+
+## 10. 同步上游 v2.3 与实例整体更新（2026-09-27）
+
+### 同步结果
+
+`git fetch upstream` 后把 `upstream/main`（`5ae0c1f5`，包版本 2.3.0，领先 205 个提交）并入本地 `main`，合并提交 `9633c985`。两处冲突：
+
+- `tavern-plugin/lib/domain/rollback-surface.js`：上游把 `pendingFailedSurfaceTurns` / `unclearedFailedTail` 里的内联轮次区间换成共享的 `turnIntervals()` + `createSurfaceOwnership()`，但同时把失败原因判定退回 `['error','aborted']`，会把本地的截断语义丢掉。**按上游结构解决冲突**，并把 `turnIntervals()` 的 `failed` 判定改回 `isFailedTurnReason()`，`error` / `aborted` / `max-tokens` 三种失败尾部语义不变。
+- `tests/prompt-streamlining.test.mjs`：上游 `18c2a3e8`（精简 20% 低价值用例）把本文件从 347 行砍到 64 行，本地新增的「截断判定早于 finalize」接线断言随之被删，且旧用例依赖的 `clientSource` / `initializationSource` 等常量已不在文件顶部。**取上游版本**，再按 v2.3 源码结构重写同一条最小断言（只依赖 `serverSource`）。
+
+### 实例整体更新
+
+这次不再逐文件打补丁（§9 的做法会漏掉依赖与补丁迁移），改用安装器全流程更新：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli
+DSH_TAVERN_CLI_HOME=$PWD DSH_TAVERN_HOST=cli \
+DSH_TAVERN_GIT_URL=/home/ezio/workspace/dsh-tavern \
+sh /home/ezio/workspace/dsh-tavern/install.sh
+```
+
+`DSH_TAVERN_GIT_URL` 指向本地仓库，安装器照常走「git 增量同步 → `cp -R` 覆盖程序文件 → `pnpm install --frozen-lockfile` → `dsh-tavern install --host cli` → `start`」，所以实例拿到的是 **v2.3 + 本地截断修复**，而不是丢掉修复的上游主干。更新前备份 `backups/app-pre-20260927-175630.tar.gz`；`apps/dsh-tavern/.dsh-tavern-release.json` 记为 `9633c985`；新增依赖 `dsh-mnemon*`、`dsh-dream-skin`（link）已随锁文件装入。
+
+注意：安装器若在 git 步骤失败会**静默回退 jsDelivr（即上游主干）**，所以改源更新后要确认实例里仍有 `tavern-plugin/lib/domain/reply-completeness.js` 且 `lib/index.js` 含 `assertCompleteReply`。
+
+### 端口
+
+安装器收尾的自动启动用默认 3081，而本机 DSH Desktop 会话里的 DSH Pocket 占着 `0.0.0.0:3081`，于是报 `端口 3081 已被其他进程占用，拒绝启动`（安装本身已成功）。按既有做法用实例启动器指定端口：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli && DSH_TAVERN_PORT=3091 dsh-tavern start
+```
+
+`resolveServicePort()` 只读环境变量 `DSH_TAVERN_PORT`，安装目录里没有持久化端口的字段，所以 `start` / `restart` 都要带上；不带就会重新去抢 3081 并失败。本次启动记录：PID 8257，`service.ready`，`http://127.0.0.1:3091/?token=…`。
+
+### 实例运行与回归（2026-09-27）
+
+服务已启动并核对：`logs/tavern.log` 有 `service.starting` / `service.spawned` / `service.ready`（PID 8257，端口 3091），`http://127.0.0.1:3091/` 无 token 返回 401、带 token 303 → 200 且页面为 DSH 外壳；实例内 `tavern-plugin/lib/domain/reply-completeness.js` 存在、`lib/index.js` 含 `assertCompleteReply`（确认没被 jsDelivr 回退覆盖）。
+
+全量测试（`DSH_TAVERN_CLI_HOME=/home/ezio/workspace/dsh-tavern-cli node bin/test-tavern.mjs`，借用实例 0.1.5-rc.2 运行时与实例 `node_modules`）：
+
+```
+tests 2966 · pass 2903 · fail 44 · skipped 19
+```
+
+- 用例数从 3141 降到 2966，是上游 `18c2a3e8`（精简 20% 低价值用例）的结果。
+- 44 个失败**全部**是浏览器缺失：`browserType.launch: Executable doesn't exist at ~/.cache/ms-playwright/chromium_headless_shell-1208/...`，命中 `worldbook-*`、`full-template-*`、`template-html-fence-boundaries`、`tavern-prompt-template-runtime`、`dynamic-constant-worldbook` 等 9 个文件（本机缓存只有 1.62.1 的 `-1234`）。
+- §9 记录的上游漂移失败（`extract-flow`、`settlement-restart-recovery`、`dsh-version-policy`、`dsh-compatibility`、`superseded-turn-errors`、`workspace-instruction-presentation`、`foreground-frame-retirement`）在 v2.3 上已全部消失。
+- 新暴露的 `tests/user-extensions.test.mjs`「实际 Unix 安装脚本更新程序两次」失败**不是本次合并引入**：在合并前的 `ef6ba4a4` 和纯净 `upstream/main`（`5ae0c1f5`）上逐一复现，原因属用例自身（mock `dsh --version` 无输出 → `dsh-compatibility.mjs --check` 抛「无法识别当前 DSH 版本」）。
+- 与本地修复直接相关的 `rollback-surface`、`reply-completeness`、`foreground-handoff`、`turn-orchestration`、`prompt-streamlining`、`card-memory` 全部通过；本次合并没有引入断言级失败（日志中 `AssertionError` 为 0）。
