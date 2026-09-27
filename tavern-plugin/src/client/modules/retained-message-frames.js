@@ -84,7 +84,8 @@ function createRetainedTavernFrames(options) {
         mount: function (props, home) {
             const record = get(props);
             move(record.node, home);
-            record.unmount = retention.mount(props.sessionId);
+            const unmount = retention.mount(props.sessionId);
+            record.unmount = unmount;
             const movable = !props.persistent && /<(?:script|iframe|object|embed)\b/i.test(String(props.content || ""));
             if (movable && options.panels) {
                 record.panel = Object.assign(record.panel || {}, { id: "retained:" + record.key,
@@ -100,6 +101,9 @@ function createRetainedTavernFrames(options) {
                     if (!attached) return;
                     attached = false;
                     if (records.get(record.key) !== record) return;
+                    // Another React root may attach the new placement before
+                    // the previous root cleans up. Its stale lease must not move it.
+                    if (record.unmount !== unmount) { unmount(); return; }
                     if (record.unpin) { record.unpin(); record.unpin = null; }
                     move(record.node, parked());
                     if (record.unmount) { record.unmount(); record.unmount = null; }
@@ -137,7 +141,11 @@ function TavernRetainedMessageFrame(props) {
     }, [activated, props.eager]);
     React.useLayoutEffect(function () {
         if (!activated) return;
-        const mounted = tavernRetainedFrames.mount(frameProps, home.current);
+        // Deferred historical frames take their frozen baseline when activated.
+        // Their parent need not receive every intervening Helper update.
+        const initialProps = props.helperContextReader
+            ? Object.assign({}, frameProps, { helperContext: props.helperContextReader() }) : frameProps;
+        const mounted = tavernRetainedFrames.mount(initialProps, home.current);
         lease.current = mounted;
         return function () { lease.current = null; mounted.detach(); };
     }, [activated, key]);
@@ -149,5 +157,6 @@ function TavernRetainedMessageFrame(props) {
             try { tavernPanelRegistry.pin(panelId, !pinned); }
             catch (error) { tavernErrorHub.report("固定面板", error); }
         } }, pinned ? "返回原消息" : "固定到右侧") : null,
+        tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { if (!activated) { setActivated(true); return; } return lease.current?.expand(); } }, "展开大屏") : null,
         React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
 }

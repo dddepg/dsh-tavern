@@ -141,7 +141,7 @@ window.__ModuleLoader__.load({
 		    // Retire old link loaders only after the bundled styles are installed.
 		    for (const node of doc.querySelectorAll(selector)) if (node !== style) node.remove();
 		}
-		if (typeof document !== "undefined") installTavernStylesheet(document, "/* —— DSH Tavern global Claude tokens（暖陶土 / 编辑风） —— */\n:root {\n  --dsh-tavern-accent: #cc785c;\n  --dsh-tavern-accent-active: #a9583e;\n  --dsh-tavern-accent-soft: color-mix(in srgb, #cc785c 16%, transparent);\n  --dsh-tavern-accent-border: color-mix(in srgb, #cc785c 42%, transparent);\n  --dsh-tavern-accent-ink: #141413;\n  --dsh-tavern-accent-muted: #6c6a64;\n  --dsh-tavern-accent-hairline: #e6dfd8;\n  --dsh-tavern-accent-cream: #faf9f5;\n  --dsh-tavern-accent-surface: #f5f0e8;\n  --dsh-tavern-accent-error: #c64545;\n  --dsh-tavern-radius-sm: 6px;\n  --dsh-tavern-radius-md: 8px;\n  --dsh-tavern-radius-lg: 12px;\n  --dsh-tavern-font-display: \"Iowan Old Style\", \"Palatino Linotype\", Palatino, \"Book Antiqua\", Georgia, \"Times New Roman\", serif;\n  --dsh-tavern-font-sans: Inter, \"Segoe UI\", system-ui, -apple-system, sans-serif;\n}\n/* Host dark theme: keep coral voltage, flip ink/cream to Claude on-dark / surface-dark. */\nbody[data-ds-dark-theme],\n[data-ds-dark-theme] {\n  --dsh-tavern-accent: #d4896c;\n  --dsh-tavern-accent-active: #e8a890;\n  --dsh-tavern-accent-soft: color-mix(in srgb, #d4896c 24%, transparent);\n  --dsh-tavern-accent-border: color-mix(in srgb, #d4896c 40%, transparent);\n  --dsh-tavern-accent-ink: #faf9f5;\n  --dsh-tavern-accent-muted: #a09d96;\n  --dsh-tavern-accent-hairline: color-mix(in srgb, #faf9f5 14%, transparent);\n  --dsh-tavern-accent-cream: #181715;\n  --dsh-tavern-accent-surface: #252320;\n  --dsh-tavern-accent-error: #e57373;\n}\nbody.dsh-tavern-shell-active,\n.dsh-tavern-library,\n.dsh-tavern-status,\n.dsh-tavern-resources,\n.dsh-tavern-card-picker,\n.dsh-tavern-mobile-import-panel,\n.dsh-tavern-error-center,\n.dsh-tavern-group-manager,\n.dsh-tavern-skills {\n  font-family: var(--dsh-tavern-font-sans);\n  -webkit-font-smoothing: antialiased;\n}\nbody.dsh-tavern-shell-active .dsh-tavern-landing::before {\n  font-family: var(--dsh-tavern-font-display) !important;\n  font-weight: 400 !important;\n  letter-spacing: -0.5px;\n}\n.dsh-tavern-status-title,\n.dsh-tavern-side-brand,\n.dsh-tavern-mobile-import-title,\n.dsh-tavern-group-manager-head h3 {\n  font-family: var(--dsh-tavern-font-display);\n  font-weight: 400;\n  letter-spacing: -0.2px;\n}\n\n.dsh-tavern-spacer { flex: 1 1 auto; }\n.dsh-tavern-btn {\n  background: var(--dsh-tavern-accent-soft);\n  color: var(--dsh-tavern-accent-active);\n  border: 1px solid transparent;\n  border-radius: var(--dsh-tavern-radius-md);\n  padding: 6px 12px;\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0;\n  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.dsh-tavern-btn:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 24%, transparent); }\n.dsh-tavern-btn:active:not(:disabled) { transform: scale(0.97); }\n.dsh-tavern-btn:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-btn.danger { border-color: transparent; color: var(--dsh-tavern-accent-error); background: color-mix(in srgb, var(--dsh-tavern-accent-error) 12%, transparent); }\n.dsh-tavern-btn.danger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-error) 20%, transparent); }\n.dsh-tavern-mobile-import { position: fixed; inset: 0; z-index: 2300; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.52); }\n.dsh-tavern-mobile-import-shell { display: contents; }\n.dsh-tavern-mobile-import-panel { box-sizing: border-box; width: min(520px, 100%); max-height: min(78vh, 680px); display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0,0,0,.35); }\n.dsh-tavern-mobile-import-title { font-size: 15px; font-weight: 750; }\n.dsh-tavern-mobile-import-list { display: flex; flex-direction: column; gap: 7px; overflow: auto; }\n.dsh-tavern-mobile-import-file { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-mobile-import-file span { color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-empty { margin: auto; text-align: center; color: #6b6878; padding: 24px; line-height: 1.8; white-space: pre-wrap; }\n.dsh-tavern-dock-error { color: #ef8f8f; padding: 0 10px 7px; font-size: 12px; }\n.dsh-tavern-picker-error { position: sticky; top: 0; z-index: 2; margin: 0 0 10px; padding: 10px 12px; border: 1px solid rgba(196,95,95,.45); border-radius: 10px; background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 88%, #c45f5f 12%); color: #c45f5f; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-error-center { position: fixed; z-index: 2200; top: 16px; right: 16px; width: min(480px, calc(100vw - 32px)); max-height: min(70vh, 640px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(196,95,95,.5); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 18px 54px rgba(0,0,0,.32); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-error-center-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(196,95,95,.25); font-size: 13px; font-weight: 700; }\n.dsh-tavern-error-center-head span { flex: 1; }\n.dsh-tavern-error-list { overflow: auto; padding: 8px; }\n.dsh-tavern-error-item { padding: 10px; border: 1px solid rgba(196,95,95,.25); border-radius: 10px; background: rgba(196,95,95,.08); }\n.dsh-tavern-error-item + .dsh-tavern-error-item { margin-top: 8px; }\n.dsh-tavern-error-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #c45f5f; font-size: 12px; font-weight: 700; }\n.dsh-tavern-error-meta time { margin-left: auto; color: var(--dsw-alias-label-secondary); font-weight: 400; }\n.dsh-tavern-error-message { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55; }\n.dsh-tavern-assistant { display: flex; flex-direction: column; gap: 16px; color: var(--dsw-alias-label-primary); font-size: 16px; line-height: 28px; }\n.dsh-tavern-illustration { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }\n.dsh-tavern-illustration > a { display: block; max-width: 100%; }\n.dsh-tavern-illustration img { display: block; width: auto; height: auto; max-width: min(100%, 320px); max-height: min(240px, 35svh); object-fit: contain; border-radius: 12px; }\n.dsh-tavern-image-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }\n.dsh-tavern-image-adjust { box-sizing: border-box; width: min(100%, 560px); padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }\n.dsh-tavern-image-adjust textarea { box-sizing: border-box; display: block; width: 100%; min-height: 80px; margin: 8px 0; }\n.dsh-tavern-image-reference { overflow-wrap: anywhere; }\n.dsh-tavern-image-reference select { box-sizing: border-box; display: block; width: 100%; margin: 8px 0; }\n.dsh-tavern-image-settings { display: flex; flex-direction: column; gap: 12px; padding: 20px; }\n.dsh-tavern-image-settings label { display: flex; flex-direction: column; gap: 5px; }\n.dsh-tavern-image-settings input, .dsh-tavern-image-settings select, .dsh-tavern-image-settings textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: inherit; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-assistant-reasoning { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }\n.dsh-tavern-assistant-reasoning summary { cursor: pointer; user-select: none; }\n.dsh-tavern-assistant-reasoning pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }\n.dsh-tavern-assistant-stopped { align-self: flex-start; border-radius: 6px; padding: 0 6px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; }\n.dsh-tavern-message-fork { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-message-fork:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-message-fork:disabled { cursor: wait; opacity: .5; }\n.dsh-tavern-swipe-controls { align-self: center; display: flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 24px; }\n.dsh-tavern-swipe-controls button { min-width: 28px; height: 26px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); cursor: pointer; }\n.dsh-tavern-swipe-controls button:disabled { opacity: .35; cursor: default; }\n.dsh-tavern-mvu-receipt { align-self: flex-start; width: min(100%, 760px); border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }\n.dsh-tavern-mvu-receipt[data-status=\"pending\"] { border-color: rgba(68,126,230,.42); }\n.dsh-tavern-mvu-receipt[data-status=\"updated\"] { border-color: rgba(70,160,105,.42); }\n.dsh-tavern-mvu-receipt[data-status=\"stale\"] { border-color: rgba(196,132,42,.46); }\n.dsh-tavern-mvu-receipt[data-status=\"partial\"], .dsh-tavern-mvu-receipt[data-status=\"error\"], .dsh-tavern-mvu-receipt[data-status=\"interrupted\"] { border-color: rgba(220,94,94,.48); }\n.dsh-tavern-mvu-receipt-summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; cursor: pointer; user-select: none; font-weight: 750; }\n.dsh-tavern-mvu-receipt-summary::-webkit-details-marker { display: none; }\n.dsh-tavern-mvu-receipt-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-mvu-receipt[data-status=\"pending\"] .dsh-tavern-mvu-receipt-dot { background: #447ee6; }\n.dsh-tavern-mvu-receipt[data-status=\"updated\"] .dsh-tavern-mvu-receipt-dot { background: #4da66d; }\n.dsh-tavern-mvu-receipt[data-status=\"stale\"] .dsh-tavern-mvu-receipt-dot { background: #c4842a; }\n.dsh-tavern-mvu-receipt[data-status=\"partial\"] .dsh-tavern-mvu-receipt-dot, .dsh-tavern-mvu-receipt[data-status=\"error\"] .dsh-tavern-mvu-receipt-dot, .dsh-tavern-mvu-receipt[data-status=\"interrupted\"] .dsh-tavern-mvu-receipt-dot { background: #dc5e5e; }\n.dsh-tavern-mvu-receipt-body { display: grid; gap: 8px; padding: 0 10px 9px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-mvu-receipt-reason { margin-top: 8px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-mvu-change { display: grid; gap: 2px; padding: 6px 8px; border-radius: 7px; background: var(--dsw-alias-bg-base); }\n.dsh-tavern-mvu-change-path { color: var(--dsh-tavern-accent); font-family: ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap: anywhere; }\n.dsh-tavern-mvu-change-values { overflow-wrap: anywhere; }\n.dsh-tavern-mvu-side-effect-title { color: var(--dsw-alias-label-tertiary); font-weight: 700; }\n.dsh-tavern-mvu-change[data-origin=\"card-script\"] .dsh-tavern-mvu-change-path { color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-mvu-failure { color: #d96767; overflow-wrap: anywhere; }\n.dsh-tavern-mvu-retry { justify-self: start; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 9px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; }\n.dsh-tavern-mvu-retry:disabled { cursor: wait; opacity: .58; }\n.dsh-tavern-message-frame-slot { display: block; width: 100%; min-height: 48px; overflow: hidden; }\n/* Legacy card resizers may write an inline height larger than the host slot. */\n.dsh-tavern-message-frame-slot > iframe:not([aria-hidden=\"true\"]) { max-height: 100% !important; }\n.dsh-tavern-message-frame { display: block; width: 100%; min-height: 48px; border: 0; background: transparent; overflow: hidden; }\n.dsh-tavern-status-runtime { width: 100%; min-width: 0; margin: 0 0 10px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-base); }\n.dsh-tavern-user-row { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }\n.dsh-tavern-user-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; max-width: min(525px, 82%); }\n.dsh-tavern-user-bubble { max-width: 100%; padding: 10px 16px; border-radius: 22px; background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); font-size: 16px; line-height: 24px; overflow-wrap: anywhere; }\n.dsh-tavern-user-extra { margin-top: 8px; }\n.dsh-tavern-user-actions { display: flex; align-items: center; gap: 7px; min-height: 20px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }\n.dsh-tavern-user-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-user-copy:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-sidebar { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; padding: 12px; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-sidebar.collapsed { padding: 12px 10px; align-items: center; }\nbody.dsh-tavern-shell-active button[aria-label=\"新建会话\"], body.dsh-tavern-shell-active button[aria-label=\"New session\"] { display: none !important; }\nbody.dsh-tavern-shell-active [data-turn-tail] > [data-slot=\"conversation.chat.turnTail\"] + div > button { display: none !important; }\nbody.dsh-tavern-shell-active [data-turn-tail] [data-slot=\"conversation.chat.assistant-actions\"] > :not(.dsh-tavern-message-fork) { display: none !important; }\nbody.dsh-tavern-shell-active .dsh-tavern-hero-preset-row { display: none !important; }\n/* A blank session is also a hero. Only the session-less landing page loses its composer. */\nbody.dsh-tavern-shell-active .dsh-tavern-landing { display: grid !important; place-items: center; }\nbody.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important; }\nbody.dsh-tavern-shell-active .dsh-tavern-landing::before { content: \"🍺 DSH Tavern\"; color: var(--dsh-tavern-accent-active); font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 24px; text-align: center; }\nbody.dsh-tavern-shell-active [data-ref-chip=\"file\"] { max-width: calc(100% - 4px); min-width: 0; overflow: hidden; text-overflow: ellipsis; }\n.dsh-tavern-side-head { height: 48px; display: flex; align-items: center; gap: 8px; flex: none; }\n.dsh-tavern-side-brand { flex: 1; min-width: 0; font-size: 16px; font-weight: 800; color: var(--dsh-tavern-accent-active); white-space: nowrap; overflow: hidden; }\n.dsh-tavern-side-icon { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }\n.dsh-tavern-side-icon:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-new { height: 40px; flex: none; border: 1px solid var(--dsw-alias-border-l2); border-radius: 11px; background: var(--dsw-alias-button-elevated-fill); color: inherit; cursor: pointer; font-weight: 650; }\n.dsh-tavern-side-new:hover { background: var(--dsw-alias-button-floating-hover); }\n.dsh-tavern-mode-switch { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 8px; padding: 3px; border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-mode-switch.compatibility-enabled { grid-template-columns: repeat(3, 1fr); }\n.dsh-tavern-mode-switch button { height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 12px; }\n.dsh-tavern-mode-switch button.active { background: var(--dsw-specific-input-major); color: var(--dsh-tavern-accent-active); box-shadow: var(--dsw-shadow-lv1); font-weight: 700; }\n.dsh-tavern-picker-tabs { display: flex; gap: 6px; margin: 2px 0 8px; }\n.dsh-tavern-picker-tabs button { flex: 1; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); padding: 6px 8px; cursor: pointer; font-size: 12px; }\n.dsh-tavern-picker-tabs button.active { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); font-weight: 700; }\n.dsh-tavern-side-title { margin: 16px 4px 7px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-tavern-compatibility-notice { margin: 10px 2px 0; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; }\n.dsh-tavern-compatibility-notice strong { color: var(--dsw-alias-label-primary); }\n.dsh-tavern-side-list { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }\n.dsh-tavern-side-row { position: relative; display: flex; align-items: center; border: 0; border-radius: 8px; background: transparent; color: inherit; }\n.dsh-tavern-side-row:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-row.active { background: var(--dsw-alias-interactive-bg-selected, rgba(120,90,60,.14)); }\n.dsh-tavern-side-row-main { min-width: 0; flex: 1; border: 0; padding: 8px 5px 8px 9px; text-align: left; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-side-row-more { width: 28px; height: 28px; flex: none; margin-right: 3px; border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; opacity: 0; }\n.dsh-tavern-side-row:hover .dsh-tavern-side-row-more, .dsh-tavern-side-row-more[aria-expanded=\"true\"] { opacity: 1; }\n.dsh-tavern-side-row-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: inherit; }\n.dsh-tavern-side-row-menu { position: absolute; z-index: 30; top: 32px; right: 4px; min-width: 96px; padding: 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.14); transform-origin: top right; animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-side-row-menu button { display: block; width: 100%; border: 0; border-radius: 6px; padding: 7px 10px; text-align: left; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-side-row-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-row-menu button.danger { color: #c34f4f; }\n.dsh-tavern-side-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }\n.dsh-tavern-side-row-meta { margin-top: 3px; display: flex; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-side-empty { padding: 18px 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.6; text-align: center; }\n.dsh-tavern-update { flex: none; margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-update-identity { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.45; }\n.dsh-tavern-update-actions { display: flex; gap: 6px; margin-top: 7px; }\n.dsh-tavern-update-button { width: 100%; height: 32px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-update-button:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-update-button.primary { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-update-button:disabled { opacity: .55; cursor: default; }\n.dsh-tavern-update-status { margin-top: 5px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 1.45; white-space: pre-wrap; }\n.dsh-tavern-update-status.error { color: #c45f5f; }\n.dsh-tavern-settings-section { display: flex; flex-direction: column; gap: 18px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-settings-intro { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 1.6; }\n.dsh-tavern-settings-group { overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-settings-subheading { margin-top: 12px; padding: 22px 20px 12px; border-top: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 12px; }\n.dsh-tavern-settings-subheading h3 { margin: 0; }\n.dsh-tavern-settings-row { display: flex; align-items: center; gap: 24px; padding: 18px 20px; cursor: pointer; }\n.dsh-tavern-settings-copy { min-width: 0; flex: 1; }\n.dsh-tavern-settings-title { display: block; font-size: 15px; font-weight: 650; }\n.dsh-tavern-settings-desc { display: block; margin-top: 5px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.55; }\n.dsh-tavern-settings-switch { position: relative; width: 42px; height: 24px; flex: none; }\n.dsh-tavern-settings-switch input { position: absolute; opacity: 0; pointer-events: none; }\n.dsh-tavern-settings-track { position: absolute; inset: 0; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); transition: background .18s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-settings-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dsw-alias-label-secondary); transition: transform .18s cubic-bezier(0.23, 1, 0.32, 1), background .18s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track { background: var(--dsh-tavern-accent-active); }\n.dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track::after { transform: translateX(18px); background: #fff; }\n.dsh-tavern-settings-switch input:focus-visible + .dsh-tavern-settings-track { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-tavern-settings-model-row { flex-wrap: wrap; }\n.dsh-tavern-settings-select { flex: 1 1 220px; max-width: 320px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; color: inherit; background: var(--dsw-specific-input-major); }\n\n.dsh-tavern-text-color-settings {\n  border-color: color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n  border-radius: var(--dsh-tavern-radius-lg);\n  background: color-mix(in srgb, var(--dsh-tavern-accent-surface) 24%, var(--dsw-specific-sidebar-fill));\n}\n.dsh-tavern-text-color-settings > .dsh-tavern-text-color-head {\n  align-items: flex-start;\n  gap: 16px;\n  padding: 18px 18px 16px;\n  border-bottom: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n}\n.dsh-tavern-text-color-settings .dsh-tavern-settings-title {\n  font-family: var(--dsh-tavern-font-display);\n  font-size: 18px;\n  font-weight: 400;\n  letter-spacing: -0.2px;\n}\n.dsh-tavern-text-color-settings .dsh-tavern-settings-desc {\n  margin-top: 6px;\n  font-size: 13px;\n  line-height: 1.55;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-text-color-settings .dsh-tavern-settings-switch { margin-top: 2px; }\n.dsh-tavern-text-color-swatches {\n  display: flex;\n  flex-direction: column;\n  gap: 0;\n  padding: 4px 10px;\n}\n.dsh-tavern-text-color-swatches.is-disabled { opacity: 0.48; pointer-events: none; }\n.dsh-tavern-text-color-swatch {\n  display: flex;\n  align-items: center;\n  gap: 16px;\n  margin: 0;\n  padding: 14px 8px;\n  border-bottom: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 40%, transparent);\n  cursor: pointer;\n}\n.dsh-tavern-text-color-swatch:last-child { border-bottom: 0; }\n.dsh-tavern-text-color-swatch .dsh-tavern-settings-title {\n  font-family: var(--dsh-tavern-font-sans);\n  font-size: 15px;\n  font-weight: 500;\n  letter-spacing: 0;\n}\n.dsh-tavern-text-color-chip {\n  position: relative;\n  flex: none;\n  width: 40px;\n  height: 40px;\n  border-radius: 9999px;\n  border: 2px solid color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent);\n  background: var(--swatch, #e8a882);\n  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 12%, transparent);\n  overflow: hidden;\n}\n.dsh-tavern-text-color-chip input[type=\"color\"] {\n  position: absolute;\n  inset: -4px;\n  width: calc(100% + 8px);\n  height: calc(100% + 8px);\n  padding: 0;\n  border: 0;\n  opacity: 0;\n  cursor: pointer;\n}\n.dsh-tavern-text-color-foot {\n  display: flex;\n  justify-content: flex-start;\n  padding: 12px 18px 16px;\n  border-top: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n}\n.dsh-tavern-compaction-settings { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 20px; }\n.dsh-tavern-compaction-settings > h3, .dsh-tavern-compaction-settings > p { margin: 0; }\n.dsh-tavern-compaction-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; font-size: 14px; line-height: 1.6; }\n.dsh-tavern-compaction-field .dsh-tavern-settings-select { box-sizing: border-box; min-width: 0; width: 100%; font: inherit; }\n.dsh-tavern-compaction-settings > .dsh-tavern-btn { align-self: flex-start; margin-top: 4px; }\n.dsh-tavern-settings-error { color: #c45f5f; font-size: 13px; }\n.dsh-tavern-background-model { min-width: 0; max-width: min(360px,45cqw); height: 28px; display: flex; align-items: center; padding: 0 8px; color: var(--dsw-alias-label-secondary); font-size: 13px; font-weight: 500; line-height: 20px; }\n.dsh-tavern-background-model span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-system-prompt-editor { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; }\n.dsh-tavern-system-prompt-warning { margin-bottom: 14px; border: 1px solid rgba(196,95,95,.55); border-radius: 9px; padding: 11px 13px; background: rgba(196,95,95,.1); color: #d98080; font-size: 13px; line-height: 1.55; }\n.dsh-tavern-status-head.dsh-tavern-system-prompt-head { padding: 18px 20px 16px; }\n.dsh-tavern-system-prompt-top-actions { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; }\n.dsh-tavern-preset-detail.dsh-tavern-system-prompt-body { padding: 20px 24px 28px; }\n.dsh-tavern-system-prompt-editor textarea { box-sizing: border-box; width: 100%; min-height: 320px; resize: vertical; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 14px; background: var(--dsw-specific-input-minor); color: var(--dsw-alias-label-primary); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }\n.dsh-tavern-system-prompt-editor textarea:focus { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n.dsh-tavern-system-prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }\n.dsh-tavern-system-prompt-status { color: var(--dsw-alias-label-secondary); font-size: 13px; }\n.dsh-tavern-system-prompt-buttons { display: flex; gap: 10px; }\n.dsh-tavern-system-prompt-button { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; padding: 8px 14px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); cursor: pointer; }\n.dsh-tavern-system-prompt-button-primary { border-color: var(--dsh-tavern-accent-active); color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-system-prompt-button:disabled { cursor: default; opacity: .5; }\n.dsh-tavern-player-action { border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 8px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-player-action:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-preset-status { max-width: min(260px, 28vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-export-action { min-height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 7px 14px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; font-size: 13px; white-space: nowrap; }\n.dsh-tavern-export-action:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-export-action:disabled { opacity: .55; cursor: default; }\n.dsh-tavern-picker-overlay { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px; background: rgba(20,18,24,.42); backdrop-filter: blur(2px); }\n.dsh-tavern-card-picker { width: min(860px, calc(100vw - 48px)); max-height: min(80vh, 760px); overflow: auto; box-sizing: border-box; padding: 20px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 16px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 22px 64px rgba(0,0,0,.30); }\n.dsh-tavern-card-picker-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 700; }\n.dsh-tavern-card-picker-help { margin: 4px 0 12px; color: var(--dsw-alias-text-l2); font-size: 13px; }\n.dsh-tavern-card-pick { width: 100%; padding: 9px; margin-top: 5px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-card-pick:hover { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-card-pick.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 14%, transparent); }\n.dsh-tavern-card-pick b { display: block; color: var(--dsh-tavern-accent); }\n.dsh-tavern-card-pick span { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.4; }\n.dsh-tavern-card-pick.with-image,.dsh-tavern-library-card.with-image { display: flex; align-items: center; gap: 12px; }\n.dsh-tavern-card-thumb { display: block; flex: none; width: 56px; height: 56px; margin: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: 50%; object-fit: cover; object-position: center top; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-card-list-copy { display: block; min-width: 0; flex: 1; margin: 0; }\n.dsh-tavern-card-pick .dsh-tavern-card-list-copy,.dsh-tavern-library-card .dsh-tavern-card-list-copy { color: inherit; font-size: inherit; }\n.dsh-tavern-card-pick-wrap { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; }\n.dsh-tavern-card-pick-wrap .dsh-tavern-card-pick { flex: 1 1 auto; min-width: 0; margin-top: 0; }\n.dsh-tavern-card-pick-wrap .dsh-tavern-script-file { flex: 0 0 auto; }\n.dsh-tavern-greeting-preview { display: block; width: 100%; height: min(52vh, 560px); overflow: auto; overflow-anchor: none; box-sizing: border-box; margin: 8px 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-greeting-nav { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }\n.dsh-tavern-greeting-count { color: var(--dsw-alias-label-secondary); text-align: center; font-size: 12px; }\n.dsh-tavern-player-name { display: grid; grid-template-columns: auto minmax(180px, 320px); gap: 10px; align-items: center; margin: 10px 0 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-tavern-player-name input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-primary); font: inherit; outline: none; }\n.dsh-tavern-player-name input:focus { border-color: var(--dsh-tavern-accent); }\n.dsh-tavern-player-name-help { margin: -3px 0 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.5; }\n@media (max-width: 640px) {\n  .dsh-tavern-mobile-import { place-items: start center; padding-top: 12px; }\n  .dsh-tavern-picker-overlay { align-items: stretch; padding: 12px; }\n  .dsh-tavern-card-picker { width: 100%; max-height: none; padding: 14px; border-radius: 14px; }\n  .dsh-tavern-greeting-preview { max-height: 60vh; }\n  .dsh-tavern-player-name { grid-template-columns: 1fr; gap: 5px; }\n  .dsh-tavern-preset-status { display: none; }\n}\n.dsh-tavern-picker-group { margin-top: 10px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-picker-foot { position: sticky; bottom: -10px; display: flex; justify-content: flex-end; margin: 10px -10px -10px; padding: 10px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-script-file { align-self: center; white-space: nowrap; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); padding: 6px 8px; cursor: pointer; font-size: 11px; }\n.dsh-tavern-script-file:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); }\n.dsh-tavern-choice-trigger { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; padding: 3px 9px; border-radius: 7px; font-size: 12px; font-weight: 650; }\n.dsh-tavern-choice-trigger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 20%, transparent); color: #8e5728; }\n.dsh-tavern-dock-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px 0; flex-wrap: wrap; }\n.dsh-tavern-more-actions { position: relative; }\n.dsh-tavern-more-menu { position: absolute; z-index: 40; right: 0; bottom: calc(100% + 6px); display: grid; min-width: 150px; padding: 5px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.2); transform-origin: bottom right; }\n.dsh-tavern-more-menu:not([hidden]) { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-more-menu[hidden] { display: none; }\n.dsh-tavern-more-menu button { width: 100%; border: 0; border-radius: 6px; padding: 8px 10px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; text-align: left; white-space: nowrap; }\n.dsh-tavern-more-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-more-menu button.danger { color: #c34f4f; }\n.dsh-tavern-more-menu button:disabled { cursor: default; opacity: .55; }\n.dsh-tavern-candidate-error-banner { width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px; border: 1px solid rgba(196,95,95,.45); border-radius: 10px; background: rgba(196,95,95,.10); color: #c45f5f; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-timeout-banner { display: flex; align-items: center; gap: 8px; width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px; border: 1px solid rgba(196,145,72,.45); border-radius: 10px; background: rgba(196,145,72,.10); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 1.5; }\n.dsh-tavern-timeout-banner span { flex: 1; }\n.dsh-tavern-timeout-banner button { flex: none; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; padding: 4px 8px; background: transparent; color: var(--dsh-tavern-accent); cursor: pointer; }\n.dsh-tavern-choice-error { padding: 5px; color: #c45f5f; font-size: 12px; }\n.dsh-tavern-question { width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-tip, var(--dsw-specific-sidebar-fill)); box-shadow: var(--dsw-shadow-lv1); }\n.dsh-tavern-question.dsh-tavern-candidate-question { width: calc(100% - 32px); max-width: min(680px, var(--dsh-composer-card-max-width, 780px)); }\n.dsh-tavern-question.collapsed { padding: 9px 12px; box-shadow: none; }\n.dsh-tavern-question-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-weight: 750; cursor: pointer; }\n.dsh-tavern-question.collapsed .dsh-tavern-question-head { margin-bottom: 0; }\n.dsh-tavern-question-close { margin-left: auto; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 16px; line-height: 1; }\n.dsh-tavern-question-sub { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 400; }\n.dsh-tavern-question-body { max-height: min(360px, 45vh); overflow-y: auto; margin: 6px -4px 0; padding: 0 4px; }\n.dsh-tavern-question-option { width: 100%; box-sizing: border-box; display: flex; align-items: flex-start; gap: 9px; margin-top: 6px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); text-align: left; line-height: 1.5; cursor: pointer; }\n.dsh-tavern-question-option:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-question-option.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-question-radio { flex: none; width: 14px; height: 14px; margin-top: 3px; border: 1.5px solid var(--dsw-alias-label-tertiary); border-radius: 50%; }\n.dsh-tavern-question-option.selected .dsh-tavern-question-radio { border: 4px solid var(--dsh-tavern-accent); }\n.dsh-tavern-question-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }\n.dsh-tavern-question-tag { align-self: flex-start; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n.dsh-tavern-question-tag-scene { color: #6b7fa3; background: rgba(107,127,163,.16); }\n.dsh-tavern-question-free { width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 9px; background: transparent; color: var(--dsw-alias-label-secondary); text-align: left; cursor: pointer; }\n.dsh-tavern-question-free:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-question-foot { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }\n.dsh-tavern-question-primary { border: 0; border-radius: 8px; padding: 6px 12px; background: var(--dsw-alias-button-info-fill); color: #fff; cursor: pointer; }\n.dsh-tavern-question-primary:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-regen-input { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; resize: vertical; }\n.dsh-tavern-status { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-resources { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-library { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-library-search { box-sizing: border-box; width: calc(100% - 24px); margin: 10px 12px 2px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-library-card { width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-library-card:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-library-card b,.dsh-tavern-library-card span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-library-card span { margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-library-card-row { display: flex; align-items: center; gap: 6px; }\n.dsh-tavern-library-card-row .dsh-tavern-library-card { flex: 1; min-width: 0; }\n.dsh-tavern-library-head-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }\n.dsh-tavern-resource-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 20px; }\n.dsh-tavern-script-preview { margin: 0; padding: 14px 16px 24px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-resource-group { margin-bottom: 16px; }\n.dsh-tavern-resource-group-title { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px; color: var(--dsw-alias-label-secondary); font-size: 13px; font-weight: 500; letter-spacing: 0; }\n.dsh-tavern-resource-actions { display: flex; align-items: center; gap: 5px; }\n.dsh-tavern-resource-actions select { min-width: 0; max-width: 120px; height: 25px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; font-size: 10px; }\n.dsh-tavern-resource-import { height: 32px; padding: 0 12px; border: 0; border-radius: var(--dsh-tavern-radius-md); background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent-active); cursor: pointer; font-size: 13px; font-weight: 500; }\n.dsh-tavern-resource-import:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 24%, transparent); }\n.dsh-tavern-resource-row {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  margin: 0 0 6px;\n  padding: 12px 14px;\n  border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n  border-radius: var(--dsh-tavern-radius-lg);\n  background: color-mix(in srgb, var(--dsh-tavern-accent-surface) 22%, var(--dsw-specific-input-major));\n}\n.dsh-tavern-resource-row:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-surface) 34%, var(--dsw-specific-input-major)); }\n.dsh-tavern-resource-row.is-binding { border-color: var(--dsh-tavern-accent-border); }\n.dsh-tavern-resource-row-main {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}\n.dsh-tavern-resource-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-resource-open { padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-resource-open:hover { color: var(--dsh-tavern-accent-active); text-decoration: none; }\n.dsh-tavern-resource-meta { flex: none; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-label-secondary); font-size: 13px; white-space: nowrap; }\n.dsh-tavern-resource-at { flex: none; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; padding: 3px 7px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-resource-at:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 18%, transparent); }\n.dsh-tavern-resource-at.mounted { border-color: var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-resource-mention,\n.dsh-tavern-resource-menu > summary {\n  flex: none;\n  display: grid;\n  place-items: center;\n  width: 32px;\n  height: 32px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-radius: 9999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1;\n  cursor: pointer;\n  list-style: none;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.dsh-tavern-resource-menu > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-resource-mention:hover,\n.dsh-tavern-resource-menu > summary:hover,\n.dsh-tavern-resource-menu[open] > summary {\n  background: var(--dsh-tavern-accent-soft);\n  color: var(--dsh-tavern-accent-active);\n}\n.dsh-tavern-resource-mention.mounted { color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-resource-mention:focus-visible,\n.dsh-tavern-resource-menu > summary:focus-visible {\n  outline: 2px solid var(--dsh-tavern-accent);\n  outline-offset: 2px;\n}\n.dsh-tavern-resource-menu { position: relative; flex: none; }\n.dsh-tavern-resource-menu-popup {\n  position: absolute;\n  top: calc(100% + 6px);\n  right: 0;\n  z-index: 40;\n  min-width: 148px;\n  padding: 4px;\n  border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 60%, var(--dsw-alias-border-l2));\n  border-radius: var(--dsh-tavern-radius-lg);\n  background: var(--dsw-specific-sidebar-fill);\n  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);\n}\n.dsh-tavern-resource-menu-popup button {\n  display: block;\n  width: 100%;\n  min-height: 34px;\n  padding: 7px 11px;\n  border: 0;\n  border-radius: var(--dsh-tavern-radius-md);\n  background: transparent;\n  color: inherit;\n  text-align: left;\n  font: inherit;\n  font-size: 13px;\n  cursor: pointer;\n}\n.dsh-tavern-resource-menu-popup button:hover { background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-resource-menu-popup button.danger { color: var(--dsh-tavern-accent-error); }\n.dsh-tavern-resource-menu-popup button.danger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-error) 12%, transparent); }\n.dsh-tavern-resource-binding {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding-top: 2px;\n}\n.dsh-tavern-resource-binding select {\n  flex: 1;\n  min-width: 0;\n  height: 36px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-tavern-radius-md);\n  background: var(--dsw-specific-sidebar-fill);\n  color: inherit;\n  font: inherit;\n  font-size: 14px;\n}\n.dsh-tavern-presets { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-preset-list { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 20px; }\n.dsh-tavern-preset-row { margin-bottom: 8px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-preset-row-head { display: block; }\n.dsh-tavern-preset-row-main { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-preset-row-main b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }\n.dsh-tavern-preset-row-main span { display: block; margin-top: 3px; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-preset-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 8px; }\n.dsh-tavern-preset-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }\n.dsh-tavern-preset-detail { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 24px; }\n.dsh-tavern-preset-summary { margin-bottom: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.5; }\n.dsh-tavern-external-preset-notice { padding: 14px 16px; font-size: 14px; line-height: 1.7; }\n.dsh-tavern-external-preset-notice p { margin: 4px 0 0; }\n.dsh-tavern-external-preset-notice strong { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-external-preset-notice .dsh-tavern-preset-warning { color: #b4473a; }\n.dsh-tavern-bypass-plan-notice { padding: 14px 16px; font-size: 14px; line-height: 1.7; }\n.dsh-tavern-bypass-plan-notice p { margin: 4px 0 0; }\n.dsh-tavern-bypass-plan-notice strong { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-bypass-plan-notice .dsh-tavern-preset-warning { color: #b4473a; }\n.dsh-tavern-preset-selector { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); font-size: 11px; }\n.dsh-tavern-preset-selector select { min-width: 0; width: 100%; height: 28px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; padding: 0 7px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-preset-section-title { margin: 14px 2px 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 800; letter-spacing: .04em; }\n.dsh-tavern-plan-phase { margin-top: 12px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-plan-phase-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }\n.dsh-tavern-plan-phase-title { font-size: 13px; font-weight: 800; }\n.dsh-tavern-plan-phase-description { margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-plan-phase-count { flex: none; color: var(--dsw-alias-label-secondary); font-size: 10px; white-space: nowrap; }\n.dsh-tavern-plan-phase-empty { padding: 8px 2px 2px; color: var(--dsw-alias-label-tertiary); font-size: 10px; }\n.dsh-tavern-preset-phase { margin-top: 8px; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-top: 3px solid #5b9cff; border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-preset-phase.phase-middle { border-top-color: #35c76f; }\n.dsh-tavern-preset-phase.phase-back { border-top-color: #b47cff; }\n.dsh-tavern-preset-phase-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 5px; }\n.dsh-tavern-preset-phase-title { font-size: 14px; font-weight: 800; }\n.dsh-tavern-preset-phase-description { max-width: 620px; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-preset-phase-count { flex: none; padding: 2px 7px; border-radius: 999px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 10px; white-space: nowrap; }\n.dsh-tavern-preset-phase-empty { padding: 10px 2px 4px; color: var(--dsw-alias-label-tertiary); font-size: 10px; }\n.dsh-tavern-preset-unassigned { margin-top: 12px; padding: 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-preset-unassigned > summary { cursor: pointer; color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 750; }\n.dsh-tavern-preset-unassigned > p { margin: 7px 0 10px; font-size: 10px; line-height: 1.5; }\n.dsh-tavern-prompt-row { margin-bottom: 7px; border: 1px solid var(--dsw-alias-border-l2); border-left: 4px solid #5b9cff; border-radius: 9px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-prompt-row.role-user { border-left-color: #35c76f; }\n.dsh-tavern-prompt-row.role-assistant { border-left-color: #b47cff; }\n.dsh-tavern-prompt-row.role-regex { border-left-color: #ed9714; }\n.dsh-tavern-prompt-row.role-script { border-left-color: #8b69d4; }\n.dsh-tavern-prompt-row.role-extension { border-left-color: #718096; }\n.dsh-tavern-prompt-head { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; list-style: none; }\n.dsh-tavern-preset-entry-head { grid-template-columns: minmax(0,1fr) auto; padding: 5px 8px; }\n.dsh-tavern-preset-phase > .dsh-tavern-prompt-row { margin-bottom: 2px; }\n.dsh-tavern-preset-entry-head .dsh-tavern-prompt-title span { margin-top: 1px; }\n.dsh-tavern-prompt-head::-webkit-details-marker { display: none; }\n.dsh-tavern-prompt-title { min-width: 0; }\n.dsh-tavern-prompt-title b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }\n.dsh-tavern-prompt-title span { display: block; overflow: hidden; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-prompt-state { display: flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-secondary); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-prompt-state::before { width: 8px; height: 8px; border: 2px solid #23bd63; border-radius: 999px; content: \"\"; }\n.dsh-tavern-prompt-state.off::before { border-color: #91a0b5; }\n.dsh-tavern-system-prompt-row > .dsh-tavern-prompt-head { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 14px 16px; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-title b { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-title span { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-state { justify-self: end; font-size: 11px; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-state:not(.is-toggle)::before { display: none; }\n\n.dsh-tavern-prompt-state.is-toggle { position: relative; flex-shrink: 0; min-height: 32px; gap: 7px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }\n.dsh-tavern-prompt-state.is-toggle.on { color: #16766b; }\n.dsh-tavern-prompt-state.is-toggle.off { color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-prompt-state.is-toggle::before { flex-shrink: 0; width: 36px; height: 20px; border: 0; background: #64748b; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-prompt-state.is-toggle.on::before { background: #16766b; }\n.dsh-tavern-prompt-state.is-toggle::after { position: absolute; top: 50%; left: 7px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: \"\"; transform: translateY(-50%); transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-prompt-state.is-toggle.on::after { transform: translate(16px, -50%); }\n.dsh-tavern-prompt-state.is-toggle:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-prompt-state.is-toggle:focus-visible { outline: 2px solid #16766b; outline-offset: 2px; }\n.dsh-tavern-prompt-state.is-toggle:disabled { opacity: .6; cursor: wait; }\n.dsh-tavern-extract-state { gap: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 650; }\n.dsh-tavern-extract-state::before { width: 11px; height: 11px; }\n.dsh-tavern-extract-state input[type=\"checkbox\"] { width: 18px; height: 18px; margin: 0; accent-color: #23bd63; }\n.dsh-tavern-plan-name-field { display: grid; gap: 5px; margin-top: 8px; color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 650; }\n.dsh-tavern-plan-name-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }\n.dsh-tavern-plan-model-editor { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }\n.dsh-tavern-plan-model-editor input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }\n.dsh-tavern-prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }\n.dsh-tavern-prompt-tag { padding: 1px 5px; border-radius: 4px; background: rgba(237,151,20,.14); color: #c77800; font-size: 9px; }\n.dsh-tavern-prompt-content { margin: 0; padding: 10px 12px; border-top: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-prompt-view-actions { display: flex; justify-content: flex-end; padding: 8px 10px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-prompt-editor { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 10px; padding: 12px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-prompt-editor-field { display: grid; gap: 5px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-prompt-editor-field.full { grid-column: 1 / -1; }\n.dsh-tavern-prompt-editor-field input[type=\"text\"], .dsh-tavern-prompt-editor-field select, .dsh-tavern-prompt-editor-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-minor); color: var(--dsw-alias-label-primary); padding: 8px 9px; font: inherit; }\n.dsh-tavern-prompt-editor-field textarea { min-height: 220px; resize: vertical; font: 10px/1.55 ui-monospace, monospace; }\n.dsh-tavern-prompt-editor-toggle { display: flex; align-items: center; gap: 7px; min-height: 34px; }\n.dsh-tavern-prompt-editor-note { grid-column: 1 / -1; color: var(--dsw-alias-label-secondary); font-size: 9px; }\n.dsh-tavern-prompt-editor-actions { position: sticky; bottom: 0; grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding: 9px 0 0; background: var(--dsw-specific-input-major); z-index: 1; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor { box-sizing: border-box; width: 100%; max-width: 640px; margin-inline: auto; grid-template-columns: minmax(0, 1fr) minmax(90px, 120px); gap: 6px 8px; padding: 8px; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-field { gap: 3px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-field :is(input, select, textarea) { padding: 5px 7px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor textarea { min-height: 140px; height: 140px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-toggle { min-height: 28px; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions { align-items: center; flex-wrap: wrap; gap: 6px; padding: 2px 0; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions :is(button, select) { padding: 3px 7px; font: inherit; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions > label { display: flex; align-items: center; gap: 5px; }\n.dsh-tavern-regex-body { border-top: 1px solid var(--dsw-alias-border-l2); padding: 10px 12px; }\n.dsh-tavern-regex-label { margin: 8px 0 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 750; }\n.dsh-tavern-regex-label:first-child { margin-top: 0; }\n.dsh-tavern-regex-code { max-height: 220px; overflow: auto; margin: 0; padding: 8px 9px; border-radius: 7px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-regex-meta { margin-top: 9px; color: var(--dsw-alias-label-tertiary); font: 9px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-extension-note { margin: 9px 0; padding: 8px 9px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 30%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 7%, transparent); color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.55; }\n.dsh-tavern-mvu-list { display: grid; gap: 6px; }\n.dsh-tavern-mvu-row { display: grid; grid-template-columns: 74px minmax(0,1fr) auto; gap: 7px; align-items: center; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); font-size: 10px; }\n.dsh-tavern-mvu-kind { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-mvu-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-mvu-state { color: var(--dsw-alias-label-tertiary); white-space: nowrap; }\n.dsh-tavern-dsh-preset { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 24px; }\n.dsh-tavern-dsh-preset-controls { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); font-size: 11px; }\n.dsh-tavern-dsh-preset-controls select { min-width: 0; width: 100%; height: 28px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; padding: 0 7px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-dsh-preset-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }\n.dsh-tavern-dsh-preset-badge { border-radius: 999px; padding: 3px 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-dsh-preset-badge.front { background: rgba(58,132,255,.13); color: #4f92ff; }\n.dsh-tavern-dsh-preset-badge.middle { background: rgba(237,151,20,.15); color: #d27b00; }\n.dsh-tavern-dsh-preset-badge.back { background: rgba(180,124,255,.14); color: #9c62ed; }\n.dsh-tavern-dsh-preset-phase { margin-bottom: 15px; }\n.dsh-tavern-dsh-preset-phase-title { margin: 2px 2px 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 800; }\n.dsh-tavern-dsh-preset-row { margin-bottom: 6px; border: 1px solid var(--dsw-alias-border-l2); border-left: 4px solid #5b9cff; border-radius: 8px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-dsh-preset-row.front { border-left-color: #4f92ff; }\n.dsh-tavern-dsh-preset-row.middle { border-left-color: #ed9714; }\n.dsh-tavern-dsh-preset-row.back { border-left-color: #b47cff; }\n.dsh-tavern-dsh-preset-row.off { opacity: .62; }\n.dsh-tavern-dsh-preset-row.unconverted { border-left-color: #e06c75; }\n.dsh-tavern-dsh-preset-row summary { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 8px 9px; cursor: pointer; list-style: none; }\n.dsh-tavern-dsh-preset-row summary::-webkit-details-marker { display: none; }\n.dsh-tavern-dsh-preset-index { color: var(--dsw-alias-label-tertiary); font: 9px/1 ui-monospace, monospace; }\n.dsh-tavern-dsh-preset-name { min-width: 0; }\n.dsh-tavern-dsh-preset-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }\n.dsh-tavern-dsh-preset-name span { display: block; overflow: hidden; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-dsh-preset-meta { color: var(--dsw-alias-label-secondary); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-dsh-preset-content { margin: 0; padding: 9px 10px; border-top: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-dsh-preset-diagnostics { margin-top: 12px; padding: 8px 10px; border: 1px solid rgba(237,151,20,.35); border-radius: 8px; background: rgba(237,151,20,.07); color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.55; }\n.dsh-tavern-dsh-preset-diagnostics summary { cursor: pointer; font-weight: 800; }\n.dsh-tavern-dsh-preset-diagnostics ul { margin: 7px 0 0; padding-left: 18px; }\n.dsh-tavern-dsh-preset-unconverted-group { margin-top: 9px; }\n.dsh-tavern-dsh-preset-unconverted-title { margin: 8px 0 6px; font-weight: 800; }\n.dsh-tavern-dsh-preset-raw { margin-top: 6px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 7px; overflow: hidden; }\n.dsh-tavern-dsh-preset-raw summary { padding: 7px 8px; cursor: pointer; font-weight: 700; }\n.dsh-tavern-status-head { flex: none; padding: 16px 16px 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-status-title { font-size: 18px; font-weight: 400; letter-spacing: -0.2px; }\n.dsh-tavern-plan-head { display: flex; flex-direction: column; gap: 10px; }\n.dsh-tavern-plan-head-main { display: flex; align-items: center; gap: 8px; min-width: 0; }\n.dsh-tavern-plan-head-main .dsh-tavern-status-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-plan-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }\n.dsh-tavern-status-role { margin-top: 5px; color: var(--dsh-tavern-accent); font-size: 13px; font-weight: 700; }\n.dsh-tavern-status-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }\n.dsh-tavern-status-tag { padding: 2px 6px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-status-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 20px; }\n.dsh-tavern-status-section { margin-bottom: 16px; }\n.dsh-tavern-card-app-section[hidden] { display: none; }\n.dsh-tavern-card-app-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }\n.dsh-tavern-card-app-head .dsh-tavern-status-label { margin-bottom: 0; }\n.dsh-tavern-card-app-recovering { margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-app-slot { width: 100%; min-height: 120px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: rgba(0,0,0,.14); }\n.dsh-tavern-script-buttons { display: flex; flex-wrap: wrap; gap: 7px; }\n.dsh-tavern-status-label { margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; letter-spacing: .06em; }\n.dsh-tavern-status-now { padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 30%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); font-size: 12px; line-height: 1.55; }\n.dsh-tavern-character-designs { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-character-design { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-character-design summary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; list-style: none; }\n.dsh-tavern-character-design summary::-webkit-details-marker { display: none; }\n.dsh-tavern-character-design-name { display: block; font-size: 12px; font-weight: 800; }\n.dsh-tavern-character-design-summary { display: block; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-character-design-meta { color: var(--dsh-tavern-accent); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-character-design-body { padding: 2px 10px 10px; border-top: 1px solid var(--dsw-alias-border-l3); }\n.dsh-tavern-character-design-row { padding-top: 8px; }\n.dsh-tavern-character-design-row b { display: block; color: var(--dsw-alias-label-tertiary); font-size: 9px; }\n.dsh-tavern-character-design-row p { margin: 3px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-guide-list { display: flex; flex-direction: column; gap: 6px; }\n.dsh-tavern-guide-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-guide-text { flex: 1; min-width: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }\n.dsh-tavern-guide-add { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }\n.dsh-tavern-guide-add textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 54px; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-script-preview { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-script-chunk { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); padding: 7px 9px; font-size: 11px; line-height: 1.55; }\n.dsh-tavern-script-chunk-label { display: block; margin-bottom: 3px; color: var(--dsh-tavern-accent); font-size: 10px; font-weight: 700; }\n.dsh-tavern-script-chunk-text { color: var(--dsw-alias-label-secondary); white-space: pre-wrap; max-height: 160px; overflow-y: auto; }\n.dsh-tavern-status-item { padding: 7px 0; border-bottom: 1px solid var(--dsw-alias-border-l3); font-size: 12px; line-height: 1.5; }\n.dsh-tavern-status-item:last-child { border-bottom: 0; }\n.dsh-tavern-status-empty { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 1.6; }\n.dsh-tavern-user-profile { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-user-profile-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 24px; }\n.dsh-tavern-user-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }\n.dsh-tavern-user-profile-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-user-profile-switch b { display: block; font-size: 12px; }\n.dsh-tavern-user-profile-switch small { display: block; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 1.45; }\n.dsh-tavern-user-profile-text { margin: 0; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-user-profile-dimension { margin-top: 7px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-user-profile-dimension b { font-size: 11px; }\n.dsh-tavern-user-profile-dimension p { margin: 5px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; }\n.dsh-tavern-user-profile-meta { margin-top: 5px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 1.5; }\n.dsh-tavern-user-profile details { margin-top: 10px; }\n.dsh-tavern-user-profile details summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-user-profile-editor textarea { box-sizing: border-box; width: 100%; min-height: 130px; margin-top: 5px; padding: 8px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; resize: vertical; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 11px; line-height: 1.6; }\n.dsh-tavern-debug-panel { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-debug-panel select { width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; }\n.dsh-tavern-debug-preview { padding: 7px 8px; border-radius: 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }\n.dsh-tavern-debug-open { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 12px; font-weight: 650; }\n.dsh-tavern-debug-open:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 16%, transparent); }\n.dsh-tavern-debug-open:disabled { cursor: wait; opacity: .6; }\n.dsh-tavern-status-settle { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #6ea676; }\n.dsh-tavern-status-dot.running { background: #c68a3a; animation: dsh-tavern-pulse 1s infinite alternate; }\n.dsh-tavern-status-dot.error { background: #c45f5f; }\n.dsh-tavern-status-view-switch { margin-top: 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 999px; padding: 5px 10px; background: color-mix(in srgb, var(--dsh-tavern-accent) 9%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-phone-host { align-items: center; overflow: auto; padding: 12px; background: radial-gradient(circle at 50% 0, rgba(63,145,255,.08), transparent 38%), var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-phone-toolbar { width: min(100%, 360px); display: flex; justify-content: flex-end; margin-bottom: 8px; }\n.dsh-tavern-phone-exit { border: 0; border-radius: 999px; padding: 6px 11px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-phone-device { position: relative; width: min(100%, 360px); height: min(720px, calc(100vh - 110px)); min-height: 520px; overflow: hidden; box-sizing: border-box; border: 9px solid #121318; border-radius: 44px; background: #edf3fb; box-shadow: 0 20px 55px rgba(0,0,0,.32), inset 0 0 0 1px rgba(255,255,255,.18); color: #162033; }\n.dsh-tavern-phone-screen { height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(150deg,#dff8ff 0%,#b7dcff 25%,#314eae 56%,#071536 100%); }\n.dsh-tavern-phone-island { position: absolute; z-index: 4; top: 10px; left: 50%; width: 104px; height: 29px; transform: translateX(-50%); border-radius: 999px; background: #090b10; }\n.dsh-tavern-phone-statusbar { position: relative; z-index: 3; height: 49px; flex: none; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; padding: 7px 19px 0; color: #fff; font-size: 12px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.35); }\n.dsh-tavern-phone-status-icons { letter-spacing: 1px; }\n.dsh-tavern-phone-home { flex: 1; min-height: 0; padding: 32px 24px; }\n.dsh-tavern-phone-app { width: 68px; border: 0; padding: 0; background: transparent; color: #fff; cursor: pointer; text-align: center; text-shadow: 0 1px 4px rgba(0,0,0,.55); }\n.dsh-tavern-phone-app-icon { position: relative; width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 7px; border-radius: 16px; background: linear-gradient(145deg,#4ed76f,#12a947); box-shadow: 0 8px 20px rgba(0,0,0,.22); color: #fff; text-shadow: none; }\n.dsh-tavern-phone-app-icon::before { content: \"\"; width: 31px; height: 25px; border-radius: 50%; background: #fff; }\n.dsh-tavern-phone-app-icon::after { content: \"\"; position: absolute; left: 16px; bottom: 14px; width: 10px; height: 10px; background: #fff; clip-path: polygon(0 0,100% 0,0 100%); transform: rotate(-10deg); }\n.dsh-tavern-phone-app-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }\n.dsh-tavern-phone-page { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #f5f7fb; color: #172033; }\n.dsh-tavern-phone-nav { min-height: 48px; flex: none; display: grid; grid-template-columns: 56px minmax(0,1fr) 56px; align-items: center; padding: 0 8px; border-bottom: 1px solid #dce2eb; background: rgba(255,255,255,.94); }\n.dsh-tavern-phone-nav strong { overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }\n.dsh-tavern-phone-nav button { border: 0; background: transparent; color: #3478e5; cursor: pointer; font-size: 12px; }\n.dsh-tavern-phone-contact-list { min-height: 0; overflow-y: auto; background: #fff; }\n.dsh-tavern-phone-contact { width: 100%; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 10px; box-sizing: border-box; border: 0; border-bottom: 1px solid #edf0f4; padding: 11px 14px; background: #fff; color: inherit; cursor: pointer; text-align: left; }\n.dsh-tavern-phone-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: linear-gradient(145deg,#7b8cff,#5265d6); color: #fff; font-size: 17px; font-weight: 800; }\n.dsh-tavern-phone-contact-copy { min-width: 0; }\n.dsh-tavern-phone-contact-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 750; }\n.dsh-tavern-phone-contact-preview { display: block; margin-top: 4px; overflow: hidden; color: #89919f; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }\n.dsh-tavern-phone-contact-time { color: #a0a7b2; font-size: 9px; }\n.dsh-tavern-phone-empty { margin: auto; padding: 28px; color: #7d8694; text-align: center; font-size: 12px; line-height: 1.6; }\n.dsh-tavern-phone-messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px 12px; background: #eef1f6; }\n.dsh-tavern-phone-bubble { max-width: 82%; padding: 8px 10px; border-radius: 13px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-phone-bubble.user { align-self: flex-end; border-bottom-right-radius: 4px; background: #95e766; }\n.dsh-tavern-phone-bubble.assistant { align-self: flex-start; border-bottom-left-radius: 4px; }\n.dsh-tavern-phone-bubble.pending { opacity: .58; }\n.dsh-tavern-phone-bubble.failed { outline: 1px solid #e16a6a; }\n.dsh-tavern-phone-message-error { display: block; margin-top: 3px; color: #c54d4d; font-size: 9px; }\n.dsh-tavern-phone-compose { flex: none; display: flex; align-items: flex-end; gap: 7px; padding: 8px; border-top: 1px solid #dce2eb; background: #fff; }\n.dsh-tavern-phone-compose textarea { min-width: 0; flex: 1; resize: none; box-sizing: border-box; max-height: 96px; border: 1px solid #d4dae4; border-radius: 16px; padding: 7px 10px; background: #f7f8fa; color: #172033; font: inherit; font-size: 12px; line-height: 1.4; }\n.dsh-tavern-phone-compose button { width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; background: #2e79e8; color: #fff; cursor: pointer; font-size: 15px; }\n.dsh-tavern-phone-compose button:disabled { opacity: .4; cursor: default; }\n.dsh-tavern-phone-indicator { width: 96px; height: 4px; flex: none; margin: 7px auto 8px; border-radius: 999px; background: currentColor; opacity: .75; }\n.dsh-tavern-card-fields { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }\n.dsh-tavern-card-field { margin-bottom: 10px; }\n.dsh-tavern-card-field label { display: block; margin-bottom: 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 700; }\n.dsh-tavern-card-field input,.dsh-tavern-card-field textarea { box-sizing: border-box; width: 100%; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 11px; line-height: 1.45; resize: vertical; }\n.dsh-tavern-card-field textarea { min-height: 76px; }\n.dsh-tavern-card-field textarea.large { min-height: 130px; }\n.dsh-tavern-card-advanced { margin: 10px 0; }\n.dsh-tavern-card-advanced summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-card-worldbook { margin: 0 0 14px; padding: 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-card-worldbook > summary { color: var(--dsh-tavern-accent-active); font-size: 13px; font-weight: 800; cursor: pointer; }\n.dsh-tavern-card-worldbook > summary:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 4px; }\n.dsh-tavern-card-worldbook > .dsh-tavern-worldbook { margin: 12px 0 0; padding: 12px 0 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); border-radius: 0; }\n\n\n.dsh-tavern-worldbook { margin-bottom: 14px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; }\n.dsh-tavern-worldbook-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }\n.dsh-tavern-worldbook-title { color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 700; }\n.dsh-tavern-worldbook-add { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsh-tavern-accent); padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 650; }\n.dsh-tavern-worldbook-add:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 20%, transparent); }\n.dsh-tavern-worldbook-empty { padding: 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-worldbook-group + .dsh-tavern-worldbook-group { margin-top: 12px; }\n.dsh-tavern-worldbook-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-group-head b { color: var(--dsh-tavern-accent); font-size: 11px; }\n.dsh-tavern-worldbook-entry { margin-bottom: 10px; padding: 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-worldbook-entry-head { color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-worldbook-entry-body { padding-top: 9px; }\n.dsh-tavern-worldbook-entry-actions { display: flex; align-items: center; gap: 4px; }\n.dsh-tavern-worldbook-danger-zone { display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-worldbook-kind { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; padding: 2px 7px; font-size: 10px; }\n.dsh-tavern-worldbook-trigger { display: block; max-width: 100%; margin: 0 0 6px; padding: 1px 0; overflow: hidden; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-worldbook-trigger:hover { color: var(--dsh-tavern-accent); }\n.dsh-tavern-worldbook-note { margin: -2px 0 8px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-worldbook-sort { display: flex; align-items: center; gap: 7px; width: fit-content; margin: 2px 0 12px; padding: 4px 5px 4px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }\n.dsh-tavern-worldbook-sort:focus-within { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n.dsh-tavern-worldbook-sort-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); color: var(--dsh-tavern-accent); font-size: 12px; font-weight: 800; }\n.dsh-tavern-worldbook-sort-label { font-size: 10px; font-weight: 700; white-space: nowrap; }\n.dsh-tavern-worldbook-sort-control { position: relative; display: inline-flex; align-items: center; }\n.dsh-tavern-worldbook-sort select { min-width: 76px; appearance: none; border: 0; border-radius: 6px; outline: 0; padding: 5px 24px 5px 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }\n.dsh-tavern-worldbook-sort-chevron { position: absolute; right: 8px; top: 50%; transform: translateY(-58%); color: var(--dsw-alias-label-tertiary); pointer-events: none; font-size: 12px; }\n.dsh-tavern-worldbook-del { border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; padding: 2px 6px; font-size: 11px; }\n.dsh-tavern-worldbook-del:hover { color: #c45f5f; background: rgba(196,95,95,.12); }\n.dsh-tavern-worldbook-entry .dsh-tavern-card-field { margin-bottom: 6px; }\n.dsh-tavern-worldbook-entry .dsh-tavern-card-field:last-child { margin-bottom: 0; }\n.dsh-tavern-worldbook-editor { padding: 10px 12px 24px; overflow-y: auto; }\n.dsh-tavern-worldbook-summary { margin: 0 0 10px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-worldbook-editor-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 6px; padding: 10px 0; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-worldbook-entry details { margin-top: 7px; }\n.dsh-tavern-worldbook-entry summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }\n.dsh-tavern-worldbook-grid label { display: flex; flex-direction: column; gap: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-grid input,.dsh-tavern-worldbook-grid select { min-width: 0; padding: 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-worldbook-checks { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 7px 0; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-checks label { display: inline-flex; align-items: center; gap: 4px; }\n.dsh-tavern-card-save { position: sticky; bottom: 0; display: flex; justify-content: flex-end; padding: 10px 0 2px; background: linear-gradient(transparent, var(--dsw-specific-sidebar-fill) 28%); }\n.dsh-tavern-script-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l3); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-script-info { flex: 1; min-width: 150px; line-height: 1.5; }\n.dsh-tavern-script-info b { color: var(--dsh-tavern-accent); }\n.dsh-tavern-script-hero { flex: none; margin: 10px 12px 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-script-hero-title { color: var(--dsh-tavern-accent-active); font-size: 13px; font-weight: 800; cursor: pointer; }\n.dsh-tavern-script-hero-help { margin-top: 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-script-hero .dsh-tavern-script-row { border-top-color: color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); }\n.dsh-tavern-script-primary { border: 0; border-radius: 8px; padding: 6px 10px; background: var(--dsh-tavern-accent); color: #fff; cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-script-primary:disabled { opacity: .5; cursor: default; }\n@keyframes dsh-tavern-pulse { from { opacity: .35; } to { opacity: 1; } }\n.dsh-card-primary { border: 0; border-radius: var(--dsh-tavern-radius-md); padding: 10px 18px; background: var(--dsh-tavern-accent); color: #fff; cursor: pointer; font-size: 14px; font-weight: 500; }\n.dsh-card-error { color: #c45f5f; font-size: 12px; }\n@media (max-width: 820px) {\n  .dsh-tavern-question { width: calc(100% - 24px); }\n}\n\n/* Compact writing-style navigation at the bottom of the status panel. */\n.dsh-tavern-style-guide > button {\n  display: flex; align-items: baseline; gap: 10px; width: 100%;\n  padding: 8px 0; border: 0; border-bottom: 1px solid var(--border, rgba(128,128,128,.16));\n  background: transparent; color: inherit; text-align: left; cursor: pointer;\n}\n.dsh-tavern-style-guide > button:last-child { border-bottom: 0; }\n.dsh-tavern-style-guide > button > span { flex-shrink: 0; font-size: 13px; }\n.dsh-tavern-style-guide > button > small { font-size: 11px; opacity: .65; }\n.dsh-tavern-style-guide > button:hover > span { text-decoration: underline; }\n.dsh-tavern-style-guide > button:disabled { opacity: .45; cursor: default; }\n\n.dsh-tavern-style-title { font-size: 17px; font-weight: 700; line-height: 1.5; margin-bottom: 8px; }\n\n/* The sidebar's translated, collapsed bottom panel extends beyond the viewport.\n   hidden still permits focus/scrollIntoView to scroll the whole fixed host,\n   stranding its tab bar above the viewport. Only pane content should scroll. */\nbody.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }\n\n/* Pocket's legacy :last-child header rule hides the native right-sidebar\n   corner added by the host. Restore that explicit seat, not the old utilities\n   row. Keep the native controller and its horizontal drawer transition. */\n@media (max-width: 767px) {\n  body.dsh-tavern-shell-active [data-phase] header:has([data-conversation-header-corner]) { position: relative; }\n  body.dsh-tavern-shell-active [data-phase] header [data-conversation-header-corner] {\n    display: flex !important;\n    position: absolute;\n    right: 8px;\n    top: 12px;\n    margin: 0;\n    z-index: 3;\n  }\n  body.dsh-tavern-shell-active [data-dsh-bottom-toggle] { display: none !important; }\n}\n\n.dsh-tavern-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }\n.dsh-tavern-history-action { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; padding: 4px 6px; border-radius: 4px; cursor: pointer; }\n.dsh-tavern-history-action:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: rgba(128, 128, 128, .12); }\n.dsh-tavern-history-action:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-history-selection { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 7px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n\n/* Player notebook: fixed UI typography, independent of story font settings. */\n.dsh-ledger { font-size: 13px; line-height: 1.55; }\n.dsh-ledger button { cursor: pointer; color: inherit; }\n.dsh-ledger-toggle { display: flex; justify-content: space-between; width: 100%; padding: 0; border: 0; background: transparent; font-size: 14px; font-weight: 600; }\n.dsh-ledger-toggle span { font-size: 12px; font-weight: 400; opacity: .65; }\n.dsh-ledger-tabs { display: flex; gap: 3px; margin: 12px 0; padding: 3px; border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }\n.dsh-ledger-tabs button { display: flex; flex: 1; align-items: center; justify-content: center; gap: 6px; min-width: 0; border: 0; background: transparent; border-radius: 6px; padding: 6px 8px; font: inherit; color: var(--dsw-alias-label-secondary, inherit); }\n.dsh-ledger-tabs [aria-selected=\"true\"] { color: var(--dsw-alias-label-primary, inherit); background: var(--dsw-specific-sidebar-fill, Canvas); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }\n.dsh-ledger-count { font-size: 11px; opacity: .65; font-variant-numeric: tabular-nums; }\n.dsh-ledger .dsh-ledger-add, .dsh-ledger-actions button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, inherit); border-radius: 6px; padding: 5px 9px; font: inherit; }\n.dsh-ledger .dsh-ledger-add { font-size: 12px; }\n.dsh-ledger button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }\n.dsh-ledger button:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-ledger-card { margin: 8px 0; padding: 10px; border: 1px solid var(--dsw-alias-border-subtle, #555); border-radius: 7px; overflow-wrap: anywhere; }\n.dsh-ledger-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }\n.dsh-ledger-actions { display: flex; flex-shrink: 0; gap: 5px; font-size: 12px; }\n.dsh-ledger p { margin: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-ledger small, .dsh-ledger-field-label { opacity: .65; }\n.dsh-ledger h4 { margin: 14px 0 6px; }\n.dsh-ledger-scene { margin: 8px 0 8px 8px; padding-left: 10px; border-left: 1px solid var(--dsh-tavern-accent); }\n.dsh-ledger-scene summary { cursor: pointer; overflow-wrap: anywhere; }\n.dsh-ledger-scene-content { padding: 5px 0; }\n.dsh-ledger-form { margin: 10px 0; padding: 10px; border: 1px solid var(--dsh-tavern-accent); border-radius: 6px; }\n.dsh-ledger-form label { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }\n.dsh-ledger-form input:not([type=\"checkbox\"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: 6px; border: 1px solid #555; border-radius: 4px; color: inherit; background: transparent; font: inherit; }\n.dsh-ledger button:disabled { opacity: .45; cursor: default; }\n\n.dsh-tavern-panel-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-panel-tabs { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: 6px; }\n.dsh-tavern-panel-tab, .dsh-tavern-panel-refresh { border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; padding: 6px 9px; cursor: pointer; }\n.dsh-tavern-panel-tab { text-align: left; overflow-wrap: anywhere; }\n.dsh-tavern-panel-tabs [aria-selected=\"true\"] { background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsw-alias-label-primary); font-weight: 650; }\n.dsh-tavern-panel-refresh { flex-shrink: 0; }\n.dsh-tavern-panel-tab:hover, .dsh-tavern-panel-refresh:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-panel-tab:focus-visible, .dsh-tavern-panel-refresh:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-tavern-status-runtime > [role=\"tabpanel\"] { min-width: 0; width: 100%; }\n.dsh-tavern-status-runtime > [role=\"tabpanel\"][hidden] { display: none; }\n\n.dsh-tavern-choice-trigger:disabled { opacity: .5; cursor: not-allowed; }\n\n.dsh-tavern-image-preview { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 64px 20px 20px; border: 0; background: rgba(0,0,0,.92); overflow: hidden; }\n.dsh-tavern-image-preview::backdrop { background: rgba(0,0,0,.8); }\n.dsh-tavern-image-preview img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }\n.dsh-tavern-image-preview button { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); min-height: 40px; padding: 8px 16px; border: 1px solid #aaa; border-radius: 8px; background: #fff; color: #111; cursor: pointer; font-size: 16px; }\n\n.dsh-tavern-error-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 12px; font-size: 12px; }\n.dsh-tavern-error-controls[hidden] { display: none; }\n.dsh-tavern-error-controls button { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 3px 8px; cursor: pointer; }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay { border-color: rgba(166,107,53,.55); color: #a66b35; font-weight: 650; }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay:hover { background: rgba(166,107,53,.18); }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay:disabled { opacity: .55; cursor: default; }\n\n/* Conversation groups are a sidebar projection, not folders in stored chat data. */\n.dsh-tavern-history-group { flex-shrink: 0; min-width: 0; }\n.dsh-tavern-history-group-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 9px 12px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-history-group-toggle:hover { background: rgba(128,128,128,.12); }\n.dsh-tavern-history-group-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }\n.dsh-tavern-history-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }\n.dsh-tavern-history-group-count { flex-shrink: 0; opacity: .6; font-size: 12px; }\n.dsh-tavern-history-group-items { padding-left: 10px; display: flex; flex-direction: column; gap: 4px; }\n\n.dsh-tavern-history-group-items .dsh-tavern-side-row-meta > span:last-child { white-space: nowrap; flex-shrink: 0; }\n\n.dsh-tavern-card-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; }\n.dsh-tavern-card-batch .danger { color: #c34848; }\n.dsh-tavern-card-batch-count { color: var(--dsw-alias-label-secondary); font-size: 12px; padding: 0 4px; font-weight: 500; }\n.dsh-tavern-card-batch-notice { flex-basis: 100%; overflow-wrap: anywhere; font-size: 12px; margin-top: 4px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-card-batch-checkbox { flex: 0 0 18px; width: 18px; height: 18px; margin: 0 6px 0 2px; cursor: pointer; accent-color: var(--dsh-tavern-accent); border-radius: 4px; vertical-align: middle; }\n.dsh-tavern-library-card.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 14%, transparent); }\n\n.dsh-tavern-card-import-hint { padding: 6px 12px 0; }\n.dsh-tavern-library > .dsh-tavern-card-batch { flex-shrink: 0; margin: 0 12px; padding: 10px 0 6px; gap: 10px; }\n.dsh-tavern-library > .dsh-tavern-card-batch + .dsh-tavern-library-search { margin-top: 12px; }\n\n/* Size every opening by content; scroll the dialog instead of squeezing long forms. */\n.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }\n/* In block pickers this is inert; avoid a descendant :has() before universal children. */\n.dsh-tavern-card-picker > * { flex-shrink: 0; }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview { height: auto; min-height: 0; max-height: min(1200px, 85dvh); flex: 0 0 auto; }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview:has(iframe) { height: min(1200px, 85dvh); }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview .dsh-tavern-message-frame-slot,\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview .dsh-tavern-message-frame { min-height: min(1200px, 85dvh); }\n@media (max-width: 640px) {\n  .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { max-height: calc(100dvh - 24px); }\n}\n\n.dsh-tavern-worldbook-bound { padding: 8px 12px; font-size: 12px; text-align: left; overflow-wrap: anywhere; }\n.dsh-tavern-worldbook-new { margin: 12px 0 8px; padding: 8px 12px; }\n.dsh-tavern-worldbook > .dsh-tavern-script-row:first-child { border-top: 0; margin-top: 0; padding-top: 0; }\n\n/* Worldbook bindings: existing relationships lead; additions stay folded. */\n.dsh-tavern-worldbook-bindings { margin: 0 0 16px; padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-worldbook-bindings-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 600; }\n.dsh-tavern-worldbook-bindings-count { color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 400; }\n.dsh-tavern-worldbook-bound-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }\n.dsh-tavern-worldbook-bound-card { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 10px; border-radius: 7px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-worldbook-bound-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 500; }\n.dsh-tavern-worldbook-binding-link { flex-shrink: 0; padding: 3px 0 3px 6px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; cursor: pointer; }\n.dsh-tavern-worldbook-binding-link:hover:not(:disabled) { color: var(--dsw-alias-label-primary); text-decoration: underline; }\n.dsh-tavern-worldbook-binding-add { margin-top: 10px; }\n.dsh-tavern-worldbook-binding-add summary { width: fit-content; padding: 3px 0; color: var(--dsw-alias-label-secondary); font-size: 11px; cursor: pointer; }\n.dsh-tavern-worldbook-binding-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }\n.dsh-tavern-worldbook-binding-form select { flex: 1 1 170px; min-width: 0; max-width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; }\n.dsh-tavern-worldbook-binding-confirm { min-height: 32px; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }\n.dsh-tavern-worldbook-bindings button:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-worldbook-bindings :is(button, summary, select):focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 3px; }\n.dsh-tavern-worldbook-binding-empty, .dsh-tavern-worldbook-binding-hint { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n\n.dsh-tavern-preset-drag { cursor: grab; flex: none; padding: 4px 8px; border: 0; background: transparent; color: inherit; font-size: 20px; }\n.dsh-tavern-preset-drag:active { cursor: grabbing; }\n.dsh-tavern-preset-drop { height: 4px; overflow: hidden; line-height: 18px; box-sizing: border-box; border: 1px solid transparent; border-radius: 6px; text-align: center; font-size: 12px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-presets.is-dragging .dsh-tavern-preset-drop { border: 1px dashed var(--dsh-tavern-accent); }\n.dsh-tavern-presets.is-dragging .is-drop-target { outline: 2px solid var(--dsh-tavern-accent); outline-offset: -2px; }\n.dsh-tavern-presets.is-dragging .dsh-tavern-prompt-row.is-drop-target { outline: none; box-shadow: 0 -3px var(--dsh-tavern-accent); }\n\n.dsh-tavern-preset-entry-head.has-drag { grid-template-columns: auto minmax(0, 1fr) auto; }\n\n/* Profile scope: current game, future games, and library browsing are separate. */\n.dsh-tavern-profile-controls { display: grid; gap: 18px; padding: 16px 18px 0; }\n.dsh-tavern-profile-game { padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-profile-section-title { font-size: 12px; font-weight: 600; margin-bottom: 9px; }\n.dsh-tavern-profile-current, .dsh-tavern-profile-library-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }\n.dsh-tavern-profile-current { justify-content: space-between; }\n.dsh-tavern-profile-current strong { font-size: 16px; overflow-wrap: anywhere; }\n.dsh-tavern-profile-current .dsh-tavern-user-profile-actions { margin: 0; }\n.dsh-tavern-profile-controls select { min-width: 0; max-width: 100%; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; }\n.dsh-tavern-profile-library-bar select { flex: 1; }\n.dsh-tavern-profile-default { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }\n.dsh-tavern-profile-controls small { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.5; margin-top: 6px; }\n.dsh-tavern-profile-default small { grid-column: 1 / -1; margin: 0; }\n.dsh-tavern-profile-library { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 16px; }\n.dsh-tavern-profile-update { margin-top: 12px; display: grid; justify-items: start; gap: 8px; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-profile-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }\n.dsh-tavern-profile-choices p { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-history-window { min-height: 0; display: flex; flex-direction: column; flex: 1; }\n.dsh-tavern-history-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; position: sticky; top: 0; z-index: 2; background: var(--dsw-specific-input-major); }\n.dsh-tavern-history-controls small { color: var(--dsw-alias-label-tertiary); }\n\n/* Shared in-app text prompt. Replaces window.prompt, which Electron never implements;\n   every previous caller failed silently on desktop. */\n.dsh-tavern-prompt {\n  box-sizing: border-box; position: fixed; inset: 0; margin: auto;\n  width: min(400px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px);\n  padding: 16px; border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 14px; background: var(--dsw-specific-sidebar-fill);\n  color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0, 0, 0, .35);\n}\n.dsh-tavern-prompt::backdrop { background: rgba(0, 0, 0, .52); }\n.dsh-tavern-prompt-panel { display: flex; flex-direction: column; gap: 10px; }\n.dsh-tavern-prompt-title { font-size: 15px; font-weight: 700; }\n.dsh-tavern-prompt-input {\n  box-sizing: border-box; width: 100%; padding: 8px 10px;\n  border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px;\n  background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 13px;\n}\n.dsh-tavern-prompt-input:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n.dsh-tavern-prompt-error { color: #c45f5f; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }\n.dsh-tavern-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; }\n\n.dsh-tavern-settings-text {\n  box-sizing: border-box; width: min(220px, 100%); padding: 7px 9px;\n  border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px;\n  background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 13px;\n}\n.dsh-tavern-settings-text:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n\n.dsh-tavern-export-menu .dsh-tavern-more-menu { top: calc(100% + 6px); bottom: auto; }\n\n.dsh-tavern-skill-assignments {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 12px 20px;\n  padding: 12px 0;\n}\n.dsh-tavern-skill-assignments label {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  cursor: pointer;\n}\n\n.dsh-tavern-skills > .dsh-tavern-question-sub {\n  padding: 0 16px;\n}\n\n.dsh-tavern-skills > .dsh-tavern-status-head { display: flex; align-items: center; justify-content: space-between; }\n.dsh-tavern-skills > .dsh-tavern-resource-body { padding: 12px 16px; }\n.dsh-tavern-skill-group { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }\n.dsh-tavern-skill-group > summary { cursor: pointer; padding: 12px 14px; font-size: 14px; font-weight: 600; background: var(--dsw-specific-input-major); }\n.dsh-tavern-skill-count { margin-left: 8px; font-size: 12px; font-weight: 400; opacity: .6; }\n.dsh-tavern-skill-row { padding: 14px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-skill-row .dsh-tavern-resource-group-title { margin: 0; gap: 10px; }\n.dsh-tavern-skill-row .dsh-tavern-resource-name { font-size: 15px; font-weight: 700; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; text-align: left; }\n.dsh-tavern-skill-row .dsh-tavern-resource-open:hover { color: var(--dsh-tavern-accent); text-decoration: underline; }\n.dsh-tavern-skill-row .dsh-tavern-resource-open:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 3px; }\n.dsh-tavern-skill-row > p { font-size: 12px; line-height: 1.6; margin: 7px 0 10px; opacity: .8; }\n.dsh-tavern-skill-options > summary { cursor: pointer; font-size: 12px; opacity: .65; }\n.dsh-tavern-skill-options .dsh-tavern-skill-assignments { padding: 10px 0 0; gap: 10px 16px; font-size: 12px; }\n.dsh-tavern-skill-empty { padding: 16px; font-size: 12px; opacity: .55; }\n.dsh-tavern-skill-row[draggable=\"true\"] { cursor: grab; }\n.dsh-tavern-skill-row.is-dragging { opacity: .4; }\n.dsh-tavern-skill-group.is-drop-target { border-color: var(--dsh-tavern-accent); box-shadow: inset 0 0 0 1px var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-skill-grip { opacity: .4; font-size: 18px; user-select: none; }\n.dsh-tavern-skill-content { overflow: auto; min-height: 0; }\n.dsh-tavern-skill-content h3 { margin: 0 0 12px; font-size: 13px; }\n.dsh-tavern-skill-content pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; }\n\n.dsh-tavern-background-config { border: 1px solid var(--border, #ddd); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }\n.dsh-tavern-background-config > summary { padding: 14px 16px; cursor: pointer; }\n.dsh-tavern-background-config > summary > span { display: block; margin-top: 6px; overflow-wrap: anywhere; }\n.dsh-tavern-background-config-body { display: grid; gap: 16px; padding: 0 16px 16px; }\n.dsh-tavern-background-config-body > p { margin: 0; }\n.dsh-tavern-background-config-body > label { display: grid; gap: 8px; min-width: 0; }\n.dsh-tavern-background-config-body select { width: 100%; min-width: 0; }\n.dsh-tavern-background-config-body > .dsh-tavern-background-task { display: flex; align-items: center; justify-content: space-between; gap: 16px; }\n.dsh-tavern-background-task .dsh-tavern-settings-desc { display: block; margin-top: 5px; }\n.dsh-tavern-background-task input[role=\"switch\"] { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 36px; width: 36px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #64748b; cursor: pointer; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-background-task input[role=\"switch\"]::after { content: \"\"; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-background-task input[role=\"switch\"]:checked { background: #16766b; }\n.dsh-tavern-background-task input[role=\"switch\"]:checked::after { transform: translateX(16px); }\n.dsh-tavern-background-task input[role=\"switch\"]:focus-visible { outline: 2px solid #16766b; outline-offset: 3px; }\n.dsh-tavern-background-task input[role=\"switch\"]:disabled { opacity: .6; cursor: not-allowed; }\n.dsh-tavern-conversation-basics { display: grid; gap: 16px; margin-bottom: 24px; }\n.dsh-tavern-conversation-basics h3 { margin: 0; }\n.dsh-tavern-conversation-basics label { display: grid; gap: 8px; }\n.dsh-tavern-conversation-basics select { width: 100%; min-width: 0; }\n\n.dsh-tavern-skill-description { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }\n.dsh-tavern-skill-description:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 3px; }\n.dsh-tavern-skill-description:disabled { cursor: wait; }\n\n/* Conversation settings share one spacing and control system. */\n.dsh-local-settings { container-type: inline-size; }\n.dsh-local-settings .dsh-tavern-status-body { padding: 16px; }\n.dsh-local-intro { margin: 0 0 18px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.6; }\n.dsh-local-section { display: grid; gap: 16px; padding: 18px; margin-bottom: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major); }\n.dsh-local-section h3 { margin: 0; font-size: 15px; font-weight: 700; }\n.dsh-local-field, .dsh-local-section > label { display: grid; gap: 6px; min-width: 0; }\n.dsh-local-field label { display: grid; gap: 8px; }\n.dsh-local-settings select, .dsh-local-settings input:not([type=\"checkbox\"]) { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; padding: 6px 10px; font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-local-settings label, .dsh-local-label { font-size: 13px; color: var(--dsw-alias-label-primary); }\n.dsh-local-settings p, .dsh-local-settings .dsh-tavern-settings-desc { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }\n.dsh-local-settings .dsh-local-warning { color: #ad6726; font-size: 11px; }\n.dsh-local-settings .dsh-local-intro { margin-bottom: 18px; }\n.dsh-local-settings .dsh-tavern-background-task { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-local-profile .dsh-tavern-profile-game { padding: 0; margin: 0; border: 0; background: transparent; }\n.dsh-local-profile details { margin-top: 8px; font-size: 12px; }\n.dsh-local-profile summary { cursor: pointer; color: var(--dsw-alias-label-secondary); }\n.dsh-local-profile .dsh-tavern-user-profile-text { max-height: 240px; overflow: auto; padding: 10px; margin-top: 8px; background: var(--dsw-specific-sidebar-fill); border-radius: 8px; }\n.dsh-local-feedback { display: block; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n@container (min-width: 560px) {\n  .dsh-local-section > label:not(.dsh-tavern-background-task), .dsh-local-field label { grid-template-columns: minmax(100px, 1fr) minmax(220px, 1.6fr); align-items: center; }\n  .dsh-local-profile { grid-template-columns: minmax(100px, 1fr) minmax(220px, 1.6fr); align-items: start; }\n}\n\n/* Skill document reader and editor */\n.dsh-skill-toolbar { flex-wrap: wrap; gap: 10px; }\n.dsh-skill-toolbar .dsh-tavern-status-title { min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-skill-content { padding: clamp(16px, 3vw, 32px); }\n.dsh-skill-document { max-width: 880px; margin: 0 auto; line-height: 1.8; overflow-wrap: anywhere; }\n.dsh-skill-document table { display: block; max-width: 100%; overflow-x: auto; }\n.dsh-skill-document pre { max-width: 100%; overflow-x: auto; }\n.dsh-skill-reference { max-width: 880px; margin: 24px auto 0; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 12px; }\n.dsh-skill-reference > summary { padding: 14px 18px; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }\n.dsh-skill-reference > .dsh-skill-document { padding: 8px 20px 20px; }\n.dsh-skill-editor { box-sizing: border-box; width: 100%; min-height: 55vh; padding: 20px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 12px; background: var(--background, Canvas); color: inherit; font: 14px/1.7 ui-monospace, monospace; resize: vertical; tab-size: 2; }\n.dsh-skill-editor:focus-visible { outline: 2px solid #a76c36; outline-offset: 2px; }\n\n.dsh-tavern-card-organization { display: flex; gap: 10px; align-items: center; margin: 12px 0; }\n.dsh-tavern-library > .dsh-tavern-card-organization { margin: 6px 12px 8px; }\n.dsh-tavern-library > .dsh-tavern-card-organization > .dsh-tavern-library-search,\n.dsh-tavern-library > .dsh-tavern-card-organization > .dsh-tavern-group-picker > summary { box-sizing: border-box; height: 32px; min-height: 32px; padding: 0 10px; font-size: 13px; line-height: 1.4; }\n.dsh-tavern-card-organization > .dsh-tavern-library-search { flex: 1; width: 0; min-width: 80px; margin: 0; }\n.dsh-tavern-group-picker { position: relative; flex: 0 1 160px; min-width: 105px; }\n.dsh-tavern-group-picker > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 0 12px; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 9px; background: var(--dsw-specific-input-major, #ffffff08); cursor: pointer; list-style: none; transition: border-color .15s, background .15s; }\n.dsh-tavern-group-picker > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-group-picker > summary > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-group-picker[open] > summary { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-group-picker > summary > span:last-child { opacity: .6; transition: transform .15s; }\n.dsh-tavern-group-picker[open] > summary > span:last-child { transform: rotate(180deg); }\n.dsh-tavern-group-picker > summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); outline-offset: 2px; }\n.dsh-tavern-group-menu { position: absolute; top: calc(100% + 6px); left: 0; width: min(220px, 75vw); z-index: 50; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 12px; padding: 5px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 8px 24px #0003; transform-origin: top left; }\n.dsh-tavern-group-menu:popover-open { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n@keyframes dsh-tavern-menu-in { from { opacity: 0; transform: scale(0.97); } }\n.dsh-tavern-group-options { max-height: 280px; overflow-y: auto; }\n.dsh-tavern-group-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 7px 11px; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 13px; line-height: 1.4; cursor: pointer; border-radius: 7px; overflow-wrap: anywhere; transition: background .12s, color .12s; }\n.dsh-tavern-group-menu button:hover, .dsh-tavern-group-menu button:focus-visible { background: var(--dsw-specific-input-major, #ffffff12); }\n.dsh-tavern-group-menu button[aria-pressed=\"true\"] { font-weight: 500; color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 13%, transparent); }\n.dsh-tavern-group-options button > span { width: 16px; flex-shrink: 0; order: 1; margin-left: auto; text-align: center; }\n.dsh-tavern-group-menu-footer { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); margin: 5px 5px 0; padding-top: 5px; }\n.dsh-tavern-group-menu-footer button { font-size: 12px; color: var(--dsw-alias-label-secondary); min-height: 32px; padding-left: 6px; }\n@media (prefers-reduced-motion: reduce) {\n  .dsh-tavern-btn { transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1); }\n  .dsh-tavern-side-row-menu,\n  .dsh-tavern-more-menu:not([hidden]),\n  .dsh-tavern-group-menu:popover-open { animation: none; }\n  .dsh-tavern-group-picker > summary > span:last-child,\n  .dsh-tavern-prompt-state.is-toggle::after,\n  .dsh-tavern-background-task input[role=\"switch\"]::after { transition: none; }\n  .dsh-tavern-settings-track,\n  .dsh-tavern-prompt-state.is-toggle::before,\n  .dsh-tavern-background-task input[role=\"switch\"] { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n  .dsh-tavern-settings-track::after { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n}\n.dsh-tavern-group-manager { width: min(440px, calc(100vw - 32px)); max-height: 80vh; border: 1px solid var(--dsw-alias-border-l2, #454750); border-radius: 12px; background: var(--dsw-specific-sidebar-fill, #202124); color: var(--dsw-alias-label-primary, #eee); padding: 0; }\n.dsh-tavern-group-manager::backdrop { background: #0008; }\n.dsh-tavern-group-manager-content { padding: 20px; }\n.dsh-tavern-group-manager-head, .dsh-tavern-group-manager-row, .dsh-tavern-group-manager-footer { display: flex; align-items: center; gap: 8px; }\n.dsh-tavern-group-manager-head { justify-content: space-between; margin-bottom: 12px; }\n.dsh-tavern-group-manager-head h3 { margin: 0; font-size: 16px; }\n.dsh-tavern-group-manager-row { padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l2, #454750); }\n.dsh-tavern-group-manager-row > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-group-manager-footer { margin-top: 18px; flex-wrap: wrap; }\n.dsh-tavern-card-detail-organization { flex: none; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 16px; }\n.dsh-tavern-card-detail-organization label { flex: 1; min-width: 110px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; font-size: 11px; line-height: 1.4; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-card-detail-organization select { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major, #ffffff08); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; }\n.dsh-tavern-card-detail-organization > button { height: 34px; padding: 0 12px; white-space: nowrap; border-radius: 7px; }\n.dsh-tavern-card-detail > .dsh-tavern-status-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; }\n.dsh-tavern-card-detail > .dsh-tavern-status-head > button { margin-bottom: 6px; }\n.dsh-tavern-card-detail .dsh-tavern-library-head-actions { margin-top: 6px; gap: 8px; }\n.dsh-tavern-card-detail > .dsh-tavern-script-hero { margin: 0 16px; }\n.dsh-tavern-card-detail > .dsh-tavern-card-fields { padding: 16px; }\n.dsh-tavern-card-detail-organization button[aria-pressed=\"true\"] { color: var(--dsh-tavern-accent); }\n.dsh-tavern-card-batch-panel { padding: 10px 0; }\n@media (max-width: 600px) {\n  .dsh-tavern-group-picker { flex-basis: 140px; }\n}\n\n.dsh-tavern-card-row-menu { flex: none; }\n.dsh-tavern-card-row-menu > summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 5px; list-style: none; cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 18px; }\n.dsh-tavern-card-row-menu > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-card-row-menu > summary:hover, .dsh-tavern-card-row-menu[open] > summary { background: var(--dsw-specific-input-major, #ffffff12); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-card-row-popup { position: fixed; inset: auto; margin: 0; z-index: 1000; width: 168px; max-width: calc(100vw - 24px); box-sizing: border-box; overflow-y: auto; padding: 4px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 7px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 4px 14px #0003; }\n.dsh-tavern-card-row-menu-title { padding: 5px 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-row-popup button { display: flex; gap: 8px; align-items: center; width: 100%; min-height: 30px; border: 0; border-radius: 4px; padding: 5px 8px; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; cursor: pointer; }\n.dsh-tavern-card-row-popup button > span { width: 12px; flex-shrink: 0; order: 1; margin-left: auto; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-row-popup button:hover, .dsh-tavern-card-row-popup button:focus-visible { background: var(--dsw-specific-input-major, #ffffff12); }\n\n.dsh-tavern-group-add { display: block; margin: 12px auto; padding: 7px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }\n.dsh-tavern-group-add:hover { background: var(--dsw-specific-input-major, #ffffff12); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-group-add-list { max-height: min(48vh, 360px); overflow-y: auto; margin-top: 12px; }\n.dsh-tavern-group-add-list label { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; }\n.dsh-tavern-group-add-list label:hover { background: var(--dsw-specific-input-major, #ffffff12); }\n.dsh-tavern-group-add-list span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }\n.dsh-tavern-group-add-list small { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n\n.dsh-tavern-character-design-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }\n.dsh-tavern-character-design-head .dsh-tavern-status-label { margin: 0; }\n\n.dsh-tavern-group-menu[popover] { position: fixed; inset: auto; margin: 0; overflow-y: auto; color: var(--dsw-alias-label-primary); }\n\n/* Script navigation stays compact inside the resizable status sidebar. */\n.dsh-script-nav { min-width: 0; font-size: 13px; line-height: 1.5; }\n.dsh-script-nav .dsh-tavern-status-label { font-size: 12px; letter-spacing: .03em; }\n.dsh-script-nav p { margin: 8px 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }\n.dsh-script-nav .dsh-script-nav-hint { margin: 0 0 12px; }\n.dsh-script-nav-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }\n.dsh-script-nav input { box-sizing: border-box; flex: 1 1 72px; width: 80px; min-width: 64px; max-width: 160px; height: 32px; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-fill, transparent); color: var(--dsw-alias-label-primary); font: inherit; font-variant-numeric: tabular-nums; }\n.dsh-script-nav button { box-sizing: border-box; appearance: none; min-height: 32px; padding: 5px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 1.4; white-space: nowrap; cursor: pointer; transition: background .15s, border-color .15s; }\n.dsh-script-nav button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsh-tavern-accent); }\n.dsh-script-nav button:disabled { opacity: .4; cursor: default; }\n.dsh-script-nav button:focus-visible, .dsh-script-nav input:focus-visible, .dsh-script-nav summary:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-script-nav-toolbar button[type=\"submit\"] { color: var(--dsh-tavern-accent); border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-script-nav .dsh-script-nav-range { margin: 12px 0 8px; font-size: 11px; font-variant-numeric: tabular-nums; }\n.dsh-script-nav .dsh-script-nav-item { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: transparent; }\n.dsh-script-nav .dsh-script-nav-item[aria-current=\"step\"] { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 7%, transparent); box-shadow: inset 3px 0 var(--dsh-tavern-accent); }\n.dsh-script-nav summary { cursor: pointer; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); }\n.dsh-script-nav summary::marker { color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-script-nav .dsh-tavern-script-chunk-text { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }\n.dsh-script-nav .dsh-script-nav-choose { display: block; margin: 8px 0 0 auto; min-height: 26px; padding: 3px 8px; color: var(--dsh-tavern-accent); border-color: transparent; }\n.dsh-script-nav-pages { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-script-nav [role=\"alert\"] { color: #c45f5f; }\n\n.dsh-script-nav .dsh-script-nav-notice { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); color: inherit; font-weight: 600; }\n.dsh-script-nav .dsh-script-nav-item[aria-current=\"step\"] .dsh-script-nav-choose { opacity: 1; font-weight: 600; border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n\n.dsh-script-nav-position { display: flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }\n\n.dsh-tavern-preset-regex-head { grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px; padding: 5px 8px; }\n.dsh-tavern-preset-regex-head > .dsh-tavern-prompt-role { font-size: 9px; line-height: 1.4; color: var(--dsh-tavern-accent); }\n.dsh-tavern-preset-regex-head .dsh-tavern-prompt-title span { margin-top: 1px; }\n.dsh-tavern-prompt-row:has(> .dsh-tavern-preset-regex-head) { margin-bottom: 4px; }\n\n/* Full-width request inspection has no chat-column resize target. */\n[data-phase=\"active\"]:has(.dsh-tavern-full-context) [data-width-handle] {\n  display: none;\n}\n\n.dsh-tavern-full-context { box-sizing: border-box; width: 100%; min-width: 0; padding: 24px clamp(16px, 3vw, 40px) 32px; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }\n.dsh-context-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }\n.dsh-context-header h3 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 600; }\n.dsh-context-header p { margin: 4px 0 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context button { flex: none; padding: 6px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }\n.dsh-tavern-full-context button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-full-context button:disabled { opacity: .5; cursor: default; }\n.dsh-context-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 18px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-context-meta time { color: var(--dsw-alias-label-tertiary); }\n.dsh-context-badge { padding: 2px 8px; border-radius: 6px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-context-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }\n.dsh-context-toolbar input { flex: 1 1 220px; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; }\n.dsh-context-toolbar input::placeholder { color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context :is(button,input,summary):focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }\n.dsh-context-list { border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }\n.dsh-context-list details + details { border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-context-list summary { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; border-radius: 8px; }\n.dsh-context-list summary::-webkit-details-marker { display: none; }\n.dsh-context-list summary:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-context-chevron { flex: none; width: 12px; color: var(--dsw-alias-label-tertiary); font-size: 20px; line-height: 20px; transition: transform .15s; }\n.dsh-context-list details[open] > summary .dsh-context-chevron { transform: rotate(90deg); }\n.dsh-context-section-title { min-width: 0; flex: 1; font-weight: 500; }\n.dsh-context-count { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }\n.dsh-context-list pre { margin: 0; padding: 16px 20px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: 12px/1.8 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-context-footnote { margin: 14px 2px 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }\n.dsh-context-empty { margin: 0; padding: 28px 16px; text-align: center; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context [role=alert] { color: var(--dsw-alias-state-error-primary); }\n@media (max-width: 600px) { .dsh-context-toolbar input { flex-basis: 100%; } .dsh-context-list summary { padding: 10px; gap: 6px; } .dsh-context-list pre { padding: 12px; } }\n\n.dsh-context-list .dsh-context-source { margin: 8px 14px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }\n.dsh-context-list .dsh-context-source > summary { font-size: 12px; color: var(--dsw-alias-label-tertiary); padding: 8px 10px; }\n\n.dsh-context-part-label { padding: 8px 20px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }\n\n/* Shared by global defaults and conversation writing-skill controls. */\n.dsh-tavern-writing-skill,\n.dsh-local-settings .dsh-tavern-writing-skill { display: block; padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-writing-skill > .dsh-tavern-writing-skill-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0; cursor: pointer; }\n.dsh-tavern-writing-skill-heading > span { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }\n.dsh-tavern-writing-skill > .dsh-tavern-settings-desc { margin: 6px 0 0; }\n.dsh-ejs-editor { box-sizing:border-box; width:min(1100px,calc(100vw - 32px)); height:min(800px,90vh); padding:0; border:1px solid var(--dsw-alias-border-l2); border-radius:14px; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary); box-shadow:0 18px 54px #0005; }\n.dsh-ejs-editor[open] { display:flex; flex-direction:column; }\n.dsh-ejs-editor::backdrop { background:#0007; }\n.dsh-ejs-editor-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; }\n.dsh-ejs-editor-head { border-bottom:1px solid var(--dsw-alias-border-l2); }\n.dsh-ejs-editor h2 { margin:0; font-size:17px; }\n.dsh-ejs-editor p { margin:5px 0 0; color:var(--dsw-alias-label-secondary); font-size:12px; }\n\n.dsh-template-panel-body { flex:1; min-height:0; overflow:auto; padding:20px; }\n.dsh-template-section + .dsh-template-section { margin-top:24px; padding-top:20px; border-top:1px solid var(--dsw-alias-border-l2); }\n.dsh-template-section h3 { margin:0 0 8px; font-size:15px; }\n.dsh-template-panel .dsh-template-help { margin:0 0 16px; line-height:1.6; }\n.dsh-template-settings-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px 24px; margin-bottom:16px; }\n.dsh-template-setting { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; min-height:32px; }\n.dsh-template-setting input[type=checkbox] { accent-color:var(--dsh-tavern-accent-active); }\n.dsh-template-panel input[type=number] { width:80px; }\n.dsh-template-panel textarea,.dsh-template-panel select,.dsh-template-panel input[type=number] { box-sizing:border-box; padding:8px; border:1px solid var(--dsw-alias-border-l2); border-radius:8px; background:var(--dsw-specific-input-major); color:inherit; font:inherit; }\n.dsh-template-panel textarea { display:block; width:100%; min-height:120px; margin:12px 0; resize:vertical; }\n.dsh-template-panel summary { cursor:pointer; margin:12px 0; font-size:13px; }\n.dsh-template-actions { display:flex; gap:8px; }\n.dsh-template-panel .dsh-template-feedback { white-space:pre-wrap; overflow-wrap:anywhere; margin-top:10px; }\n\n/* Keep the existing browsing context when presenting a card at screen size. */\n.dsh-tavern-message-frame-slot > iframe.dsh-tavern-message-frame:fullscreen { width: 100vw !important; height: 100vh !important; max-height: none !important; background: var(--dsw-alias-bg-base, Canvas); }\n\n.dsh-tavern-immersive-header { display: none !important; }\n.dsh-tavern-restore-header { align-self: center; flex: none; border: 1px solid var(--dsw-alias-border-l2); border-top: 0; border-radius: 0 0 9px 9px; padding: 2px 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; cursor: pointer; }\n.dsh-tavern-restore-header[hidden] { display: none !important; }\n.dsh-tavern-restore-header:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }\n\n/* Worldbook entries put the editable text ahead of occasional configuration. */\n.dsh-tavern-worldbook-entry > .dsh-tavern-worldbook-entry-head { font-size: 14px; font-weight: 700; line-height: 1.6; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }\n.dsh-tavern-worldbook-entry-actions { gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }\n.dsh-tavern-worldbook-entry-actions > label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-worldbook-entry-actions input { margin: 0; }\n.dsh-tavern-worldbook-content > label { font-size: 12px; color: var(--dsw-alias-label-primary); margin-bottom: 7px; }\n.dsh-tavern-worldbook-content textarea.large { min-height: 280px; max-height: 70vh; padding: 12px; font-size: 13px; line-height: 1.75; background: var(--dsw-specific-input-major); }\n.dsh-tavern-worldbook-entry-settings { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 10px; }\n.dsh-tavern-worldbook-entry-settings > summary { font-size: 11px; padding: 2px 0; }\n.dsh-tavern-worldbook-entry-settings[open] > summary { margin-bottom: 10px; }\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-card-field input,\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-grid input,\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-grid select { font-size: 11px; padding: 5px 7px; }\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-checks { font-size: 11px; }\n\n/* DSH 0.1.5-rc.2: hide Open in App and native log-download menu in Tavern's header. */\nheader .CAgGvG_split,\nheader .nL4_yW_moreButton { display: none !important; }\n\n/* —— 人物卡库 / 详情：Claude 暖陶土·编辑风（scoped 样例，不污染其它侧栏） —— */\n.dsh-tavern-card-library,\n.dsh-tavern-card-detail {\n  --dsh-card-action: var(--dsh-tavern-accent);\n  --dsh-card-action-active: var(--dsh-tavern-accent-active);\n  --dsh-card-action-soft: var(--dsh-tavern-accent-soft);\n  --dsh-card-action-border: var(--dsh-tavern-accent-border);\n  /* Follow theme tokens (light ink / dark on-dark), not a fixed light-mode mix. */\n  --dsh-card-ink: var(--dsh-tavern-accent-ink);\n  --dsh-card-muted: var(--dsh-tavern-accent-muted);\n  --dsh-card-hairline: color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n  --dsh-card-cream: color-mix(in srgb, var(--dsh-tavern-accent-cream) 22%, var(--dsw-specific-sidebar-fill));\n  --dsh-card-surface: color-mix(in srgb, var(--dsh-tavern-accent-surface) 28%, var(--dsw-specific-input-major));\n  --dsh-card-radius-sm: var(--dsh-tavern-radius-sm);\n  --dsh-card-radius-md: var(--dsh-tavern-radius-md);\n  --dsh-card-radius-lg: var(--dsh-tavern-radius-lg);\n  --dsh-card-radius-full: 9999px;\n  --dsh-card-display: var(--dsh-tavern-font-display);\n  --dsh-card-sans: var(--dsh-tavern-font-sans);\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsh-card-cream);\n  font-family: var(--dsh-card-sans);\n  -webkit-font-smoothing: antialiased;\n}\n[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger,\n[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger {\n  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 18%, transparent);\n  color: var(--dsh-tavern-accent-error);\n}\n[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger:hover,\n[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {\n  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 28%, transparent);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-status-head,\n.dsh-tavern-card-detail > .dsh-tavern-status-head {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 8px;\n  padding: 20px 16px 14px;\n  border-bottom: 1px solid var(--dsh-card-hairline);\n}\n.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-status-title,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title {\n  font-family: var(--dsh-card-display);\n  font-size: 22px;\n  font-weight: 400;\n  letter-spacing: -0.3px;\n  line-height: 1.2;\n  color: var(--dsh-card-ink);\n}\n.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-question-sub,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-question-sub,\n.dsh-tavern-card-library > .dsh-tavern-card-import-hint {\n  margin: 0;\n  padding: 0;\n  font-size: 13px;\n  font-weight: 400;\n  line-height: 1.38;\n  letter-spacing: -0.08px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-library > .dsh-tavern-card-import-hint {\n  padding: 0 16px 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-library-head-actions,\n.dsh-tavern-card-detail .dsh-tavern-library-head-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-btn,\n.dsh-tavern-card-detail .dsh-tavern-btn {\n  min-height: 32px;\n  padding: 0 14px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action-active);\n  font-size: 14px;\n  font-weight: 500;\n  letter-spacing: 0;\n  line-height: 1;\n}\n.dsh-tavern-card-library .dsh-tavern-btn:hover,\n.dsh-tavern-card-detail .dsh-tavern-btn:hover {\n  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);\n}\n.dsh-tavern-card-library .dsh-tavern-btn.danger,\n.dsh-tavern-card-detail .dsh-tavern-btn.danger {\n  background: color-mix(in srgb, #c64545 14%, transparent);\n  color: #c64545;\n  border-color: transparent;\n}\n.dsh-tavern-card-library .dsh-tavern-btn.danger:hover,\n.dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {\n  background: color-mix(in srgb, #c64545 22%, transparent);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-card-organization {\n  margin: 10px 16px 6px;\n  gap: 10px;\n}\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search,\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-group-picker > summary {\n  height: 36px;\n  min-height: 36px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsw-specific-input-major);\n  font-size: 15px;\n  letter-spacing: -0.24px;\n  line-height: 1.2;\n}\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search:focus,\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search:focus-visible {\n  outline: none;\n  border-color: var(--dsh-card-action);\n  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-group-picker[open] > summary {\n  border-color: var(--dsh-card-action-border);\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-group-picker > summary:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-library .dsh-tavern-group-menu button[aria-pressed=\"true\"] {\n  color: var(--dsh-card-action);\n  background: var(--dsh-card-action-soft);\n  font-weight: 600;\n}\n\n.dsh-tavern-card-library > .dsh-tavern-card-batch {\n  margin: 0 16px;\n  padding: 8px 0 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-count {\n  font-size: 13px;\n  font-weight: 500;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-notice {\n  border-radius: var(--dsh-card-radius-sm);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-checkbox {\n  width: 20px;\n  height: 20px;\n  margin: 0 8px 0 4px;\n  accent-color: var(--dsh-card-action);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-resource-body {\n  padding: 8px 10px 24px;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card-row {\n  gap: 8px;\n  margin: 2px 0;\n  padding: 2px 4px;\n  border-radius: var(--dsh-card-radius-md);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-height: 64px;\n  padding: 10px 12px;\n  border: 1px solid transparent;\n  border-radius: var(--dsh-card-radius-md);\n  background: transparent;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card:active:not(:disabled) {\n  transform: scale(0.985);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card.selected {\n  border-color: var(--dsh-card-action-border);\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-card-thumb {\n  width: 44px;\n  height: 44px;\n  border-radius: var(--dsh-card-radius-md);\n  border: 1px solid var(--dsw-alias-border-l2);\n  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);\n}\n.dsh-tavern-card-library .dsh-tavern-card-list-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card b {\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  line-height: 1.27;\n  color: var(--dsw-alias-label-primary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card span {\n  margin-top: 0;\n  font-size: 13px;\n  font-weight: 400;\n  letter-spacing: -0.08px;\n  line-height: 1.35;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.dsh-tavern-card-library .dsh-tavern-resource-at {\n  min-height: 28px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: transparent;\n  color: var(--dsh-card-action);\n  font-size: 13px;\n  font-weight: 500;\n}\n.dsh-tavern-card-library .dsh-tavern-resource-at:hover {\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention {\n  flex: none;\n  display: grid;\n  place-items: center;\n  width: 32px;\n  height: 32px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-radius: var(--dsh-card-radius-full, 9999px);\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  line-height: 1;\n  cursor: pointer;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:hover {\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:active {\n  transform: scale(0.94);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-row-menu > summary {\n  width: 32px;\n  height: 32px;\n  border-radius: var(--dsh-card-radius-md);\n  font-size: 18px;\n}\n.dsh-tavern-card-library .dsh-tavern-empty {\n  padding: 40px 24px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 15px;\n  line-height: 1.47;\n  letter-spacing: -0.24px;\n}\n\n/* 详情：整页滚动，顶部标题/操作随滚动收起（不再钉死在上） */\n.dsh-tavern-card-detail {\n  overflow-x: hidden;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\n.dsh-tavern-card-detail > .dsh-tavern-status-head,\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization,\n.dsh-tavern-card-detail > .dsh-tavern-script-hero {\n  flex: 0 0 auto;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-fields {\n  flex: 0 0 auto;\n  min-height: auto;\n  overflow: visible;\n}\n\n.dsh-tavern-card-detail > .dsh-tavern-status-head > .dsh-tavern-btn {\n  align-self: flex-start;\n  margin: 0 0 4px;\n}\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-role {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--dsh-card-display);\n  font-size: 28px;\n  font-weight: 400;\n  letter-spacing: -0.3px;\n  line-height: 1.2;\n  color: var(--dsh-card-ink);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization {\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization label {\n  font-size: 13px;\n  font-weight: 400;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization select {\n  height: 36px;\n  border-radius: var(--dsh-card-radius-md);\n  font-size: 15px;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization > button {\n  height: 36px;\n  border-radius: var(--dsh-card-radius-md);\n}\n.dsh-tavern-card-detail-organization button[aria-pressed=\"true\"] {\n  color: var(--dsh-card-action);\n}\n.dsh-tavern-card-detail > .dsh-tavern-script-hero {\n  margin: 12px 16px 0;\n  padding: 14px 16px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-lg);\n  background: var(--dsw-specific-input-major);\n}\n.dsh-tavern-card-detail .dsh-tavern-script-hero-title {\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n}\n.dsh-tavern-card-detail .dsh-tavern-script-hero-help {\n  font-size: 13px;\n  line-height: 1.43;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-fields {\n  padding: 16px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced {\n  margin: 0 0 14px;\n  padding: 0;\n  border: 1px solid var(--dsh-card-hairline);\n  border-radius: var(--dsh-card-radius-lg);\n  background: var(--dsh-card-surface);\n  overflow: hidden;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary {\n  padding: 14px 16px;\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  list-style: none;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-card-detail .dsh-tavern-card-advanced[open] > summary {\n  border-bottom: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > :not(summary) {\n  padding: 12px 16px 16px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-specific-input-major);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary {\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > .dsh-tavern-worldbook {\n  margin: 0;\n  padding: 12px 16px 16px;\n  border: 0;\n  border-top: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field {\n  margin-bottom: 14px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field label {\n  margin-bottom: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  font-weight: 400;\n  letter-spacing: -0.08px;\n  line-height: 1.35;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field input,\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea {\n  min-height: 40px;\n  padding: 12px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsw-specific-sidebar-fill);\n  font-size: 16px;\n  letter-spacing: -0.24px;\n  line-height: 1.55;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field input:focus,\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea:focus {\n  outline: none;\n  border-color: var(--dsh-card-action);\n  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea {\n  field-sizing: content;\n  min-height: 120px;\n  max-height: min(68vh, 520px);\n  overflow-y: auto;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large {\n  min-height: 240px;\n  max-height: min(72vh, 640px);\n  line-height: 1.6;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.is-empty,\n.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea {\n  min-height: 64px;\n  max-height: 96px;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large.is-empty,\n.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea.large {\n  min-height: 88px;\n  max-height: 120px;\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-bound,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-new {\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action);\n  font-size: 13px;\n  font-weight: 500;\n  padding: 6px 12px;\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add:hover {\n  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-note,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-title,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head {\n  font-size: 13px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head b {\n  color: var(--dsh-card-action);\n  font-size: 13px;\n}\n.dsh-tavern-card-detail .dsh-card-primary {\n  min-height: 36px;\n  padding: 0 18px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action);\n  color: #fff;\n  font-size: 14px;\n  font-weight: 500;\n  letter-spacing: 0;\n}\n.dsh-tavern-card-detail .dsh-card-primary:hover {\n  filter: brightness(1.06);\n}\n.dsh-tavern-card-detail .dsh-card-primary:active:not(:disabled) {\n  transform: scale(0.97);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-save {\n  padding: 14px 0 4px;\n}\n");
+		if (typeof document !== "undefined") installTavernStylesheet(document, "/* Tavern components share the active DSH theme, including accent overrides. */\n:root, body {\n  --dsh-tavern-accent: var(--dsw-alias-brand-primary);\n  --dsh-tavern-accent-active: var(--dsw-alias-brand-primary);\n  --dsh-tavern-accent-soft: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);\n  --dsh-tavern-accent-border: color-mix(in srgb, var(--dsw-alias-brand-primary) 42%, transparent);\n  --dsh-tavern-accent-ink: var(--dsw-alias-label-primary);\n  --dsh-tavern-accent-muted: var(--dsw-alias-label-secondary);\n  --dsh-tavern-accent-hairline: var(--dsw-alias-border-l2);\n  --dsh-tavern-accent-cream: var(--dsw-alias-bg-base);\n  --dsh-tavern-accent-surface: var(--dsw-alias-bg-layer-1);\n  --dsh-tavern-accent-error: var(--dsw-static-red-500, #c64545);\n  --dsh-tavern-radius-sm: 6px;\n  --dsh-tavern-radius-md: 8px;\n  --dsh-tavern-radius-lg: 12px;\n  --dsh-tavern-font-display: \"Iowan Old Style\", \"Palatino Linotype\", Palatino, \"Book Antiqua\", Georgia, \"Times New Roman\", serif;\n  --dsh-tavern-font-sans: Inter, \"Segoe UI\", system-ui, -apple-system, sans-serif;\n}\nbody.dsh-tavern-shell-active,\n.dsh-tavern-library,\n.dsh-tavern-status,\n.dsh-tavern-resources,\n.dsh-tavern-card-picker,\n.dsh-tavern-mobile-import-panel,\n.dsh-tavern-error-center,\n.dsh-tavern-group-manager,\n.dsh-tavern-skills {\n  font-family: var(--dsh-tavern-font-sans);\n  -webkit-font-smoothing: antialiased;\n}\nbody.dsh-tavern-shell-active .dsh-tavern-landing::before {\n  font-family: var(--dsh-tavern-font-display) !important;\n  font-weight: 400 !important;\n  letter-spacing: -0.5px;\n}\n.dsh-tavern-status-title,\n.dsh-tavern-side-brand,\n.dsh-tavern-mobile-import-title,\n.dsh-tavern-group-manager-head h3 {\n  font-family: var(--dsh-tavern-font-display);\n  font-weight: 400;\n  letter-spacing: -0.2px;\n}\n\n.dsh-tavern-spacer { flex: 1 1 auto; }\n.dsh-tavern-btn {\n  background: var(--dsh-tavern-accent-soft);\n  color: var(--dsh-tavern-accent-active);\n  border: 1px solid transparent;\n  border-radius: var(--dsh-tavern-radius-md);\n  padding: 6px 12px;\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 500;\n  letter-spacing: 0;\n  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.dsh-tavern-btn:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 24%, transparent); }\n.dsh-tavern-btn:active:not(:disabled) { transform: scale(0.97); }\n.dsh-tavern-btn:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-btn.danger { border-color: transparent; color: var(--dsh-tavern-accent-error); background: color-mix(in srgb, var(--dsh-tavern-accent-error) 12%, transparent); }\n.dsh-tavern-btn.danger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-error) 20%, transparent); }\n.dsh-tavern-mobile-import { position: fixed; inset: 0; z-index: 2300; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.52); }\n.dsh-tavern-mobile-import-shell { display: contents; }\n.dsh-tavern-mobile-import-panel { box-sizing: border-box; width: min(520px, 100%); max-height: min(78vh, 680px); display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0,0,0,.35); }\n.dsh-tavern-mobile-import-title { font-size: 15px; font-weight: 750; }\n.dsh-tavern-mobile-import-list { display: flex; flex-direction: column; gap: 7px; overflow: auto; }\n.dsh-tavern-mobile-import-file { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-mobile-import-file span { color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-empty { margin: auto; text-align: center; color: var(--dsw-alias-label-secondary); padding: 24px; line-height: 1.8; white-space: pre-wrap; }\n.dsh-tavern-dock-error { color: #ef8f8f; padding: 0 10px 7px; font-size: 12px; }\n.dsh-tavern-picker-error { position: sticky; top: 0; z-index: 2; margin: 0 0 10px; padding: 10px 12px; border: 1px solid rgba(196,95,95,.45); border-radius: 10px; background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 88%, #c45f5f 12%); color: #c45f5f; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-error-center { position: fixed; z-index: 2200; top: 16px; right: 16px; width: min(480px, calc(100vw - 32px)); max-height: min(70vh, 640px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(196,95,95,.5); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 18px 54px rgba(0,0,0,.32); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-error-center-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(196,95,95,.25); font-size: 13px; font-weight: 700; }\n.dsh-tavern-error-center-head span { flex: 1; }\n.dsh-tavern-error-list { overflow: auto; padding: 8px; }\n.dsh-tavern-error-item { padding: 10px; border: 1px solid rgba(196,95,95,.25); border-radius: 10px; background: rgba(196,95,95,.08); }\n.dsh-tavern-error-item + .dsh-tavern-error-item { margin-top: 8px; }\n.dsh-tavern-error-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #c45f5f; font-size: 12px; font-weight: 700; }\n.dsh-tavern-error-meta time { margin-left: auto; color: var(--dsw-alias-label-secondary); font-weight: 400; }\n.dsh-tavern-error-message { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55; }\n.dsh-tavern-assistant { display: flex; flex-direction: column; gap: 16px; color: var(--dsw-alias-label-primary); font-size: 16px; line-height: 28px; }\n.dsh-tavern-illustration { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }\n.dsh-tavern-illustration > a { display: block; max-width: 100%; }\n.dsh-tavern-illustration img { display: block; width: auto; height: auto; max-width: min(100%, 320px); max-height: min(240px, 35svh); object-fit: contain; border-radius: 12px; }\n.dsh-tavern-image-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }\n.dsh-tavern-image-adjust { box-sizing: border-box; width: min(100%, 560px); padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }\n.dsh-tavern-image-adjust textarea { box-sizing: border-box; display: block; width: 100%; min-height: 80px; margin: 8px 0; }\n.dsh-tavern-image-reference { overflow-wrap: anywhere; }\n.dsh-tavern-image-reference select { box-sizing: border-box; display: block; width: 100%; margin: 8px 0; }\n.dsh-tavern-image-settings { display: flex; flex-direction: column; gap: 12px; padding: 20px; }\n.dsh-tavern-image-settings label { display: flex; flex-direction: column; gap: 5px; }\n.dsh-tavern-image-settings input, .dsh-tavern-image-settings select, .dsh-tavern-image-settings textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: inherit; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-assistant-reasoning { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }\n.dsh-tavern-assistant-reasoning summary { cursor: pointer; user-select: none; }\n.dsh-tavern-assistant-reasoning pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }\n.dsh-tavern-assistant-stopped { align-self: flex-start; border-radius: 6px; padding: 0 6px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; }\n.dsh-tavern-message-fork { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-message-fork:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-message-fork:disabled { cursor: wait; opacity: .5; }\n.dsh-tavern-swipe-controls { align-self: center; display: flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 24px; }\n.dsh-tavern-swipe-controls button { min-width: 28px; height: 26px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); cursor: pointer; }\n.dsh-tavern-swipe-controls button:disabled { opacity: .35; cursor: default; }\n.dsh-tavern-mvu-receipt { align-self: flex-start; width: min(100%, 760px); border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }\n.dsh-tavern-mvu-receipt[data-status=\"pending\"] { border-color: rgba(68,126,230,.42); }\n.dsh-tavern-mvu-receipt[data-status=\"updated\"] { border-color: rgba(70,160,105,.42); }\n.dsh-tavern-mvu-receipt[data-status=\"stale\"] { border-color: rgba(196,132,42,.46); }\n.dsh-tavern-mvu-receipt[data-status=\"partial\"], .dsh-tavern-mvu-receipt[data-status=\"error\"], .dsh-tavern-mvu-receipt[data-status=\"interrupted\"] { border-color: rgba(220,94,94,.48); }\n.dsh-tavern-mvu-receipt-summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; cursor: pointer; user-select: none; font-weight: 750; }\n.dsh-tavern-mvu-receipt-summary::-webkit-details-marker { display: none; }\n.dsh-tavern-mvu-receipt-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-mvu-receipt[data-status=\"pending\"] .dsh-tavern-mvu-receipt-dot { background: #447ee6; }\n.dsh-tavern-mvu-receipt[data-status=\"updated\"] .dsh-tavern-mvu-receipt-dot { background: #4da66d; }\n.dsh-tavern-mvu-receipt[data-status=\"stale\"] .dsh-tavern-mvu-receipt-dot { background: #c4842a; }\n.dsh-tavern-mvu-receipt[data-status=\"partial\"] .dsh-tavern-mvu-receipt-dot, .dsh-tavern-mvu-receipt[data-status=\"error\"] .dsh-tavern-mvu-receipt-dot, .dsh-tavern-mvu-receipt[data-status=\"interrupted\"] .dsh-tavern-mvu-receipt-dot { background: #dc5e5e; }\n.dsh-tavern-mvu-receipt-body { display: grid; gap: 8px; padding: 0 10px 9px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-mvu-receipt-reason { margin-top: 8px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-mvu-change { display: grid; gap: 2px; padding: 6px 8px; border-radius: 7px; background: var(--dsw-alias-bg-base); }\n.dsh-tavern-mvu-change-path { color: var(--dsh-tavern-accent); font-family: ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap: anywhere; }\n.dsh-tavern-mvu-change-values { overflow-wrap: anywhere; }\n.dsh-tavern-mvu-side-effect-title { color: var(--dsw-alias-label-tertiary); font-weight: 700; }\n.dsh-tavern-mvu-change[data-origin=\"card-script\"] .dsh-tavern-mvu-change-path { color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-mvu-failure { color: #d96767; overflow-wrap: anywhere; }\n.dsh-tavern-mvu-retry { justify-self: start; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 9px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; }\n.dsh-tavern-mvu-retry:disabled { cursor: wait; opacity: .58; }\n.dsh-tavern-message-frame-slot { display: block; width: 100%; min-height: 48px; overflow: hidden; }\n/* Legacy card resizers may write an inline height larger than the host slot. */\n.dsh-tavern-message-frame-slot > iframe:not([aria-hidden=\"true\"]) { max-height: 100% !important; }\n.dsh-tavern-message-frame { display: block; width: 100%; min-height: 48px; border: 0; background: transparent; overflow: hidden; }\n.dsh-tavern-status-runtime { width: 100%; min-width: 0; margin: 0 0 10px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-base); }\n.dsh-tavern-user-row { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }\n.dsh-tavern-user-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; max-width: min(525px, 82%); }\n.dsh-tavern-user-bubble { max-width: 100%; padding: 10px 16px; border-radius: 22px; background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); font-size: 16px; line-height: 24px; overflow-wrap: anywhere; }\n.dsh-tavern-user-extra { margin-top: 8px; }\n.dsh-tavern-user-actions { display: flex; align-items: center; gap: 7px; min-height: 20px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }\n.dsh-tavern-user-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-user-copy:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-sidebar { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; padding: 12px; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-sidebar.collapsed { padding: 12px 10px; align-items: center; }\nbody.dsh-tavern-shell-active button[aria-label=\"新建会话\"], body.dsh-tavern-shell-active button[aria-label=\"New session\"] { display: none !important; }\nbody.dsh-tavern-shell-active [data-turn-tail] > [data-slot=\"conversation.chat.turnTail\"] + div > button { display: none !important; }\nbody.dsh-tavern-shell-active [data-turn-tail] [data-slot=\"conversation.chat.assistant-actions\"] > :not(.dsh-tavern-message-fork) { display: none !important; }\nbody.dsh-tavern-shell-active .dsh-tavern-hero-preset-row { display: none !important; }\n/* A blank session is also a hero. Only the session-less landing page loses its composer. */\nbody.dsh-tavern-shell-active .dsh-tavern-landing { display: grid !important; place-items: center; }\nbody.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important; }\nbody.dsh-tavern-shell-active .dsh-tavern-landing::before { content: \"🍺 DSH Tavern\"; color: var(--dsh-tavern-accent-active); font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 24px; text-align: center; }\nbody.dsh-tavern-shell-active [data-ref-chip=\"file\"] { max-width: calc(100% - 4px); min-width: 0; overflow: hidden; text-overflow: ellipsis; }\n.dsh-tavern-side-head { height: 48px; display: flex; align-items: center; gap: 8px; flex: none; }\n.dsh-tavern-side-brand { flex: 1; min-width: 0; font-size: 16px; font-weight: 800; color: var(--dsh-tavern-accent-active); white-space: nowrap; overflow: hidden; }\n.dsh-tavern-side-icon { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }\n.dsh-tavern-side-icon:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-new { height: 40px; flex: none; border: 1px solid var(--dsw-alias-border-l2); border-radius: 11px; background: var(--dsw-alias-button-elevated-fill); color: inherit; cursor: pointer; font-weight: 650; }\n.dsh-tavern-side-new:hover { background: var(--dsw-alias-button-floating-hover); }\n.dsh-tavern-mode-switch { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 8px; padding: 3px; border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-mode-switch.compatibility-enabled { grid-template-columns: repeat(3, 1fr); }\n.dsh-tavern-mode-switch button { height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 12px; }\n.dsh-tavern-mode-switch button.active { background: var(--dsw-specific-input-major); color: var(--dsh-tavern-accent-active); box-shadow: var(--dsw-shadow-lv1); font-weight: 700; }\n.dsh-tavern-picker-tabs { display: flex; gap: 6px; margin: 2px 0 8px; }\n.dsh-tavern-picker-tabs button { flex: 1; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); padding: 6px 8px; cursor: pointer; font-size: 12px; }\n.dsh-tavern-picker-tabs button.active { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); font-weight: 700; }\n.dsh-tavern-side-title { margin: 16px 4px 7px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-tavern-compatibility-notice { margin: 10px 2px 0; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; }\n.dsh-tavern-compatibility-notice strong { color: var(--dsw-alias-label-primary); }\n.dsh-tavern-side-list { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }\n.dsh-tavern-side-row { position: relative; display: flex; align-items: center; border: 0; border-radius: 8px; background: transparent; color: inherit; }\n.dsh-tavern-side-row:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-row.active { background: var(--dsw-alias-interactive-bg-selected, rgba(120,90,60,.14)); }\n.dsh-tavern-side-row-main { min-width: 0; flex: 1; border: 0; padding: 8px 5px 8px 9px; text-align: left; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-side-row-more { width: 28px; height: 28px; flex: none; margin-right: 3px; border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; opacity: 0; }\n.dsh-tavern-side-row:hover .dsh-tavern-side-row-more, .dsh-tavern-side-row-more[aria-expanded=\"true\"] { opacity: 1; }\n.dsh-tavern-side-row-more:hover { background: var(--dsw-alias-interactive-bg-hover); color: inherit; }\n.dsh-tavern-side-row-menu { position: absolute; z-index: 30; top: 32px; right: 4px; min-width: 96px; padding: 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.14); transform-origin: top right; animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-side-row-menu button { display: block; width: 100%; border: 0; border-radius: 6px; padding: 7px 10px; text-align: left; background: transparent; color: inherit; cursor: pointer; }\n.dsh-tavern-side-row-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-side-row-menu button.danger { color: #c34f4f; }\n.dsh-tavern-side-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }\n.dsh-tavern-side-row-meta { margin-top: 3px; display: flex; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-side-empty { padding: 18px 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.6; text-align: center; }\n.dsh-tavern-update { flex: none; margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-update-identity { color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.45; }\n.dsh-tavern-update-actions { display: flex; gap: 6px; margin-top: 7px; }\n.dsh-tavern-update-button { width: 100%; height: 32px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-update-button:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-update-button.primary { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-update-button:disabled { opacity: .55; cursor: default; }\n.dsh-tavern-update-status { margin-top: 5px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 1.45; white-space: pre-wrap; }\n.dsh-tavern-update-status.error { color: #c45f5f; }\n.dsh-tavern-settings-section { display: flex; flex-direction: column; gap: 18px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-settings-intro { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 1.6; }\n.dsh-tavern-settings-group { overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-settings-subheading { margin-top: 12px; padding: 22px 20px 12px; border-top: 1px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 12px; }\n.dsh-tavern-settings-subheading h3 { margin: 0; }\n.dsh-tavern-settings-row { display: flex; align-items: center; gap: 24px; padding: 18px 20px; cursor: pointer; }\n.dsh-tavern-settings-copy { min-width: 0; flex: 1; }\n.dsh-tavern-settings-title { display: block; font-size: 15px; font-weight: 650; }\n.dsh-tavern-settings-desc { display: block; margin-top: 5px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 1.55; }\n.dsh-tavern-settings-switch { position: relative; width: 42px; height: 24px; flex: none; }\n.dsh-tavern-settings-switch input { position: absolute; opacity: 0; pointer-events: none; }\n.dsh-tavern-settings-track { position: absolute; inset: 0; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); transition: background .18s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-settings-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dsw-alias-label-secondary); transition: transform .18s cubic-bezier(0.23, 1, 0.32, 1), background .18s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track { background: var(--dsh-tavern-accent-active); }\n.dsh-tavern-settings-switch input:checked + .dsh-tavern-settings-track::after { transform: translateX(18px); background: #fff; }\n.dsh-tavern-settings-switch input:focus-visible + .dsh-tavern-settings-track { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-tavern-settings-model-row { flex-wrap: wrap; }\n.dsh-tavern-settings-select { flex: 1 1 220px; max-width: 320px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; color: inherit; background: var(--dsw-specific-input-major); }\n\n.dsh-tavern-compaction-settings { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 20px; }\n.dsh-tavern-compaction-settings > h3, .dsh-tavern-compaction-settings > p { margin: 0; }\n.dsh-tavern-compaction-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; font-size: 14px; line-height: 1.6; }\n.dsh-tavern-compaction-field .dsh-tavern-settings-select { box-sizing: border-box; min-width: 0; width: 100%; font: inherit; }\n.dsh-tavern-compaction-settings > .dsh-tavern-btn { align-self: flex-start; margin-top: 4px; }\n.dsh-tavern-settings-error { color: #c45f5f; font-size: 13px; }\n.dsh-tavern-background-model { min-width: 0; max-width: min(360px,45cqw); height: 28px; display: flex; align-items: center; padding: 0 8px; color: var(--dsw-alias-label-secondary); font-size: 13px; font-weight: 500; line-height: 20px; }\n.dsh-tavern-background-model span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-system-prompt-editor { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; }\n.dsh-tavern-system-prompt-warning { margin-bottom: 14px; border: 1px solid rgba(196,95,95,.55); border-radius: 9px; padding: 11px 13px; background: rgba(196,95,95,.1); color: #d98080; font-size: 13px; line-height: 1.55; }\n.dsh-tavern-status-head.dsh-tavern-system-prompt-head { padding: 18px 20px 16px; }\n.dsh-tavern-system-prompt-top-actions { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; }\n.dsh-tavern-preset-detail.dsh-tavern-system-prompt-body { padding: 20px 24px 28px; }\n.dsh-tavern-system-prompt-editor textarea { box-sizing: border-box; width: 100%; min-height: 320px; resize: vertical; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 14px; background: var(--dsw-specific-input-minor); color: var(--dsw-alias-label-primary); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }\n.dsh-tavern-system-prompt-editor textarea:focus { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n.dsh-tavern-system-prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }\n.dsh-tavern-system-prompt-status { color: var(--dsw-alias-label-secondary); font-size: 13px; }\n.dsh-tavern-system-prompt-buttons { display: flex; gap: 10px; }\n.dsh-tavern-system-prompt-button { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; padding: 8px 14px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); cursor: pointer; }\n.dsh-tavern-system-prompt-button-primary { border-color: var(--dsh-tavern-accent-active); color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-system-prompt-button:disabled { cursor: default; opacity: .5; }\n.dsh-tavern-player-action { border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 8px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-player-action:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-preset-status { max-width: min(260px, 28vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; padding: 4px 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-export-action { min-height: 36px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; padding: 7px 14px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; font-size: 13px; white-space: nowrap; }\n.dsh-tavern-export-action:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-export-action:disabled { opacity: .55; cursor: default; }\n.dsh-tavern-picker-overlay { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 24px; background: rgba(20,18,24,.42); backdrop-filter: blur(2px); }\n.dsh-tavern-card-picker { width: min(860px, calc(100vw - 48px)); max-height: min(80vh, 760px); overflow: auto; box-sizing: border-box; padding: 20px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 16px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 22px 64px rgba(0,0,0,.30); }\n.dsh-tavern-card-picker-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 700; }\n.dsh-tavern-card-picker-help { margin: 4px 0 12px; color: var(--dsw-alias-text-l2); font-size: 13px; }\n.dsh-tavern-card-pick { width: 100%; padding: 9px; margin-top: 5px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-card-pick:hover { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-card-pick.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 14%, transparent); }\n.dsh-tavern-card-pick b { display: block; color: var(--dsh-tavern-accent); }\n.dsh-tavern-card-pick span { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.4; }\n.dsh-tavern-card-pick.with-image,.dsh-tavern-library-card.with-image { display: flex; align-items: center; gap: 12px; }\n.dsh-tavern-card-thumb { display: block; flex: none; width: 56px; height: 56px; margin: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: 50%; object-fit: cover; object-position: center top; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-card-list-copy { display: block; min-width: 0; flex: 1; margin: 0; }\n.dsh-tavern-card-pick .dsh-tavern-card-list-copy,.dsh-tavern-library-card .dsh-tavern-card-list-copy { color: inherit; font-size: inherit; }\n.dsh-tavern-card-pick-wrap { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; }\n.dsh-tavern-card-pick-wrap .dsh-tavern-card-pick { flex: 1 1 auto; min-width: 0; margin-top: 0; }\n.dsh-tavern-card-pick-wrap .dsh-tavern-script-file { flex: 0 0 auto; }\n.dsh-tavern-greeting-preview { display: block; width: 100%; height: min(52vh, 560px); overflow: auto; overflow-anchor: none; box-sizing: border-box; margin: 8px 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-greeting-nav { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }\n.dsh-tavern-greeting-count { color: var(--dsw-alias-label-secondary); text-align: center; font-size: 12px; }\n.dsh-tavern-player-name { display: grid; grid-template-columns: auto minmax(180px, 320px); gap: 10px; align-items: center; margin: 10px 0 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-tavern-player-name input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-primary); font: inherit; outline: none; }\n.dsh-tavern-player-name input:focus { border-color: var(--dsh-tavern-accent); }\n.dsh-tavern-player-name-help { margin: -3px 0 8px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.5; }\n@media (max-width: 640px) {\n  .dsh-tavern-mobile-import { place-items: start center; padding-top: 12px; }\n  .dsh-tavern-picker-overlay { align-items: stretch; padding: 12px; }\n  .dsh-tavern-card-picker { width: 100%; max-height: none; padding: 14px; border-radius: 14px; }\n  .dsh-tavern-greeting-preview { max-height: 60vh; }\n  .dsh-tavern-player-name { grid-template-columns: 1fr; gap: 5px; }\n  .dsh-tavern-preset-status { display: none; }\n}\n.dsh-tavern-picker-group { margin-top: 10px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-picker-foot { position: sticky; bottom: -10px; display: flex; justify-content: flex-end; margin: 10px -10px -10px; padding: 10px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-script-file { align-self: center; white-space: nowrap; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); padding: 6px 8px; cursor: pointer; font-size: 11px; }\n.dsh-tavern-script-file:hover { border-color: var(--dsh-tavern-accent); color: var(--dsh-tavern-accent); }\n.dsh-tavern-choice-trigger { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; padding: 3px 9px; border-radius: 7px; font-size: 12px; font-weight: 650; }\n.dsh-tavern-choice-trigger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 20%, transparent); color: var(--dsw-alias-brand-primary); }\n.dsh-tavern-dock-actions { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px 0; flex-wrap: wrap; }\n.dsh-tavern-more-actions { position: relative; }\n.dsh-tavern-more-menu { position: absolute; z-index: 40; right: 0; bottom: calc(100% + 6px); display: grid; min-width: 150px; padding: 5px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-sidebar-fill); box-shadow: 0 8px 24px rgba(0,0,0,.2); transform-origin: bottom right; }\n.dsh-tavern-more-menu:not([hidden]) { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-more-menu[hidden] { display: none; }\n.dsh-tavern-more-menu button { width: 100%; border: 0; border-radius: 6px; padding: 8px 10px; background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; text-align: left; white-space: nowrap; }\n.dsh-tavern-more-menu button:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-more-menu button.danger { color: #c34f4f; }\n.dsh-tavern-more-menu button:disabled { cursor: default; opacity: .55; }\n.dsh-tavern-candidate-error-banner { width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px; border: 1px solid rgba(196,95,95,.45); border-radius: 10px; background: rgba(196,95,95,.10); color: #c45f5f; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-timeout-banner { display: flex; align-items: center; gap: 8px; width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 8px 12px; border: 1px solid rgba(196,145,72,.45); border-radius: 10px; background: rgba(196,145,72,.10); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 1.5; }\n.dsh-tavern-timeout-banner span { flex: 1; }\n.dsh-tavern-timeout-banner button { flex: none; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; padding: 4px 8px; background: transparent; color: var(--dsh-tavern-accent); cursor: pointer; }\n.dsh-tavern-choice-error { padding: 5px; color: #c45f5f; font-size: 12px; }\n.dsh-tavern-question { width: 100%; max-width: var(--dsh-composer-card-max-width, 780px); box-sizing: border-box; margin: 0 auto; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-tip, var(--dsw-specific-sidebar-fill)); box-shadow: var(--dsw-shadow-lv1); }\n.dsh-tavern-question.dsh-tavern-candidate-question { width: calc(100% - 32px); max-width: min(680px, var(--dsh-composer-card-max-width, 780px)); }\n.dsh-tavern-question.collapsed { padding: 9px 12px; box-shadow: none; }\n.dsh-tavern-question-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-weight: 750; cursor: pointer; }\n.dsh-tavern-question.collapsed .dsh-tavern-question-head { margin-bottom: 0; }\n.dsh-tavern-question-close { margin-left: auto; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 16px; line-height: 1; }\n.dsh-tavern-question-sub { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 400; }\n.dsh-tavern-question-body { max-height: min(360px, 45vh); overflow-y: auto; margin: 6px -4px 0; padding: 0 4px; }\n.dsh-tavern-question-option { width: 100%; box-sizing: border-box; display: flex; align-items: flex-start; gap: 9px; margin-top: 6px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); text-align: left; line-height: 1.5; cursor: pointer; }\n.dsh-tavern-question-option:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-question-option.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-question-radio { flex: none; width: 14px; height: 14px; margin-top: 3px; border: 1.5px solid var(--dsw-alias-label-tertiary); border-radius: 50%; }\n.dsh-tavern-question-option.selected .dsh-tavern-question-radio { border: 4px solid var(--dsh-tavern-accent); }\n.dsh-tavern-question-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }\n.dsh-tavern-question-tag { align-self: flex-start; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n.dsh-tavern-question-tag-scene { color: #6b7fa3; background: rgba(107,127,163,.16); }\n.dsh-tavern-question-free { width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 9px; background: transparent; color: var(--dsw-alias-label-secondary); text-align: left; cursor: pointer; }\n.dsh-tavern-question-free:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-question-foot { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }\n.dsh-tavern-question-primary { border: 0; border-radius: 8px; padding: 6px 12px; background: var(--dsw-alias-button-info-fill); color: #fff; cursor: pointer; }\n.dsh-tavern-question-primary:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-regen-input { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; resize: vertical; }\n.dsh-tavern-status { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-resources { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-library { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-library-search { box-sizing: border-box; width: calc(100% - 24px); margin: 10px 12px 2px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-library-card { width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-library-card:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-library-card b,.dsh-tavern-library-card span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-library-card span { margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-library-card-row { display: flex; align-items: center; gap: 6px; }\n.dsh-tavern-library-card-row .dsh-tavern-library-card { flex: 1; min-width: 0; }\n.dsh-tavern-library-head-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }\n.dsh-tavern-resource-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 20px; }\n.dsh-tavern-script-preview { margin: 0; padding: 14px 16px 24px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-resource-group { margin-bottom: 16px; }\n.dsh-tavern-resource-group-title { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px; color: var(--dsw-alias-label-secondary); font-size: 13px; font-weight: 500; letter-spacing: 0; }\n.dsh-tavern-resource-actions { display: flex; align-items: center; gap: 5px; }\n.dsh-tavern-resource-actions select { min-width: 0; max-width: 120px; height: 25px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; font-size: 10px; }\n.dsh-tavern-resource-import { height: 32px; padding: 0 12px; border: 0; border-radius: var(--dsh-tavern-radius-md); background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent-active); cursor: pointer; font-size: 13px; font-weight: 500; }\n.dsh-tavern-resource-import:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 24%, transparent); }\n.dsh-tavern-resource-row {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  margin: 0 0 6px;\n  padding: 12px 14px;\n  border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n  border-radius: var(--dsh-tavern-radius-lg);\n  background: color-mix(in srgb, var(--dsh-tavern-accent-surface) 22%, var(--dsw-specific-input-major));\n}\n.dsh-tavern-resource-row:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-surface) 34%, var(--dsw-specific-input-major)); }\n.dsh-tavern-resource-row.is-binding { border-color: var(--dsh-tavern-accent-border); }\n.dsh-tavern-resource-row-main {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-width: 0;\n}\n.dsh-tavern-resource-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-resource-open { padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-resource-open:hover { color: var(--dsh-tavern-accent-active); text-decoration: none; }\n.dsh-tavern-resource-meta { flex: none; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-label-secondary); font-size: 13px; white-space: nowrap; }\n.dsh-tavern-resource-at { flex: none; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; padding: 3px 7px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-resource-at:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 18%, transparent); }\n.dsh-tavern-resource-at.mounted { border-color: var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-resource-mention,\n.dsh-tavern-resource-menu > summary {\n  flex: none;\n  display: grid;\n  place-items: center;\n  width: 32px;\n  height: 32px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-radius: 9999px;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1;\n  cursor: pointer;\n  list-style: none;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1);\n}\n.dsh-tavern-resource-menu > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-resource-mention:hover,\n.dsh-tavern-resource-menu > summary:hover,\n.dsh-tavern-resource-menu[open] > summary {\n  background: var(--dsh-tavern-accent-soft);\n  color: var(--dsh-tavern-accent-active);\n}\n.dsh-tavern-resource-mention.mounted { color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-resource-mention:focus-visible,\n.dsh-tavern-resource-menu > summary:focus-visible {\n  outline: 2px solid var(--dsh-tavern-accent);\n  outline-offset: 2px;\n}\n.dsh-tavern-resource-menu { position: relative; flex: none; }\n.dsh-tavern-resource-menu-popup {\n  position: absolute;\n  top: calc(100% + 6px);\n  right: 0;\n  z-index: 40;\n  min-width: 148px;\n  padding: 4px;\n  border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent-hairline) 60%, var(--dsw-alias-border-l2));\n  border-radius: var(--dsh-tavern-radius-lg);\n  background: var(--dsw-specific-sidebar-fill);\n  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);\n}\n.dsh-tavern-resource-menu-popup button {\n  display: block;\n  width: 100%;\n  min-height: 34px;\n  padding: 7px 11px;\n  border: 0;\n  border-radius: var(--dsh-tavern-radius-md);\n  background: transparent;\n  color: inherit;\n  text-align: left;\n  font: inherit;\n  font-size: 13px;\n  cursor: pointer;\n}\n.dsh-tavern-resource-menu-popup button:hover { background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent-active); }\n.dsh-tavern-resource-menu-popup button.danger { color: var(--dsh-tavern-accent-error); }\n.dsh-tavern-resource-menu-popup button.danger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-error) 12%, transparent); }\n.dsh-tavern-resource-binding {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding-top: 2px;\n}\n.dsh-tavern-resource-binding select {\n  flex: 1;\n  min-width: 0;\n  height: 36px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-tavern-radius-md);\n  background: var(--dsw-specific-sidebar-fill);\n  color: inherit;\n  font: inherit;\n  font-size: 14px;\n}\n.dsh-tavern-presets { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-preset-list { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 20px; }\n.dsh-tavern-preset-row { margin-bottom: 8px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-preset-row-head { display: block; }\n.dsh-tavern-preset-row-main { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-preset-row-main b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }\n.dsh-tavern-preset-row-main span { display: block; margin-top: 3px; overflow: hidden; color: var(--dsw-alias-label-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-preset-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 8px; }\n.dsh-tavern-preset-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }\n.dsh-tavern-preset-detail { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 24px; }\n.dsh-tavern-preset-summary { margin-bottom: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.5; }\n.dsh-tavern-external-preset-notice { padding: 14px 16px; font-size: 14px; line-height: 1.7; }\n.dsh-tavern-external-preset-notice p { margin: 4px 0 0; }\n.dsh-tavern-external-preset-notice strong { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-external-preset-notice .dsh-tavern-preset-warning { color: #b4473a; }\n.dsh-tavern-bypass-plan-notice { padding: 14px 16px; font-size: 14px; line-height: 1.7; }\n.dsh-tavern-bypass-plan-notice p { margin: 4px 0 0; }\n.dsh-tavern-bypass-plan-notice strong { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-bypass-plan-notice .dsh-tavern-preset-warning { color: #b4473a; }\n.dsh-tavern-preset-selector { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); font-size: 11px; }\n.dsh-tavern-preset-selector select { min-width: 0; width: 100%; height: 28px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; padding: 0 7px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-preset-section-title { margin: 14px 2px 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 800; letter-spacing: .04em; }\n.dsh-tavern-plan-phase { margin-top: 12px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-plan-phase-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }\n.dsh-tavern-plan-phase-title { font-size: 13px; font-weight: 800; }\n.dsh-tavern-plan-phase-description { margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-plan-phase-count { flex: none; color: var(--dsw-alias-label-secondary); font-size: 10px; white-space: nowrap; }\n.dsh-tavern-plan-phase-empty { padding: 8px 2px 2px; color: var(--dsw-alias-label-tertiary); font-size: 10px; }\n.dsh-tavern-preset-phase { margin-top: 8px; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-top: 3px solid #5b9cff; border-radius: 10px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-preset-phase.phase-middle { border-top-color: #35c76f; }\n.dsh-tavern-preset-phase.phase-back { border-top-color: #b47cff; }\n.dsh-tavern-preset-phase-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 5px; }\n.dsh-tavern-preset-phase-title { font-size: 14px; font-weight: 800; }\n.dsh-tavern-preset-phase-description { max-width: 620px; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-preset-phase-count { flex: none; padding: 2px 7px; border-radius: 999px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 10px; white-space: nowrap; }\n.dsh-tavern-preset-phase-empty { padding: 10px 2px 4px; color: var(--dsw-alias-label-tertiary); font-size: 10px; }\n.dsh-tavern-preset-unassigned { margin-top: 12px; padding: 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-preset-unassigned > summary { cursor: pointer; color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 750; }\n.dsh-tavern-preset-unassigned > p { margin: 7px 0 10px; font-size: 10px; line-height: 1.5; }\n.dsh-tavern-prompt-row { margin-bottom: 7px; border: 1px solid var(--dsw-alias-border-l2); border-left: 4px solid #5b9cff; border-radius: 9px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-prompt-row.role-user { border-left-color: #35c76f; }\n.dsh-tavern-prompt-row.role-assistant { border-left-color: #b47cff; }\n.dsh-tavern-prompt-row.role-regex { border-left-color: #ed9714; }\n.dsh-tavern-prompt-row.role-script { border-left-color: #8b69d4; }\n.dsh-tavern-prompt-row.role-extension { border-left-color: #718096; }\n.dsh-tavern-prompt-head { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; list-style: none; }\n.dsh-tavern-preset-entry-head { grid-template-columns: minmax(0,1fr) auto; padding: 5px 8px; }\n.dsh-tavern-preset-phase > .dsh-tavern-prompt-row { margin-bottom: 2px; }\n.dsh-tavern-preset-entry-head .dsh-tavern-prompt-title span { margin-top: 1px; }\n.dsh-tavern-prompt-head::-webkit-details-marker { display: none; }\n.dsh-tavern-prompt-title { min-width: 0; }\n.dsh-tavern-prompt-title b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }\n.dsh-tavern-prompt-title span { display: block; overflow: hidden; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-prompt-state { display: flex; align-items: center; gap: 5px; color: var(--dsw-alias-label-secondary); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-prompt-state::before { width: 8px; height: 8px; border: 2px solid #23bd63; border-radius: 999px; content: \"\"; }\n.dsh-tavern-prompt-state.off::before { border-color: #91a0b5; }\n.dsh-tavern-system-prompt-row > .dsh-tavern-prompt-head { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 14px 16px; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-title b { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-title span { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-state { justify-self: end; font-size: 11px; }\n.dsh-tavern-system-prompt-row .dsh-tavern-prompt-state:not(.is-toggle)::before { display: none; }\n\n.dsh-tavern-prompt-state.is-toggle { position: relative; flex-shrink: 0; min-height: 32px; gap: 7px; border: 0; border-radius: 6px; padding: 4px 5px; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }\n.dsh-tavern-prompt-state.is-toggle.on { color: #16766b; }\n.dsh-tavern-prompt-state.is-toggle.off { color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-prompt-state.is-toggle::before { flex-shrink: 0; width: 36px; height: 20px; border: 0; background: #64748b; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-prompt-state.is-toggle.on::before { background: #16766b; }\n.dsh-tavern-prompt-state.is-toggle::after { position: absolute; top: 50%; left: 7px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: \"\"; transform: translateY(-50%); transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-prompt-state.is-toggle.on::after { transform: translate(16px, -50%); }\n.dsh-tavern-prompt-state.is-toggle:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-prompt-state.is-toggle:focus-visible { outline: 2px solid #16766b; outline-offset: 2px; }\n.dsh-tavern-prompt-state.is-toggle:disabled { opacity: .6; cursor: wait; }\n.dsh-tavern-extract-state { gap: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 650; }\n.dsh-tavern-extract-state::before { width: 11px; height: 11px; }\n.dsh-tavern-extract-state input[type=\"checkbox\"] { width: 18px; height: 18px; margin: 0; accent-color: #23bd63; }\n.dsh-tavern-plan-name-field { display: grid; gap: 5px; margin-top: 8px; color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 650; }\n.dsh-tavern-plan-name-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }\n.dsh-tavern-plan-model-editor { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }\n.dsh-tavern-plan-model-editor input { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit; font-weight: 400; }\n/* Card extensions have a type badge in addition to the title and state. */\n.dsh-tavern-card-extensions .dsh-tavern-prompt-head { grid-template-columns: auto minmax(0, 1fr) auto; }\n.dsh-tavern-card-extensions .dsh-tavern-prompt-role { font-size: 9px; line-height: 1.4; color: var(--dsw-alias-label-secondary); white-space: nowrap; }\n.dsh-tavern-card-extensions .dsh-tavern-prompt-title .dsh-tavern-prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }\n.dsh-tavern-card-extensions .dsh-tavern-prompt-tags .dsh-tavern-prompt-tag { display: inline-block; margin-top: 0; color: #c77800; font-size: 9px; }\n@media (max-width: 560px) {\n  .dsh-tavern-card-extensions .dsh-tavern-prompt-head { grid-template-columns: minmax(0, 1fr) auto; }\n  .dsh-tavern-card-extensions .dsh-tavern-prompt-role { grid-column: 1; grid-row: 1; }\n  .dsh-tavern-card-extensions .dsh-tavern-prompt-state, .dsh-tavern-card-extensions .dsh-tavern-prompt-head > .dsh-tavern-mvu-state { grid-column: 2; grid-row: 1; }\n  .dsh-tavern-card-extensions .dsh-tavern-prompt-title { grid-column: 1 / -1; grid-row: 2; }\n}\n.dsh-tavern-prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }\n.dsh-tavern-prompt-tag { padding: 1px 5px; border-radius: 4px; background: rgba(237,151,20,.14); color: #c77800; font-size: 9px; }\n.dsh-tavern-prompt-content { margin: 0; padding: 10px 12px; border-top: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-prompt-view-actions { display: flex; justify-content: flex-end; padding: 8px 10px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-prompt-editor { display: grid; grid-template-columns: minmax(0,1fr) 150px; gap: 10px; padding: 12px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-prompt-editor-field { display: grid; gap: 5px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-prompt-editor-field.full { grid-column: 1 / -1; }\n.dsh-tavern-prompt-editor-field input[type=\"text\"], .dsh-tavern-prompt-editor-field select, .dsh-tavern-prompt-editor-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-minor); color: var(--dsw-alias-label-primary); padding: 8px 9px; font: inherit; }\n.dsh-tavern-prompt-editor-field textarea { min-height: 220px; resize: vertical; font: 10px/1.55 ui-monospace, monospace; }\n.dsh-tavern-prompt-editor-toggle { display: flex; align-items: center; gap: 7px; min-height: 34px; }\n.dsh-tavern-prompt-editor-note { grid-column: 1 / -1; color: var(--dsw-alias-label-secondary); font-size: 9px; }\n.dsh-tavern-prompt-editor-actions { position: sticky; bottom: 0; grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding: 9px 0 0; background: var(--dsw-specific-input-major); z-index: 1; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor { box-sizing: border-box; width: 100%; max-width: 640px; margin-inline: auto; grid-template-columns: minmax(0, 1fr) minmax(90px, 120px); gap: 6px 8px; padding: 8px; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-field { gap: 3px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-field :is(input, select, textarea) { padding: 5px 7px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor textarea { min-height: 140px; height: 140px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-toggle { min-height: 28px; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions { align-items: center; flex-wrap: wrap; gap: 6px; padding: 2px 0; font-size: 11px; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions :is(button, select) { padding: 3px 7px; font: inherit; }\n:is(.dsh-tavern-preset-entry-head, .dsh-tavern-preset-regex-head) + .dsh-tavern-prompt-editor .dsh-tavern-prompt-editor-actions > label { display: flex; align-items: center; gap: 5px; }\n.dsh-tavern-regex-body { border-top: 1px solid var(--dsw-alias-border-l2); padding: 10px 12px; }\n.dsh-tavern-regex-label { margin: 8px 0 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 750; }\n.dsh-tavern-regex-label:first-child { margin-top: 0; }\n.dsh-tavern-regex-code { max-height: 220px; overflow: auto; margin: 0; padding: 8px 9px; border-radius: 7px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-regex-meta { margin-top: 9px; color: var(--dsw-alias-label-tertiary); font: 9px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-extension-note { margin: 9px 0; padding: 8px 9px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 30%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 7%, transparent); color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.55; }\n.dsh-tavern-mvu-list { display: grid; gap: 6px; }\n.dsh-tavern-mvu-row { display: grid; grid-template-columns: 74px minmax(0,1fr) auto; gap: 7px; align-items: center; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); font-size: 10px; }\n.dsh-tavern-mvu-kind { color: var(--dsh-tavern-accent); font-weight: 750; }\n.dsh-tavern-mvu-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-mvu-state { color: var(--dsw-alias-label-tertiary); white-space: nowrap; }\n.dsh-tavern-dsh-preset { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 24px; }\n.dsh-tavern-dsh-preset-controls { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); font-size: 11px; }\n.dsh-tavern-dsh-preset-controls select { min-width: 0; width: 100%; height: 28px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; padding: 0 7px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-dsh-preset-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }\n.dsh-tavern-dsh-preset-badge { border-radius: 999px; padding: 3px 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-dsh-preset-badge.front { background: rgba(58,132,255,.13); color: #4f92ff; }\n.dsh-tavern-dsh-preset-badge.middle { background: rgba(237,151,20,.15); color: #d27b00; }\n.dsh-tavern-dsh-preset-badge.back { background: rgba(180,124,255,.14); color: #9c62ed; }\n.dsh-tavern-dsh-preset-phase { margin-bottom: 15px; }\n.dsh-tavern-dsh-preset-phase-title { margin: 2px 2px 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 800; }\n.dsh-tavern-dsh-preset-row { margin-bottom: 6px; border: 1px solid var(--dsw-alias-border-l2); border-left: 4px solid #5b9cff; border-radius: 8px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-dsh-preset-row.front { border-left-color: #4f92ff; }\n.dsh-tavern-dsh-preset-row.middle { border-left-color: #ed9714; }\n.dsh-tavern-dsh-preset-row.back { border-left-color: #b47cff; }\n.dsh-tavern-dsh-preset-row.off { opacity: .62; }\n.dsh-tavern-dsh-preset-row.unconverted { border-left-color: #e06c75; }\n.dsh-tavern-dsh-preset-row summary { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 8px 9px; cursor: pointer; list-style: none; }\n.dsh-tavern-dsh-preset-row summary::-webkit-details-marker { display: none; }\n.dsh-tavern-dsh-preset-index { color: var(--dsw-alias-label-tertiary); font: 9px/1 ui-monospace, monospace; }\n.dsh-tavern-dsh-preset-name { min-width: 0; }\n.dsh-tavern-dsh-preset-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }\n.dsh-tavern-dsh-preset-name span { display: block; overflow: hidden; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-dsh-preset-meta { color: var(--dsw-alias-label-secondary); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-dsh-preset-content { margin: 0; padding: 9px 10px; border-top: 1px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); font: 10px/1.55 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }\n.dsh-tavern-dsh-preset-diagnostics { margin-top: 12px; padding: 8px 10px; border: 1px solid rgba(237,151,20,.35); border-radius: 8px; background: rgba(237,151,20,.07); color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.55; }\n.dsh-tavern-dsh-preset-diagnostics summary { cursor: pointer; font-weight: 800; }\n.dsh-tavern-dsh-preset-diagnostics ul { margin: 7px 0 0; padding-left: 18px; }\n.dsh-tavern-dsh-preset-unconverted-group { margin-top: 9px; }\n.dsh-tavern-dsh-preset-unconverted-title { margin: 8px 0 6px; font-weight: 800; }\n.dsh-tavern-dsh-preset-raw { margin-top: 6px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 7px; overflow: hidden; }\n.dsh-tavern-dsh-preset-raw summary { padding: 7px 8px; cursor: pointer; font-weight: 700; }\n.dsh-tavern-status-head { flex: none; padding: 16px 16px 12px; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-status-title { font-size: 18px; font-weight: 400; letter-spacing: -0.2px; }\n.dsh-tavern-plan-head { display: flex; flex-direction: column; gap: 10px; }\n.dsh-tavern-plan-head-main { display: flex; align-items: center; gap: 8px; min-width: 0; }\n.dsh-tavern-plan-head-main .dsh-tavern-status-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-plan-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }\n.dsh-tavern-status-role { margin-top: 5px; color: var(--dsh-tavern-accent); font-size: 13px; font-weight: 700; }\n.dsh-tavern-status-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }\n.dsh-tavern-status-tag { padding: 2px 6px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-status-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 20px; }\n.dsh-tavern-status-section { margin-bottom: 16px; }\n.dsh-tavern-card-reload { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }\n.dsh-tavern-card-reload-notice { min-width: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }\n.dsh-tavern-card-app-section[hidden] { display: none; }\n.dsh-tavern-card-app-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }\n.dsh-tavern-card-app-head .dsh-tavern-status-label { margin-bottom: 0; }\n.dsh-tavern-card-app-recovering { margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-app-slot { width: 100%; min-height: 120px; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: rgba(0,0,0,.14); }\n.dsh-tavern-script-buttons { display: flex; flex-wrap: wrap; gap: 7px; }\n.dsh-tavern-status-label { margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; letter-spacing: .06em; }\n.dsh-tavern-status-now { padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 30%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); font-size: 12px; line-height: 1.55; }\n.dsh-tavern-character-designs { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-character-design { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); overflow: hidden; }\n.dsh-tavern-character-design summary { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; list-style: none; }\n.dsh-tavern-character-design summary::-webkit-details-marker { display: none; }\n.dsh-tavern-character-design-name { display: block; font-size: 12px; font-weight: 800; }\n.dsh-tavern-character-design-summary { display: block; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-character-design-meta { color: var(--dsh-tavern-accent); font-size: 9px; white-space: nowrap; }\n.dsh-tavern-character-design-body { padding: 2px 10px 10px; border-top: 1px solid var(--dsw-alias-border-l3); }\n.dsh-tavern-character-design-row { padding-top: 8px; }\n.dsh-tavern-character-design-row b { display: block; color: var(--dsw-alias-label-tertiary); font-size: 9px; }\n.dsh-tavern-character-design-row p { margin: 3px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-guide-list { display: flex; flex-direction: column; gap: 6px; }\n.dsh-tavern-guide-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-guide-text { flex: 1; min-width: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }\n.dsh-tavern-guide-add { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }\n.dsh-tavern-guide-add textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 54px; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-script-preview { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-script-chunk { border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); padding: 7px 9px; font-size: 11px; line-height: 1.55; }\n.dsh-tavern-script-chunk-label { display: block; margin-bottom: 3px; color: var(--dsh-tavern-accent); font-size: 10px; font-weight: 700; }\n.dsh-tavern-script-chunk-text { color: var(--dsw-alias-label-secondary); white-space: pre-wrap; max-height: 160px; overflow-y: auto; }\n.dsh-tavern-status-item { padding: 7px 0; border-bottom: 1px solid var(--dsw-alias-border-l3); font-size: 12px; line-height: 1.5; }\n.dsh-tavern-status-item:last-child { border-bottom: 0; }\n.dsh-tavern-status-empty { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 1.6; }\n.dsh-tavern-user-profile { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-user-profile-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 24px; }\n.dsh-tavern-user-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }\n.dsh-tavern-user-profile-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-user-profile-switch b { display: block; font-size: 12px; }\n.dsh-tavern-user-profile-switch small { display: block; margin-top: 3px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 1.45; }\n.dsh-tavern-user-profile-text { margin: 0; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-user-profile-dimension { margin-top: 7px; padding: 9px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-user-profile-dimension b { font-size: 11px; }\n.dsh-tavern-user-profile-dimension p { margin: 5px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.55; }\n.dsh-tavern-user-profile-meta { margin-top: 5px; color: var(--dsw-alias-label-tertiary); font-size: 9px; line-height: 1.5; }\n.dsh-tavern-user-profile details { margin-top: 10px; }\n.dsh-tavern-user-profile details summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-user-profile-editor textarea { box-sizing: border-box; width: 100%; min-height: 130px; margin-top: 5px; padding: 8px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; resize: vertical; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 11px; line-height: 1.6; }\n.dsh-tavern-debug-panel { display: flex; flex-direction: column; gap: 7px; }\n.dsh-tavern-debug-panel select { width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; }\n.dsh-tavern-debug-preview { padding: 7px 8px; border-radius: 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }\n.dsh-tavern-debug-open { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 12px; font-weight: 650; }\n.dsh-tavern-debug-open:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 16%, transparent); }\n.dsh-tavern-debug-open:disabled { cursor: wait; opacity: .6; }\n.dsh-tavern-status-settle { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #6ea676; }\n.dsh-tavern-status-dot.running { background: #c68a3a; animation: dsh-tavern-pulse 1s infinite alternate; }\n.dsh-tavern-status-dot.error { background: #c45f5f; }\n.dsh-tavern-status-view-switch { margin-top: 10px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 999px; padding: 5px 10px; background: color-mix(in srgb, var(--dsh-tavern-accent) 9%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-phone-host { align-items: center; overflow: auto; padding: 12px; background: radial-gradient(circle at 50% 0, rgba(63,145,255,.08), transparent 38%), var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-phone-toolbar { width: min(100%, 360px); display: flex; justify-content: flex-end; margin-bottom: 8px; }\n.dsh-tavern-phone-exit { border: 0; border-radius: 999px; padding: 6px 11px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 11px; }\n.dsh-tavern-phone-device { position: relative; width: min(100%, 360px); height: min(720px, calc(100vh - 110px)); min-height: 520px; overflow: hidden; box-sizing: border-box; border: 9px solid #121318; border-radius: 44px; background: #edf3fb; box-shadow: 0 20px 55px rgba(0,0,0,.32), inset 0 0 0 1px rgba(255,255,255,.18); color: #162033; }\n.dsh-tavern-phone-screen { height: 100%; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(150deg,#dff8ff 0%,#b7dcff 25%,#314eae 56%,#071536 100%); }\n.dsh-tavern-phone-island { position: absolute; z-index: 4; top: 10px; left: 50%; width: 104px; height: 29px; transform: translateX(-50%); border-radius: 999px; background: #090b10; }\n.dsh-tavern-phone-statusbar { position: relative; z-index: 3; height: 49px; flex: none; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; padding: 7px 19px 0; color: #fff; font-size: 12px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.35); }\n.dsh-tavern-phone-status-icons { letter-spacing: 1px; }\n.dsh-tavern-phone-home { flex: 1; min-height: 0; padding: 32px 24px; }\n.dsh-tavern-phone-app { width: 68px; border: 0; padding: 0; background: transparent; color: #fff; cursor: pointer; text-align: center; text-shadow: 0 1px 4px rgba(0,0,0,.55); }\n.dsh-tavern-phone-app-icon { position: relative; width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 7px; border-radius: 16px; background: linear-gradient(145deg,#4ed76f,#12a947); box-shadow: 0 8px 20px rgba(0,0,0,.22); color: #fff; text-shadow: none; }\n.dsh-tavern-phone-app-icon::before { content: \"\"; width: 31px; height: 25px; border-radius: 50%; background: #fff; }\n.dsh-tavern-phone-app-icon::after { content: \"\"; position: absolute; left: 16px; bottom: 14px; width: 10px; height: 10px; background: #fff; clip-path: polygon(0 0,100% 0,0 100%); transform: rotate(-10deg); }\n.dsh-tavern-phone-app-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }\n.dsh-tavern-phone-page { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #f5f7fb; color: #172033; }\n.dsh-tavern-phone-nav { min-height: 48px; flex: none; display: grid; grid-template-columns: 56px minmax(0,1fr) 56px; align-items: center; padding: 0 8px; border-bottom: 1px solid #dce2eb; background: rgba(255,255,255,.94); }\n.dsh-tavern-phone-nav strong { overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }\n.dsh-tavern-phone-nav button { border: 0; background: transparent; color: #3478e5; cursor: pointer; font-size: 12px; }\n.dsh-tavern-phone-contact-list { min-height: 0; overflow-y: auto; background: #fff; }\n.dsh-tavern-phone-contact { width: 100%; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 10px; box-sizing: border-box; border: 0; border-bottom: 1px solid #edf0f4; padding: 11px 14px; background: #fff; color: inherit; cursor: pointer; text-align: left; }\n.dsh-tavern-phone-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: linear-gradient(145deg,#7b8cff,#5265d6); color: #fff; font-size: 17px; font-weight: 800; }\n.dsh-tavern-phone-contact-copy { min-width: 0; }\n.dsh-tavern-phone-contact-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 750; }\n.dsh-tavern-phone-contact-preview { display: block; margin-top: 4px; overflow: hidden; color: #89919f; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }\n.dsh-tavern-phone-contact-time { color: #a0a7b2; font-size: 9px; }\n.dsh-tavern-phone-empty { margin: auto; padding: 28px; color: #7d8694; text-align: center; font-size: 12px; line-height: 1.6; }\n.dsh-tavern-phone-messages { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px 12px; background: #eef1f6; }\n.dsh-tavern-phone-bubble { max-width: 82%; padding: 8px 10px; border-radius: 13px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-tavern-phone-bubble.user { align-self: flex-end; border-bottom-right-radius: 4px; background: #95e766; }\n.dsh-tavern-phone-bubble.assistant { align-self: flex-start; border-bottom-left-radius: 4px; }\n.dsh-tavern-phone-bubble.pending { opacity: .58; }\n.dsh-tavern-phone-bubble.failed { outline: 1px solid #e16a6a; }\n.dsh-tavern-phone-message-error { display: block; margin-top: 3px; color: #c54d4d; font-size: 9px; }\n.dsh-tavern-phone-compose { flex: none; display: flex; align-items: flex-end; gap: 7px; padding: 8px; border-top: 1px solid #dce2eb; background: #fff; }\n.dsh-tavern-phone-compose textarea { min-width: 0; flex: 1; resize: none; box-sizing: border-box; max-height: 96px; border: 1px solid #d4dae4; border-radius: 16px; padding: 7px 10px; background: #f7f8fa; color: #172033; font: inherit; font-size: 12px; line-height: 1.4; }\n.dsh-tavern-phone-compose button { width: 34px; height: 34px; flex: none; border: 0; border-radius: 50%; background: #2e79e8; color: #fff; cursor: pointer; font-size: 15px; }\n.dsh-tavern-phone-compose button:disabled { opacity: .4; cursor: default; }\n.dsh-tavern-phone-indicator { width: 96px; height: 4px; flex: none; margin: 7px auto 8px; border-radius: 999px; background: currentColor; opacity: .75; }\n.dsh-tavern-card-fields { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }\n.dsh-tavern-card-field { margin-bottom: 10px; }\n.dsh-tavern-card-field label { display: block; margin-bottom: 4px; color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 700; }\n.dsh-tavern-card-field input,.dsh-tavern-card-field textarea { box-sizing: border-box; width: 100%; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 11px; line-height: 1.45; resize: vertical; }\n.dsh-tavern-card-field textarea { min-height: 76px; }\n.dsh-tavern-card-field textarea.large { min-height: 130px; }\n.dsh-tavern-card-advanced { margin: 10px 0; }\n.dsh-tavern-card-advanced summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 700; }\n.dsh-tavern-card-worldbook { margin: 0 0 14px; padding: 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-card-worldbook > summary { color: var(--dsh-tavern-accent-active); font-size: 13px; font-weight: 800; cursor: pointer; }\n.dsh-tavern-card-worldbook > summary:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 4px; }\n.dsh-tavern-card-worldbook > .dsh-tavern-worldbook { margin: 12px 0 0; padding: 12px 0 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); border-radius: 0; }\n\n\n.dsh-tavern-worldbook { margin-bottom: 14px; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; }\n.dsh-tavern-worldbook-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }\n.dsh-tavern-worldbook-title { color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 700; }\n.dsh-tavern-worldbook-add { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsh-tavern-accent); padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 650; }\n.dsh-tavern-worldbook-add:hover { background: color-mix(in srgb, var(--dsh-tavern-accent) 20%, transparent); }\n.dsh-tavern-worldbook-empty { padding: 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-worldbook-group + .dsh-tavern-worldbook-group { margin-top: 12px; }\n.dsh-tavern-worldbook-group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-group-head b { color: var(--dsh-tavern-accent); font-size: 11px; }\n.dsh-tavern-worldbook-entry { margin-bottom: 10px; padding: 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-worldbook-entry-head { color: var(--dsh-tavern-accent); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-worldbook-entry-body { padding-top: 9px; }\n.dsh-tavern-worldbook-entry-actions { display: flex; align-items: center; gap: 4px; }\n.dsh-tavern-worldbook-danger-zone { display: flex; justify-content: flex-end; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-worldbook-kind { border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsh-tavern-accent); cursor: pointer; padding: 2px 7px; font-size: 10px; }\n.dsh-tavern-worldbook-trigger { display: block; max-width: 100%; margin: 0 0 6px; padding: 1px 0; overflow: hidden; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; font-size: 10px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-worldbook-trigger:hover { color: var(--dsh-tavern-accent); }\n.dsh-tavern-worldbook-note { margin: -2px 0 8px; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 1.5; }\n.dsh-tavern-worldbook-sort { display: flex; align-items: center; gap: 7px; width: fit-content; margin: 2px 0 12px; padding: 4px 5px 4px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }\n.dsh-tavern-worldbook-sort:focus-within { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n.dsh-tavern-worldbook-sort-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); color: var(--dsh-tavern-accent); font-size: 12px; font-weight: 800; }\n.dsh-tavern-worldbook-sort-label { font-size: 10px; font-weight: 700; white-space: nowrap; }\n.dsh-tavern-worldbook-sort-control { position: relative; display: inline-flex; align-items: center; }\n.dsh-tavern-worldbook-sort select { min-width: 76px; appearance: none; border: 0; border-radius: 6px; outline: 0; padding: 5px 24px 5px 8px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }\n.dsh-tavern-worldbook-sort-chevron { position: absolute; right: 8px; top: 50%; transform: translateY(-58%); color: var(--dsw-alias-label-tertiary); pointer-events: none; font-size: 12px; }\n.dsh-tavern-worldbook-del { border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; padding: 2px 6px; font-size: 11px; }\n.dsh-tavern-worldbook-del:hover { color: #c45f5f; background: rgba(196,95,95,.12); }\n.dsh-tavern-worldbook-entry .dsh-tavern-card-field { margin-bottom: 6px; }\n.dsh-tavern-worldbook-entry .dsh-tavern-card-field:last-child { margin-bottom: 0; }\n.dsh-tavern-worldbook-editor { padding: 10px 12px 24px; overflow-y: auto; }\n.dsh-tavern-worldbook-summary { margin: 0 0 10px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-worldbook-editor-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 6px; padding: 10px 0; background: var(--dsw-specific-sidebar-fill); }\n.dsh-tavern-worldbook-entry details { margin-top: 7px; }\n.dsh-tavern-worldbook-entry summary { cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }\n.dsh-tavern-worldbook-grid label { display: flex; flex-direction: column; gap: 3px; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-grid input,.dsh-tavern-worldbook-grid select { min-width: 0; padding: 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; }\n.dsh-tavern-worldbook-checks { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 7px 0; color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-tavern-worldbook-checks label { display: inline-flex; align-items: center; gap: 4px; }\n.dsh-tavern-card-save { position: sticky; bottom: 0; display: flex; justify-content: flex-end; padding: 10px 0 2px; background: linear-gradient(transparent, var(--dsw-specific-sidebar-fill) 28%); }\n.dsh-tavern-script-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l3); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-script-info { flex: 1; min-width: 150px; line-height: 1.5; }\n.dsh-tavern-script-info b { color: var(--dsh-tavern-accent); }\n.dsh-tavern-script-hero { flex: none; margin: 10px 12px 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); }\n.dsh-tavern-script-hero-title { color: var(--dsh-tavern-accent-active); font-size: 13px; font-weight: 800; cursor: pointer; }\n.dsh-tavern-script-hero-help { margin-top: 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n.dsh-tavern-script-hero .dsh-tavern-script-row { border-top-color: color-mix(in srgb, var(--dsh-tavern-accent) 28%, transparent); }\n.dsh-tavern-script-primary { border: 0; border-radius: 8px; padding: 6px 10px; background: var(--dsh-tavern-accent); color: var(--dsw-alias-brand-text, #fff); cursor: pointer; font-size: 11px; font-weight: 700; }\n.dsh-tavern-script-primary:disabled { opacity: .5; cursor: default; }\n@keyframes dsh-tavern-pulse { from { opacity: .35; } to { opacity: 1; } }\n.dsh-card-primary { border: 0; border-radius: var(--dsh-tavern-radius-md); padding: 10px 18px; background: var(--dsh-tavern-accent); color: var(--dsw-alias-brand-text, #fff); cursor: pointer; font-size: 14px; font-weight: 500; }\n.dsh-card-error { color: #c45f5f; font-size: 12px; }\n@media (max-width: 820px) {\n  .dsh-tavern-question { width: calc(100% - 24px); }\n}\n\n/* Compact writing-style navigation at the bottom of the status panel. */\n.dsh-tavern-style-guide > button {\n  display: flex; align-items: baseline; gap: 10px; width: 100%;\n  padding: 8px 0; border: 0; border-bottom: 1px solid var(--border, rgba(128,128,128,.16));\n  background: transparent; color: inherit; text-align: left; cursor: pointer;\n}\n.dsh-tavern-style-guide > button:last-child { border-bottom: 0; }\n.dsh-tavern-style-guide > button > span { flex-shrink: 0; font-size: 13px; }\n.dsh-tavern-style-guide > button > small { font-size: 11px; opacity: .65; }\n.dsh-tavern-style-guide > button:hover > span { text-decoration: underline; }\n.dsh-tavern-style-guide > button:disabled { opacity: .45; cursor: default; }\n\n.dsh-tavern-style-title { font-size: 17px; font-weight: 700; line-height: 1.5; margin-bottom: 8px; }\n\n/* The sidebar's translated, collapsed bottom panel extends beyond the viewport.\n   hidden still permits focus/scrollIntoView to scroll the whole fixed host,\n   stranding its tab bar above the viewport. Only pane content should scroll. */\nbody.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }\n\n/* Pocket's legacy :last-child header rule hides the native right-sidebar\n   corner added by the host. Restore that explicit seat, not the old utilities\n   row. Keep the native controller and its horizontal drawer transition. */\n@media (max-width: 767px) {\n  body.dsh-tavern-shell-active [data-phase] header:has([data-conversation-header-corner]) { position: relative; }\n  body.dsh-tavern-shell-active [data-phase] header [data-conversation-header-corner] {\n    display: flex !important;\n    position: absolute;\n    right: 8px;\n    top: 12px;\n    margin: 0;\n    z-index: 3;\n  }\n  body.dsh-tavern-shell-active [data-dsh-bottom-toggle] { display: none !important; }\n}\n\n.dsh-tavern-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }\n.dsh-tavern-history-action { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; padding: 4px 6px; border-radius: 4px; cursor: pointer; }\n.dsh-tavern-history-action:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: rgba(128, 128, 128, .12); }\n.dsh-tavern-history-action:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-history-selection { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 7px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n\n/* Player notebook: fixed UI typography, independent of story font settings. */\n.dsh-ledger { font-size: 13px; line-height: 1.55; }\n.dsh-ledger button { cursor: pointer; color: inherit; }\n.dsh-ledger-toggle { display: flex; justify-content: space-between; width: 100%; padding: 0; border: 0; background: transparent; font-size: 14px; font-weight: 600; }\n.dsh-ledger-toggle span { font-size: 12px; font-weight: 400; opacity: .65; }\n.dsh-ledger-tabs { display: flex; gap: 3px; margin: 12px 0; padding: 3px; border-radius: 9px; background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }\n.dsh-ledger-tabs button { display: flex; flex: 1; align-items: center; justify-content: center; gap: 6px; min-width: 0; border: 0; background: transparent; border-radius: 6px; padding: 6px 8px; font: inherit; color: var(--dsw-alias-label-secondary, inherit); }\n.dsh-ledger-tabs [aria-selected=\"true\"] { color: var(--dsw-alias-label-primary, inherit); background: var(--dsw-specific-sidebar-fill, Canvas); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }\n.dsh-ledger-count { font-size: 11px; opacity: .65; font-variant-numeric: tabular-nums; }\n.dsh-ledger .dsh-ledger-add, .dsh-ledger-actions button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, inherit); border-radius: 6px; padding: 5px 9px; font: inherit; }\n.dsh-ledger .dsh-ledger-add { font-size: 12px; }\n.dsh-ledger button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }\n.dsh-ledger button:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-ledger-card { margin: 8px 0; padding: 10px; border: 1px solid var(--dsw-alias-border-subtle, #555); border-radius: 7px; overflow-wrap: anywhere; }\n.dsh-ledger-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }\n.dsh-ledger-actions { display: flex; flex-shrink: 0; gap: 5px; font-size: 12px; }\n.dsh-ledger p { margin: 5px 0; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-ledger small, .dsh-ledger-field-label { opacity: .65; }\n.dsh-ledger h4 { margin: 14px 0 6px; }\n.dsh-ledger-scene { margin: 8px 0 8px 8px; padding-left: 10px; border-left: 1px solid var(--dsh-tavern-accent); }\n.dsh-ledger-scene summary { cursor: pointer; overflow-wrap: anywhere; }\n.dsh-ledger-scene-content { padding: 5px 0; }\n.dsh-ledger-form { margin: 10px 0; padding: 10px; border: 1px solid var(--dsh-tavern-accent); border-radius: 6px; }\n.dsh-ledger-form label { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }\n.dsh-ledger-form input:not([type=\"checkbox\"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: 6px; border: 1px solid #555; border-radius: 4px; color: inherit; background: transparent; font: inherit; }\n.dsh-ledger button:disabled { opacity: .45; cursor: default; }\n\n.dsh-tavern-panel-toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-panel-tabs { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: 6px; }\n.dsh-tavern-panel-tab, .dsh-tavern-panel-refresh { border: 0; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; padding: 6px 9px; cursor: pointer; }\n.dsh-tavern-panel-tab { text-align: left; overflow-wrap: anywhere; }\n.dsh-tavern-panel-tabs [aria-selected=\"true\"] { background: color-mix(in srgb, var(--dsh-tavern-accent) 10%, transparent); color: var(--dsw-alias-label-primary); font-weight: 650; }\n.dsh-tavern-panel-refresh { flex-shrink: 0; }\n.dsh-tavern-panel-tab:hover, .dsh-tavern-panel-refresh:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-tavern-panel-tab:focus-visible, .dsh-tavern-panel-refresh:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-tavern-status-runtime > [role=\"tabpanel\"] { min-width: 0; width: 100%; }\n.dsh-tavern-status-runtime > [role=\"tabpanel\"][hidden] { display: none; }\n\n.dsh-tavern-choice-trigger:disabled { opacity: .5; cursor: not-allowed; }\n\n.dsh-tavern-image-preview { position: fixed; inset: 0; box-sizing: border-box; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 64px 20px 20px; border: 0; background: rgba(0,0,0,.92); overflow: hidden; }\n.dsh-tavern-image-preview::backdrop { background: rgba(0,0,0,.8); }\n.dsh-tavern-image-preview img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }\n.dsh-tavern-image-preview button { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); min-height: 40px; padding: 8px 16px; border: 1px solid #aaa; border-radius: 8px; background: #fff; color: #111; cursor: pointer; font-size: 16px; }\n\n.dsh-tavern-error-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 12px; font-size: 12px; }\n.dsh-tavern-error-controls[hidden] { display: none; }\n.dsh-tavern-error-controls button { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 3px 8px; cursor: pointer; }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay { border-color: rgba(166,107,53,.55); color: #a66b35; font-weight: 650; }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay:hover { background: rgba(166,107,53,.18); }\n.dsh-tavern-error-controls button.dsh-tavern-error-replay:disabled { opacity: .55; cursor: default; }\n\n/* Conversation groups are a sidebar projection, not folders in stored chat data. */\n.dsh-tavern-history-group { flex-shrink: 0; min-width: 0; }\n.dsh-tavern-history-group-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 9px 12px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.dsh-tavern-history-group-toggle:hover { background: rgba(128,128,128,.12); }\n.dsh-tavern-history-group-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }\n.dsh-tavern-history-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }\n.dsh-tavern-history-group-count { flex-shrink: 0; opacity: .6; font-size: 12px; }\n.dsh-tavern-history-group-items { padding-left: 10px; display: flex; flex-direction: column; gap: 4px; }\n\n.dsh-tavern-history-group-items .dsh-tavern-side-row-meta > span:last-child { white-space: nowrap; flex-shrink: 0; }\n\n.dsh-tavern-card-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; }\n.dsh-tavern-card-batch .danger { color: #c34848; }\n.dsh-tavern-card-batch-count { color: var(--dsw-alias-label-secondary); font-size: 12px; padding: 0 4px; font-weight: 500; }\n.dsh-tavern-card-batch-notice { flex-basis: 100%; overflow-wrap: anywhere; font-size: 12px; margin-top: 4px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-card-batch-checkbox { flex: 0 0 18px; width: 18px; height: 18px; margin: 0 6px 0 2px; cursor: pointer; accent-color: var(--dsh-tavern-accent); border-radius: 4px; vertical-align: middle; }\n.dsh-tavern-library-card.selected { border-color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 14%, transparent); }\n\n.dsh-tavern-card-import-hint { padding: 6px 12px 0; }\n.dsh-tavern-library > .dsh-tavern-card-batch { flex-shrink: 0; margin: 0 12px; padding: 10px 0 6px; gap: 10px; }\n.dsh-tavern-library > .dsh-tavern-card-batch + .dsh-tavern-library-search { margin-top: 12px; }\n\n/* Size every opening by content; scroll the dialog instead of squeezing long forms. */\n.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }\n/* In block pickers this is inert; avoid a descendant :has() before universal children. */\n.dsh-tavern-card-picker > * { flex-shrink: 0; }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview { height: auto; min-height: 0; max-height: min(1200px, 85dvh); flex: 0 0 auto; }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview:has(iframe) { height: min(1200px, 85dvh); }\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview .dsh-tavern-message-frame-slot,\n.dsh-tavern-card-picker > .dsh-tavern-greeting-preview .dsh-tavern-message-frame { min-height: min(1200px, 85dvh); }\n@media (max-width: 640px) {\n  .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { max-height: calc(100dvh - 24px); }\n}\n\n.dsh-tavern-worldbook-bound { padding: 8px 12px; font-size: 12px; text-align: left; overflow-wrap: anywhere; }\n.dsh-tavern-worldbook-new { margin: 12px 0 8px; padding: 8px 12px; }\n.dsh-tavern-worldbook > .dsh-tavern-script-row:first-child { border-top: 0; margin-top: 0; padding-top: 0; }\n\n/* Worldbook bindings: existing relationships lead; additions stay folded. */\n.dsh-tavern-worldbook-bindings { margin: 0 0 16px; padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-worldbook-bindings-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 600; }\n.dsh-tavern-worldbook-bindings-count { color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 400; }\n.dsh-tavern-worldbook-bound-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }\n.dsh-tavern-worldbook-bound-card { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 9px 10px; border-radius: 7px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-worldbook-bound-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 500; }\n.dsh-tavern-worldbook-binding-link { flex-shrink: 0; padding: 3px 0 3px 6px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; cursor: pointer; }\n.dsh-tavern-worldbook-binding-link:hover:not(:disabled) { color: var(--dsw-alias-label-primary); text-decoration: underline; }\n.dsh-tavern-worldbook-binding-add { margin-top: 10px; }\n.dsh-tavern-worldbook-binding-add summary { width: fit-content; padding: 3px 0; color: var(--dsw-alias-label-secondary); font-size: 11px; cursor: pointer; }\n.dsh-tavern-worldbook-binding-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }\n.dsh-tavern-worldbook-binding-form select { flex: 1 1 170px; min-width: 0; max-width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 12px; }\n.dsh-tavern-worldbook-binding-confirm { min-height: 32px; padding: 4px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }\n.dsh-tavern-worldbook-bindings button:disabled { opacity: .45; cursor: default; }\n.dsh-tavern-worldbook-bindings :is(button, summary, select):focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 3px; }\n.dsh-tavern-worldbook-binding-empty, .dsh-tavern-worldbook-binding-hint { margin: 6px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 1.6; }\n\n.dsh-tavern-preset-drag { cursor: grab; flex: none; padding: 4px 8px; border: 0; background: transparent; color: inherit; font-size: 20px; }\n.dsh-tavern-preset-drag:active { cursor: grabbing; }\n.dsh-tavern-preset-drop { height: 4px; overflow: hidden; line-height: 18px; box-sizing: border-box; border: 1px solid transparent; border-radius: 6px; text-align: center; font-size: 12px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-presets.is-dragging .dsh-tavern-preset-drop { border: 1px dashed var(--dsh-tavern-accent); }\n.dsh-tavern-presets.is-dragging .is-drop-target { outline: 2px solid var(--dsh-tavern-accent); outline-offset: -2px; }\n.dsh-tavern-presets.is-dragging .dsh-tavern-prompt-row.is-drop-target { outline: none; box-shadow: 0 -3px var(--dsh-tavern-accent); }\n\n.dsh-tavern-preset-entry-head.has-drag { grid-template-columns: auto minmax(0, 1fr) auto; }\n\n/* Profile scope: current game, future games, and library browsing are separate. */\n.dsh-tavern-profile-controls { display: grid; gap: 18px; padding: 16px 18px 0; }\n.dsh-tavern-profile-game { padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major); }\n.dsh-tavern-profile-section-title { font-size: 12px; font-weight: 600; margin-bottom: 9px; }\n.dsh-tavern-profile-current, .dsh-tavern-profile-library-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }\n.dsh-tavern-profile-current { justify-content: space-between; }\n.dsh-tavern-profile-current strong { font-size: 16px; overflow-wrap: anywhere; }\n.dsh-tavern-profile-current .dsh-tavern-user-profile-actions { margin: 0; }\n.dsh-tavern-profile-controls select { min-width: 0; max-width: 100%; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major); color: inherit; font: inherit; }\n.dsh-tavern-profile-library-bar select { flex: 1; }\n.dsh-tavern-profile-default { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }\n.dsh-tavern-profile-controls small { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 1.5; margin-top: 6px; }\n.dsh-tavern-profile-default small { grid-column: 1 / -1; margin: 0; }\n.dsh-tavern-profile-library { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 16px; }\n.dsh-tavern-profile-update { margin-top: 12px; display: grid; justify-items: start; gap: 8px; font-size: 12px; line-height: 1.5; }\n.dsh-tavern-profile-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }\n.dsh-tavern-profile-choices p { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-history-window { min-height: 0; display: flex; flex-direction: column; flex: 1; }\n.dsh-tavern-history-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; position: sticky; top: 0; z-index: 2; background: var(--dsw-specific-input-major); }\n.dsh-tavern-history-controls small { color: var(--dsw-alias-label-tertiary); }\n\n/* Shared in-app text prompt. Replaces window.prompt, which Electron never implements;\n   every previous caller failed silently on desktop. */\n.dsh-tavern-prompt {\n  box-sizing: border-box; position: fixed; inset: 0; margin: auto;\n  width: min(400px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px);\n  padding: 16px; border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 14px; background: var(--dsw-specific-sidebar-fill);\n  color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0, 0, 0, .35);\n}\n.dsh-tavern-prompt::backdrop { background: rgba(0, 0, 0, .52); }\n.dsh-tavern-prompt-panel { display: flex; flex-direction: column; gap: 10px; }\n.dsh-tavern-prompt-title { font-size: 15px; font-weight: 700; }\n.dsh-tavern-prompt-input {\n  box-sizing: border-box; width: 100%; padding: 8px 10px;\n  border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px;\n  background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 13px;\n}\n.dsh-tavern-prompt-input:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n.dsh-tavern-prompt-error { color: #c45f5f; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }\n.dsh-tavern-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; }\n\n.dsh-tavern-settings-text {\n  box-sizing: border-box; width: min(220px, 100%); padding: 7px 9px;\n  border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px;\n  background: var(--dsw-specific-input-major); color: inherit; font: inherit; font-size: 13px;\n}\n.dsh-tavern-settings-text:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 1px; }\n\n.dsh-tavern-export-menu .dsh-tavern-more-menu { top: calc(100% + 6px); bottom: auto; }\n\n.dsh-tavern-skill-assignments {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 12px 20px;\n  padding: 12px 0;\n}\n.dsh-tavern-skill-assignments label {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  cursor: pointer;\n}\n\n.dsh-tavern-skills > .dsh-tavern-question-sub {\n  padding: 0 16px;\n}\n\n.dsh-tavern-skills > .dsh-tavern-status-head { display: flex; align-items: center; justify-content: space-between; }\n.dsh-tavern-skills > .dsh-tavern-resource-body { padding: 12px 16px; }\n.dsh-tavern-skill-group { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }\n.dsh-tavern-skill-group > summary { cursor: pointer; padding: 12px 14px; font-size: 14px; font-weight: 600; background: var(--dsw-specific-input-major); }\n.dsh-tavern-skill-count { margin-left: 8px; font-size: 12px; font-weight: 400; opacity: .6; }\n.dsh-tavern-skill-row { padding: 14px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-skill-row .dsh-tavern-resource-group-title { margin: 0; gap: 10px; }\n.dsh-tavern-skill-row .dsh-tavern-resource-name { font-size: 15px; font-weight: 700; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; text-align: left; }\n.dsh-tavern-skill-row .dsh-tavern-resource-open:hover { color: var(--dsh-tavern-accent); text-decoration: underline; }\n.dsh-tavern-skill-row .dsh-tavern-resource-open:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 3px; }\n.dsh-tavern-skill-row > p { font-size: 12px; line-height: 1.6; margin: 7px 0 10px; opacity: .8; }\n.dsh-tavern-skill-options > summary { cursor: pointer; font-size: 12px; opacity: .65; }\n.dsh-tavern-skill-options .dsh-tavern-skill-assignments { padding: 10px 0 0; gap: 10px 16px; font-size: 12px; }\n.dsh-tavern-skill-empty { padding: 16px; font-size: 12px; opacity: .55; }\n.dsh-tavern-skill-row[draggable=\"true\"] { cursor: grab; }\n.dsh-tavern-skill-row.is-dragging { opacity: .4; }\n.dsh-tavern-skill-group.is-drop-target { border-color: var(--dsh-tavern-accent); box-shadow: inset 0 0 0 1px var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-skill-grip { opacity: .4; font-size: 18px; user-select: none; }\n.dsh-tavern-skill-content { overflow: auto; min-height: 0; }\n.dsh-tavern-skill-content h3 { margin: 0 0 12px; font-size: 13px; }\n.dsh-tavern-skill-content pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; }\n\n.dsh-tavern-background-config { border: 1px solid var(--border, #ddd); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }\n.dsh-tavern-background-config > summary { padding: 14px 16px; cursor: pointer; }\n.dsh-tavern-background-config > summary > span { display: block; margin-top: 6px; overflow-wrap: anywhere; }\n.dsh-tavern-background-config-body { display: grid; gap: 16px; padding: 0 16px 16px; }\n.dsh-tavern-background-config-body > p { margin: 0; }\n.dsh-tavern-background-config-body > label { display: grid; gap: 8px; min-width: 0; }\n.dsh-tavern-background-config-body select { width: 100%; min-width: 0; }\n.dsh-tavern-background-config-body > .dsh-tavern-background-task { display: flex; align-items: center; justify-content: space-between; gap: 16px; }\n.dsh-tavern-background-task .dsh-tavern-settings-desc { display: block; margin-top: 5px; }\n.dsh-tavern-background-task input[role=\"switch\"] { appearance: none; -webkit-appearance: none; position: relative; flex: 0 0 36px; width: 36px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 10px; background: #64748b; cursor: pointer; transition: background .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-background-task input[role=\"switch\"]::after { content: \"\"; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s cubic-bezier(0.23, 1, 0.32, 1); }\n.dsh-tavern-background-task input[role=\"switch\"]:checked { background: #16766b; }\n.dsh-tavern-background-task input[role=\"switch\"]:checked::after { transform: translateX(16px); }\n.dsh-tavern-background-task input[role=\"switch\"]:focus-visible { outline: 2px solid #16766b; outline-offset: 3px; }\n.dsh-tavern-background-task input[role=\"switch\"]:disabled { opacity: .6; cursor: not-allowed; }\n.dsh-tavern-conversation-basics { display: grid; gap: 16px; margin-bottom: 24px; }\n.dsh-tavern-conversation-basics h3 { margin: 0; }\n.dsh-tavern-conversation-basics label { display: grid; gap: 8px; }\n.dsh-tavern-conversation-basics select { width: 100%; min-width: 0; }\n\n.dsh-tavern-skill-description { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }\n.dsh-tavern-skill-description:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 3px; }\n.dsh-tavern-skill-description:disabled { cursor: wait; }\n\n/* Conversation settings share one spacing and control system. */\n.dsh-local-settings { container-type: inline-size; }\n.dsh-local-settings .dsh-tavern-status-body { padding: 16px; }\n.dsh-local-intro { margin: 0 0 18px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.6; }\n.dsh-local-section { display: grid; gap: 16px; padding: 18px; margin-bottom: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major); }\n.dsh-local-section h3 { margin: 0; font-size: 15px; font-weight: 700; }\n.dsh-local-field, .dsh-local-section > label { display: grid; gap: 6px; min-width: 0; }\n.dsh-local-field label { display: grid; gap: 8px; }\n.dsh-local-settings select, .dsh-local-settings input:not([type=\"checkbox\"]) { box-sizing: border-box; width: 100%; min-width: 0; height: 36px; padding: 6px 10px; font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }\n.dsh-local-settings label, .dsh-local-label { font-size: 13px; color: var(--dsw-alias-label-primary); }\n.dsh-local-settings p, .dsh-local-settings .dsh-tavern-settings-desc { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }\n.dsh-local-settings .dsh-local-warning { color: #ad6726; font-size: 11px; }\n.dsh-local-settings .dsh-local-intro { margin-bottom: 18px; }\n.dsh-local-settings .dsh-tavern-background-task { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-local-profile .dsh-tavern-profile-game { padding: 0; margin: 0; border: 0; background: transparent; }\n.dsh-local-profile details { margin-top: 8px; font-size: 12px; }\n.dsh-local-profile summary { cursor: pointer; color: var(--dsw-alias-label-secondary); }\n.dsh-local-profile .dsh-tavern-user-profile-text { max-height: 240px; overflow: auto; padding: 10px; margin-top: 8px; background: var(--dsw-specific-sidebar-fill); border-radius: 8px; }\n.dsh-local-feedback { display: block; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n@container (min-width: 560px) {\n  .dsh-local-section > label:not(.dsh-tavern-background-task), .dsh-local-field label { grid-template-columns: minmax(100px, 1fr) minmax(220px, 1.6fr); align-items: center; }\n  .dsh-local-profile { grid-template-columns: minmax(100px, 1fr) minmax(220px, 1.6fr); align-items: start; }\n}\n\n/* Skill document reader and editor */\n.dsh-skill-toolbar { flex-wrap: wrap; gap: 10px; }\n.dsh-skill-toolbar .dsh-tavern-status-title { min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-skill-content { padding: clamp(16px, 3vw, 32px); }\n.dsh-skill-document { max-width: 880px; margin: 0 auto; line-height: 1.8; overflow-wrap: anywhere; }\n.dsh-skill-document table { display: block; max-width: 100%; overflow-x: auto; }\n.dsh-skill-document pre { max-width: 100%; overflow-x: auto; }\n.dsh-skill-reference { max-width: 880px; margin: 24px auto 0; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 12px; }\n.dsh-skill-reference > summary { padding: 14px 18px; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }\n.dsh-skill-reference > .dsh-skill-document { padding: 8px 20px 20px; }\n.dsh-skill-editor { box-sizing: border-box; width: 100%; min-height: 55vh; padding: 20px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 12px; background: var(--background, Canvas); color: inherit; font: 14px/1.7 ui-monospace, monospace; resize: vertical; tab-size: 2; }\n.dsh-skill-editor:focus-visible { outline: 2px solid #a76c36; outline-offset: 2px; }\n\n.dsh-tavern-card-organization { display: flex; gap: 10px; align-items: center; margin: 12px 0; }\n.dsh-tavern-library > .dsh-tavern-card-organization { margin: 6px 12px 8px; }\n.dsh-tavern-library > .dsh-tavern-card-organization > .dsh-tavern-library-search,\n.dsh-tavern-library > .dsh-tavern-card-organization > .dsh-tavern-group-picker > summary { box-sizing: border-box; height: 32px; min-height: 32px; padding: 0 10px; font-size: 13px; line-height: 1.4; }\n.dsh-tavern-card-organization > .dsh-tavern-library-search { flex: 1; width: 0; min-width: 80px; margin: 0; }\n.dsh-tavern-group-picker { position: relative; flex: 0 1 160px; min-width: 105px; }\n.dsh-tavern-group-picker > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 0 12px; border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 9px; background: var(--dsw-specific-input-major, #ffffff08); cursor: pointer; list-style: none; transition: border-color .15s, background .15s; }\n.dsh-tavern-group-picker > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-group-picker > summary > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dsh-tavern-group-picker[open] > summary { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-tavern-group-picker > summary > span:last-child { opacity: .6; transition: transform .15s; }\n.dsh-tavern-group-picker[open] > summary > span:last-child { transform: rotate(180deg); }\n.dsh-tavern-group-picker > summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); outline-offset: 2px; }\n.dsh-tavern-group-menu { position: absolute; top: calc(100% + 6px); left: 0; width: min(220px, 75vw); z-index: 50; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 12px; padding: 5px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 8px 24px #0003; transform-origin: top left; }\n.dsh-tavern-group-menu:popover-open { animation: dsh-tavern-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n@keyframes dsh-tavern-menu-in { from { opacity: 0; transform: scale(0.97); } }\n.dsh-tavern-group-options { max-height: 280px; overflow-y: auto; }\n.dsh-tavern-group-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 7px 11px; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 13px; line-height: 1.4; cursor: pointer; border-radius: 7px; overflow-wrap: anywhere; transition: background .12s, color .12s; }\n.dsh-tavern-group-menu button:hover, .dsh-tavern-group-menu button:focus-visible { background: var(--dsw-specific-input-major, #ffffff12); }\n.dsh-tavern-group-menu button[aria-pressed=\"true\"] { font-weight: 500; color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 13%, transparent); }\n.dsh-tavern-group-options button > span { width: 16px; flex-shrink: 0; order: 1; margin-left: auto; text-align: center; }\n.dsh-tavern-group-menu-footer { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); margin: 5px 5px 0; padding-top: 5px; }\n.dsh-tavern-group-menu-footer button { font-size: 12px; color: var(--dsw-alias-label-secondary); min-height: 32px; padding-left: 6px; }\n@media (prefers-reduced-motion: reduce) {\n  .dsh-tavern-btn { transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1); }\n  .dsh-tavern-side-row-menu,\n  .dsh-tavern-more-menu:not([hidden]),\n  .dsh-tavern-group-menu:popover-open { animation: none; }\n  .dsh-tavern-group-picker > summary > span:last-child,\n  .dsh-tavern-prompt-state.is-toggle::after,\n  .dsh-tavern-background-task input[role=\"switch\"]::after { transition: none; }\n  .dsh-tavern-settings-track,\n  .dsh-tavern-prompt-state.is-toggle::before,\n  .dsh-tavern-background-task input[role=\"switch\"] { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n  .dsh-tavern-settings-track::after { transition: background 150ms cubic-bezier(0.23, 1, 0.32, 1); }\n}\n.dsh-tavern-group-manager { width: min(440px, calc(100vw - 32px)); max-height: 80vh; border: 1px solid var(--dsw-alias-border-l2, #454750); border-radius: 12px; background: var(--dsw-specific-sidebar-fill, #202124); color: var(--dsw-alias-label-primary, #eee); padding: 0; }\n.dsh-tavern-group-manager::backdrop { background: #0008; }\n.dsh-tavern-group-manager-content { padding: 20px; }\n.dsh-tavern-group-manager-head, .dsh-tavern-group-manager-row, .dsh-tavern-group-manager-footer { display: flex; align-items: center; gap: 8px; }\n.dsh-tavern-group-manager-head { justify-content: space-between; margin-bottom: 12px; }\n.dsh-tavern-group-manager-head h3 { margin: 0; font-size: 16px; }\n.dsh-tavern-group-manager-row { padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l2, #454750); }\n.dsh-tavern-group-manager-row > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }\n.dsh-tavern-group-manager-footer { margin-top: 18px; flex-wrap: wrap; }\n.dsh-tavern-card-detail-organization { flex: none; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 16px; }\n.dsh-tavern-card-detail-organization label { flex: 1; min-width: 110px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; font-size: 11px; line-height: 1.4; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-card-detail-organization select { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-major, #ffffff08); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; }\n.dsh-tavern-card-detail-organization > button { height: 34px; padding: 0 12px; white-space: nowrap; border-radius: 7px; }\n.dsh-tavern-card-detail > .dsh-tavern-status-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; }\n.dsh-tavern-card-detail > .dsh-tavern-status-head > button { margin-bottom: 6px; }\n.dsh-tavern-card-detail .dsh-tavern-library-head-actions { margin-top: 6px; gap: 8px; }\n.dsh-tavern-card-detail > .dsh-tavern-script-hero { margin: 0 16px; }\n.dsh-tavern-card-detail > .dsh-tavern-card-fields { padding: 16px; }\n.dsh-tavern-card-detail-organization button[aria-pressed=\"true\"] { color: var(--dsh-tavern-accent); }\n.dsh-tavern-card-batch-panel { padding: 10px 0; }\n@media (max-width: 600px) {\n  .dsh-tavern-group-picker { flex-basis: 140px; }\n}\n\n.dsh-tavern-card-row-menu { flex: none; }\n.dsh-tavern-card-row-menu > summary { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 5px; list-style: none; cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 18px; }\n.dsh-tavern-card-row-menu > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-card-row-menu > summary:hover, .dsh-tavern-card-row-menu[open] > summary { background: var(--dsw-specific-input-major, #ffffff12); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-card-row-popup { position: fixed; inset: auto; margin: 0; z-index: 1000; width: 168px; max-width: calc(100vw - 24px); box-sizing: border-box; overflow-y: auto; padding: 4px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 7px; background: var(--dsw-specific-sidebar-fill, #202124); box-shadow: 0 4px 14px #0003; }\n.dsh-tavern-card-row-menu-title { padding: 5px 8px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-row-popup button { display: flex; gap: 8px; align-items: center; width: 100%; min-height: 30px; border: 0; border-radius: 4px; padding: 5px 8px; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; cursor: pointer; }\n.dsh-tavern-card-row-popup button > span { width: 12px; flex-shrink: 0; order: 1; margin-left: auto; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-card-row-popup button:hover, .dsh-tavern-card-row-popup button:focus-visible { background: var(--dsw-specific-input-major, #ffffff12); }\n\n.dsh-tavern-group-add { display: block; margin: 12px auto; padding: 7px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }\n.dsh-tavern-group-add:hover { background: var(--dsw-specific-input-major, #ffffff12); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-group-add-list { max-height: min(48vh, 360px); overflow-y: auto; margin-top: 12px; }\n.dsh-tavern-group-add-list label { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; }\n.dsh-tavern-group-add-list label:hover { background: var(--dsw-specific-input-major, #ffffff12); }\n.dsh-tavern-group-add-list span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }\n.dsh-tavern-group-add-list small { display: block; margin-top: 3px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n\n.dsh-tavern-character-design-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }\n.dsh-tavern-character-design-head .dsh-tavern-status-label { margin: 0; }\n\n.dsh-tavern-group-menu[popover] { position: fixed; inset: auto; margin: 0; overflow-y: auto; color: var(--dsw-alias-label-primary); }\n\n/* Script navigation stays compact inside the resizable status sidebar. */\n.dsh-script-nav { min-width: 0; font-size: 13px; line-height: 1.5; }\n.dsh-script-nav .dsh-tavern-status-label { font-size: 12px; letter-spacing: .03em; }\n.dsh-script-nav p { margin: 8px 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }\n.dsh-script-nav .dsh-script-nav-hint { margin: 0 0 12px; }\n.dsh-script-nav-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }\n.dsh-script-nav input { box-sizing: border-box; flex: 1 1 72px; width: 80px; min-width: 64px; max-width: 160px; height: 32px; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-specific-input-fill, transparent); color: var(--dsw-alias-label-primary); font: inherit; font-variant-numeric: tabular-nums; }\n.dsh-script-nav button { box-sizing: border-box; appearance: none; min-height: 32px; padding: 5px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 1.4; white-space: nowrap; cursor: pointer; transition: background .15s, border-color .15s; }\n.dsh-script-nav button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsh-tavern-accent); }\n.dsh-script-nav button:disabled { opacity: .4; cursor: default; }\n.dsh-script-nav button:focus-visible, .dsh-script-nav input:focus-visible, .dsh-script-nav summary:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }\n.dsh-script-nav-toolbar button[type=\"submit\"] { color: var(--dsh-tavern-accent); border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, transparent); }\n.dsh-script-nav .dsh-script-nav-range { margin: 12px 0 8px; font-size: 11px; font-variant-numeric: tabular-nums; }\n.dsh-script-nav .dsh-script-nav-item { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: transparent; }\n.dsh-script-nav .dsh-script-nav-item[aria-current=\"step\"] { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 7%, transparent); box-shadow: inset 3px 0 var(--dsh-tavern-accent); }\n.dsh-script-nav summary { cursor: pointer; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); }\n.dsh-script-nav summary::marker { color: var(--dsw-alias-label-secondary); font-size: 10px; }\n.dsh-script-nav .dsh-tavern-script-chunk-text { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }\n.dsh-script-nav .dsh-script-nav-choose { display: block; margin: 8px 0 0 auto; min-height: 26px; padding: 3px 8px; color: var(--dsh-tavern-accent); border-color: transparent; }\n.dsh-script-nav-pages { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-script-nav [role=\"alert\"] { color: #c45f5f; }\n\n.dsh-script-nav .dsh-script-nav-notice { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); color: inherit; font-weight: 600; }\n.dsh-script-nav .dsh-script-nav-item[aria-current=\"step\"] .dsh-script-nav-choose { opacity: 1; font-weight: 600; border-color: color-mix(in srgb, var(--dsh-tavern-accent) 40%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }\n\n.dsh-script-nav-position { display: flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }\n\n.dsh-tavern-preset-regex-head { grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px; padding: 5px 8px; }\n.dsh-tavern-preset-regex-head > .dsh-tavern-prompt-role { font-size: 9px; line-height: 1.4; color: var(--dsh-tavern-accent); }\n.dsh-tavern-preset-regex-head .dsh-tavern-prompt-title span { margin-top: 1px; }\n.dsh-tavern-prompt-row:has(> .dsh-tavern-preset-regex-head) { margin-bottom: 4px; }\n\n/* Full-width request inspection has no chat-column resize target. */\n[data-phase=\"active\"]:has(.dsh-tavern-full-context) [data-width-handle] {\n  display: none;\n}\n\n.dsh-tavern-full-context { box-sizing: border-box; width: 100%; min-width: 0; padding: 24px clamp(16px, 3vw, 40px) 32px; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }\n.dsh-context-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }\n.dsh-context-header h3 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 600; }\n.dsh-context-header p { margin: 4px 0 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context button { flex: none; padding: 6px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }\n.dsh-tavern-full-context button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }\n.dsh-tavern-full-context button:disabled { opacity: .5; cursor: default; }\n.dsh-context-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 18px; color: var(--dsw-alias-label-secondary); font-size: 12px; }\n.dsh-context-meta time { color: var(--dsw-alias-label-tertiary); }\n.dsh-context-badge { padding: 2px 8px; border-radius: 6px; background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-context-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }\n.dsh-context-toolbar input { flex: 1 1 220px; min-width: 0; box-sizing: border-box; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; }\n.dsh-context-toolbar input::placeholder { color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context :is(button,input,summary):focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }\n.dsh-context-list { border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }\n.dsh-context-list details + details { border-top: 1px solid var(--dsw-alias-border-l2); }\n.dsh-context-list summary { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; list-style: none; border-radius: 8px; }\n.dsh-context-list summary::-webkit-details-marker { display: none; }\n.dsh-context-list summary:hover { background: var(--dsw-alias-interactive-bg-hover); }\n.dsh-context-chevron { flex: none; width: 12px; color: var(--dsw-alias-label-tertiary); font-size: 20px; line-height: 20px; transition: transform .15s; }\n.dsh-context-list details[open] > summary .dsh-context-chevron { transform: rotate(90deg); }\n.dsh-context-section-title { min-width: 0; flex: 1; font-weight: 500; }\n.dsh-context-count { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }\n.dsh-context-list pre { margin: 0; padding: 16px 20px; border-top: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); font: 12px/1.8 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }\n.dsh-context-footnote { margin: 14px 2px 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }\n.dsh-context-empty { margin: 0; padding: 28px 16px; text-align: center; color: var(--dsw-alias-label-tertiary); }\n.dsh-tavern-full-context [role=alert] { color: var(--dsw-alias-state-error-primary); }\n@media (max-width: 600px) { .dsh-context-toolbar input { flex-basis: 100%; } .dsh-context-list summary { padding: 10px; gap: 6px; } .dsh-context-list pre { padding: 12px; } }\n\n.dsh-context-list .dsh-context-source { margin: 8px 14px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }\n.dsh-context-list .dsh-context-source > summary { font-size: 12px; color: var(--dsw-alias-label-tertiary); padding: 8px 10px; }\n\n.dsh-context-part-label { padding: 8px 20px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }\n\n/* Shared by global defaults and conversation writing-skill controls. */\n.dsh-tavern-writing-skill,\n.dsh-local-settings .dsh-tavern-writing-skill { display: block; padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }\n.dsh-tavern-writing-skill > .dsh-tavern-writing-skill-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0; cursor: pointer; }\n.dsh-tavern-writing-skill-heading > span { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }\n.dsh-tavern-writing-skill > .dsh-tavern-settings-desc { margin: 6px 0 0; }\n.dsh-ejs-editor { box-sizing:border-box; width:min(1100px,calc(100vw - 32px)); height:min(800px,90vh); padding:0; border:1px solid var(--dsw-alias-border-l2); border-radius:14px; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary); box-shadow:0 18px 54px #0005; }\n.dsh-ejs-editor[open] { display:flex; flex-direction:column; }\n.dsh-ejs-editor::backdrop { background:#0007; }\n.dsh-ejs-editor-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; }\n.dsh-ejs-editor-head { border-bottom:1px solid var(--dsw-alias-border-l2); }\n.dsh-ejs-editor h2 { margin:0; font-size:17px; }\n.dsh-ejs-editor p { margin:5px 0 0; color:var(--dsw-alias-label-secondary); font-size:12px; }\n\n.dsh-template-panel-body { flex:1; min-height:0; overflow:auto; padding:20px; }\n.dsh-template-section + .dsh-template-section { margin-top:24px; padding-top:20px; border-top:1px solid var(--dsw-alias-border-l2); }\n.dsh-template-section h3 { margin:0 0 8px; font-size:15px; }\n.dsh-template-panel .dsh-template-help { margin:0 0 16px; line-height:1.6; }\n.dsh-template-settings-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px 24px; margin-bottom:16px; }\n.dsh-template-setting { display:flex; justify-content:space-between; align-items:center; gap:12px; font-size:13px; min-height:32px; }\n.dsh-template-setting input[type=checkbox] { accent-color:var(--dsh-tavern-accent-active); }\n.dsh-template-panel input[type=number] { width:80px; }\n.dsh-template-panel textarea,.dsh-template-panel select,.dsh-template-panel input[type=number] { box-sizing:border-box; padding:8px; border:1px solid var(--dsw-alias-border-l2); border-radius:8px; background:var(--dsw-specific-input-major); color:inherit; font:inherit; }\n.dsh-template-panel textarea { display:block; width:100%; min-height:120px; margin:12px 0; resize:vertical; }\n.dsh-template-panel summary { cursor:pointer; margin:12px 0; font-size:13px; }\n.dsh-template-actions { display:flex; gap:8px; }\n.dsh-template-panel .dsh-template-feedback { white-space:pre-wrap; overflow-wrap:anywhere; margin-top:10px; }\n\n/* Keep the existing browsing context when presenting a card at screen size. */\n.dsh-tavern-message-frame-slot > iframe.dsh-tavern-message-frame:fullscreen { width: 100vw !important; height: 100vh !important; max-height: none !important; background: var(--dsw-alias-bg-base, Canvas); }\n\n.dsh-tavern-immersive-header { display: none !important; }\n.dsh-tavern-restore-header { align-self: center; flex: none; border: 1px solid var(--dsw-alias-border-l2); border-top: 0; border-radius: 0 0 9px 9px; padding: 2px 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; cursor: pointer; }\n.dsh-tavern-restore-header[hidden] { display: none !important; }\n.dsh-tavern-restore-header:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 2px; }\n\n/* Worldbook entries put the editable text ahead of occasional configuration. */\n.dsh-tavern-worldbook-entry > .dsh-tavern-worldbook-entry-head { font-size: 14px; font-weight: 700; line-height: 1.6; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }\n.dsh-tavern-worldbook-entry-actions { gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }\n.dsh-tavern-worldbook-entry-actions > label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dsw-alias-label-secondary); }\n.dsh-tavern-worldbook-entry-actions input { margin: 0; }\n.dsh-tavern-worldbook-content > label { font-size: 12px; color: var(--dsw-alias-label-primary); margin-bottom: 7px; }\n.dsh-tavern-worldbook-content textarea.large { min-height: 280px; max-height: 70vh; padding: 12px; font-size: 13px; line-height: 1.75; background: var(--dsw-specific-input-major); }\n.dsh-tavern-worldbook-entry-settings { border-top: 1px solid var(--dsw-alias-border-l2); padding-top: 10px; }\n.dsh-tavern-worldbook-entry-settings > summary { font-size: 11px; padding: 2px 0; }\n.dsh-tavern-worldbook-entry-settings[open] > summary { margin-bottom: 10px; }\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-card-field input,\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-grid input,\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-grid select { font-size: 11px; padding: 5px 7px; }\n.dsh-tavern-worldbook-entry-settings .dsh-tavern-worldbook-checks { font-size: 11px; }\n\n/* DSH 0.1.5-rc.2: hide Open in App and native log-download menu in Tavern's header. */\nheader .CAgGvG_split,\nheader .nL4_yW_moreButton { display: none !important; }\n\n/* —— 人物卡库 / 详情：Claude 暖陶土·编辑风（scoped 样例，不污染其它侧栏） —— */\n.dsh-tavern-card-library,\n.dsh-tavern-card-detail {\n  --dsh-card-action: var(--dsh-tavern-accent);\n  --dsh-card-action-active: var(--dsh-tavern-accent-active);\n  --dsh-card-action-soft: var(--dsh-tavern-accent-soft);\n  --dsh-card-action-border: var(--dsh-tavern-accent-border);\n  /* Follow theme tokens (light ink / dark on-dark), not a fixed light-mode mix. */\n  --dsh-card-ink: var(--dsh-tavern-accent-ink);\n  --dsh-card-muted: var(--dsh-tavern-accent-muted);\n  --dsh-card-hairline: color-mix(in srgb, var(--dsh-tavern-accent-hairline) 55%, var(--dsw-alias-border-l2));\n  --dsh-card-cream: color-mix(in srgb, var(--dsh-tavern-accent-cream) 22%, var(--dsw-specific-sidebar-fill));\n  --dsh-card-surface: color-mix(in srgb, var(--dsh-tavern-accent-surface) 28%, var(--dsw-specific-input-major));\n  --dsh-card-radius-sm: var(--dsh-tavern-radius-sm);\n  --dsh-card-radius-md: var(--dsh-tavern-radius-md);\n  --dsh-card-radius-lg: var(--dsh-tavern-radius-lg);\n  --dsh-card-radius-full: 9999px;\n  --dsh-card-display: var(--dsh-tavern-font-display);\n  --dsh-card-sans: var(--dsh-tavern-font-sans);\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsh-card-cream);\n  font-family: var(--dsh-card-sans);\n  -webkit-font-smoothing: antialiased;\n}\n[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger,\n[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger {\n  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 18%, transparent);\n  color: var(--dsh-tavern-accent-error);\n}\n[data-ds-dark-theme] .dsh-tavern-card-library .dsh-tavern-btn.danger:hover,\n[data-ds-dark-theme] .dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {\n  background: color-mix(in srgb, var(--dsh-tavern-accent-error) 28%, transparent);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-status-head,\n.dsh-tavern-card-detail > .dsh-tavern-status-head {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 8px;\n  padding: 20px 16px 14px;\n  border-bottom: 1px solid var(--dsh-card-hairline);\n}\n.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-status-title,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title {\n  font-family: var(--dsh-card-display);\n  font-size: 22px;\n  font-weight: 400;\n  letter-spacing: -0.3px;\n  line-height: 1.2;\n  color: var(--dsh-card-ink);\n}\n.dsh-tavern-card-library > .dsh-tavern-status-head .dsh-tavern-question-sub,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-question-sub,\n.dsh-tavern-card-library > .dsh-tavern-card-import-hint {\n  margin: 0;\n  padding: 0;\n  font-size: 13px;\n  font-weight: 400;\n  line-height: 1.38;\n  letter-spacing: -0.08px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-library > .dsh-tavern-card-import-hint {\n  padding: 0 16px 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-library-head-actions,\n.dsh-tavern-card-detail .dsh-tavern-library-head-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-btn,\n.dsh-tavern-card-detail .dsh-tavern-btn {\n  min-height: 32px;\n  padding: 0 14px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action-active);\n  font-size: 14px;\n  font-weight: 500;\n  letter-spacing: 0;\n  line-height: 1;\n}\n.dsh-tavern-card-library .dsh-tavern-btn:hover,\n.dsh-tavern-card-detail .dsh-tavern-btn:hover {\n  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);\n}\n.dsh-tavern-card-library .dsh-tavern-btn.danger,\n.dsh-tavern-card-detail .dsh-tavern-btn.danger {\n  background: color-mix(in srgb, #c64545 14%, transparent);\n  color: #c64545;\n  border-color: transparent;\n}\n.dsh-tavern-card-library .dsh-tavern-btn.danger:hover,\n.dsh-tavern-card-detail .dsh-tavern-btn.danger:hover {\n  background: color-mix(in srgb, #c64545 22%, transparent);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-card-organization {\n  margin: 10px 16px 6px;\n  gap: 10px;\n}\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search,\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-group-picker > summary {\n  height: 36px;\n  min-height: 36px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsw-specific-input-major);\n  font-size: 15px;\n  letter-spacing: -0.24px;\n  line-height: 1.2;\n}\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search:focus,\n.dsh-tavern-card-library > .dsh-tavern-card-organization > .dsh-tavern-library-search:focus-visible {\n  outline: none;\n  border-color: var(--dsh-card-action);\n  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-group-picker[open] > summary {\n  border-color: var(--dsh-card-action-border);\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-group-picker > summary:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-library .dsh-tavern-group-menu button[aria-pressed=\"true\"] {\n  color: var(--dsh-card-action);\n  background: var(--dsh-card-action-soft);\n  font-weight: 600;\n}\n\n.dsh-tavern-card-library > .dsh-tavern-card-batch {\n  margin: 0 16px;\n  padding: 8px 0 4px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-count {\n  font-size: 13px;\n  font-weight: 500;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-notice {\n  border-radius: var(--dsh-card-radius-sm);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsw-alias-label-primary);\n  font-size: 13px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-batch-checkbox {\n  width: 20px;\n  height: 20px;\n  margin: 0 8px 0 4px;\n  accent-color: var(--dsh-card-action);\n}\n\n.dsh-tavern-card-library > .dsh-tavern-resource-body {\n  padding: 8px 10px 24px;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card-row {\n  gap: 8px;\n  margin: 2px 0;\n  padding: 2px 4px;\n  border-radius: var(--dsh-card-radius-md);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-height: 64px;\n  padding: 10px 12px;\n  border: 1px solid transparent;\n  border-radius: var(--dsh-card-radius-md);\n  background: transparent;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card:active:not(:disabled) {\n  transform: scale(0.985);\n}\n.dsh-tavern-card-library .dsh-tavern-library-card.selected {\n  border-color: var(--dsh-card-action-border);\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-card-thumb {\n  width: 44px;\n  height: 44px;\n  border-radius: var(--dsh-card-radius-md);\n  border: 1px solid var(--dsw-alias-border-l2);\n  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);\n}\n.dsh-tavern-card-library .dsh-tavern-card-list-copy {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card b {\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  line-height: 1.27;\n  color: var(--dsw-alias-label-primary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.dsh-tavern-card-library .dsh-tavern-library-card span {\n  margin-top: 0;\n  font-size: 13px;\n  font-weight: 400;\n  letter-spacing: -0.08px;\n  line-height: 1.35;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.dsh-tavern-card-library .dsh-tavern-resource-at {\n  min-height: 28px;\n  padding: 0 10px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: transparent;\n  color: var(--dsh-card-action);\n  font-size: 13px;\n  font-weight: 500;\n}\n.dsh-tavern-card-library .dsh-tavern-resource-at:hover {\n  background: var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention {\n  flex: none;\n  display: grid;\n  place-items: center;\n  width: 32px;\n  height: 32px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-radius: var(--dsh-card-radius-full, 9999px);\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font: inherit;\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  line-height: 1;\n  cursor: pointer;\n  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1), color 140ms cubic-bezier(0.23, 1, 0.32, 1), transform 100ms ease-out;\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:hover {\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:active {\n  transform: scale(0.94);\n}\n.dsh-tavern-card-library .dsh-tavern-card-mention:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-library .dsh-tavern-card-row-menu > summary {\n  width: 32px;\n  height: 32px;\n  border-radius: var(--dsh-card-radius-md);\n  font-size: 18px;\n}\n.dsh-tavern-card-library .dsh-tavern-empty {\n  padding: 40px 24px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 15px;\n  line-height: 1.47;\n  letter-spacing: -0.24px;\n}\n\n/* 详情：整页滚动，顶部标题/操作随滚动收起（不再钉死在上） */\n.dsh-tavern-card-detail {\n  overflow-x: hidden;\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\n.dsh-tavern-card-detail > .dsh-tavern-status-head,\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization,\n.dsh-tavern-card-detail > .dsh-tavern-script-hero {\n  flex: 0 0 auto;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-fields {\n  flex: 0 0 auto;\n  min-height: auto;\n  overflow: visible;\n}\n\n.dsh-tavern-card-detail > .dsh-tavern-status-head > .dsh-tavern-btn {\n  align-self: flex-start;\n  margin: 0 0 4px;\n}\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-title,\n.dsh-tavern-card-detail > .dsh-tavern-status-head .dsh-tavern-status-role {\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--dsh-card-display);\n  font-size: 28px;\n  font-weight: 400;\n  letter-spacing: -0.3px;\n  line-height: 1.2;\n  color: var(--dsh-card-ink);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization {\n  padding: 12px 16px;\n  border-bottom: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization label {\n  font-size: 13px;\n  font-weight: 400;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization select {\n  height: 36px;\n  border-radius: var(--dsh-card-radius-md);\n  font-size: 15px;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-detail-organization > button {\n  height: 36px;\n  border-radius: var(--dsh-card-radius-md);\n}\n.dsh-tavern-card-detail-organization button[aria-pressed=\"true\"] {\n  color: var(--dsh-card-action);\n}\n.dsh-tavern-card-detail > .dsh-tavern-script-hero {\n  margin: 12px 16px 0;\n  padding: 14px 16px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-lg);\n  background: var(--dsw-specific-input-major);\n}\n.dsh-tavern-card-detail .dsh-tavern-script-hero-title {\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n}\n.dsh-tavern-card-detail .dsh-tavern-script-hero-help {\n  font-size: 13px;\n  line-height: 1.43;\n}\n.dsh-tavern-card-detail > .dsh-tavern-card-fields {\n  padding: 16px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced {\n  margin: 0 0 14px;\n  padding: 0;\n  border: 1px solid var(--dsh-card-hairline);\n  border-radius: var(--dsh-card-radius-lg);\n  background: var(--dsh-card-surface);\n  overflow: hidden;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary {\n  padding: 14px 16px;\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.24px;\n  list-style: none;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > summary::-webkit-details-marker { display: none; }\n.dsh-tavern-card-detail .dsh-tavern-card-advanced[open] > summary {\n  border-bottom: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-advanced > :not(summary) {\n  padding: 12px 16px 16px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-specific-input-major);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary {\n  color: var(--dsw-alias-label-primary);\n  font-size: 15px;\n  font-weight: 600;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > summary:focus-visible {\n  outline: 2px solid var(--dsh-card-action);\n  outline-offset: 2px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-worldbook > .dsh-tavern-worldbook {\n  margin: 0;\n  padding: 12px 16px 16px;\n  border: 0;\n  border-top: 1px solid var(--dsw-alias-border-l2);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field {\n  margin-bottom: 14px;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field label {\n  margin-bottom: 6px;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 13px;\n  font-weight: 400;\n  letter-spacing: -0.08px;\n  line-height: 1.35;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field input,\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea {\n  min-height: 40px;\n  padding: 12px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsw-specific-sidebar-fill);\n  font-size: 16px;\n  letter-spacing: -0.24px;\n  line-height: 1.55;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field input:focus,\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea:focus {\n  outline: none;\n  border-color: var(--dsh-card-action);\n  box-shadow: 0 0 0 3px var(--dsh-card-action-soft);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea {\n  field-sizing: content;\n  min-height: 120px;\n  max-height: min(68vh, 520px);\n  overflow-y: auto;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large {\n  min-height: 240px;\n  max-height: min(72vh, 640px);\n  line-height: 1.6;\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.is-empty,\n.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea {\n  min-height: 64px;\n  max-height: 96px;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-field textarea.large.is-empty,\n.dsh-tavern-card-detail .dsh-tavern-card-field.is-empty textarea.large {\n  min-height: 88px;\n  max-height: 120px;\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-bound,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add.dsh-tavern-worldbook-new {\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action-soft);\n  color: var(--dsh-card-action);\n  font-size: 13px;\n  font-weight: 500;\n  padding: 6px 12px;\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-add:hover {\n  background: color-mix(in srgb, var(--dsh-card-action) 22%, transparent);\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-note,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-title,\n.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head {\n  font-size: 13px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsh-tavern-card-detail .dsh-tavern-worldbook-group-head b {\n  color: var(--dsh-card-action);\n  font-size: 13px;\n}\n.dsh-tavern-card-detail .dsh-card-primary {\n  min-height: 36px;\n  padding: 0 18px;\n  border: 0;\n  border-radius: var(--dsh-card-radius-md);\n  background: var(--dsh-card-action);\n  color: #fff;\n  font-size: 14px;\n  font-weight: 500;\n  letter-spacing: 0;\n}\n.dsh-tavern-card-detail .dsh-card-primary:hover {\n  filter: brightness(1.06);\n}\n.dsh-tavern-card-detail .dsh-card-primary:active:not(:disabled) {\n  transform: scale(0.97);\n}\n.dsh-tavern-card-detail .dsh-tavern-card-save {\n  padding: 14px 0 4px;\n}\n\n/* Card-only Mnemon management, shared across desktop and narrow WebViews. */\n.dsh-tavern-card-memory { padding: 16px; overflow: auto; min-width: 0; color: var(--dsw-alias-label-primary); }\n.dsh-tavern-card-memory p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }\n.dsh-tavern-memory-entry { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 12px; margin: 10px 0; }\n.dsh-tavern-memory-entry summary { cursor: pointer; overflow-wrap: anywhere; }\n.dsh-tavern-memory-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.dsh-tavern-memory-actions input { flex: 1; min-width: 120px; }\n.dsh-tavern-memory-field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }\n.dsh-tavern-card-memory input, .dsh-tavern-card-memory textarea, .dsh-tavern-card-memory select { box-sizing: border-box; max-width: 100%; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: inherit; background: var(--dsw-alias-bg-base); font: inherit; }\n.dsh-tavern-memory-field textarea { width: 100%; resize: vertical; }\n\n/* Read-only, collapsible source viewer in character card details. */\n.dsh-tavern-script-code { min-width: 0; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-alias-bg-base); }\n.dsh-tavern-script-code > summary { padding: 9px 12px; cursor: pointer; color: var(--dsw-alias-label-primary); font-size: 12px; }\n.dsh-tavern-script-code-count { margin-left: 12px; color: var(--dsw-alias-label-secondary); font-size: 11px; }\n.dsh-tavern-script-code-scroll { display: flex; max-height: 480px; max-height: min(480px, 60vh); overflow: auto; border-top: 1px solid var(--dsw-alias-border-l2); font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }\n.dsh-tavern-script-code-lines { flex: 0 0 auto; padding: 12px 10px; text-align: right; color: var(--dsw-alias-label-secondary); border-right: 1px solid var(--dsw-alias-border-l2); user-select: none; }\n.dsh-tavern-script-code-scroll pre { flex: 1 0 auto; margin: 0; padding: 12px; color: var(--dsw-alias-label-primary); font: inherit; white-space: pre; overflow-wrap: normal; word-break: normal; }\n.dsh-tavern-script-code-scroll code { font: inherit; }\n.dsh-tavern-script-code > summary:focus-visible, .dsh-tavern-script-code-scroll:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: -2px; }\n");
 
 
 		function isPlayMode(mode) {
@@ -403,7 +403,7 @@ window.__ModuleLoader__.load({
 			refresh: reloadTavernClient
 		});
 
-		async function readTavernJsonResponse(response) {
+		async function readTavernJsonResponse(response, onBody) {
 			function failure(message, retryable) {
 				const error = new Error(message);
 				error.status = response.status;
@@ -414,11 +414,30 @@ window.__ModuleLoader__.load({
 			if (response.status === 403) throw failure("请求被拒绝，请检查访问地址和权限", false);
 			if (!response.ok) throw failure("服务请求失败（HTTP " + response.status + "），请稍后重试", [404, 408, 429, 502, 503, 504].includes(response.status));
 			const body = await response.text();
+            if (onBody) onBody(body);
 			if (!body.trim()) throw failure("服务返回空响应，可能仍在启动或重启，请稍后重试", true);
 			try { return JSON.parse(body); }
 			catch (_error) { throw failure("服务返回非 JSON 或不完整的响应，请稍后重试", true); }
 		}
 
+		// Bounded timing metadata only; never retain action arguments or error messages.
+		function createOpeningPerformance() {
+		  const rows = [], requests = [];
+		  const clock = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
+		  const id = () => typeof window !== 'undefined' && window.crypto?.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === 'x' ? n : (n & 3) | 8).toString(16); });
+		  function begin(stage, actionId) {
+		    const started = clock();
+		    const row = { id: actionId || id(), stage, startedAt: Date.now(), status: 'running' };
+		    rows.push({ row, started });
+		    if (rows.length > 120) rows.shift();
+		    return {
+		      finish(success) { if (row.status !== 'running') return; row.durationMs = Math.max(0, Math.round(clock() - started)); row.status = success ? 'completed' : 'failed'; },
+		      async measure(name, work) { const child = begin(name, row.id); try { const value = await work(); child.finish(true); return value; } catch (error) { child.finish(false); throw error; } }
+		    };
+		  }
+		  return { begin, recordRequest(row) { requests.push({ ...row }); if (requests.length > 60) requests.shift(); }, requests: () => requests.map(row => ({ ...row })), read: () => rows.map(({row, started}) => ({ ...row, durationMs: row.status === 'running' ? Math.max(0, Math.round(clock() - started)) : row.durationMs })) };
+		}
+		const openingPerformance = createOpeningPerformance();
 		const pagePerformance = { observedMs: 0, longTaskCount: 0, longTaskTotalMs: 0, longTaskMaxMs: 0, slowRpcCount: 0, slowRpcMaxMs: 0, longTaskSupported: false };
 		const pagePerformanceStarted = Date.now();
 		let performanceReportAt = 0;
@@ -443,52 +462,588 @@ window.__ModuleLoader__.load({
 			} catch (_) {}
 		}
 
+		// Shared by the host and generated iframe. Fixed seven-level radix index over
+		// JavaScript's 32-bit array indices: no linked overlays and no history-sized copy.
+		function createIndexedArrayApi(options = {}) {
+		    const states = new WeakMap();
+		    const valid = options.valid || (value => value !== undefined);
+		    const eligible = options.eligible || valid;
+		    const measure = options.measure || (() => 0);
+		    const maximum = options.maximum || (() => -Infinity);
+		    const visit = options.visit || (() => {});
+		    const width = depth => 2 ** (depth * 5);
+		    function aggregate(slots) {
+		        let count = 0, validCount = 0, eligible = 0, bytes = 320, max = -Infinity;
+		        for (const child of slots) if (child) { count += child.count; validCount += child.validCount; eligible += child.eligible; bytes += child.bytes; max = Math.max(max, child.max); }
+		        return { slots, count, validCount, eligible, bytes, max };
+		    }
+		    function put(node, depth, id, leaf, mutable) {
+		        visit();
+		        const slots = node ? (mutable ? node.slots : node.slots.slice()) : [];
+		        const digit = Math.floor(id / width(depth)) % 32;
+		        slots[digit] = depth === 0 ? leaf : put(slots[digit], depth - 1, id, leaf, mutable);
+		        return aggregate(slots);
+		    }
+		    function lookup(node, id) {
+		        for (let depth = 6; depth >= 0; depth--) {
+		            visit();
+		            node = node?.slots[Math.floor(id / width(depth)) % 32];
+		        }
+		        return node;
+		    }
+		    function trim(node, depth, limit) {
+		        if (!node || limit <= 0) return undefined;
+		        const span = width(depth);
+		        if (limit >= span * 32) return node;
+		        const slots = node.slots.slice(0, Math.ceil(limit / span));
+		        if (depth > 0 && limit % span) slots[slots.length - 1] = trim(slots[slots.length - 1], depth - 1, limit % span);
+		        return aggregate(slots);
+		    }
+		    function checkLength(length) {
+		        if (!Number.isInteger(length) || length < 0 || length > 0xffffffff) throw new Error('Invalid indexed array length');
+		    }
+		    function view(root, length) {
+		        function index(key) { return typeof key === 'string' && /^(0|[1-9]\d*)$/.test(key) && Number(key) < length; }
+		        const array = new Proxy([], {
+		            get(target, key, receiver) {
+		                if (key === 'length') return length;
+		                return index(key) ? lookup(root, Number(key))?.value : Reflect.get(target, key, receiver);
+		            },
+		            has(target, key) { return index(key) ? Boolean(lookup(root, Number(key))) : Reflect.has(target, key); },
+		            ownKeys() {
+		                const keys = [];
+		                for (let id = 0; id < length; id++) if (lookup(root, id)) keys.push(String(id));
+		                return [...keys, 'length'];
+		            },
+		            getOwnPropertyDescriptor(target, key) {
+		                if (index(key)) {
+		                    const leaf = lookup(root, Number(key));
+		                    return leaf ? { value: leaf.value, enumerable: true, writable: false, configurable: true } : undefined;
+		                }
+		                const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+		                return key === 'length' ? { ...descriptor, value: length } : descriptor;
+		            },
+		            set() { throw new Error('Indexed array is immutable'); },
+		            defineProperty() { throw new Error('Indexed array is immutable'); },
+		            deleteProperty() { throw new Error('Indexed array is immutable'); }
+		        });
+		        states.set(array, { root, length });
+		        return array;
+		    }
+		    function leaf(value) { return { value, count: 1, validCount: valid(value) ? 1 : 0, eligible: eligible(value) ? 1 : 0, bytes: 48 + measure(value), max: maximum(value) }; }
+		    function from(source) {
+		        if (states.has(source)) return source;
+		        checkLength(source.length);
+		        let root;
+		        for (let id = 0; id < source.length; id++) if (id in source) root = put(root, 6, id, leaf(source[id]), true);
+		        return view(root, source.length);
+		    }
+		    function update(source, entries, length = source.length) {
+		        checkLength(length);
+		        const state = states.get(source) || states.get(from(source));
+		        let root = length < state.length ? trim(state.root, 6, length) : state.root;
+		        for (const [id, value] of entries) {
+		            if (!Number.isInteger(id) || id < 0 || id >= length) throw new Error('Invalid indexed array position');
+		            root = put(root, 6, id, leaf(value), false);
+		        }
+		        return view(root, length);
+		    }
+		    function previous(source, exclusive) {
+		        const state = states.get(source);
+		        if (!state) throw new Error('Unindexed array');
+		        function search(node, depth, prefix, end) {
+		            visit();
+		            if (!node?.eligible) return -1;
+		            const span = width(depth), top = Math.min(31, Math.floor((end - prefix) / span));
+		            for (let digit = top; digit >= 0; digit--) {
+		                const child = node.slots[digit];
+		                if (!child?.eligible) continue;
+		                const start = prefix + digit * span;
+		                if (depth === 0) return start;
+		                const result = search(child, depth - 1, start, Math.min(end, start + span - 1));
+		                if (result >= 0) return result;
+		            }
+		            return -1;
+		        }
+		        return search(state.root, 6, 0, Math.min(exclusive, state.length) - 1);
+		    }
+		    function changed(before, after) {
+		        const left = states.get(before), right = states.get(after);
+		        if (!left || !right) return null;
+		        const result = [];
+		        function walk(a, b, depth, prefix) {
+		            visit();
+		            if (a === b) return;
+		            if (depth < 0) { if (prefix < right.length && a?.value !== b?.value) result.push(prefix); return; }
+		            for (let digit = 0; digit < 32; digit++) {
+		                const x = a?.slots[digit], y = b?.slots[digit];
+		                if (x !== y) walk(x, y, depth - 1, prefix + digit * width(depth));
+		            }
+		        }
+		        walk(left.root, right.root, 6, 0);
+		        return result;
+		    }
+		    function select(source, position) {
+		        const state=states.get(source);
+		        if(!state || !Number.isInteger(position) || position<0 || position>=(state.root?.eligible || 0))return -1;
+		        let node=state.root,id=0;
+		        for(let depth=6;depth>=0;depth--){
+		            visit();
+		            for(let digit=0;digit<32;digit++){
+		                const child=node.slots[digit],count=child?.eligible || 0;
+		                if(position<count){node=child;id+=digit*width(depth);break;}
+		                position-=count;
+		            }
+		        }
+		        return id;
+		    }
+		    function rank(source, exclusive) {
+		        const state=states.get(source);
+		        if(!state)throw new Error('Unindexed array');
+		        let node=state.root,total=0,end=Math.max(0,Math.min(exclusive,state.length));
+		        if(end===state.length)return node?.eligible || 0;
+		        for(let depth=6;depth>=0 && node;depth--){
+		            visit();
+		            const digit=Math.floor(end/width(depth))%32;
+		            for(let i=0;i<digit;i++)total+=node.slots[i]?.eligible || 0;
+		            node=node.slots[digit];
+		        }
+		        return total;
+		    }
+		    function info(source) {
+		        const state = states.get(source);
+		        return state && { length: state.length, complete: (state.root?.validCount || 0) === state.length, eligible: state.root?.eligible || 0,
+		            count: state.root?.count || 0, bytes: state.root?.bytes || 0 };
+		    }
+		    return { from, update, previous, rank, select, info, changed, maximum: source => states.get(source)?.root?.max ?? -Infinity };
+		}
+		// Persistent compressed radix tree over IEEE-754 numeric keys. At most sixteen
+		// nibble levels; insertion/removal never shifts a sorted array's suffix.
+		function createOrderedNumericIndex({visit=()=>{},measure=()=>0}={}) {
+		  const states=new WeakMap(),buffer=new DataView(new ArrayBuffer(8))
+		  function digits(key) {
+		    if(typeof key!=='number' || Number.isNaN(key))throw new Error('Invalid ordered numeric key')
+		    buffer.setFloat64(0,key===0?0:key)
+		    let high=buffer.getUint32(0),low=buffer.getUint32(4)
+		    if(high>>>31){high=(~high)>>>0;low=(~low)>>>0}else high=(high^0x80000000)>>>0
+		    const result=[]
+		    for(const word of [high,low])for(let shift=28;shift>=0;shift-=4)result.push((word>>>shift)&15)
+		    return result
+		  }
+		  const leaf=(key,value)=>({key:key===0?0:key,value,count:1,bytes:48+measure(value),unsafe:Number.isFinite(key)?0:1})
+		  function branch(depth,key,slots){
+		    let count=0,bytes=160,unsafe=0,children=0,last
+		    for(const item of slots)if(item){count+=item.count;bytes+=item.bytes;unsafe+=item.unsafe;children++;last=item}
+		    return children===0?undefined:children===1?last:{depth,key,slots,count,bytes,unsafe}
+		  }
+		  function put(node,path,key,value,mutable=false) {
+		    visit()
+		    if(!node)return value===undefined?undefined:leaf(key,value)
+		    const other=digits(node.key),limit=node.slots?node.depth:16
+		    let split=0
+		    while(split<limit && other[split]===path[split])split++
+		    if(split<limit){
+		      if(value===undefined)return node
+		      const slots=[];slots[other[split]]=node;slots[path[split]]=leaf(key,value)
+		      return branch(split,node.key,slots)
+		    }
+		    if(!node.slots)return value===undefined?undefined:node.value===value?node:leaf(key,value)
+		    const digit=path[node.depth],child=put(node.slots[digit],path,key,value,mutable)
+		    if(child===node.slots[digit])return node
+		    const slots=mutable?node.slots:node.slots.slice();slots[digit]=child
+		    return branch(node.depth,node.key,slots)
+		  }
+		  function at(root,position) {
+		    let node=root
+		    while(node?.slots){
+		      visit()
+		      if(position<0 || position>=node.count)return undefined
+		      for(const child of node.slots){if(!child)continue;if(position<child.count){node=child;break}position-=child.count}
+		    }
+		    return position===0?node?.value:undefined
+		  }
+		  function view(root) {
+		    const length=root?.count || 0
+		    const numeric=key=>typeof key==='string' && /^(0|[1-9]\d*)$/.test(key) && Number(key)<length
+		    const array=new Proxy([],{
+		      get(target,key,receiver){return key==='length'?length:numeric(key)?at(root,Number(key)):Reflect.get(target,key,receiver)},
+		      has(target,key){return numeric(key)||Reflect.has(target,key)},
+		      ownKeys(){return [...Array.from({length},(_,id)=>String(id)),'length']},
+		      getOwnPropertyDescriptor(target,key){
+		        if(numeric(key))return {value:at(root,Number(key)),enumerable:true,writable:false,configurable:true}
+		        const descriptor=Reflect.getOwnPropertyDescriptor(target,key)
+		        return key==='length'?{...descriptor,value:length}:descriptor
+		      },
+		      set(){throw new Error('Ordered index is immutable')},defineProperty(){throw new Error('Ordered index is immutable')},deleteProperty(){throw new Error('Ordered index is immutable')}
+		    })
+		    states.set(array,root);return array
+		  }
+		  function from(entries){let root;for(const [key,value] of entries)root=put(root,digits(key),key,value,true);return view(root)}
+		  function update(source,entries){if(!states.has(source))throw new Error('Unknown ordered index');let root=states.get(source);for(const [key,value] of entries)root=put(root,digits(key),key,value);return root===states.get(source)?source:view(root)}
+		  function get(source,key){let node=states.get(source);const path=digits(key);while(node?.slots){visit();node=node.slots[path[node.depth]]}visit();return node?.key===key?node.value:undefined}
+		  function rank(source,key){
+		    let node=states.get(source),position=0;const path=digits(key)
+		    while(node?.slots){
+		      visit();const prefix=digits(node.key)
+		      for(let i=0;i<node.depth;i++)if(prefix[i]!==path[i])return position+(prefix[i]<path[i]?node.count:0)
+		      const digit=path[node.depth];for(let i=0;i<digit;i++)position+=node.slots[i]?.count || 0
+		      node=node.slots[digit]
+		    }
+		    return position+(node && node.key<key?1:0)
+		  }
+		  // Keep a suffix by rank, sharing all fully retained subtrees.
+		  function suffix(source,start){
+		    if(!states.has(source))throw new Error('Unknown ordered index')
+		    function trim(node,skip){
+		      visit()
+		      if(!node || skip>=node.count)return undefined
+		      if(skip<=0)return node
+		      const slots=[]
+		      for(let id=0;id<16;id++){
+		        const child=node.slots[id];if(!child)continue
+		        slots[id]=trim(child,skip);skip=Math.max(0,skip-child.count)
+		      }
+		      return branch(node.depth,node.key,slots)
+		    }
+		    const root=trim(states.get(source),Math.max(0,Math.floor(start)))
+		    return root===states.get(source)?source:view(root)
+		  }
+		  function changed(before,after){
+		    if(!states.has(before)||!states.has(after))return null
+		    const result=[]
+		    function emit(node,removed){
+		      if(!node)return
+		      visit()
+		      if(node.slots){for(const child of node.slots)emit(child,removed)}
+		      else result.push({key:node.key,before:removed?node.value:undefined,after:removed?undefined:node.value})
+		    }
+		    function walk(left,right){
+		      visit();if(left===right)return
+		      if(!left || !right){emit(left||right,Boolean(left));return}
+		      const a=digits(left.key),b=digits(right.key),ld=left.slots?left.depth:16,rd=right.slots?right.depth:16
+		      for(let i=0;i<Math.min(ld,rd);i++)if(a[i]!==b[i]){emit(left,true);emit(right,false);return}
+		      if(ld===16 && rd===16){result.push({key:right.key,before:left.value,after:right.value});return}
+		      if(ld===rd){for(let id=0;id<16;id++)if(left.slots[id]!==right.slots[id])walk(left.slots[id],right.slots[id]);return}
+		      // Compression can promote a shared child to root. Align by prefix before
+		      // descending, so removing a sibling never enumerates that shared subtree.
+		      if(ld<rd){for(let id=0;id<16;id++)if(left.slots[id] || id===b[ld])walk(left.slots[id],id===b[ld]?right:undefined)}
+		      else {for(let id=0;id<16;id++)if(right.slots[id] || id===a[rd])walk(id===a[rd]?left:undefined,right.slots[id])}
+		    }
+		    walk(states.get(before),states.get(after));return result
+		  }
+		  return {from,update,get,rank,suffix,changed,info:source=>states.has(source)?{count:states.get(source)?.count||0,bytes:states.get(source)?.bytes||0,unsafe:states.get(source)?.unsafe||0}:null}
+		}
 		// Cached session views are immutable, like the React views returned by getSession.
 		function createSessionViewReader(maxSessions = 4) {
 		  const sessions = new Map();
+		  const index = createSessionViewReader.indexApi ||= createIndexedArrayApi();
+		  const receiptLookup = createSessionViewReader.receiptLookup ||= createTurnLookup(index,createSessionViewReader.onReceiptLookupVisit);
+		  const ordered = typeof createOrderedNumericIndex === "function" ? (createSessionViewReader.receiptOrderedIndex ||= createOrderedNumericIndex()) : null;
+		  const turnFields = ordered ? (createSessionViewReader.turnFields ||= createTurnFieldIndex()) : null;
+		  const projectionLookup = createSessionViewReader.projectionLookup ||= createTurnLookup(index);
+		  const storyTurnLookup = createSessionViewReader.storyTurnLookup ||= createStoryTurnLookup();
 		  let sequence = 0;
 		  return function begin(sessionId) {
 		    const base = sessions.get(sessionId);
 		    const requestSequence = ++sequence;
 		    return {
 		      cursor: base && base.cursor,
+		      receiptSync: ordered ? 1 : undefined,
 		      accept(result) {
-		        let view = result.view;
+		        let view = result.view, projectionChanges = null, storyChanges = null, storyKeys = null;
 		        if (result.viewDelta) {
 		          if (!base || result.viewDelta.baseCursor !== base.cursor) throw new Error("会话增量已过期，请重新读取");
-		          view = Object.assign({}, base.view);
-		          const copied = new Set();
-		          function parent(path) {
-		            let target = view;
-		            for (let i = 0; i < path.length - 1; i++) {
-		              const key = path[i];
-		              const id = JSON.stringify(path.slice(0, i + 1));
-		              if (!copied.has(id)) {
-		                const old = target[key];
-		                target[key] = Array.isArray(old) ? old.slice() : (path[i + 1] === "length" || typeof path[i + 1] === "number" ? [] : Object.assign({}, old));
-		                copied.add(id);
+		          const delta = result.viewDelta;
+		          const unchanged = delta.set.length===0 && delta.remove.length===0
+		            && (!delta.receiptDelta || delta.receiptDelta.set.length===0 && delta.receiptDelta.remove.length===0);
+		          if (unchanged) view = base.view;
+		          else {
+		            view = Object.assign({}, base.view);
+		            const copied = new Set();
+		            const messagePath = path => path[0] === "tavernHelper" && path[1] === "messages" && path.length === 3;
+		            const messageEdits = result.viewDelta.set.filter(([path]) => messagePath(path));
+		            const messageRemovals = result.viewDelta.remove.filter(messagePath);
+		            const incrementalMessages = Array.isArray(base.view?.tavernHelper?.messages)
+		              && !result.viewDelta.set.some(([path]) => path[0] === "tavernHelper" && path.length < 3)
+		              && !result.viewDelta.remove.some(path => path[0] === "tavernHelper" && path.length < 3)
+		              && messageRemovals.every(path => typeof path[2] === "number")
+		              && messageEdits.every(([path]) => path[2] === "length" || Number.isSafeInteger(path[2]));
+
+		            const receiptPath = path => path[0] === "mvuReceipts" && path.length === 2;
+		            const receiptEdits = result.viewDelta.set.filter(([path]) => receiptPath(path));
+		            const receiptRemovals = result.viewDelta.remove.filter(receiptPath);
+		            const incrementalReceipts = !result.viewDelta.receiptDelta && !ordered?.info(base.view?.mvuReceipts) && Array.isArray(base.view?.mvuReceipts)
+		              && !result.viewDelta.set.some(([path]) => path[0] === "mvuReceipts" && path.length < 2)
+		              && !result.viewDelta.remove.some(path => path[0] === "mvuReceipts" && path.length < 2)
+		              && receiptRemovals.every(path => Number.isSafeInteger(path[1]))
+		              && receiptEdits.every(([path]) => path[1] === "length" || Number.isSafeInteger(path[1]));
+
+		            const projectionPath = path => path[0] === "replyProjections" && path.length === 2;
+		            const projectionEdits = result.viewDelta.set.filter(([path]) => projectionPath(path));
+		            const projectionRemovals = result.viewDelta.remove.filter(projectionPath);
+		            const incrementalProjections = Array.isArray(base.view?.replyProjections)
+		              && !result.viewDelta.set.some(([path]) => path[0] === "replyProjections" && path.length < 2)
+		              && !result.viewDelta.remove.some(path => path[0] === "replyProjections" && path.length < 2)
+		              && projectionRemovals.every(path => Number.isSafeInteger(path[1]))
+		              && projectionEdits.every(([path]) => path[1] === "length" || Number.isSafeInteger(path[1]));
+
+		            const fieldUpdates = new Map();
+		            for (const field of ["inputSources", "inputTemplateDisplays", "regeneratedDshTurns"]) {
+		              const source = base.view?.[field];
+		              const sets = delta.set.filter(([path]) => path[0] === field);
+		              const removes = delta.remove.filter(path => path[0] === field);
+		              if (turnFields?.has(source) && sets.every(([path]) => path.length === 2 && turnFields.validKey(path[1]))
+		                && removes.every(path => path.length === 2 && turnFields.validKey(path[1]))) {
+		                fieldUpdates.set(field, turnFields.update(source, sets.map(([path,value]) => [path[1],value]), removes.map(path => path[1])));
+		                if (field === "regeneratedDshTurns") storyKeys = [...new Set([...sets.map(([path]) => String(path[1])), ...removes.map(path => String(path[1]))])];
 		              }
-		              target = target[key];
 		            }
-		            return target;
+		            function parent(path) {
+		              let target = view;
+		              for (let i = 0; i < path.length - 1; i++) {
+		                const key = path[i];
+		                const id = JSON.stringify(path.slice(0, i + 1));
+		                if (!copied.has(id)) {
+		                  const old = target[key];
+		                  target[key] = Array.isArray(old) ? old.slice() : (path[i + 1] === "length" || typeof path[i + 1] === "number" ? [] : Object.assign({}, old));
+		                  copied.add(id);
+		                }
+		                target = target[key];
+		              }
+		              return target;
+		            }
+		            // Remove old descendants before replacing a parent with null or a new object.
+		            for (const path of result.viewDelta.remove.slice().sort((a, b) => b.length - a.length)) {
+		              if (fieldUpdates.has(path[0])) continue;
+		              if (incrementalMessages && messagePath(path) || incrementalReceipts && receiptPath(path) || incrementalProjections && projectionPath(path)) continue;
+		              const target = parent(path), key = path[path.length - 1];
+		              if (!(Array.isArray(target) && key === "length")) delete target[key];
+		            }
+		            for (const [path, value] of result.viewDelta.set) {
+		              if (fieldUpdates.has(path[0])) continue;
+		              if (incrementalMessages && messagePath(path) || incrementalReceipts && receiptPath(path) || incrementalProjections && projectionPath(path)) continue;
+		              parent(path)[path[path.length - 1]] = value;
+		            }
+		            for (const [field, value] of fieldUpdates) view[field] = value;
+		            if (result.viewDelta.receiptDelta) {
+		              if (!ordered?.info(base.view?.mvuReceipts)) throw new Error("回执增量缺少基线，请重新读取");
+		              const delta = result.viewDelta.receiptDelta;
+		              view.mvuReceipts = ordered.update(base.view.mvuReceipts,[...delta.remove.map(turn=>[turn,undefined]),...delta.set.map(row=>[row.turn,row])]);
+		            }
+		            if (incrementalReceipts) {
+		              const old = base.view.mvuReceipts;
+		              const length = receiptEdits.find(([path]) => path[1] === "length")?.[1] ?? old.length;
+		              const entries = receiptEdits.filter(([path]) => path[1] !== "length").map(([path,value]) => [path[1],value]);
+		              if (receiptRemovals.some(path => path[1] < length)) throw new Error("Invalid sparse receipt delta");
+		              view.mvuReceipts = index.update(old,entries,length);
+		              receiptLookup.remember(view.mvuReceipts,old,entries);
+		            }
+		            if (incrementalProjections) {
+		              const old = base.view.replyProjections;
+		              const length = projectionEdits.find(([path]) => path[1] === "length")?.[1] ?? old.length;
+		              const entries = projectionEdits.filter(([path]) => path[1] !== "length").map(([path,value]) => [path[1],value]);
+		              if (projectionRemovals.some(path => path[1] < length)) throw new Error("Invalid sparse projection delta");
+		              view.replyProjections = entries.length || length!==old.length ? index.update(old,entries,length) : old;
+		              projectionLookup.remember(view.replyProjections,old,entries);
+		              const turns = new Set();
+		              for (const [id, row] of entries) { turns.add(Number(old[id]?.turn)); turns.add(Number(row?.turn)); }
+		              for (let id = length; id < old.length; id++) turns.add(Number(old[id]?.turn));
+		              projectionChanges = { turns: [...turns].filter(turn => !Number.isNaN(turn)),
+		                beforeLatest: projectionLookup.max(old), afterLatest: projectionLookup.max(view.replyProjections) };
+		            }
+		            if (incrementalMessages) {
+		              const old = base.view.tavernHelper.messages;
+		              const length = messageEdits.find(([path]) => path[2] === "length")?.[1] ?? old.length;
+		              const entries = messageEdits.filter(([path]) => path[2] !== "length").map(([path,value]) => [path[2],value]);
+		              // The protocol emits removals only for a truncated tail.
+		              if (messageRemovals.some(path => path[2] < length)) throw new Error("Invalid sparse message delta");
+		              view.tavernHelper = {...view.tavernHelper,messages:index.update(old,entries,length)};
+		            }
 		          }
-		          // Remove old descendants before replacing a parent with null or a new object.
-		          for (const path of result.viewDelta.remove.slice().sort((a, b) => b.length - a.length)) {
-		            const target = parent(path), key = path[path.length - 1];
-		            if (!(Array.isArray(target) && key === "length")) delete target[key];
-		          }
-		          for (const [path, value] of result.viewDelta.set) parent(path)[path[path.length - 1]] = value;
 		        }
+		        if (Array.isArray(view?.tavernHelper?.messages) && !index.info(view.tavernHelper.messages)) {
+		          view = {...view,tavernHelper:{...view.tavernHelper,messages:index.from(view.tavernHelper.messages)}};
+		        }
+		        if (Array.isArray(view?.mvuReceipts)) {
+		          if (result.receiptSync===1) {
+		            if (!ordered) throw new Error("当前客户端不支持回执索引");
+		            view = {...view,mvuReceipts:ordered.from(view.mvuReceipts.map(row=>[row.turn,row]))};
+		          } else if (!ordered?.info(view.mvuReceipts)) {
+		            if (!index.info(view.mvuReceipts)) view = {...view,mvuReceipts:index.from(view.mvuReceipts)};
+		            receiptLookup.remember(view.mvuReceipts);
+		          }
+		        }
+		        if (Array.isArray(view?.replyProjections)) {
+		          if (!index.info(view.replyProjections)) view = {...view,replyProjections:index.from(view.replyProjections)};
+		          projectionLookup.remember(view.replyProjections);
+		        }
+		        if (turnFields) for (const field of ["inputSources", "inputTemplateDisplays", "regeneratedDshTurns"]) {
+		          const value = turnFields.from(view?.[field]);
+		          if (value !== view?.[field]) view = {...view, [field]: value};
+		        }
+		        storyChanges = storyTurnLookup.remember(view?.regeneratedDshTurns, base?.view?.regeneratedDshTurns, storyKeys);
 		        const latest = sessions.get(sessionId);
 		        if (!latest || latest.sequence < requestSequence) {
 		          sessions.delete(sessionId);
 		          sessions.set(sessionId, { view, cursor: result.viewCursor, sequence: requestSequence });
 		          while (sessions.size > maxSessions) sessions.delete(sessions.keys().next().value);
 		        }
-		        return Object.assign({}, result, { view });
+		        return Object.assign({}, result, { view, viewBase: result.viewDelta ? base.view : undefined, projectionChanges, storyChanges });
 		      }
 		    };
 		  };
+		}
+
+		// Weak array-version keys preserve concurrent/older views without retaining them.
+		function createTurnLookup(index,onVisit = () => {}) {
+		  const versions = new WeakMap();
+		  // Number-to-string has bounded length for IEEE-754 turns, including infinities.
+		  // A character trie avoids history-sized Map copies while retaining old roots.
+		  const turnKey = value => { const turn=Number(value); return Number.isNaN(turn) ? null : String(turn); };
+		  function get(root,key) {
+		    let node=root;
+		    for (const character of key) { onVisit(); node=node?.[character]; }
+		    return node?.$;
+		  }
+		  function put(root,key,value,offset=0) {
+		    onVisit();
+		    const next={...root}, character=offset===key.length ? "$" : key[offset];
+		    const child=offset===key.length ? value : put(root?.[character],key,value,offset+1);
+		    if (child===undefined) delete next[character]; else next[character]=child;
+		    let maximum=0,children=0;
+		    for (const name of Object.keys(next)) if (name!=="_max") {
+		      children++; maximum=Math.max(maximum,name==="$" ? Number(next[name].turn)||0 : next[name]._max||0);
+		    }
+		    if (!children) return undefined;
+		    next._max=maximum;
+		    return next;
+		  }
+		  function change(root,key,id,row) {
+		    if (key===null) return root;
+		    const old=get(root,key);
+		    let next;
+		    if (old?.rows) {
+		      const rows=index.update(old.rows,[[id,row]],Math.max(old.rows.length,id+1));
+		      const count=index.info(rows).eligible;
+		      if (count>1) next={rows};
+		      else if (count===1) { const last=index.previous(rows,rows.length); next={id:last,row:rows[last]}; }
+		    } else if (row!==undefined) {
+		      next=old && old.id!==id
+		        ? {rows:index.update([],[[old.id,old.row],[id,row]],Math.max(old.id,id)+1)} : {id,row};
+		    } else if (old?.id!==id) next=old;
+		    return put(root,key,next ? {...next,turn:Number(key)} : undefined);
+		  }
+		  function remember(rows,before,entries) {
+		    if (versions.has(rows)) return;
+		    let root;
+		    if (before && versions.has(before)) {
+		      root=versions.get(before);
+		      const changed=new Map(entries);
+		      // Clear all old owners first, so swaps and duplicate-turn promotion work.
+		      for (const [id] of changed) if (id<before.length) root=change(root,turnKey(before[id]?.turn),id,undefined);
+		      for (let id=rows.length;id<before.length;id++) if (!changed.has(id)) root=change(root,turnKey(before[id]?.turn),id,undefined);
+		      for (const [id,row] of changed) if (id<rows.length) root=change(root,turnKey(row?.turn),id,row);
+		    } else {
+		      for (let id=0;id<rows.length;id++) { const row=rows[id]; root=change(root,turnKey(row?.turn),id,row); }
+		    }
+		    versions.set(rows,root);
+		  }
+		  function row(rows,turn) {
+		    const key=turnKey(turn);
+		    if (key===null) return null;
+		    const bucket=get(versions.get(rows),key);
+		    const row=bucket?.rows ? bucket.rows[index.previous(bucket.rows,bucket.rows.length)] : bucket?.row;
+		    return row || null;
+		  }
+		  return {remember,row,read:(rows,turn)=>row(rows,turn)?.receipt || null,max:rows=>versions.get(rows)?._max || 0,has:rows=>versions.has(rows)};
+		}
+
+		function createStoryTurnLookup() {
+		  const versions = new WeakMap();
+		  const ordered = typeof createOrderedNumericIndex === "function" ? createOrderedNumericIndex({visit: () => createSessionViewReader.onStoryLookupVisit?.()}) : null;
+		  const validKey = key => /^(0|[1-9]\d*)$/.test(key) && Number(key) < 0xffffffff;
+		  function remember(source, before, keys) {
+		    if (!source || typeof source !== "object") return null;
+		    if (versions.has(source)) return source === before ? [] : null;
+		    const previous = versions.get(before);
+		    if (ordered && previous?.root && Array.isArray(keys) && keys.every(validKey)) {
+		      let root = previous.root;
+		      const hosts = new Set();
+		      function change(host, story, remove) {
+		        if (Number.isNaN(host)) return;
+		        hosts.add(host);
+		        let rows = ordered.get(root, host) || ordered.from([]);
+		        rows = ordered.update(rows, [[Number(story), remove ? undefined : Number(story)]]);
+		        root = ordered.update(root, [[host, rows.length ? rows : undefined]]);
+		      }
+		      for (const key of keys) if (Object.prototype.hasOwnProperty.call(before, key)) change(Number(before[key]), key, true);
+		      for (const key of keys) if (Object.prototype.hasOwnProperty.call(source, key)) change(Number(source[key]), key, false);
+		      versions.set(source, { root });
+		      return [...hosts];
+		    }
+		    const names = Object.keys(source);
+		    if (ordered && names.every(validKey)) {
+		      const hosts = new Map();
+		      for (const story of names) {
+		        const host = Number(source[story]);
+		        if (Number.isNaN(host)) continue;
+		        if (!hosts.has(host)) hosts.set(host, []);
+		        hosts.get(host).push([Number(story), Number(story)]);
+		      }
+		      versions.set(source, { root: ordered.from([...hosts].map(([host, rows]) => [host, ordered.from(rows)])) });
+		    } else {
+		      const turns = new Map();
+		      for (const story of names) {
+		        const turn = Number(source[story]);
+		        if (!Number.isNaN(turn) && !turns.has(turn)) turns.set(turn, Number(story));
+		      }
+		      versions.set(source, { turns });
+		    }
+		    return null;
+		  }
+		  return { remember, has: source => versions.has(source), read(source, turn) {
+		    const key = Number(turn), version = versions.get(source);
+		    if (version?.root && !Number.isNaN(key)) return ordered.get(version.root, key)?.[0] ?? key;
+		    return version?.turns?.has(key) ? version.turns.get(key) : key;
+		  } };
+		}
+
+		// Canonical array-index keys retain ordinary object enumeration order. Legacy
+		// non-turn keys use the original object path instead of changing its semantics.
+		function createTurnFieldIndex() {
+		  const index = createOrderedNumericIndex({visit: () => createSessionViewReader.onTurnFieldVisit?.()});
+		  const states = new WeakMap();
+		  const validKey = key => /^(0|[1-9]\d*)$/.test(String(key)) && Number(key) < 0xffffffff;
+		  function wrap(rows) {
+		    const target = {};
+		    const lookup = key => validKey(key) ? index.get(rows, Number(key)) : undefined;
+		    const value = new Proxy(target, {
+		      get: (object,key,receiver) => { const row = lookup(key); return row ? row.value : Reflect.get(object,key,receiver); },
+		      has: (object,key) => Boolean(lookup(key)) || Reflect.has(object,key),
+		      ownKeys: () => rows.map(row => row.key),
+		      getOwnPropertyDescriptor: (object,key) => {
+		        const row = lookup(key);
+		        return row ? {value:row.value,enumerable:true,configurable:true,writable:false} : Reflect.getOwnPropertyDescriptor(object,key);
+		      },
+		      set() { throw new Error("Turn fields are immutable"); },
+		      defineProperty() { throw new Error("Turn fields are immutable"); },
+		      deleteProperty() { throw new Error("Turn fields are immutable"); }
+		    });
+		    states.set(value,rows);return value;
+		  }
+		  function from(source) {
+		    if (!source || typeof source !== "object" || Array.isArray(source) || states.has(source)) return source;
+		    const keys = Reflect.ownKeys(source);
+		    if (!keys.every(key => typeof key === "string" && validKey(key))) return source;
+		    return wrap(index.from(keys.map(key => [Number(key),{key,value:source[key]}])));
+		  }
+		  function update(source,sets,removes) {
+		    if (!sets.length && !removes.length) return source;
+		    const entries = removes.map(key => [Number(key),undefined]);
+		    for (const [key,value] of sets) entries.push([Number(key),{key:String(key),value}]);
+		    return wrap(index.update(states.get(source),entries));
+		  }
+		  return {from,update,validKey,has:source => states.has(source)};
 		}
 		const beginSessionViewRead = createSessionViewReader();
 
@@ -497,18 +1052,18 @@ window.__ModuleLoader__.load({
 			const controlChannel = runtimeControl && typeof tavernSessionSignals !== "undefined" && typeof tavernSessionSignals.control === "function" ? tavernSessionSignals : null;
 			const started = Date.now();
             const clockStart = performance.now();
-            const traced = method === "getSession" || method === "syncSession";
+            const traced = ["getSession", "syncSession", "getCardOpenings", "initializeOpeningTemplate", "preparePlayStart", "startChat"].includes(method);
             const trace = traced ? { id: window.crypto?.randomUUID?.() || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === "x" ? n : (n & 3) | 8).toString(16); }), method, sentAt: started, active: ++performanceActiveRequests } : null;
             const payload = Object.assign({}, args || {});
 			if (!runtimeControl && (started - performanceReportAt >= 60000 || /diagnostic|export/i.test(method))) {
 				pagePerformance.observedMs = started - pagePerformanceStarted;
-				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice() });
+				payload._performance = Object.assign({}, pagePerformance, { requests: performanceRequests.slice(), openingRequests: typeof openingPerformance !== "undefined" ? openingPerformance.requests() : [], openings: typeof openingPerformance !== "undefined" ? openingPerformance.read() : [] });
 				performanceReportAt = started;
 			}
 			if (trace) payload._traceId = trace.id;
 			if (sessionId) payload.sessionId = sessionId;
 			const viewRead = method === "getSession" ? beginSessionViewRead(payload.sessionId) : null;
-			if (viewRead) { payload.viewSync = 1; payload.viewCursor = viewRead.cursor; }
+			if (viewRead) { payload.viewSync = 1; payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
 			const requestBody = JSON.stringify(payload);
 			if (trace) {
 				try { trace.requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).length : requestBody.length; }
@@ -526,13 +1081,13 @@ window.__ModuleLoader__.load({
 				? Promise.resolve().then(() => controlChannel.control(method, JSON.parse(requestBody), requestOptions && requestOptions.signal))
 				: fetch("/api/dsh-tavern/" + method, request).then(async function (response) {
                 if (trace) trace.headersMs = Math.round(performance.now() - clockStart);
-                const result = await readTavernJsonResponse(response);
+                const result = await readTavernJsonResponse(response, trace ? body => { trace.bodyChars = body.length; } : undefined);
                 if (trace) {
 					trace.parsedMs = Math.round(performance.now() - clockStart);
 					try {
 						const header = response.headers && typeof response.headers.get === "function" ? response.headers.get("content-length") : null;
 						if (header) trace.responseBytes = Number(header);
-						else trace.responseBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(JSON.stringify(result)).length : JSON.stringify(result).length;
+						// bodyChars measures the decoded body without serializing the large result again.
 					} catch (_error) {}
 				}
                 return result;
@@ -555,6 +1110,7 @@ window.__ModuleLoader__.load({
                     performanceActiveRequests--;
                     trace.durationMs = Math.round(performance.now() - clockStart);
                     performanceRequests.push(trace);
+                    if (!["getSession", "syncSession"].includes(method) && typeof openingPerformance !== "undefined") openingPerformance.recordRequest(trace);
                     if (performanceRequests.length > 60) performanceRequests.shift();
                 }
                 if (elapsed >= 1000) { pagePerformance.slowRpcCount++; pagePerformance.slowRpcMaxMs = Math.max(pagePerformance.slowRpcMaxMs, elapsed); }
@@ -765,13 +1321,105 @@ window.__ModuleLoader__.load({
 			function initialState() { return { phase: "idle", view: null, error: "", updatedAt: 0 }; }
 			function recordFor(sessionId) {
 				const id = String(sessionId || "");
-				if (!records.has(id)) records.set(id, { id: id, state: initialState(), listeners: new Set(), timer: null, watchdog: null, loading: false, reloadRequested: false, optimisticBusy: false, eviction: null, controller: null });
+				if (!records.has(id)) records.set(id, { id: id, state: initialState(), listeners: new Set(), paths: dependencyNode(), timer: null, watchdog: null, loading: false, reloadRequested: false, optimisticBusy: false, eviction: null, controller: null });
 				return records.get(id);
 			}
-			function publish(record, state) {
+			function dependencyNode() { return { exact: new Set(), all: new Set(), children: new Map() }; }
+			function register(root, paths, listener) {
+				const nodes = new Set(), leaves = new Set(), edges = [];
+				paths.forEach(function (path) {
+					let node = root; nodes.add(node);
+					path.forEach(function (key) {
+						key = String(key);
+						if (!node.children.has(key)) node.children.set(key, dependencyNode());
+						edges.push([node, key]); node = node.children.get(key); nodes.add(node);
+					});
+					leaves.add(node);
+				});
+				nodes.forEach(node => node.all.add(listener));
+				leaves.forEach(node => node.exact.add(listener));
+				return function () {
+					nodes.forEach(node => node.all.delete(listener));
+					leaves.forEach(node => node.exact.delete(listener));
+					for (let i = edges.length - 1; i >= 0; i--) {
+						const [parent, key] = edges[i];
+						if (parent.children.get(key)?.all.size === 0) parent.children.delete(key);
+					}
+				};
+			}
+			function affected(root, paths) {
+				const listeners = new Set(root.exact);
+				paths.forEach(function (path) {
+					let node = root;
+					for (const key of path) {
+						node = node.children.get(String(key));
+						if (!node) return;
+						node.exact.forEach(listener => listeners.add(listener));
+					}
+					node.all.forEach(listener => listeners.add(listener));
+				});
+				return listeners;
+			}
+			function addReceiptStatePaths(paths, before, after) {
+				if (Boolean(before?.activity?.busy) !== Boolean(after?.activity?.busy)) paths.push(["$receiptBusy"]);
+				if (!Object.is(before?.settlementTurn, after?.settlementTurn)) {
+					paths.push(["$settlementOwner", String(before?.settlementTurn)], ["$settlementOwner", String(after?.settlementTurn)]);
+				}
+			}
+			function publish(record, state, result) {
 				if (records.get(record.id) !== record) return;
+				// A confirmed no-op should not wake every mounted history component.
+				// In this opt-in mode updatedAt records the last published state change.
+				if (options.deduplicateViews === true && record.state.phase === state.phase
+					&& record.state.view === state.view && record.state.error === state.error) return;
+				let listeners = record.listeners;
+				if (result && result.viewBase === record.state.view && result.viewDelta
+					&& record.state.phase === state.phase && record.state.error === state.error) {
+					const delta = result.viewDelta;
+					const paths = delta.set.map(entry => entry[0]).concat(delta.remove);
+					if (paths.some(path => path[0] === "regeneratedDshTurns")) {
+						if (Array.isArray(result.storyChanges)) for (const turn of result.storyChanges) paths.push(["$storyHostTurn", String(turn)]);
+						else paths.push(["$storyHostTurn"]);
+					}
+					if (paths.some(path => path[0] === "replyProjections")) {
+						const change = result.projectionChanges;
+						if (change) {
+							for (const turn of change.turns) paths.push(["$projectionTurn", String(turn)]);
+							if (change.beforeLatest !== change.afterLatest) {
+								paths.push(["$projectionLatestTurn", String(change.beforeLatest)], ["$projectionLatestTurn", String(change.afterLatest)]);
+							}
+						} else paths.push(["$projectionTurn"], ["$projectionLatestTurn"]);
+					}
+					// Virtual turn dependencies are separate from positional array paths.
+					// Legacy/whole-array edits cannot prove turn locality and invalidate all.
+					if (paths.some(path => path[0] === "mvuReceipts")) paths.push(["$mvuReceiptTurn"]);
+					if (delta.receiptDelta && (delta.receiptDelta.set.length || delta.receiptDelta.remove.length)) {
+						paths.push(["mvuReceipts"]);
+						for (const row of delta.receiptDelta.set) paths.push(["$mvuReceiptTurn", String(row.turn)]);
+						for (const turn of delta.receiptDelta.remove) paths.push(["$mvuReceiptTurn", String(turn)]);
+					}
+					if (Boolean(record.state.view?.tavernHelper) !== Boolean(state.view?.tavernHelper)) paths.push(["$helperAvailable"]);
+					addReceiptStatePaths(paths, record.state.view, state.view);
+					listeners = affected(record.paths, paths);
+				} else if (options.deduplicateViews === true && record.state.view && state.view
+					&& record.state.phase === state.phase && record.state.error === state.error) {
+					// The identity-based mode already requires immutable published views.
+					// Hydration and local replacements preserve unrelated field identities:
+					// route those updates without enumerating history or all subscribers.
+					const before = record.state.view, after = state.view;
+					const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+					const paths = [];
+					for (const key of keys) if (Object.prototype.hasOwnProperty.call(before, key) !== Object.prototype.hasOwnProperty.call(after, key)
+						|| !Object.is(before[key], after[key])) paths.push([key]);
+					if (paths.some(path => path[0] === "regeneratedDshTurns")) paths.push(["$storyHostTurn"]);
+					if (paths.some(path => path[0] === "replyProjections")) paths.push(["$projectionTurn"], ["$projectionLatestTurn"]);
+					if (paths.some(path => path[0] === "mvuReceipts")) paths.push(["$mvuReceiptTurn"]);
+					if (Boolean(record.state.view?.tavernHelper) !== Boolean(state.view?.tavernHelper)) paths.push(["$helperAvailable"]);
+					addReceiptStatePaths(paths, record.state.view, state.view);
+					listeners = affected(record.paths, paths);
+				}
 				record.state = state;
-				record.listeners.forEach(function (listener) { listener(state); });
+				listeners.forEach(function (listener) { listener(state); });
 			}
 			function schedule(record, delay) {
 				if (records.get(record.id) !== record || record.listeners.size === 0) return;
@@ -815,7 +1463,7 @@ window.__ModuleLoader__.load({
 						return;
 					}
 					if (shouldPoll(view)) record.optimisticBusy = false;
-					publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
+					publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() }, result);
 					if (view && view.tavernHelper && view.tavernHelper.messagesPending && typeof options.hydrateHelperMessages === "function") {
 						try {
 							view = await options.hydrateHelperMessages(record.id, view) || view;
@@ -865,6 +1513,46 @@ window.__ModuleLoader__.load({
 			}
 
 			return {
+				// Each selection owns a stable snapshot, including missing-property semantics.
+				select: function (sessionId, paths) {
+					const module = this;
+					paths = paths.map(path => path.map(String));
+					if (paths.some(path => path.length === 0)) return {
+						getSnapshot: function () { return module.getSnapshot(sessionId); },
+						subscribe: function (notify) { return module.subscribe(sessionId, notify); }
+					};
+					// A selected parent already includes its children. Never write a child
+					// through a borrowed parent object while constructing the projection.
+					paths = paths.filter((path, i, all) => !all.some((parent, j) =>
+						(j < i || parent.length < path.length) && parent.length <= path.length
+						&& parent.every((key, depth) => path[depth] === key)));
+					let previous = null, values = null;
+					function snapshot() {
+						const state = module.getSnapshot(sessionId);
+						const next = paths.map(function (path) {
+							let value = state.view, present = value != null;
+							for (const key of path) {
+								present = value != null && Object.prototype.hasOwnProperty.call(value, key);
+								if (!present) return [false, undefined];
+								value = value[key];
+							}
+							return [present, value];
+						});
+						if (previous && previous.phase === state.phase && previous.error === state.error
+							&& (previous.view === null) === (state.view === null)
+							&& next.every((entry, i) => entry[0] === values[i][0] && Object.is(entry[1], values[i][1]))) return previous;
+						const view = state.view === null ? null : Object.create(null);
+						if (view) paths.forEach(function (path, i) {
+							if (!next[i][0]) return;
+							let target = view;
+							path.slice(0, -1).forEach(key => { target = target[key] || (target[key] = Object.create(null)); });
+							target[path[path.length - 1]] = next[i][1];
+						});
+						values = next;
+						return previous = Object.assign({}, state, { view: view });
+					}
+					return { getSnapshot: snapshot, subscribe: function (notify) { return module.subscribe(sessionId, notify, paths); } };
+				},
 				evict: evict,
 				getSnapshot: function (sessionId) { return recordFor(sessionId).state; },
 				setView: function (sessionId, view) {
@@ -880,10 +1568,11 @@ window.__ModuleLoader__.load({
 						if (records.get(record.id) === record) invalidate(sessionId);
 					};
 				},
-				subscribe: function (sessionId, listener) {
+				subscribe: function (sessionId, listener, paths) {
 					const record = recordFor(sessionId);
 					if (record.eviction !== null) { cancelTimer(record.eviction); record.eviction = null; }
 					const firstSubscriber = record.listeners.size === 0;
+					const unregister = register(record.paths, paths || [[]], listener);
 					record.listeners.add(listener);
 					listener(record.state);
 					if (firstSubscriber) schedule(record, 0);
@@ -893,6 +1582,7 @@ window.__ModuleLoader__.load({
 						}, watchdogIntervalMs);
 					}
 					return function () {
+						unregister();
 						record.listeners.delete(listener);
 						if (record.listeners.size === 0) {
 							if (cacheRetentionMs > 0 && record.eviction === null) record.eviction = scheduleTimer(function () {
@@ -936,6 +1626,7 @@ window.__ModuleLoader__.load({
 		}
 
 		const liveTavernView = createLiveTavernViewModule({
+			deduplicateViews: true,
 			loadTimeoutMs: 10000,
 			cacheRetentionMs: 10 * 60 * 1000,
 			timeoutRetryDelayMs: 5000,
@@ -1085,51 +1776,75 @@ window.__ModuleLoader__.load({
 
         // Bound initial story rendering independently of host child-slot ownership.
         // Only explicit input expands history; canonical records are never changed.
-        function createTavernHistoryViewport(initialLimit = 20) {
-            const entries = new Map(), listeners = new Set(), limits = new Map();
-            let snapshot = new Set();
-            function publish(next, force = false) {
-                if (!force && next.size === snapshot.size && [...next].every(key => snapshot.has(key))) return;
-                const previous = snapshot;
-                snapshot = new Set(next);
-                for (const key of previous) if (!next.has(key)) entries.get(key)?.release();
-                listeners.forEach(fn => fn());
+        function createTavernHistoryViewport(initialLimit = 20, { visit = () => {} } = {}) {
+            const index = createOrderedNumericIndex({ visit });
+            const entries = new Map(), sessions = new Map(), listeners = new Map();
+            let activeSession, selected = index.from([]), earlierKey;
+            function state(key) {
+                const item = entries.get(key);
+                return item && item.sessionId === activeSession && index.get(selected, item.turn)
+                    ? (key === earlierKey ? 2 : 1) : 0;
             }
-            function ordered(sessionId) {
-                return [...entries.values()].filter(item => item.sessionId === sessionId).sort((a, b) => a.turn - b.turn);
+            function publish(sessionId, next) {
+                const oldEarlier = earlierKey, previousSession = activeSession;
+                const changes = previousSession === sessionId ? index.changed(selected, next)
+                    : [...selected.map(item => ({ before: item })), ...next.map(item => ({ after: item }))];
+                activeSession = sessionId;
+                selected = next;
+                const rows = sessions.get(sessionId)?.rows;
+                earlierKey = rows?.length && next.length && rows[0].turn < next[0].turn ? next[0].key : undefined;
+                const changedKeys = new Set([oldEarlier, earlierKey]);
+                for (const change of changes) {
+                    if (change.before) { changedKeys.add(change.before.key); change.before.release(); }
+                    if (change.after) changedKeys.add(change.after.key);
+                }
+                for (const key of changedKeys) if (key !== undefined) listeners.get(key)?.forEach(fn => fn());
             }
             function select(sessionId) {
-                const rows = ordered(sessionId);
-                publish(new Set(rows.slice(-(limits.get(sessionId) || initialLimit)).map(item => item.key)), true);
+                const session = sessions.get(sessionId);
+                publish(sessionId, session ? index.suffix(session.rows, session.rows.length - (session.limit || initialLimit)) : index.from([]));
             }
             return {
-                subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-                snapshot() { return snapshot; },
+                subscribe(key, fn) {
+                    let bucket = listeners.get(key);
+                    if (!bucket) listeners.set(key, bucket = new Set());
+                    bucket.add(fn);
+                    return () => { bucket.delete(fn); if (!bucket.size) listeners.delete(key); };
+                },
+                state,
                 register(sessionId, turn, release) {
                     const key = JSON.stringify([sessionId, turn]);
-                    let item = entries.get(key);
-                    const added = !item;
-                    const newest = ordered(sessionId).at(-1);
-                    if (added && limits.has(sessionId) && newest && turn > newest.turn) limits.set(sessionId, limits.get(sessionId) + 1);
-                    if (!item) { item = { key, sessionId, turn, release, mounts: 0 }; entries.set(key, item); }
+                    let item = entries.get(key), session = sessions.get(sessionId);
+                    if (!session) sessions.set(sessionId, session = { rows: index.from([]) });
+                    const added = !item, newest = session.rows[session.rows.length - 1];
+                    if (added && session.limit && newest && turn > newest.turn) session.limit++;
+                    if (!item) {
+                        item = { key, sessionId, turn, release, mounts: 0 };
+                        entries.set(key, item);
+                        session.rows = index.update(session.rows, [[turn, item]]);
+                    }
                     item.mounts++;
                     if (added) select(sessionId);
                     return () => {
                         if (--item.mounts > 0) return;
-                        item.release();
                         entries.delete(key);
-                        if (!ordered(sessionId).length) limits.delete(sessionId);
-                        publish(new Set([...snapshot].filter(k => k !== key)));
+                        session.rows = index.update(session.rows, [[turn, undefined]]);
+                        if (!session.rows.length) sessions.delete(sessionId);
+                        if (activeSession === sessionId && index.get(selected, turn)) {
+                            publish(sessionId, index.update(selected, [[turn, undefined]]));
+                        } else {
+                            item.release();
+                            if (activeSession === sessionId) publish(sessionId, selected);
+                        }
                     };
                 },
                 more(sessionId) {
-                    limits.set(sessionId, (limits.get(sessionId) || initialLimit) + initialLimit);
+                    const session = sessions.get(sessionId);
+                    if (!session) return;
+                    session.limit = (session.limit || initialLimit) + initialLimit;
                     select(sessionId);
                 },
-                hasEarlier(sessionId, turn) {
-                    const rows = ordered(sessionId), selected = rows.filter(item => snapshot.has(item.key));
-                    return selected[0]?.turn === turn && rows[0]?.turn < turn;
-                },
+                hasEarlier(sessionId, turn) { return earlierKey === JSON.stringify([sessionId, turn]); },
                 key(sessionId, turn) { return JSON.stringify([sessionId, turn]); }
             };
         }
@@ -1140,11 +1855,14 @@ window.__ModuleLoader__.load({
             const expanding = React.useRef(false);
             const turn = Number(props.node.location?.turn?.turn || 0);
             const key = tavernHistoryViewport.key(props.sessionId, turn);
-            const active = React.useSyncExternalStore(tavernHistoryViewport.subscribe, tavernHistoryViewport.snapshot).has(key);
+            const subscribe = React.useCallback(fn => tavernHistoryViewport.subscribe(key, fn), [key]);
+            const getState = React.useCallback(() => tavernHistoryViewport.state(key), [key]);
+            const viewportState = React.useSyncExternalStore(subscribe, getState);
+            const active = viewportState !== 0;
             React.useLayoutEffect(() => tavernHistoryViewport.register(props.sessionId, turn, () => {
                 tavernRetainedFrames.invalidateOwner(key);
             }), [key]);
-            const earlier = props.node.kind !== "user" && tavernHistoryViewport.hasEarlier(props.sessionId, turn);
+            const earlier = props.node.kind !== "user" && viewportState === 2;
             function more() {
                 if (expanding.current) return;
                 expanding.current = true;
@@ -1197,10 +1915,24 @@ window.__ModuleLoader__.load({
                 ) : null);
         }
 
-		function useLiveTavernView(sessionId, revision) {
-			const subscribe = React.useCallback(function (notify) { return liveTavernView.subscribe(sessionId, notify); }, [sessionId]);
+		function useLiveTavernView(sessionId, revision, paths) {
+            const dependencyKey = JSON.stringify(paths);
+			const subscribe = React.useCallback(function (notify) { return liveTavernView.subscribe(sessionId, notify, paths); }, [sessionId, dependencyKey]);
 			const snapshot = React.useCallback(function () { return liveTavernView.getSnapshot(sessionId); }, [sessionId]);
 			const state = React.useSyncExternalStore(subscribe, snapshot, snapshot);
+			const previous = React.useRef({ sessionId: sessionId, revision: revision });
+			React.useEffect(function () {
+				const last = previous.current;
+				previous.current = { sessionId: sessionId, revision: revision };
+				if (last.sessionId === sessionId && last.revision !== revision) liveTavernView.invalidate(sessionId);
+			}, [sessionId, revision]);
+			return state;
+		}
+
+		function useScopedLiveTavernView(sessionId, revision, paths) {
+			const key = JSON.stringify(paths);
+			const selection = React.useMemo(function () { return liveTavernView.select(sessionId, paths); }, [sessionId, key]);
+			const state = React.useSyncExternalStore(selection.subscribe, selection.getSnapshot, selection.getSnapshot);
 			const previous = React.useRef({ sessionId: sessionId, revision: revision });
 			React.useEffect(function () {
 				const last = previous.current;
@@ -1391,36 +2123,40 @@ window.__ModuleLoader__.load({
             async function run(request, key) {
                 let phase = "清理当前空白对话";
                 let attempt = attempts.get(key);
+                const timing = options.trace ? options.trace("startGame") : null;
+                const step = (name, work) => timing ? timing.measure(name, work) : work();
+                let successful = false;
                 try {
                     const existingId = attempt && attempt.sessionId || request.preparedSessionId || "";
-                    await options.archiveCurrent(existingId);
+                    await step("archiveCurrent", () => options.archiveCurrent(existingId));
                     if (!attempt) {
                         let sessionId = existingId;
                         if (!sessionId) {
                             phase = request.kind === "card" ? "准备卡片工作区" : "准备游玩工作区";
-                            const workspaceId = request.preparedWorkspaceId || await options.resolveWorkspace(request);
+                            const workspaceId = request.preparedWorkspaceId || await step("resolveWorkspace", () => options.resolveWorkspace(request));
                             phase = "创建 DSH Session";
-                            sessionId = await options.connectWorkspace(workspaceId);
+                            sessionId = await step("connectWorkspace", () => options.connectWorkspace(workspaceId));
                         }
                         attempt = { sessionId, initialized: false };
                         attempts.set(key, attempt);
                     }
                     const sessionId = attempt.sessionId;
                     phase = "等待 DSH Session 就绪";
-                    await options.waitForSession(sessionId);
+                    await step("waitForSession", () => options.waitForSession(sessionId));
                     if (!attempt.initialized) {
                         phase = "切换到酒馆模式";
-                        await options.ensurePreset(sessionId, request);
+                        await step("ensurePreset", () => options.ensurePreset(sessionId, request));
                         phase = request.kind === "card" ? "创建卡片工作台对话" : "写入人物卡开场白";
-                        await options.createChat(request, sessionId);
+                        await step("createChat", () => options.createChat(request, sessionId));
                         attempt = { sessionId, initialized: true };
                         attempts.set(key, attempt);
                     }
                     phase = "同步并打开 DSH Session";
                     const pending = Object.assign({}, request.pending || {}, { sessionId, targetMode: request.targetMode });
                     options.rememberPending(pending);
-                    await options.finishOpen(pending);
+                    await step("finishOpen", () => options.finishOpen(pending));
                     attempts.delete(key);
+                    successful = true;
                     return { sessionId, pending };
                 } catch (error) {
                     const failure = error instanceof Error ? error : new Error(String(error || "创建对话失败"));
@@ -1431,7 +2167,7 @@ window.__ModuleLoader__.load({
                     // the next click, or waitForSession keeps timing out on the same id.
                     if (attempt && !attempt.initialized && /列表同步超时/.test(failure.message)) attempts.delete(key);
                     throw failure;
-                }
+                } finally { if (timing) timing.finish(successful); }
             }
             return { start };
         }
@@ -1950,17 +2686,68 @@ window.__ModuleLoader__.load({
             const hostDocument = options && options.document;
             const roots = [hostDocument && hostDocument.head, hostDocument && hostDocument.body].filter(Boolean);
             const owned = new Map();
+            const owners = hostDocument.__dshTavernArtifactOwners || (hostDocument.__dshTavernArtifactOwners = new WeakMap());
+            const identity = {};
+            const host = hostDocument.defaultView;
+            let observer = null;
+            function park() {
+                if (visible || disposed) return;
+                for (const [node, previous] of owned) if (node.parentNode === previous.root) {
+                    previous.nextSibling = node.nextSibling;
+                    previous.root.removeChild(node);
+                    previous.parked = true;
+                }
+            }
+            function remember(node, root) {
+                // Prose highlights belong to the host renderer, even if React mounts
+                // them while a card frame is being initialized.
+                if (owned.has(node) || owners.has(node) || node.hasAttribute?.("data-tavern-retained-frames")
+                    || node.hasAttribute?.("data-dsh-tavern-text-colors")) return;
+                owners.set(node, identity);
+                owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: root === hostDocument.body,
+                    root: root, nextSibling: node.nextSibling, parked: false });
+            }
             let baselines, disposed = false, visible = true;
             function baseline() { baselines = roots.map(root => ({ root: root, nodes: new Set(Array.from(root.childNodes || root.children || [])) })); }
             function capture() {
                 for (const entry of baselines) for (const node of Array.from(entry.root.childNodes || entry.root.children || [])) {
-                    if (entry.nodes.has(node) || owned.has(node) || node.hasAttribute?.("data-tavern-retained-frames")) continue;
-                    owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: entry.root === hostDocument.body,
-                        root: entry.root, nextSibling: node.nextSibling, parked: false });
+                    if (!entry.nodes.has(node)) remember(node, entry.root);
                 }
             }
             baseline();
+            if (host && host.MutationObserver) {
+                observer = new host.MutationObserver(park);
+                for (const root of roots) observer.observe(root, { childList: true });
+            }
             return Object.freeze({
+                // Scope the mounting operation, not the whole asynchronous import.
+                // Other conversations and the app can render while that import waits.
+                bindJQuery: function (jquery) {
+                    const wrappers = new WeakMap();
+                    const mutations = new Set(["append", "prepend", "before", "after", "appendTo", "prependTo", "insertBefore", "insertAfter", "replaceWith", "replaceAll", "html"]);
+                    function wrap(value) {
+                        if (!value || !value.jquery) return value;
+                        if (wrappers.has(value)) return wrappers.get(value);
+                        const proxy = new Proxy(value, { get(target, key) {
+                            const method = target[key];
+                            if (typeof method !== "function" || key === "constructor") return method;
+                            return function () {
+                                const before = mutations.has(key) ? roots.map(root => ({ root, nodes: new Set(root.childNodes) })) : null;
+                                let result;
+                                try { result = method.apply(target, arguments); }
+                                finally {
+                                    if (before) for (const entry of before) for (const node of Array.from(entry.root.childNodes)) {
+                                        if (!entry.nodes.has(node)) { if (disposed) node.remove(); else remember(node, entry.root); }
+                                    }
+                                }
+                                return wrap(result);
+                            };
+                        } });
+                        wrappers.set(value, proxy); wrappers.set(proxy, proxy);
+                        return proxy;
+                    }
+                    return new Proxy(jquery, { apply(target, receiver, args) { return wrap(Reflect.apply(target, receiver, args)); } });
+                },
                 setVisible: function (next) {
                     if (disposed || visible === next) return;
                     if (visible) capture();
@@ -1992,6 +2779,7 @@ window.__ModuleLoader__.load({
                     if (disposed) return;
                     if (visible) capture();
                     disposed = true;
+                    if (observer) observer.disconnect();
                     for (const node of owned.keys()) {
                         if (typeof node.remove === "function") node.remove();
                         else if (node.parentNode && typeof node.parentNode.removeChild === "function") node.parentNode.removeChild(node);
@@ -2879,15 +3667,15 @@ window.__ModuleLoader__.load({
 		    const doc = root.ownerDocument, win = doc.defaultView;
 		    if (!win.CSS || !win.CSS.highlights || typeof win.Highlight !== 'function') return { setEnabled() {}, setColors() {}, dispose() {} };
 		    const prefix = 'dsh-tavern-text-' + Math.random().toString(36).slice(2);
-		    // Claude 陶土色系：浅底用加深 terracotta，深底用暖杏；斜体用偏冷灰紫作对比。
-		    const colors = { 'quote-light': '#a9583e', 'quote-dark': '#e8a882', 'em-light': '#6b5b7a', 'em-dark': '#c4b5d4' };
+		    const colors = { 'quote-light': true, 'quote-dark': true, 'em-light': true, 'em-dark': true };
 		    const highlights = new Map();
 		    const style = doc.createElement('style');
 		    style.setAttribute('data-dsh-tavern-text-colors', '');
 		    function setColors(overrides) {
 		        style.textContent = Object.entries(colors).map(([kind, fallback]) => {
 		            const value = overrides && overrides[kind.startsWith('quote') ? 'quote' : 'em'];
-		            const color = typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+		            const color = typeof value === 'string' && win.CSS.supports('color', value) && !/[;{}]/.test(value)
+		                ? value : 'var(--dsw-alias-brand-primary, currentColor)';
 		            return '::highlight(' + prefix + '-' + kind + '){color:' + color + '}';
 		        }).join('\n');
 		    }
@@ -2990,66 +3778,24 @@ window.__ModuleLoader__.load({
 		    };
 		}
 
-		function tavernTextColorsEnabled(host) {
-		    try { return host.localStorage.getItem('dsh-tavern-text-colors') !== 'off'; } catch (_) { return true; }
-		}
-		function setTavernTextColorsEnabled(enabled) {
-		    try { window.localStorage.setItem('dsh-tavern-text-colors', enabled ? 'on' : 'off'); } catch (_) {}
-		    window.dispatchEvent(new CustomEvent('dsh-tavern-text-colors-changed', { detail: enabled }));
-		}
+		// Display colors belong to the host theme; legacy per-browser overrides are ignored.
+		function tavernTextColorsEnabled() { return true; }
 		function tavernTextColorOverrides(host) {
-		    try {
-		        const value = JSON.parse(host.localStorage.getItem('dsh-tavern-text-color-overrides') || '{}');
-		        const result = {};
-		        for (const key of ['quote', 'em']) if (value && typeof value[key] === 'string' && /^#[0-9a-f]{6}$/i.test(value[key])) result[key] = value[key];
-		        return result;
-		    } catch (_) { return {}; }
-		}
-		function setTavernTextColorOverrides(colors) {
-		    try { window.localStorage.setItem('dsh-tavern-text-color-overrides', JSON.stringify(colors)); } catch (_) {}
-		    window.dispatchEvent(new CustomEvent('dsh-tavern-text-colors-changed'));
+		    const doc = host.document;
+		    const probe = doc.createElement('span');
+		    probe.style.cssText = 'position:absolute;visibility:hidden;color:var(--dsw-alias-brand-primary, currentColor)';
+		    doc.body.appendChild(probe);
+		    const accent = host.getComputedStyle(probe).color;
+		    probe.remove();
+		    return { quote: accent, em: accent };
 		}
 		function TavernColoredMarkdown(props) {
 		    const root = React.useRef(null);
 		    React.useEffect(function () {
-		        const colors = installTavernTextColors(root.current, { enabled: tavernTextColorsEnabled(window), colors: tavernTextColorOverrides(window) }, findTavernQuoteRanges);
-		        const changed = () => { colors.setColors(tavernTextColorOverrides(window)); colors.setEnabled(tavernTextColorsEnabled(window)); };
-		        window.addEventListener('dsh-tavern-text-colors-changed', changed);
-		        window.addEventListener('storage', changed);
-		        return function () { window.removeEventListener('dsh-tavern-text-colors-changed', changed); window.removeEventListener('storage', changed); colors.dispose(); };
+		        const colors = installTavernTextColors(root.current, {}, findTavernQuoteRanges);
+		        return () => colors.dispose();
 		    }, []);
 		    return React.createElement('div', { ref: root, className: 'dsh-tavern-colored-markdown' }, React.createElement(DshUi.MarkdownText, props));
-		}
-		function TavernTextColorSettings() {
-		    const [enabled, setEnabled] = React.useState(() => tavernTextColorsEnabled(window));
-		    const [overrides, setOverrides] = React.useState(() => tavernTextColorOverrides(window));
-		    React.useEffect(function () {
-		        const changed = () => { setEnabled(tavernTextColorsEnabled(window)); setOverrides(tavernTextColorOverrides(window)); };
-		        window.addEventListener('dsh-tavern-text-colors-changed', changed);
-		        window.addEventListener('storage', changed);
-		        return function () { window.removeEventListener('dsh-tavern-text-colors-changed', changed); window.removeEventListener('storage', changed); };
-		    }, []);
-		    const h = React.createElement;
-		    return h('div', { className: 'dsh-tavern-settings-group dsh-tavern-text-color-settings' },
-		        h('label', { className: 'dsh-tavern-settings-row dsh-tavern-text-color-head' },
-		            h('span', { className: 'dsh-tavern-settings-copy' },
-		                h('span', { className: 'dsh-tavern-settings-title' }, '正文分色'),
-		                h('span', { className: 'dsh-tavern-settings-desc' }, '为引号内对白和斜体文字分别选色，普通文字保持原色。保留人物卡已有配色；仅影响当前浏览器显示。')),
-		            h('span', { className: 'dsh-tavern-settings-switch' },
-		                h('input', { type: 'checkbox', checked: enabled, 'aria-label': '启用正文分色', onChange: event => { setEnabled(event.target.checked); setTavernTextColorsEnabled(event.target.checked); } }),
-		                h('span', { className: 'dsh-tavern-settings-track', 'aria-hidden': true }))),
-		        h('div', { className: 'dsh-tavern-text-color-swatches' + (enabled ? '' : ' is-disabled') },
-		            ...[['quote', '对白颜色', '#e8a882'], ['em', '斜体颜色', '#c4b5d4']].map(([key, label, fallback]) =>
-		                h('label', { key, className: 'dsh-tavern-text-color-swatch' },
-		                    h('span', { className: 'dsh-tavern-settings-copy' },
-		                        h('span', { className: 'dsh-tavern-settings-title' }, label),
-		                        h('span', { className: 'dsh-tavern-settings-desc' }, overrides[key] ? overrides[key].toUpperCase() : '默认：自动适配深浅背景')),
-		                    h('span', { className: 'dsh-tavern-text-color-chip', style: { '--swatch': overrides[key] || fallback } },
-		                        h('input', { type: 'color', 'aria-label': label, value: overrides[key] || fallback, disabled: !enabled,
-		                            onChange: event => { const next = { ...overrides, [key]: event.target.value }; setOverrides(next); setTavernTextColorOverrides(next); } }))))),
-		        h('div', { className: 'dsh-tavern-text-color-foot' },
-		            h('button', { type: 'button', className: 'dsh-tavern-btn', disabled: !Object.keys(overrides).length,
-		                onClick: () => { setOverrides({}); setTavernTextColorOverrides({}); } }, '恢复默认配色')));
 		}
 
 		function substituteTavernIdentityMacros(value, context) {
@@ -3190,33 +3936,270 @@ window.__ModuleLoader__.load({
 		    };
 		}
 
+		// A viewport-sized card cannot determine its own iframe viewport. Use the host
+		// viewport as a floor for page layouts, while retaining authored local scrollers.
+		function tavernFrameViewportFloor() {
+			var viewport = 600;
+			try { viewport = window.parent.innerHeight || viewport; } catch (_) {}
+			viewport = Math.max(160, Math.min(1200, viewport));
+			function viewportHeight(style) {
+				return /(?:^|[^\d.])100(?:d|s|l)?vh\b/i.test((style.height || '') + ' ' + (style.minHeight || ''));
+			}
+			function visible(node) {
+		        // The embedding adapter resets document roots to content height. An
+		        // overridden author rule on body/html is not a live viewport-sized panel.
+		        if (node === document.body || node === document.documentElement) return false;
+		        for (var ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
+		            if (ancestor.tagName === 'DETAILS' && !ancestor.open) {
+		                var summary = ancestor.querySelector('summary');
+		                if (!summary || !summary.contains(node)) return false;
+		            }
+		        }
+				var rect = node.getBoundingClientRect();
+				var style = getComputedStyle(node);
+				return rect.width > window.innerWidth / 2 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+			}
+			function matchesRules(rules) {
+				for (var rule of Array.from(rules || [])) {
+					if (rule.media && !matchMedia(rule.media.mediaText).matches) continue;
+					if (rule.selectorText && rule.style && viewportHeight(rule.style)) {
+						try { if (Array.from(document.querySelectorAll(rule.selectorText)).some(visible)) return true; } catch (_) {}
+					}
+					if (rule.cssRules && matchesRules(rule.cssRules)) return true;
+				}
+				return false;
+			}
+			for (var sheet of Array.from(document.styleSheets)) {
+				try { if (!sheet.disabled && (!sheet.media.mediaText || matchMedia(sheet.media.mediaText).matches) && matchesRules(sheet.cssRules)) return viewport; } catch (_) {}
+			}
+			for (var node of document.body.querySelectorAll('*')) {
+				if (!visible(node)) continue;
+				var style = getComputedStyle(node);
+				if (viewportHeight(node.style)) return viewport;
+				// Full-page fixed shells have no normal-flow height at all. Floating
+				// buttons or small dialogs must not enlarge the frame.
+				if (style.position === 'fixed' && style.top === '0px' && style.bottom === '0px') return viewport;
+			}
+			return 0;
+		}
+        function normalizeFrameSizing(value) {
+          if (!value || !['content', 'viewport', 'fixed'].includes(value.mode)) return null
+          const result = { mode: value.mode, minHeight: 48, maxHeight: 32000 }
+          for (const key of ['height', 'minHeight', 'maxHeight', 'aspectRatio']) {
+            if (value[key] === undefined) continue
+            const n = value[key]
+            if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0 || n > 32000) return null
+            result[key] = n
+          }
+          if (result.minHeight < 48 || result.maxHeight < result.minHeight) return null
+          if (result.mode === 'fixed' && !result.height && !result.aspectRatio) return null
+          return result
+        }
+
+        function normalizeCardFrameSizing(value) {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+          const panels = Object.create(null)
+          for (const [id, config] of Object.entries(value.panels || {}).slice(0, 64)) {
+            if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) continue
+            const normalized = normalizeFrameSizing(config)
+            if (normalized) panels[id] = normalized
+          }
+          const fallback = normalizeFrameSizing(value.default)
+          return fallback || Object.keys(panels).length ? { default: fallback, panels } : null
+        }
+        // Opt-in, template-local sizing. An absent/invalid declaration stays on the
+        // legacy path, including its viewport heuristics and cached initial height.
+        function tavernFrameSizingDeclaration(content) {
+            if (!String(content || "").includes("dsh-tavern-frame")) return null;
+            const markup = String(content || "").replace(/<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+            for (const tag of markup.match(/<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi) || []) {
+                const attrs = Object.create(null);
+                for (const match of tag.matchAll(/([^\s=<>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+                    const key = match[1].toLowerCase();
+                    if (!(key in attrs)) attrs[key] = match[2] ?? match[3] ?? match[4];
+                }
+                if (attrs.name !== "dsh-tavern-frame") continue;
+                return attrs;
+            }
+            return null;
+        }
+
+        function tavernFrameSizing(content, settings, panelId) {
+            const attrs = tavernFrameSizingDeclaration(content);
+            if (attrs?.content) {
+                const value = { mode: attrs.content };
+                for (const [attribute, key] of [["data-height", "height"], ["data-min-height", "minHeight"], ["data-max-height", "maxHeight"], ["data-aspect-ratio", "aspectRatio"]]) {
+                    if (attrs[attribute] === undefined) continue;
+                    if (!/^\d+(?:\.\d+)?$/.test(attrs[attribute])) return null;
+                    value[key] = Number(attrs[attribute]);
+                }
+                const config = normalizeFrameSizing(value);
+                return config ? Object.assign(config, { source: "template" }) : null;
+            }
+            const card = normalizeCardFrameSizing(settings);
+            const id = attrs?.["data-panel-id"] || panelId;
+            const panel = card?.panels[id];
+            const config = panel || card?.default;
+            return config ? Object.assign({}, config, { source: panel ? "panel" : "card" }) : null;
+        }
+
+        function tavernFrameSizingHeight(config, width, available, measured) {
+            const target = config.mode === "content" ? measured : config.mode === "viewport" ? available
+                : config.height || width / config.aspectRatio;
+            const limit = config.mode === "content" ? config.maxHeight : Math.min(config.maxHeight, available);
+            return Math.max(48, Math.round(Math.min(limit, Math.max(config.minHeight, target || 48))));
+        }
+
+        // Size against a scroll viewport, not the frame's top or its content height:
+        // scrolling a message must not shrink its application or create a feedback loop.
+        function observeTavernFrameSizing(host, frame, config, change) {
+            let stopped = false, queued = null, ancestors = [], observer;
+            function update() {
+                queued = null;
+                if (stopped || !frame.isConnected || !frame.getClientRects().length) return;
+                const viewport = host.visualViewport;
+                let top = viewport?.offsetTop || 0, bottom = top + (viewport?.height || host.innerHeight);
+                const next = [];
+                for (let node = frame.parentElement; node && node !== host.document.body; node = node.parentElement) {
+                    next.push(node);
+                    const style = host.getComputedStyle(node);
+                    // Scroll containers define the viewport even when content currently
+                    // fits; using scrollHeight here would oscillate at the fit boundary.
+                    // Plain clipping wrappers are not available-height contracts.
+                    if (!/(auto|scroll)/.test(style.overflowY) && !node.hasAttribute("data-dsh-tavern-frame-viewport")) continue;
+                    const rect = node.getBoundingClientRect();
+                    top = Math.max(top, rect.top + node.clientTop + (parseFloat(style.paddingTop) || 0));
+                    bottom = Math.min(bottom, rect.top + node.clientTop + node.clientHeight - (parseFloat(style.paddingBottom) || 0));
+                }
+                if (observer && (next.length !== ancestors.length || next.some((node, index) => node !== ancestors[index]))) {
+                    observer.disconnect(); observer.observe(frame);
+                    next.forEach(node => observer.observe(node)); ancestors = next;
+                }
+                const width = frame.getBoundingClientRect().width;
+                const available = Math.max(48, bottom - top);
+                change({ width, available, height: tavernFrameSizingHeight(config, width, available, frame.clientHeight), reason: "container" });
+            }
+            function schedule() { if (!stopped && queued === null) queued = host.requestAnimationFrame(update); }
+            if (typeof host.ResizeObserver === "function") { observer = new host.ResizeObserver(schedule); observer.observe(frame); }
+            host.addEventListener("resize", schedule);
+            host.addEventListener("scroll", schedule, true);
+            host.visualViewport?.addEventListener("resize", schedule);
+            host.visualViewport?.addEventListener("scroll", schedule);
+            frame.addEventListener("load", schedule);
+            schedule();
+            return { schedule, stop() {
+                stopped = true;
+                if (queued !== null) host.cancelAnimationFrame(queued);
+                observer?.disconnect();
+                host.removeEventListener("resize", schedule);
+                host.removeEventListener("scroll", schedule, true);
+                host.visualViewport?.removeEventListener("resize", schedule);
+                host.visualViewport?.removeEventListener("scroll", schedule);
+                frame.removeEventListener("load", schedule);
+            } };
+        }
+
+        // Runs inside the iframe, including opaque-origin sandboxed cards.
+        function installTavernFrameSizing(token, config) {
+            window.__dshTavernFrameLayout = function () {
+                return { mode: config?.mode || "legacy", source: config?.source || "legacy",
+                    phase: document.readyState, width: innerWidth, height: innerHeight, minHeight: config?.minHeight || 48,
+                    maxHeight: config?.maxHeight || 32000,
+                    roots: [document.documentElement, document.body, document.getElementById("app")].filter(Boolean).map(node => {
+                        const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
+                        return { tag: node.tagName, id: node.id, width: rect.width, height: rect.height,
+                            clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+                            position: style.position, overflowY: style.overflowY, cssHeight: style.height, minHeight: style.minHeight };
+                    }) };
+            };
+            if (!config) return;
+            addEventListener("message", event => {
+                const data = event.data;
+                if (event.source !== parent || data?.token !== token || data.type !== "dsh-tavern-frame-layout") return;
+                if (config.mode === "content") document.documentElement.toggleAttribute("data-dsh-tavern-sizing-scroll", data.scroll === true);
+            });
+        }
+
+				function TavernStartCards(props) {
+					const { newTabOptions, onNewTab } = props;
+					const h = React.createElement;
+					const groups = [
+						['本局', ['dsh-tavern:status', 'dsh-tavern:conversation-settings']],
+						['资料库', ['dsh-tavern:cards', 'dsh-tavern:worldbooks', 'dsh-tavern:presets', 'dsh-tavern:resources', 'dsh-tavern:skills', 'dsh-tavern:system-prompts']],
+						['偏好', ['dsh-tavern:user-profile', 'dsh-tavern:card-memory']],
+						['其他', []]
+					];
+					const paths = {
+						status: 'M4 18a9 9 0 1 1 16 0M12 13l5-5M11 13a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+						'conversation-settings': 'M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1zM9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+						cards: 'M8 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0M4 21a8 8 0 0 1 16 0',
+						worldbooks: 'M3 5c0-4 18-4 18 0s-18 4-18 0v14c0 4 18 4 18 0V5M3 12c0 4 18 4 18 0',
+						presets: 'M10 4a2 2 0 1 0 4 0a2 2 0 1 0-4 0M3 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 6l-3 8M16 6l3 8M9 19h6',
+						resources: 'M3 8V5h7l3 3h8v12H3zM3 11h18',
+						skills: 'M13 21H5V3h14v9M8 7h8M8 11h5M18 14l1.5 3.5L23 19l-3.5 1.5L18 24l-1.5-3.5L13 19l3.5-1.5z',
+						'system-prompts': 'M10 3L6 21M18 3l-4 18M3 9h18M2 15h18',
+						'user-profile': 'M3 6h10m4 0h4M3 12h4m4 0h10M3 18h10m4 0h4M13 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M13 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+						'card-memory': 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',
+						fallback: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'
+					};
+					const known = new Set(groups.flatMap(group => group[1]));
+					const css = `.dsh-tavern-start{box-sizing:border-box;padding:20px;overflow:auto;min-height:0;width:100%;color:var(--dsw-alias-label-primary);container-type:inline-size}.dsh-tavern-start section+section{margin-top:24px}.dsh-tavern-start h3{font-size:13px;font-weight:500;color:var(--dsw-alias-label-secondary);margin:0 0 10px}.dsh-tavern-start-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,112px),1fr));gap:12px}.dsh-tavern-start-card{appearance:none;font:inherit;font-size:14px;color:inherit;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#ddd);border-radius:16px;min-width:0;min-height:112px;padding:16px 8px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;cursor:pointer}.dsh-tavern-start-card:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-label-secondary)}.dsh-tavern-start-card:focus-visible{outline:2px solid currentColor;outline-offset:2px}.dsh-tavern-start-card:disabled{opacity:.45;cursor:default}.dsh-tavern-start-icon{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:var(--dsw-alias-interactive-bg-hover-accent,#edf1fc);color:var(--dsw-alias-brand-primary,#5279c7)}.dsh-tavern-start-icon svg{width:24px;height:24px}.dsh-tavern-start-label{text-align:center;line-height:1.45;overflow-wrap:anywhere}@container(max-width:260px){.dsh-tavern-start-grid{gap:8px}.dsh-tavern-start-card{font-size:13px;padding:12px 6px;min-height:100px}}`;
+					return h('div', {className:'dsh-tavern-start'}, h('style',null,css), groups.map(([title, ids]) => {
+						const options = ids.length ? ids.map(id => newTabOptions.find(option => option.id === id)).filter(Boolean) : newTabOptions.filter(option => !known.has(option.id));
+						if (!options.length) return null;
+						return h('section',{key:title,'aria-label':title},h('h3',null,title),h('div',{className:'dsh-tavern-start-grid'},options.map(option => {
+							const key=option.id.replace('dsh-tavern:','');
+							const icon=paths[key] ? h('svg',{viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round'},h('path',{d:paths[key]})) : option.icon ?? h('svg',{viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8},h('path',{d:paths.fallback}));
+							return h('button',{key:option.id,type:'button',className:'dsh-tavern-start-card',disabled:option.disabled===true,title:option.label,onClick:()=>onNewTab(option.id)},h('span',{className:'dsh-tavern-start-icon','aria-hidden':true},icon),h('span',{className:'dsh-tavern-start-label'},option.label));
+						})));
+					}));
+				}
+
+		function registerTavernStartPage(ctx, slots) {
+		 ctx.inject(["sidebarRightTabs"], injected => {
+		  const registry = injected.get("sidebarRightTabs");
+		  injected.effect(() => slots.inject("sidebar.right.tab.guide", () => slots.register({name:"sidebar.right.tab.guide",id:"dsh-tavern:start",priority:-1,select:()=>true}, function TavernStartPage(props) {
+		   const entries = React.useSyncExternalStore(callback => registry.subscribe(callback), () => registry.guide());
+		   const {tab} = props.useTabInfo();
+		   return React.createElement(TavernStartCards,{newTabOptions:entries.map(entry => ({id:entry.kind,label:entry.title(),icon:entry.icon ? React.createElement(entry.icon,{size:24}) : null})),onNewTab:id=>tab.actions.openTab(id,{replaceTab:true})});
+		  })), "dsh-tavern: native start page");
+		 });
+		}
+
 		function buildTavernFrameDocument(input) {
 			const html = rewriteTavernStaticMarkup(String(input && (input.content !== undefined ? input.content : input.html) || ""));
-			const token = JSON.stringify(String(input && input.token || "")).replace(/</g, "\\u003c");
+			const sizing = tavernFrameSizing(html, input && input.frameSizing, input && input.persistent ? input.panelId : undefined);
+            const token = JSON.stringify(String(input && input.token || "")).replace(/</g, "\\u003c");
 			const helperContext = JSON.stringify(input && input.helperContext || null).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 			const helperTurn = Math.max(0, Number(input && input.turn) || 0);
 			const preparationRuntime = input && input.openingPreview && input.openingPreview.runtime
 				? buildTavernHelperScriptParts({ token: input.token, context: input.openingPreview.runtime.context, scripts: input.openingPreview.runtime.scripts, previewScope: true }) : null;
 			const helperDependencies = input && (input.helperContext || input.openingPreview) ? tavernHelperMessageDependencies() : sillyTavernCssCompatibilityDependencies() + (/<script\b/i.test(html) ? tavernHelperMessageDependencies() : "");
 			const storageShim = '<script data-dsh-tavern-storage>(function(){try{void window.localStorage;return;}catch(e){}var values=Object.create(null),keys=[];var storage={getItem:function(key){key=String(key);return Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;},setItem:function(key,value){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))keys.push(key);values[key]=String(value);},removeItem:function(key){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))return;delete values[key];keys.splice(keys.indexOf(key),1);},clear:function(){values=Object.create(null);keys=[];},key:function(index){index=Number(index);return index>=0&&index<keys.length?keys[index]:null;}};Object.defineProperty(storage,"length",{enumerable:true,get:function(){return keys.length;}});try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,value:storage});}catch(e){}})();<\/script>';
-			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[all[currentId()]];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(all[i]);}else items=[all[normalizeId(target)]];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else{var message=state.messages[normalizeId(option.message_id)];if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=state.messages[normalizeId(patch.message_id)];if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});return selectedVariables((state.messages||[])[normalizeId(option.message_id)]);};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
+			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[all[currentId()]];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(all[i]);}else items=[all[normalizeId(target)]];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=state.messages[normalizeId(option.message_id)];if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=state.messages[normalizeId(patch.message_id)];if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables((state.messages||[])[normalizeId(option.message_id)]);};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
 			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")});};var worldbook=' + JSON.stringify(input && input.helperContext && input.helperContext.worldbook || null).replace(/</g, '\\u003c') + ';window.getCharWorldbookNames=function(){return {primary:worldbook&&worldbook.name||null,additional:[]};};window.getWorldbookNames=function(){return worldbook&&worldbook.name?[worldbook.name]:[];};window.TavernHelper=window.TavernHelper||{};["getCurrentCharacterName","getVariables","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
 			const mvuViewObservationShim = input && input.helperContext && input.observeMvuView !== false ? '<script data-dsh-tavern-mvu-view-observer>(function(){var token=' + token + ',reported=false;function report(){if(reported)return;reported=true;window.__dshTavernMvuViewUsed=true;parent.postMessage({type:"dsh-tavern-mvu-view-used",token:token,mvuViewUsed:true},"*");}var getMvuData=window.Mvu&&window.Mvu.getMvuData;if(typeof getMvuData==="function")window.Mvu.getMvuData=function(){report();return getMvuData.apply(window.Mvu,arguments);};var getVariables=window.getVariables;if(typeof getVariables==="function")window.getVariables=function(){report();return getVariables.apply(window,arguments);};})();<\/script>' : '';
 			// parent.Mvu may throw an Error from another iframe: instanceof alone loses its stack.
 			const runtimeReporter = input && input.runtimeReporting === false ? '' : '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var captureDom=' + JSON.stringify(!(input && input.persistent === true)) + ';var logs=[],network=[],errors=[],timer=0;function trim(list){if(list.length>100)list.splice(0,list.length-100);}function value(input,depth){if(depth>3)return "[深度已截断]";if(input===null||input===undefined||typeof input==="boolean"||typeof input==="number"||typeof input==="string")return typeof input==="string"&&input.length>4000?input.slice(0,4000)+"…[已截断]":input;try{if(input instanceof Error||Object.prototype.toString.call(input)==="[object Error]")return {name:String(input.name),message:String(input.message).slice(0,4000),stack:String(input.stack||"").slice(0,4000)};if(Array.isArray(input))return input.slice(0,30).map(function(item){return value(item,depth+1);});if(typeof input==="object"){var out={};Object.keys(input).slice(0,30).forEach(function(key){out[key]=value(input[key],depth+1);});return out;}}catch(e){}return String(input);}function cleanUrl(input){try{var parsed=new URL(String(input),location.href);return parsed.protocol+"//"+parsed.host+parsed.pathname;}catch(e){return String(input||"").split(/[?#]/)[0].slice(0,1000);}}function send(){timer=0;var dom="";try{if(captureDom&&document.body){var copy=document.body.cloneNode(true);Array.prototype.forEach.call(copy.querySelectorAll("script[data-dsh-tavern-frame],script[data-dsh-tavern-storage],script[data-dsh-tavern-layout]"),function(node){node.remove();});dom=copy.innerHTML;}}catch(e){}if(dom.length>100000)dom=dom.slice(0,100000)+"<!-- 已截断 -->";parent.postMessage({type:"dsh-tavern-frame-runtime",token:token,runtime:{capturedAt:Date.now(),dom:dom,console:logs.slice(),network:network.slice(),errors:errors.slice()}} ,"*");}function schedule(){if(timer)return;timer=setTimeout(send,350);}["log","info","warn","error"].forEach(function(level){var original=console[level];console[level]=function(){logs.push({at:Date.now(),level:level,args:Array.prototype.map.call(arguments,function(item){return value(item,0);})});trim(logs);schedule();return original&&original.apply(console,arguments);};});addEventListener("error",function(event){var target=event.target;if(target&&target!==window){errors.push({at:Date.now(),kind:"resource",tag:String(target.tagName||""),url:cleanUrl(target.src||target.href||"")});}else errors.push({at:Date.now(),kind:"error",message:String(event.message||""),source:cleanUrl(event.filename||""),line:Number(event.lineno)||0,column:Number(event.colno)||0});trim(errors);schedule();},true);addEventListener("unhandledrejection",function(event){errors.push({at:Date.now(),kind:"unhandledrejection",message:String(event.reason&&event.reason.message||event.reason||"")});trim(errors);schedule();});if(typeof window.fetch==="function"){var nativeFetch=window.fetch;window.fetch=function(input,init){var started=Date.now(),method=String(init&&init.method||"GET").toUpperCase(),url=cleanUrl(input&&input.url||input);return nativeFetch.apply(this,arguments).then(function(response){network.push({at:started,kind:"fetch",method:method,url:url,status:Number(response.status)||0,durationMs:Date.now()-started});trim(network);if(!response.ok)schedule();return response;},function(error){network.push({at:started,kind:"fetch",method:method,url:url,failed:true,durationMs:Date.now()-started,error:String(error&&error.message||error)});trim(network);schedule();throw error;});};}if(typeof XMLHttpRequest==="function"){var nativeOpen=XMLHttpRequest.prototype.open,nativeSend=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(method,url){this.__dshRequest={started:0,method:String(method||"GET").toUpperCase(),url:cleanUrl(url)};return nativeOpen.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){var request=this.__dshRequest||{method:"GET",url:""};request.started=Date.now();this.addEventListener("loadend",function(){network.push({at:request.started,kind:"xhr",method:request.method,url:request.url,status:Number(this.status)||0,durationMs:Date.now()-request.started});trim(network);if(Number(this.status)>=400)schedule();});return nativeSend.apply(this,arguments);};}addEventListener("load",schedule);schedule();})();<\/script>';
-			const reporter = '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var last=0;var queued=false;var active=true;function nodeBottom(node){if(!node||typeof node.getBoundingClientRect!=="function")return 0;var style;try{style=getComputedStyle(node);}catch(e){return 0;}if(style.display==="none"||style.visibility==="hidden"||style.position==="fixed")return 0;var rect=node.getBoundingClientRect();if(rect.width===0&&rect.height===0)return 0;var top=rect.top,bottom=rect.bottom+Math.max(0,parseFloat(style.marginBottom)||0);var ancestor=node.parentElement;while(ancestor&&ancestor!==document.documentElement){if(String(ancestor.tagName||" ").toLowerCase()==="details"&&!ancestor.open){var summary=ancestor.querySelector("summary");if(!summary||!summary.contains(node))return 0;}var ancestorStyle;try{ancestorStyle=getComputedStyle(ancestor);}catch(e){ancestorStyle=null;}var overflow=String(ancestorStyle&&(ancestorStyle.overflowY||ancestorStyle.overflow)||"visible");if(overflow!=="visible"){var ancestorRect=ancestor.getBoundingClientRect();top=Math.max(top,ancestorRect.top);bottom=Math.min(bottom,ancestorRect.bottom);if(bottom<=top)return 0;}ancestor=ancestor.parentElement;}return Math.ceil(bottom+(window.scrollY||0));}function measure(){var body=document.body;if(!body)return 48;var bodyRect=body.getBoundingClientRect();var height=Math.max(body.scrollHeight||0,Math.ceil(bodyRect.bottom+(window.scrollY||0)),48);var nodes=[body].concat(Array.prototype.slice.call(body.querySelectorAll("*")));for(var i=0;i<nodes.length;i+=1)height=Math.max(height,nodeBottom(nodes[i]));return height;}function report(){queued=false;if(!active)return;var height=measure();document.documentElement.toggleAttribute("data-dsh-tavern-scroll",height>=32000);if(height===last)return;last=height;parent.postMessage({type:"dsh-tavern-frame-height",token:token,height:height},"*");}function schedule(){if(!active||queued)return;queued=true;if(typeof requestAnimationFrame==="function")requestAnimationFrame(report);else setTimeout(report,0);}if(typeof ResizeObserver==="function"){var observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}addEventListener("load",schedule);addEventListener("toggle",schedule,true);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(schedule);var mutations=new MutationObserver(schedule);function observe(){mutations.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});if(typeof observer!=="undefined"){observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}}addEventListener("message",function(event){var data=event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-frame-measure-active")return;active=data.active!==false;if(active){observe();schedule();}else{mutations.disconnect();if(typeof observer!=="undefined")observer.disconnect();}});observe();schedule();})();<\/script>';
+			let reporter = '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var viewportFloor=' + tavernFrameViewportFloor.toString() + ';var last=0;var queued=false;var active=true;function nodeBottom(node){if(!node||typeof node.getBoundingClientRect!=="function")return 0;var style;try{style=getComputedStyle(node);}catch(e){return 0;}if(style.display==="none"||style.visibility==="hidden"||style.position==="fixed")return 0;var rect=node.getBoundingClientRect();if(rect.width===0&&rect.height===0)return 0;var top=rect.top,bottom=rect.bottom+Math.max(0,parseFloat(style.marginBottom)||0);var ancestor=node.parentElement;while(ancestor&&ancestor!==document.documentElement){if(String(ancestor.tagName||" ").toLowerCase()==="details"&&!ancestor.open){var summary=ancestor.querySelector("summary");if(!summary||!summary.contains(node))return 0;}var ancestorStyle;try{ancestorStyle=getComputedStyle(ancestor);}catch(e){ancestorStyle=null;}var overflow=String(ancestorStyle&&(ancestorStyle.overflowY||ancestorStyle.overflow)||"visible");if(overflow!=="visible"){var ancestorRect=ancestor.getBoundingClientRect();top=Math.max(top,ancestorRect.top);bottom=Math.min(bottom,ancestorRect.bottom);if(bottom<=top)return 0;}ancestor=ancestor.parentElement;}return Math.ceil(bottom+(window.scrollY||0));}function measure(){var body=document.body;if(!body)return 48;var bodyRect=body.getBoundingClientRect();var height=Math.max(body.scrollHeight||0,Math.ceil(bodyRect.bottom+(window.scrollY||0)),48,viewportFloor());var nodes=[body].concat(Array.prototype.slice.call(body.querySelectorAll("*")));for(var i=0;i<nodes.length;i+=1)height=Math.max(height,nodeBottom(nodes[i]));return height;}function report(){queued=false;if(!active)return;var height=measure();document.documentElement.toggleAttribute("data-dsh-tavern-scroll",height>=32000);if(height===last)return;last=height;parent.postMessage({type:"dsh-tavern-frame-height",token:token,height:height},"*");}function schedule(){if(!active||queued)return;queued=true;if(typeof requestAnimationFrame==="function")requestAnimationFrame(report);else setTimeout(report,0);}if(typeof ResizeObserver==="function"){var observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}addEventListener("load",schedule);addEventListener("toggle",schedule,true);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(schedule);var mutations=new MutationObserver(schedule);function observe(){mutations.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});if(typeof observer!=="undefined"){observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}}addEventListener("message",function(event){var data=event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-frame-measure-active")return;active=data.active!==false;if(active){observe();schedule();}else{mutations.disconnect();if(typeof observer!=="undefined")observer.disconnect();}});observe();schedule();})();<\/script>';
 			// Animated/polling cards may never become DOM-idle; bound the wait so
 			// their authenticated variable channel can start receiving updates.
 			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,deadline=0,reported=false;function report(){if(reported)return;reported=true;clearTimeout(timer);clearTimeout(deadline);observer.disconnect();var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;deadline=setTimeout(report,1000);schedule();});})();<\/script>';
 			const layoutNormalizer = '<script data-dsh-tavern-layout>(function(){if(!document.body)return;function clean(){Array.prototype.slice.call(document.body.childNodes).forEach(function(node){var value=String(node.nodeValue||"");if(node.nodeType===3&&!/\\S/.test(value)&&/[\\r\\n]/.test(value))node.nodeValue="";});}clean();if(typeof MutationObserver!=="undefined"){var observer=new MutationObserver(clean);observer.observe(document.body,{childList:true});addEventListener("pagehide",function(){observer.disconnect();},{once:true});}})();<\/script>';
 			const fontRuntime = '<script data-dsh-tavern-font-runtime>(' + installTavernFrameFonts.toString() + ')(' + token + ',' + restoreTavernFrameFontStyles.toString() + ');<\/script>';
             const textColorRuntime = '<script data-dsh-tavern-text-colors>(function(){const colors=(' + installTavernTextColors.toString() + ')(document.body,{enabled:false},' + findTavernQuoteRanges.toString() + ');addEventListener("message",function(event){const data=event.data;if(event.source===parent&&data&&data.token===' + token + '&&(data.type==="dsh-tavern-text-colors"||data.type==="dsh-tavern-font-size")){colors.setColors(data.textColorOverrides);colors.setEnabled(data.type==="dsh-tavern-font-size"?data.textColorsEnabled:data.enabled);}});addEventListener("pagehide",()=>colors.dispose(),{once:true});})();<\/script>';
-			const cleanRuntimeReporter = runtimeReporter.replace('dom=copy.innerHTML;', '(' + restoreTavernFrameFontStyles.toString() + ')(copy);Array.from(copy.querySelectorAll("script[data-dsh-tavern-font-runtime],script[data-dsh-tavern-text-colors],script[data-dsh-tavern-touch]")).forEach(function(node){node.remove();});dom=copy.innerHTML;');
+            if (sizing) {
+                if (sizing.mode !== "content") reporter = "";
+                else reporter = reporter.replace("48,viewportFloor()", "48");
+            }
+            const sizingRuntime = '<script data-dsh-tavern-sizing>(' + installTavernFrameSizing.toString() + ')(' + token + ',' + JSON.stringify(sizing) + ');<\/script>';
+            const sizingStyle = !sizing ? "" : '<style data-dsh-tavern-sizing>html[data-dsh-tavern-sizing-scroll]{overflow-y:auto!important}html[data-dsh-tavern-sizing-scroll] body{overflow-y:visible!important}' + (sizing.mode === "content" ? '' : 'html:root,html:root body{height:100%!important;min-height:0!important;overflow:auto!important}html:root body{white-space:normal}') + '</style>';
+			const cleanRuntimeReporter = runtimeReporter.replace('addEventListener("load",schedule);schedule();', 'addEventListener("load",schedule);addEventListener("resize",schedule);schedule();').replace("capturedAt:Date.now(),", "capturedAt:Date.now(),layout:window.__dshTavernFrameLayout?window.__dshTavernFrameLayout():null,").replace('dom=copy.innerHTML;', '(' + restoreTavernFrameFontStyles.toString() + ')(copy);Array.from(copy.querySelectorAll("script[data-dsh-tavern-font-runtime],script[data-dsh-tavern-text-colors],script[data-dsh-tavern-touch]")).forEach(function(node){node.remove();});dom=copy.innerHTML;');
 			return '<!doctype html><html><head><meta charset="utf-8">'
 				+ '<meta name="viewport" content="width=device-width,initial-scale=1">'
 				+ '<meta name="referrer" content="no-referrer">'
 				+ '<meta http-equiv="Content-Security-Policy" content="default-src https: http: data: blob:; img-src https: http: data: blob:; media-src https: http: data: blob:; font-src https: http: data:; style-src \'unsafe-inline\' https: http:; script-src \'unsafe-inline\' \'unsafe-eval\' https: http: data: blob:; connect-src https: http: wss: data: blob:; frame-src https: http: data: blob:; object-src \'none\'; base-uri \'none\'; form-action \'none\'">'
-				+ '<style>:root{color-scheme:light dark}html,body{box-sizing:border-box;margin:0;min-height:0;background:transparent;color:CanvasText;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;line-height:1.75}body{padding:0 1px;overflow-wrap:anywhere;white-space:pre-wrap}html[data-dsh-tavern-scroll]{overflow-y:auto!important}html[data-dsh-tavern-scroll] body{overflow-y:visible!important}body>*{white-space:normal}maintext{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.dsh-tavern-plain-text{white-space:pre-wrap;overflow-wrap:anywhere}*,*:before,*:after{box-sizing:border-box}img,video,svg,canvas{max-width:100%;height:auto}pre{max-width:100%;overflow:auto;white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}a{color:LinkText}</style>' + (preparationRuntime ? preparationRuntime.head : helperDependencies) + tavernStaticAssetShim() + '<script data-dsh-tavern-remote-document>(' + installTavernRemoteDocumentLoader.toString() + ')();<\/script>' + storageShim + helperShim + interactiveHelperShim + mvuViewObservationShim + cleanRuntimeReporter
+				+ '<style>:root{color-scheme:light dark}html,body{box-sizing:border-box;margin:0;min-height:0;background:transparent;color:CanvasText;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;line-height:1.75}body{padding:0 1px;overflow-wrap:anywhere;white-space:pre-wrap}html[data-dsh-tavern-scroll]{overflow-y:auto!important}html[data-dsh-tavern-scroll] body{overflow-y:visible!important}body>*{white-space:normal}maintext{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.dsh-tavern-plain-text{white-space:pre-wrap;overflow-wrap:anywhere}*,*:before,*:after{box-sizing:border-box}img,video,svg,canvas{max-width:100%;height:auto}pre{max-width:100%;overflow:auto;white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}a{color:LinkText}</style>' + (preparationRuntime ? preparationRuntime.head : helperDependencies) + tavernStaticAssetShim() + '<script data-dsh-tavern-remote-document>(' + installTavernRemoteDocumentLoader.toString() + ')();<\/script>' + storageShim + helperShim + interactiveHelperShim + mvuViewObservationShim + cleanRuntimeReporter + sizingStyle
 				+ (input && input.helperContext && input.helperContext.openingHost ? '<script data-dsh-tavern-session-opening>(' + installSessionOpeningBridge.toString() + ')(' + token + ',' + JSON.stringify(Object.assign({}, input.helperContext.openingHost, { extensionSettings: input.helperContext.extensionSettings || {} })).replace(/</g, '\\u003c') + ');<\/script>' : '')
 				+ (input && input.helperContext ? '<script data-dsh-tavern-frame-variable-aliases>(' + installTavernFrameVariableAliases.toString() + ')();<\/script>' : '')
 				+ (input && input.helperContext && input.persistent === true && input.preserveInstance !== true ? '<script data-dsh-tavern-status-refresh>(' + installTavernStatusRefresh.toString() + ')(' + token + ');<\/script>' : '')
@@ -3225,7 +4208,7 @@ window.__ModuleLoader__.load({
 				// Viewers without the execution lease still receive live variables. Legacy
 				// status panels read parent.Mvu; expose their Helper API below the executor.
 				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
-				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
+				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
 		function encodeTavernScriptSource(value) {
@@ -3248,6 +4231,7 @@ window.__ModuleLoader__.load({
 			const { parent, token, copy, identity, onContext, onEvent } = options;
 			let nextId = 1;
 			const pending = Object.create(null);
+            let contextReady = null;
 			function post(message) { parent.postMessage(Object.assign({}, message, { token: token }), "*"); }
 			function request(method, args) {
 				// A card may replace its document; DOM listeners must be restored before RPC.
@@ -3262,8 +4246,8 @@ window.__ModuleLoader__.load({
 			function receive(event) {
 				const data = event && event.data;
 				if (event.source !== parent || !data || data.token !== token) return;
-				if (data.type === "dsh-tavern-helper-context") { onContext({ context: data.context || {} }); return; }
-				if (data.type === "dsh-tavern-helper-event" || data.type === "dsh-tavern-helper-event-ack" || data.type === "dsh-tavern-helper-event-query") { onEvent(data); return; }
+				if (data.type === "dsh-tavern-helper-context") { const ready = Promise.resolve(onContext(data.contextDelta ? {contextDelta:data.contextDelta} : { context: data.context || {} })); contextReady = ready; ready.then(function () { if (contextReady === ready) contextReady = null; }, function (error) { console.error(error); }); return; }
+				if (data.type === "dsh-tavern-helper-event" || data.type === "dsh-tavern-helper-event-ack" || data.type === "dsh-tavern-helper-event-query") { if (contextReady) contextReady.then(function () { onEvent(data); }, function (error) { console.error(error); }); else onEvent(data); return; }
 				if (data.type !== "dsh-tavern-helper-response") return;
 				const task = pending[data.requestId];
 				if (!task) return;
@@ -3471,16 +4455,11 @@ window.__ModuleLoader__.load({
 				}
 				if (revision < lastRevision && !acknowledged) return;
 				chatId = String(value.chatId || ""); lifecycleRevision = Number(value.lifecycleRevision || 0);
-				// Do not conceal an unsupported local splice/reorder with a host refresh.
-				if (!layoutMatches()) return;
-				const variablesOnly = variableDelta && !acknowledged && revision === variableDelta.stateRevision
-                    && lastRevision === variableDelta.baseRevision && rows.length === (value.messages || []).length;
-                const nextRows = (value.messages || []).map(function (message, index) {
-                    if (variablesOnly && index !== variableDelta.messageId) {
-                        const row = rows[index];
-                        if (same(pluginData(row.view), row.base)) row.revision = revision;
-                        return row;
-                    }
+                const variablesOnly = variableDelta && !acknowledged && revision === variableDelta.stateRevision
+                    && lastRevision === (variableDelta.kind === 'transaction' ? variableDelta.stateRevision : variableDelta.baseRevision)
+                    && rows.length === (value.messages || []).length;
+                const changedRows = variableDelta?.version === 2 ? new Set((variableDelta.messages || []).map(m=>m.message_id)) : new Set([variableDelta?.messageId]);
+                function mergeRow(message, index) {
 					const core = coreOf(message), remote = copy(message.pluginData || {});
 					let row = rows[index];
 					if (!row || !same(identity(row.core), identity(core))) {
@@ -3493,8 +4472,21 @@ window.__ModuleLoader__.load({
 					row.core = core;
 					if (ack || same(pluginData(row.view), remote)) { row.base = remote; row.revision = revision; }
 					return row;
-				});
-				rows = nextRows; chat.splice(0, chat.length, ...rows.map(row => row.view));
+                }
+                if (variablesOnly) {
+                    // Preserve arbitrary unsaved plugin edits, including an invalid
+                    // layout elsewhere. Full save still checks every row; a receipt
+                    // must neither scan nor silently repair untouched plugin data.
+                    if (chat.length !== rows.length || [...changedRows].some(id => !rows[id] || chat[id] !== rows[id].view)) return;
+                    for (const id of changedRows) {
+                        rows[id] = mergeRow(value.messages[id], id);
+                        chat[id] = rows[id].view;
+                    }
+                } else {
+                    if (!layoutMatches()) return;
+                    rows = (value.messages || []).map(mergeRow);
+                    chat.splice(0, chat.length, ...rows.map(row => row.view));
+                }
 				const remoteMetadata = copy(value.chatMetadata || {}), ackMetadata = acknowledged && acknowledged.metadata;
 				mergeView(metadata, ackMetadata ? ackMetadata.data : metadataBase, remoteMetadata);
 				if (ackMetadata || same(metadata, remoteMetadata)) { metadataBase = remoteMetadata; metadataRevision = revision; }
@@ -3649,28 +4641,67 @@ window.__ModuleLoader__.load({
 		    }
 		  };
 		}
-		// null requests a read-only snapshot; an obsolete receipt cannot roll state back.
-		// Untouched history remains shared. This function also runs inside script iframes.
-		function applyTavernVariableReceipt(previous, delta) {
-		    if (!previous || !delta || delta.version !== 1) return null;
-		    if (delta.chatId !== previous.chatId || delta.lifecycleRevision < Number(previous.lifecycleRevision || 0)) return previous;
-		    if (delta.lifecycleRevision !== Number(previous.lifecycleRevision || 0)) return null;
-		    if (delta.stateRevision <= Number(previous.stateRevision || 0)) return previous;
-		    if (delta.baseRevision !== previous.stateRevision) return null;
-		    function copy(value) { return JSON.parse(JSON.stringify(value)); }
-		    const context = Object.assign({}, previous, { stateRevision: delta.stateRevision });
-		    if (delta.message) {
-		        if (!Number.isInteger(delta.messageId) || !previous.messages || !previous.messages[delta.messageId]) return null;
-		        context.messages = previous.messages.slice();
-		        const message = Object.assign({}, previous.messages[delta.messageId], copy(delta.message));
-		        // Retain the parent runtime's compatibility aliases without copying history.
-		        if (Object.prototype.hasOwnProperty.call(message, 'mes')) message.mes = message.message;
-		        context.messages[delta.messageId] = message;
-		    } else if (delta.chatVariables) context.chatVariables = copy(delta.chatVariables);
-		    else if (delta.scriptVariables) context.scriptVariables = copy(delta.scriptVariables);
-		    else return null;
-		    return context;
-		}
+        // null requests a read-only snapshot; an obsolete receipt cannot roll state back.
+        // Untouched history remains shared. This function also runs inside script iframes.
+        function applyTavernVariableReceipt(previous, delta) {
+            if (previous && delta && delta.version === 2) {
+                if (delta.chatId !== previous.chatId || delta.lifecycleRevision < Number(previous.lifecycleRevision || 0)) return previous;
+                if (delta.lifecycleRevision !== Number(previous.lifecycleRevision || 0)) return null;
+                if (delta.kind === 'transaction') {
+                    if (previous.transaction?.eventId !== delta.eventId) return previous;
+                    if (delta.sequence <= previous.transaction.sequence) return previous;
+                    if (delta.baseSequence !== previous.transaction.sequence || delta.sequence !== delta.baseSequence + 1) return null;
+                } else if (delta.kind === 'committed') {
+                    if (delta.stateRevision < previous.stateRevision) return previous;
+                    if (delta.baseRevision !== previous.stateRevision || previous.messagesPending) return null;
+                } else if (delta.kind === 'dispatch') {
+                    if (previous.transaction || delta.baseRevision !== previous.stateRevision || previous.messagesPending) return null;
+                } else return null;
+                const context = Object.assign({}, previous, delta.header || {}, {
+                    stateRevision: delta.stateRevision,
+                    transaction: { eventId: delta.eventId, sequence: delta.kind === 'dispatch' ? 0 : delta.sequence }
+                });
+                if (delta.kind === 'committed') delete context.transaction;
+                const api = applyTavernVariableReceipt.indexApi;
+                const length = delta.kind === 'dispatch' ? delta.messageCount : (previous.messages || []).length;
+                if (!Number.isInteger(length) || length < 0 || length > 0xffffffff) return null;
+                const entries = [];
+                for (const source of delta.messages || []) {
+                    const index = source.message_id;
+                    if (!Number.isInteger(index) || index < 0 || index >= length) return null;
+                    const message = JSON.parse(JSON.stringify(source));
+                    // Dispatch used to decorate every floor. A compact floor must keep
+                    // these aliases too: official MVU compares name with SillyTavern.name2.
+                    message.mes = message.message;
+                    message.is_user = message.role === 'user'; message.is_system = message.role === 'system';
+                    if (!message.name) message.name = message.is_user ? (context.playerName || '你') : (context.characterName || context.character?.name || '角色');
+                    entries.push([index, message]);
+                }
+                context.messages = api.update(previous.messages || [], entries, length);
+                if (!api.info(context.messages).complete) return null;
+                for (const key of ['chatVariables', 'scriptVariables', 'scriptPrompts']) if (Object.hasOwn(delta, key)) context[key] = JSON.parse(JSON.stringify(delta[key]));
+                return context;
+            }
+            if (!previous || !delta || delta.version !== 1) return null;
+            if (delta.chatId !== previous.chatId || delta.lifecycleRevision < Number(previous.lifecycleRevision || 0)) return previous;
+            if (delta.lifecycleRevision !== Number(previous.lifecycleRevision || 0)) return null;
+            if (delta.stateRevision <= Number(previous.stateRevision || 0)) return previous;
+            if (delta.baseRevision !== previous.stateRevision) return null;
+            function copy(value) { return JSON.parse(JSON.stringify(value)); }
+            const context = Object.assign({}, previous, { stateRevision: delta.stateRevision });
+            if (delta.message) {
+                if (!Number.isInteger(delta.messageId) || !previous.messages || !previous.messages[delta.messageId]) return null;
+
+                const message = Object.assign({}, previous.messages[delta.messageId], copy(delta.message));
+                // Retain the parent runtime's compatibility aliases without copying history.
+                if (Object.prototype.hasOwnProperty.call(message, 'mes')) message.mes = message.message;
+                context.messages = applyTavernVariableReceipt.indexApi.update(previous.messages, [[delta.messageId, message]]);
+            } else if (delta.chatVariables) context.chatVariables = copy(delta.chatVariables);
+            else if (delta.scriptVariables) context.scriptVariables = copy(delta.scriptVariables);
+            else return null;
+            return context;
+        }
+        applyTavernVariableReceipt.indexApi = createIndexedArrayApi({valid: row => Boolean(row && !row.stub), eligible: row => Boolean(row?.variables?.stat_data !== undefined && row?.variables?.schema !== undefined)});
 
 		function installTavernHelperFacade(options) {
 			const nativeWorldInfoSnapshots = new WeakMap();
@@ -3878,6 +4909,7 @@ window.__ModuleLoader__.load({
         }
 
 		function tavernHelperScriptBootstrap(metadata, initialContext, modules) {
+            modules.applyVariableReceipt.indexApi = modules.createIndexedArrayApi({valid: row => Boolean(row && !row.stub), eligible: row => Boolean(row?.variables?.stat_data !== undefined && row?.variables?.schema !== undefined)});
             const initializationTiming = modules.createInitializationTiming({ report: function (timings) { parent.postMessage({ type: "dsh-tavern-mvu-load-diagnostic", token: metadata.token, diagnostic: { phase: "initialization-timing", timings: timings } }, "*"); } });
             window.__dshTavernInitializationTiming = initializationTiming;
             window.addEventListener("pagehide", initializationTiming.dispose, { once: true });
@@ -3896,6 +4928,7 @@ window.__ModuleLoader__.load({
 				try { Object.defineProperty(window, "localStorage", { configurable: true, value: storage }); } catch (_) {}
 			}
 			let state = initialContext && typeof initialContext === "object" ? initialContext : {};
+            state = {...state, messages:modules.applyVariableReceipt.indexApi.from(state.messages || [])};
 			const token = String(metadata.token || "");
 			const officialMvuEnabled = metadata.officialMvu === true;
 			let lorebookSettings = { selected_global_lorebooks: [] };
@@ -3933,7 +4966,7 @@ window.__ModuleLoader__.load({
 				onContext: async function (result, method) {
                     if (result.contextDelta) {
                         const next = modules.applyVariableReceipt(state, result.contextDelta);
-                        if (next === null) await transport.request("getTavernHelperContext", {});
+                        if (next === null) await transport.request("getTavernHelperContext", result.contextDelta.version === 2 ? {eventId:result.contextDelta.eventId} : {});
                         else if (next !== state) { state = next; if (facade) facade.sync(state, result.contextDelta); }
                         return;
                     }
@@ -3943,7 +4976,7 @@ window.__ModuleLoader__.load({
 						|| Number(incoming.lifecycleRevision || 0) < Number(state.lifecycleRevision || 0)
                         || (Number(incoming.lifecycleRevision || 0) === Number(state.lifecycleRevision || 0)
                             && Number(incoming.stateRevision || 0) < Number(state.stateRevision || 0)))) return;
-					if (incoming) state = Object.assign({}, state, copy(incoming));
+					if (incoming) { state = Object.assign({}, state, copy(incoming)); state.messages = modules.applyVariableReceipt.indexApi.from(state.messages || []); if (!incoming.transaction) delete state.transaction; }
 					if (result.worldbook) state.worldbook = copy(result.worldbook);
 					// Chat-data saves acknowledge their own submitted snapshot separately.
 					if (incoming && facade && method !== "saveTavernChatData") facade.sync(state);
@@ -5072,6 +6105,7 @@ window.__ModuleLoader__.load({
 			const bootstrap = '(' + tavernHelperScriptBootstrap.toString() + ')(' + safeMetadata + ',' + safeContext + ',{'
 				+ 'createInitializationTiming:' + createTavernInitializationTiming.toString() + ','
 				+ 'createTransport:' + createTavernHelperTransport.toString() + ','
+                + 'createIndexedArrayApi:' + createIndexedArrayApi.toString() + ','
                 + 'applyVariableReceipt:' + applyTavernVariableReceipt.toString() + ','
 				+ 'createEvents:' + createTavernHelperEventBus.toString() + ','
 				+ 'createPopup:' + createTavernHelperPopup.toString() + ','
@@ -5089,7 +6123,7 @@ window.__ModuleLoader__.load({
 				+ 'const scripts=' + JSON.stringify(modules).replace(/</g, "\\u003c") + ';\n'
 				+ 'const token=' + JSON.stringify(metadata.token) + ';\n'
 				+ 'try{'
-				+ (input && input.trustedCardMode ? 'const ensureHostJQuery=' + ensureTavernHostJQuery.toString() + ';await ensureHostJQuery(window.parent);const ensureHostJQueryUi=' + ensureTavernHostJQueryUi.toString() + ';await ensureHostJQueryUi(window.parent);window.$=window.jQuery=window.parent.jQuery;const installHostFacade=' + installTavernTrustedHostFacade.toString() + ';const releaseHostFacade=installHostFacade(window.parent,window);window.addEventListener("pagehide",releaseHostFacade,{once:true});window.addEventListener("unload",releaseHostFacade,{once:true});\n' : '')
+				+ (input && input.trustedCardMode ? 'const ensureHostJQuery=' + ensureTavernHostJQuery.toString() + ';await ensureHostJQuery(window.parent);const ensureHostJQueryUi=' + ensureTavernHostJQueryUi.toString() + ';await ensureHostJQueryUi(window.parent);const artifacts=window.frameElement&&window.frameElement.__dshTavernHostArtifacts;window.$=window.jQuery=artifacts?artifacts.bindJQuery(window.parent.jQuery):window.parent.jQuery;const installHostFacade=' + installTavernTrustedHostFacade.toString() + ';const releaseHostFacade=installHostFacade(window.parent,window);window.addEventListener("pagehide",releaseHostFacade,{once:true});window.addEventListener("unload",releaseHostFacade,{once:true});\n' : '')
 				+ 'for(const script of scripts){window.__dshTavernHelperSetCurrentScript(script.id);try{'
 				+ 'if(script.system==="official-mvu"&&script.assetUrl){const loader=createMvuLoader({fetch:window.fetch.bind(window),evaluate:source=>loadModule(source,script.id),onDiagnostic(diagnostic){parent.postMessage({type:"dsh-tavern-mvu-load-diagnostic",token,diagnostic},"*");},onState(state){parent.postMessage({type:"dsh-tavern-mvu-load-state",token,state},"*");}});'
 				+ 'const retry=event=>{if(event.source===parent&&event.data?.token===token&&event.data.type==="dsh-tavern-mvu-reload")loader.retry();};'
@@ -5256,6 +6290,7 @@ window.__ModuleLoader__.load({
 					if (!message.name) message.name = message.is_user ? context.playerName : context.characterName;
 					message.mes = String(message.message || "");
 				}
+                context.messages = applyTavernVariableReceipt.indexApi.from(context.messages || []);
 				return context;
 			}
 			function helperContext(view, scripts) {
@@ -5273,7 +6308,10 @@ window.__ModuleLoader__.load({
 			}
 			function post(record, message) {
 				if (records.get(record.id) !== record || !record.loaded || !record.frame.contentWindow) return;
-				record.frame.contentWindow.postMessage(Object.assign({ token: record.token }, message), "*");
+				if (message.context && applyTavernVariableReceipt.indexApi.info(message.context.messages)) {
+                    message = {...message, context:{...message.context, messages:Array.from(message.context.messages)}};
+                }
+                record.frame.contentWindow.postMessage(Object.assign({ token: record.token }, message), "*");
 			}
 			function snapshot(context) {
 				const messages = Array.isArray(context && context.messages) ? context.messages : [];
@@ -5353,12 +6391,11 @@ window.__ModuleLoader__.load({
 				const core = record && record.scripts.get("__dsh_official_mvu__");
 				return core && core.initializationFailed ? "MVU 模块加载失败：" + (core.initializationError || "初始化未完成") + "\n请刷新页面或重启酒馆后重试。" : record && record.mvuDataError || "";
 			}
-			function mvuDataReady(record) {
-				return (Array.isArray(record.context && record.context.messages) ? record.context.messages : []).some(function (message) {
-					const value = message && message.variables;
-					return value && typeof value === "object" && !Array.isArray(value) && value.stat_data !== undefined && value.schema !== undefined;
-				});
-			}
+            function mvuDataReady(record) {
+                const info = applyTavernVariableReceipt.indexApi.info(record.context?.messages);
+                return info ? info.eligible > 0 : (record.context?.messages || []).some(message =>
+                    message?.variables?.stat_data !== undefined && message?.variables?.schema !== undefined);
+            }
 			function syncMvuDataReadiness(record) {
 				const core = record.scripts.get("__dsh_official_mvu__");
 				if (!core || core.initializationFailed || !record.subscriptionsReady) return;
@@ -5388,7 +6425,7 @@ window.__ModuleLoader__.load({
 					onMvuLoadState(record.mvuLoadState);
 				}
 			}
-			function emitToRecord(record, name, args, context, diagnostics, hostEventId) {
+			async function emitToRecord(record, name, args, context, diagnostics, hostEventId) {
 				const initializationError = mvuInitializationError(record);
 				if (initializationError) {
 					if (diagnostics) diagnostics.push({ kind: "initialization", name: name, level: "error", ready: false, initializationFailed: true, scriptId: "__dsh_official_mvu__", message: initializationError });
@@ -5397,8 +6434,21 @@ window.__ModuleLoader__.load({
 				if (diagnostics) diagnostics.push({ kind: "dispatch", name: name, ready: record.subscriptionsReady, initializationFailed: record.initializationFailed, subscribed: record.subscriptions.has(String(name)) });
 				if (!record.loaded || !record.subscriptionsReady || record.initializationFailed) return Promise.resolve(args);
 				if (context && typeof context === "object") {
-					record.context = decorateHelperContext(context, record.context);
-					post(record, { type: "dsh-tavern-helper-context", context: record.context });
+                    if (context.contextDelta) {
+                        const next = applyTavernVariableReceipt(record.context, context.contextDelta);
+                        if (next === null) {
+                            const snapshot = await invoke("getTavernHelperContext", {eventId:hostEventId}, record.sessionId);
+                            if (records.get(record.id) !== record) throw new Error("脚本运行时已失效");
+                            record.context = decorateHelperContext(snapshot.context, record.context);
+                            post(record,{type:"dsh-tavern-helper-context",context:record.context});
+                        } else {
+                            record.context=next;
+                            post(record,{type:"dsh-tavern-helper-context",contextDelta:context.contextDelta});
+                        }
+                    } else {
+                        record.context = decorateHelperContext(context, record.context);
+                        post(record, { type: "dsh-tavern-helper-context", context: record.context });
+                    }
 				}
 				if (!record.subscriptions.has(String(name))) return Promise.resolve(args);
 				const eventId = String(hostEventId || "") || "host-event-" + (++eventSequence);
@@ -5462,10 +6512,10 @@ window.__ModuleLoader__.load({
 					Promise.resolve(invoke("recordMvuRuntimeDiagnostic", { diagnostic: data }, record.sessionId)).catch(function () {});
 				} catch (_) {}
 			}
-			function createRecord(sessionId, scripts, context, trustedCardMode) {
+			function createRecord(sessionId, scripts, context, trustedCardMode, viewer) {
 				const container = ensureRoot();
 				const frame = hostDocument.createElement("iframe");
-				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
+				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				const record = {
 					id: "shared",
 					sessionId: sessionId,
@@ -5492,6 +6542,7 @@ window.__ModuleLoader__.load({
 					scripts: new Map(scripts.map(function (script) { return [String(script.id), { id: String(script.id), name: String(script.name || script.id), loaded: false, subscriptionsReady: false, initializationFailed: false }]; }))
 				};
 				frame.__dshTavernSessionId = sessionId;
+                frame.__dshTavernHostArtifacts = record.hostArtifacts;
 				frame.title = "人物卡共享脚本沙箱";
 				if (!trustedCardMode) frame.sandbox = "allow-scripts";
 				frame.referrerPolicy = "no-referrer";
@@ -5515,7 +6566,7 @@ window.__ModuleLoader__.load({
 			}
 			function scriptsForView(view) {
 				const scripts = Array.isArray(view && view.tavernHelperScripts) ? view.tavernHelperScripts.slice() : [];
-				const mvu = view && view.tavernMvuRuntime;
+				const mvu = view && view.tavernScriptRuntimeMode !== "viewer" && view.tavernMvuRuntime;
 				if (mvu && mvu.owner === "official" && mvu.assetUrl) {
 					scripts.unshift({
 						id: "__dsh_official_mvu__",
@@ -5528,29 +6579,74 @@ window.__ModuleLoader__.load({
 				}
 				return scripts;
 			}
+            function refreshContext(record, context) {
+                const api = applyTavernVariableReceipt.indexApi, before = record.context;
+                const changed = before && before.chatId === context.chatId
+                    && before.lifecycleRevision === context.lifecycleRevision
+                    && before.messages.length === context.messages.length
+                    ? api.changed(before.messages,context.messages) : null;
+                record.context = context;
+                if (changed === null) { post(record,{type:"dsh-tavern-helper-context",context}); return; }
+                const header = {...context}; delete header.messages;
+                if (header.turnMessageIds === before.turnMessageIds) delete header.turnMessageIds;
+                post(record,{type:"dsh-tavern-helper-context",contextDelta:{
+                    version:2,kind:"committed",chatId:context.chatId,lifecycleRevision:context.lifecycleRevision,
+                    baseRevision:before.stateRevision,stateRevision:context.stateRevision,header,
+                    messages:changed.map(id=>context.messages[id])
+                }});
+            }
 			function sync(sessionId, view) {
 				const nextSessionId = String(sessionId || "");
 				if (activeSessionId && activeSessionId !== nextSessionId) clear();
 				activeSessionId = nextSessionId;
 				const scripts = scriptsForView(view);
+				const viewer = Boolean(view && view.tavernScriptRuntimeMode === "viewer");
 				const trustedCardMode = Boolean(view && view.tavernRuntimePolicy && view.tavernRuntimePolicy.trustedCardMode);
-				readinessKey = scripts.length === 0 ? "" : nextSessionId + "\n" + scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
+				readinessKey = scripts.length === 0 ? "" : nextSessionId + "\n" + scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				if (scripts.length === 0) { clear(); activeSessionId = nextSessionId; return; }
-				const context = helperContext(view, scripts);
+                let record = records.get("shared");
+                const source = view?.tavernHelper;
+                const sourceIndex = createSessionViewReader.indexApi;
+                const sourceChanges = record && source && record.sourceHelper
+                    && view.chatId === record.context.chatId
+                    && String(view.playerName || "你") === record.committedContext?.playerName
+                    && String(view.card?.name || "角色") === record.committedContext?.characterName
+                    && Array.isArray(source.messages) && Array.isArray(record.sourceHelper.messages)
+                    && record.sourceHelper.lifecycleRevision === source.lifecycleRevision
+                    && record.sourceHelper.messages.length === source.messages.length
+                    ? sourceIndex.changed(record.sourceHelper.messages,source.messages) : null;
+                let context;
+                if (sourceChanges !== null && record.committedContext) {
+                    const helper = {...source,messages:sourceChanges.map(id=>source.messages[id])};
+                    const sameTurns = source.turnMessageIds === record.sourceHelper.turnMessageIds;
+                    if (sameTurns) delete helper.turnMessageIds;
+                    const partial = helperContext({...view,tavernHelper:helper},scripts);
+                    context = {...partial,messages:applyTavernVariableReceipt.indexApi.update(record.committedContext.messages,
+                        sourceChanges.map((id,at)=>[id,partial.messages[at]]))};
+                    if (sameTurns) context.turnMessageIds = record.committedContext.turnMessageIds;
+                } else context = helperContext(view,scripts);
 				const nextSnapshot = snapshot(context);
 				const officialOwner = Boolean(view && view.tavernMvuRuntime && view.tavernMvuRuntime.owner === "official");
-				const queuedEvents = officialOwner ? [] : eventsBetween(previous, nextSnapshot);
-				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode);
-				let record = records.get("shared");
+				// Viewers mirror committed data without replaying settlement callbacks.
+				const queuedEvents = officialOwner || viewer ? [] : eventsBetween(previous, nextSnapshot);
+				const fingerprint = scripts.map(function (script) { return script.id + "\n" + script.content; }).join("\n---\n") + "\ntrusted=" + String(trustedCardMode) + "\nviewer=" + String(viewer);
 				if (record && record.fingerprint !== fingerprint) { removeRecord("shared"); record = null; }
-				if (!record) record = createRecord(nextSessionId, scripts, context, trustedCardMode);
+				if (!record) record = createRecord(nextSessionId, scripts, context, trustedCardMode, viewer);
 				else {
-					record.context = context;
-					post(record, { type: "dsh-tavern-helper-context", context: context });
+                    if (record.context.transaction && pendingEvents.has(record.context.transaction.eventId)
+                        && Number(context.lifecycleRevision || 0) === Number(record.context.lifecycleRevision || 0)) {
+                        // A committed view refresh must not replace an executing draft.
+                        record.deferredContext = context;
+                    } else {
+                        record.deferredContext = null;
+                        refreshContext(record,context);
+                    }
 					queuedEvents.forEach(function (event) {
 						if (record.subscriptionsReady && record.subscriptions.has(String(event.name))) post(record, { type: "dsh-tavern-helper-event", name: event.name, args: event.args });
 					});
 				}
+                record.sourceHelper = source;
+                record.committedContext = context;
 				previous = nextSnapshot;
 				maybeAnnounceReady();
 				syncMvuDataReadiness(record);
@@ -5662,6 +6758,11 @@ window.__ModuleLoader__.load({
 						closeEventId(eventId);
 						hostWindow.clearTimeout(pending.timer);
                         post(record, { type: "dsh-tavern-helper-event-ack", eventId: eventId });
+                        if (record.deferredContext) {
+                            const committed = record.deferredContext;
+                            record.deferredContext = null;
+                            refreshContext(record,committed);
+                        }
 						const completeData = pending.completeData || data;
 						if (completeData.error) {
 							const script = record.scripts.get(String(completeData.scriptId || pending.activeScriptId || ""));
@@ -5762,7 +6863,8 @@ window.__ModuleLoader__.load({
                             if (!result || !result.contextDelta || records.get(record.id) !== record) return result;
                             const next = applyTavernVariableReceipt(record.context, result.contextDelta);
                             if (next === null) {
-                                const snapshot = await invoke("getTavernHelperContext", {}, record.sessionId);
+                                const snapshot = await invoke("getTavernHelperContext", result.contextDelta.version === 2 ? {eventId:result.contextDelta.eventId} : {}, record.sessionId);
+                                record.context = decorateHelperContext(snapshot.context, record.context);
                                 return Object.assign({}, result, { contextDelta: undefined, context: snapshot.context });
                             }
                             record.context = next;
@@ -5801,7 +6903,7 @@ window.__ModuleLoader__.load({
 						syncMvuDataReadiness(record);
 					}
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: true, result: result });
-					if ((data.method === "updateTavernHelperPrompts" || data.method === "updateTavernHelperVariables" || data.method === "updateTavernHelperMessages" || data.method === "createTavernHelperMessages" || data.method === "replaceTavernHelperWorldbook" || data.method === "saveTavernExtensionSettings" || data.method === "saveTavernWorldInfo" || data.method === "saveTavernChatData") && result && result.updated !== false && result.stale !== true && records.get(record.id) === record) reportMutation(record.sessionId, data.method, result.contextDelta ? Object.assign({}, result, { context: record.context }) : result);
+					if ((data.method === "updateTavernHelperPrompts" || data.method === "updateTavernHelperVariables" || data.method === "updateTavernHelperMessages" || data.method === "createTavernHelperMessages" || data.method === "replaceTavernHelperWorldbook" || data.method === "saveTavernExtensionSettings" || data.method === "saveTavernWorldInfo" || data.method === "saveTavernChatData") && result && !result.transactional && result.updated !== false && result.stale !== true && records.get(record.id) === record) reportMutation(record.sessionId, data.method, result.contextDelta ? Object.assign({}, result, { context: record.context }) : result);
 				}, function (error) {
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false, error: String(error && error.message || error), errorCode: String(error && error.code || "") });
 				});
@@ -5831,7 +6933,11 @@ window.__ModuleLoader__.load({
 					const record = records.get("shared");
 					const scripts = record ? Array.from(record.scripts.values()).map(function (script) { return { id: script.id, loaded: script.loaded, subscriptionsReady: script.subscriptionsReady, initializationFailed: script.initializationFailed }; }) : [];
 					const initializationError = mvuInitializationError(record);
-					return { sessionId: activeSessionId, frameCount: record ? 1 : 0, scriptIds: scripts.map(function (script) { return script.id; }), scripts: scripts, ...(record && record.scripts.has("__dsh_official_mvu__") ? { mvuDataReady: mvuDataReady(record) } : {}), ...(record && record.mvuLoadState ? { mvuLoadState: record.mvuLoadState } : {}), ...(initializationError ? { initializationError: initializationError } : {}) };
+					const baseline=record && record.context;
+                    const contextBaseline=baseline ? {workContextVersion:1,chatId:baseline.chatId,stateRevision:baseline.stateRevision,
+                        lifecycleRevision:Number(baseline.lifecycleRevision)||0,messageCount:(baseline.messages||[]).length,
+                        transaction:baseline.transaction,complete:!baseline.messagesPending && (applyTavernVariableReceipt.indexApi.info(baseline.messages)?.complete ?? false)} : {workContextVersion:1,full:true};
+                    return { contextBaseline:contextBaseline, sessionId: activeSessionId, frameCount: record ? 1 : 0, scriptIds: scripts.map(function (script) { return script.id; }), scripts: scripts, ...(record && record.scripts.has("__dsh_official_mvu__") ? { mvuDataReady: mvuDataReady(record) } : {}), ...(record && record.mvuLoadState ? { mvuLoadState: record.mvuLoadState } : {}), ...(initializationError ? { initializationError: initializationError } : {}) };
 				}
 			});
 		}
@@ -5861,10 +6967,15 @@ window.__ModuleLoader__.load({
 			let claimRequested = false;
 			let claimRetryCount = 0;
 			let active = false;
+			let ownershipKnown = false;
 			let input = null;
 
-			function inactiveView(view) {
-				return Object.assign({}, view || {}, { tavernHelperScripts: [], tavernMvuRuntime: null });
+			function runtimeView(view) {
+				if (active) return view;
+				// Wait for the first claim before evaluating any scripts. Once another
+				// browser owns settlement, this page still needs its own interactive UI.
+				if (!ownershipKnown) return Object.assign({}, view || {}, { tavernHelperScripts: [], tavernMvuRuntime: null });
+				return Object.assign({}, view || {}, { tavernScriptRuntimeMode: "viewer", tavernMvuRuntime: null });
 			}
 			function hasScriptRuntime(view) {
 				return Boolean(
@@ -5887,6 +6998,7 @@ window.__ModuleLoader__.load({
                 delivery = null;
 				input = null;
 				active = false;
+				ownershipKnown = false;
 					claimRequested = false;
 					claimRetryCount = 0;
 					if (claimRetryTimer !== null) hostWindow.clearTimeout(claimRetryTimer);
@@ -5912,7 +7024,7 @@ window.__ModuleLoader__.load({
 						void claimWork();
 					},
 					onReady: function (readySessionId) {
-						if (lease !== currentLease || !readySessionId || !input || input.sessionId !== readySessionId) return;
+						if (lease !== currentLease || !active || !readySessionId || !input || input.sessionId !== readySessionId) return;
 						const chatId = String(input.view && input.view.chatId || "");
 						// MVU uses this identity to invalidate older asynchronous initialization.
 						// An absent ID cancels the real chat's startup without initializing a replacement.
@@ -6014,16 +7126,20 @@ window.__ModuleLoader__.load({
 				try {
 					if (releasesPending > 0) await releaseBarrier;
 					if (lease !== currentLease) return;
-					const result = await invokeWithDeadline("claimTavernScriptWork", currentLease, currentRuntime.inspect());
+					// A ready viewer cannot advertise settlement readiness: promotion
+					// rebuilds the sandbox with the official core before accepting work.
+					const inspection = ownershipKnown && !active ? { scripts: [] } : currentRuntime.inspect();
+					const result = await invokeWithDeadline("claimTavernScriptWork", currentLease, inspection, {contextBaseline: inspection.contextBaseline || {workContextVersion:1,full:true}});
 					if (lease !== currentLease) {
 						if (result && result.active) releaseLease(currentLease);
 						return;
 					}
 					if (result && result.active) claimRetryCount = 0;
 					else scheduleClaimRetry(currentLease);
-					if (Boolean(result && result.active) !== active) {
+					if (!ownershipKnown || Boolean(result && result.active) !== active) {
+						ownershipKnown = true;
 						active = Boolean(result && result.active);
-						currentRuntime.sync(input.sessionId, active ? input.view : inactiveView(input.view));
+						currentRuntime.sync(input.sessionId, runtimeView(input.view));
 					}
 						currentEvent = result && result.event;
 						leaseToken = String(result && result.leaseToken || "");
@@ -6048,7 +7164,7 @@ window.__ModuleLoader__.load({
 				if (input && input.sessionId !== nextSessionId) dispose();
 				const currentRuntime = ensureRuntime(nextSessionId);
 				input = { sessionId: nextSessionId, view: view };
-				currentRuntime.sync(nextSessionId, active ? view : inactiveView(view));
+				currentRuntime.sync(nextSessionId, runtimeView(view));
 				// Claim also renews the lease and recovers work when its signal was lost.
 				if (heartbeatTimer === null && startHeartbeat) heartbeatTimer = startHeartbeat(function () { void claimWork(); }, heartbeatIntervalMs);
 				void claimWork();
@@ -6058,7 +7174,7 @@ window.__ModuleLoader__.load({
                 setForeground: function (value) { foreground = value; if (runtime && runtime.setForeground) runtime.setForeground(value); },
 				retryMvuLoad: function () { return Boolean(runtime && active && runtime.retryMvuLoad()); },
 				triggerButton: function (scriptId, name) {
-					if (!runtime || !active) return Promise.reject(new Error("人物卡脚本正在其他窗口运行，或尚未加载完成"));
+					if (!runtime || !ownershipKnown) return Promise.reject(new Error("人物卡脚本尚未加载完成"));
 					return runtime.triggerButton(scriptId, name);
 				},
 				inspect: function () { return { active: active, busy: Boolean(delivery || claimBusy), input: input, runtime: runtime && runtime.inspect() }; }
@@ -6181,8 +7297,11 @@ window.__ModuleLoader__.load({
 
 		async function initializeFullOpeningTemplate(response) {
 		  if (!response.preparationId) return response;
-		  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId }, 'opening:' + response.preparationId);
-		  for (const opening of response.openings || []) if (opening.openingPreview) opening.openingPreview.runtime = prepared.runtime;
+		  const prepared = await rpc('initializeOpeningTemplate', { id: response.preparationId, compact: response.previewTransport === 'deferred-v1' }, 'opening:' + response.preparationId);
+		  for (const opening of response.openings || []) if (opening.openingPreview) {
+		    opening.openingPreview.runtime = prepared.runtime;
+		    if (response.previewTransport === 'deferred-v1') opening.openingPreview.worldbook = prepared.runtime?.context?.worldbook ?? prepared.worldbook ?? null;
+		  }
 		  return response;
 		}
 
@@ -6548,6 +7667,7 @@ window.__ModuleLoader__.load({
 			const channels = new Map();
             const touchRelay = createTavernTouchRelay(hostWindow);
 			const frameSizeObservers = new Map();
+            const sizingObservers = new Map();
             const frameVisibility = new Map();
 			let props = initial;
 			let frozenHelperContext = initial.helperContext;
@@ -6558,7 +7678,7 @@ window.__ModuleLoader__.load({
 			let listener = null;
 			let lifetime = 0;
 			let synchronizationKey = "";
-			let lastFontSize = null;
+			let lastFontSize = null, lastTextAccent = null;
 			let documentInputs = null;
 			let cachedDocumentKey = "";
 			let desired = createDocument();
@@ -6566,10 +7686,12 @@ window.__ModuleLoader__.load({
 			let pending = null;
 			let height = restoredTavernFrameHeight(visible.heightKey, visible.content);
 			function documentKey() {
-				const values = [props.sessionId, props.content, props.persistent === true ? 0 : props.turn, props.observeMvuView, props.runtimeReporting, props.persistent, props.trustedCardMode, Boolean(props.helperContext), JSON.stringify(props.openingPreview), refreshRevision];
+				const values = [props.sessionId, props.content, props.persistent === true ? 0 : props.turn, props.observeMvuView, props.runtimeReporting, props.persistent, props.trustedCardMode, Boolean(props.helperContext), JSON.stringify(props.openingPreview), JSON.stringify(props.frameSizing), refreshRevision];
 				if (!documentInputs || values.some(function (value, index) { return value !== documentInputs[index]; })) {
 					documentInputs = values;
-					cachedDocumentKey = JSON.stringify(values);
+                    const keyValues = values.slice();
+                    keyValues[9] = tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined);
+					cachedDocumentKey = JSON.stringify(keyValues);
 				}
 				return cachedDocumentKey;
 			}
@@ -6578,13 +7700,16 @@ window.__ModuleLoader__.load({
 					key: documentKey(), token: nextTavernFrameToken(),
 					helperContext: helperContext, turn: props.turn,
 					heightKey: tavernFrameHeightKey(props), content: props.content,
+                    sizing: tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined),
 					sessionId: props.sessionId,
 					trustedCardMode: props.trustedCardMode, refreshRequested: false
 				};
-				document.html = buildTavernFrameDocument({ content: props.content, token: document.token, openingPreview: props.openingPreview, helperContext: helperContext, trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
+				document.html = buildTavernFrameDocument({ content: props.content, frameSizing: props.frameSizing, panelId: props.panelId, token: document.token, openingPreview: props.openingPreview, helperContext: helperContext, trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
 				const channel = createTavernFrameContextChannel(document);
 				// Stable callback identity preserves the per-document delta baseline.
 				document.ref = function (node) {
+                    const previousSizing = sizingObservers.get(document.token);
+                    if (previousSizing) { previousSizing.stop(); sizingObservers.delete(document.token); }
                     const stopVisibility = frameVisibility.get(document.token);
                     if (stopVisibility) { stopVisibility(); frameVisibility.delete(document.token); }
                     const previous = frameSizeObservers.get(document.token);
@@ -6613,7 +7738,7 @@ window.__ModuleLoader__.load({
                     }
                     // Trusted cards may replace their document and lose our reporter,
                     // then resize frameElement directly. Observe outside that document.
-                    if (node && document.trustedCardMode && typeof hostWindow.MutationObserver === "function") {
+                    if (node && !document.sizing && document.trustedCardMode && typeof hostWindow.MutationObserver === "function") {
                         const observer = new hostWindow.MutationObserver(function () {
                             if (channel.element() !== node || frameSizeObservers.get(document.token) !== observer) return;
                             const raw = String(node.style && node.style.height || "");
@@ -6627,10 +7752,24 @@ window.__ModuleLoader__.load({
                         observer.observe(node, { attributes: true, attributeFilter: ["style"] });
                     }
 					if (node) channels.set(document.token, channel);
-					else channels.delete(document.token);
+                    if (node && document.sizing) sizingObservers.set(document.token, observeTavernFrameSizing(hostWindow, node, document.sizing, function (layout) {
+                        document.layout = layout;
+                        if (document.sizing.mode !== "content") applySizing(document, channel, layout.height);
+                    }));
+                    if (!node) channels.delete(document.token);
 				};
 				return document;
 			}
+            function applySizing(document, channel, measured) {
+                const config = document.sizing;
+                const node = channel.element();
+                if (config && (node === hostWindow.document?.fullscreenElement || node?.hasAttribute?.("data-dsh-tavern-expanded"))) return;
+                const value = config ? tavernFrameSizingHeight(config, document.layout?.width || 0, document.layout?.available || hostWindow.innerHeight || 600, measured) : clampTavernFrameHeight(measured);
+                const changed = document.height !== value;
+                document.height = value;
+                if (config) channel.element()?.contentWindow?.postMessage({ type: "dsh-tavern-frame-layout", token: document.token, scroll: config.mode === "content" && measured > value }, "*");
+                if (document === visible && (changed || height !== value || (config && Math.abs(node?.clientHeight - value) > 1))) { rememberHeight(document, value); publish(); }
+            }
 			function snapshot() { return { visibleDocument: visible, pendingDocument: pending, height: height }; }
 			function publish() { if (listener) listener(snapshot()); }
 			function cancelRuntimeReport() {
@@ -6642,24 +7781,19 @@ window.__ModuleLoader__.load({
 				const channel = document && channels.get(document.token);
 				if (channel) channel.sync(helperContext, props.turn, mode);
 			}
-			function sendTextColors(document) {
-                channels.forEach(function (channel, token) {
-                    if (document && token !== document.token) return;
-                    const node = channel.element();
-                    if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-text-colors", token: token, enabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: tavernTextColorOverrides(hostWindow) }, "*");
-                });
-            }
 			function sendFontSize(document) {
 				const body = hostWindow.document && hostWindow.document.body;
 				if (!body || typeof hostWindow.getComputedStyle !== "function") return;
 				const value = parseFloat(hostWindow.getComputedStyle(body).getPropertyValue("--dsh-content-font-size"));
 				const fontSize = props.followContentFont !== false && Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
-				if (!document && fontSize === lastFontSize) return;
+				const textColorOverrides = tavernTextColorOverrides(hostWindow);
+                if (!document && fontSize === lastFontSize && textColorOverrides.quote === lastTextAccent) return;
+                lastTextAccent = textColorOverrides.quote;
 				lastFontSize = fontSize;
 				channels.forEach(function (channel, token) {
 					if (document && token !== document.token) return;
 					const node = channel.element();
-					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-font-size", token: token, fontSize: fontSize, textColorsEnabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: tavernTextColorOverrides(hostWindow) }, "*");
+					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-font-size", token: token, fontSize: fontSize, textColorsEnabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: textColorOverrides }, "*");
 				});
 			}
 			function reconcile() {
@@ -6717,6 +7851,7 @@ window.__ModuleLoader__.load({
 				}
 				if (data.type === "dsh-tavern-frame-ready") {
                     frameVisibility.get(data.token)?.sync();
+                    sizingObservers.get(data.token)?.schedule();
 					sendFontSize(sourceDocument);
 					sendContext(sourceDocument, "ready");
 					if (sourceDocument === pending && pending.key === desired.key) {
@@ -6728,8 +7863,7 @@ window.__ModuleLoader__.load({
 				} else if (data.type === "dsh-tavern-frame-touch-start" || data.type === "dsh-tavern-frame-scroll") {
                     if (sourceDocument === visible && channel.element()) touchRelay.receive(channel.element(), data.token, data);
 				} else if (data.type === "dsh-tavern-frame-height") {
-					sourceDocument.height = clampTavernFrameHeight(data.height);
-					if (sourceDocument === visible) { rememberHeight(visible, sourceDocument.height); publish(); }
+					if (!sourceDocument.sizing || sourceDocument.sizing.mode === "content") applySizing(sourceDocument, channel, data.height);
 				} else if (data.type === "dsh-tavern-helper-context-request") {
 					sendContext(sourceDocument, "snapshot");
 				} else if (data.type === "dsh-tavern-mvu-view-used" && props.observeMvuView !== false && props.sessionId && props.turn > 0) {
@@ -6737,7 +7871,10 @@ window.__ModuleLoader__.load({
 						if (current() && result && result.captured === true) invalidate(requestProps.sessionId);
 					}, function () {});
 				} else if (data.type === "dsh-tavern-frame-runtime" && props.runtimeReporting !== false && props.sessionId && props.turn > 0) {
-					pendingRuntime = data.runtime;
+					pendingRuntime = Object.assign({}, data.runtime, { layout: Object.assign({}, data.runtime?.layout, {
+                        availableHeight: sourceDocument.layout?.available, reason: sourceDocument.sizing?.mode === "content" ? "content" : sourceDocument.layout?.reason || "content",
+                        mode: sourceDocument.sizing?.mode || "legacy", source: sourceDocument.sizing?.source || "legacy"
+                    }) });
 					if (runtimeTimer === null) runtimeTimer = hostWindow.setTimeout(function () {
 						runtimeTimer = null;
 						const runtime = pendingRuntime; pendingRuntime = null;
@@ -6857,13 +7994,12 @@ window.__ModuleLoader__.load({
                             return executeSlash("/send " + text + "|/trigger", props.sessionId);
                         }, function (error) { tavernErrorHub.report("开始旅程", error); }) : function () {};
 
-                    const colorsChanged = function () { sendTextColors(); };
-                    hostWindow.addEventListener("dsh-tavern-text-colors-changed", colorsChanged);
-                    hostWindow.addEventListener("storage", colorsChanged);
 					let fontObserver = null;
 					if (hostWindow.document && typeof hostWindow.MutationObserver === "function") {
 						fontObserver = new hostWindow.MutationObserver(function () { sendFontSize(); });
-						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { fontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class"] }); });
+                        // Theme token overrides are emitted as stylesheets, not only root attributes.
+                        fontObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
+						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { fontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
 					}
 					return function () {
                         touchRelay.stop();
@@ -6878,10 +8014,10 @@ window.__ModuleLoader__.load({
 						if (fontObserver) fontObserver.disconnect();
                         frameSizeObservers.forEach(function (observer) { observer.disconnect(); });
                         frameSizeObservers.clear();
+                        sizingObservers.forEach(observer => observer.stop());
+                        sizingObservers.clear();
                         frameVisibility.forEach(stop => stop());
                         frameVisibility.clear();
-                        hostWindow.removeEventListener("dsh-tavern-text-colors-changed", colorsChanged);
-                        hostWindow.removeEventListener("storage", colorsChanged);
 						listener = null; lifetime++;
 						hostWindow.removeEventListener("message", receive);
 						cancelRuntimeReport();
@@ -7040,7 +8176,8 @@ window.__ModuleLoader__.load({
 		        mount: function (props, home) {
 		            const record = get(props);
 		            move(record.node, home);
-		            record.unmount = retention.mount(props.sessionId);
+		            const unmount = retention.mount(props.sessionId);
+		            record.unmount = unmount;
 		            const movable = !props.persistent && /<(?:script|iframe|object|embed)\b/i.test(String(props.content || ""));
 		            if (movable && options.panels) {
 		                record.panel = Object.assign(record.panel || {}, { id: "retained:" + record.key,
@@ -7056,6 +8193,9 @@ window.__ModuleLoader__.load({
 		                    if (!attached) return;
 		                    attached = false;
 		                    if (records.get(record.key) !== record) return;
+		                    // Another React root may attach the new placement before
+		                    // the previous root cleans up. Its stale lease must not move it.
+		                    if (record.unmount !== unmount) { unmount(); return; }
 		                    if (record.unpin) { record.unpin(); record.unpin = null; }
 		                    move(record.node, parked());
 		                    if (record.unmount) { record.unmount(); record.unmount = null; }
@@ -7093,7 +8233,11 @@ window.__ModuleLoader__.load({
 		    }, [activated, props.eager]);
 		    React.useLayoutEffect(function () {
 		        if (!activated) return;
-		        const mounted = tavernRetainedFrames.mount(frameProps, home.current);
+		        // Deferred historical frames take their frozen baseline when activated.
+		        // Their parent need not receive every intervening Helper update.
+		        const initialProps = props.helperContextReader
+		            ? Object.assign({}, frameProps, { helperContext: props.helperContextReader() }) : frameProps;
+		        const mounted = tavernRetainedFrames.mount(initialProps, home.current);
 		        lease.current = mounted;
 		        return function () { lease.current = null; mounted.detach(); };
 		    }, [activated, key]);
@@ -7105,6 +8249,7 @@ window.__ModuleLoader__.load({
 		            try { tavernPanelRegistry.pin(panelId, !pinned); }
 		            catch (error) { tavernErrorHub.report("固定面板", error); }
 		        } }, pinned ? "返回原消息" : "固定到右侧") : null,
+		        tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { if (!activated) { setActivated(true); return; } return lease.current?.expand(); } }, "展开大屏") : null,
 		        React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
 		}
         const tavernRetainedFrames = createRetainedTavernFrames({ window: window, retention: tavernSessionRetention,
@@ -7178,6 +8323,7 @@ window.__ModuleLoader__.load({
             let observer;
             const restore = () => {
                 observer?.disconnect();
+                frame.removeAttribute("data-dsh-tavern-expanded");
                 if (typeof frame.hidePopover === "function" && frame.matches(":popover-open")) frame.hidePopover();
                 if (previousPopover === null) frame.removeAttribute("popover");
                 else frame.setAttribute("popover", previousPopover);
@@ -7194,6 +8340,7 @@ window.__ModuleLoader__.load({
             doc.addEventListener("keydown", onKey);
             try {
                 // Keep the live iframe in place: reparenting would reload card scripts.
+                frame.setAttribute("data-dsh-tavern-expanded", "");
                 frame.style.cssText += ";position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;";
                 if (typeof frame.showPopover === "function") {
                     frame.setAttribute("popover", "manual");
@@ -7286,6 +8433,7 @@ window.__ModuleLoader__.load({
 					try { setActivated(true); tavernPanelRegistry.pin(panelKey.current, !pinned); }
 					catch (error) { tavernErrorHub.report("固定面板", error); }
 				} }, pinned ? "返回原消息" : "固定到右侧") : null,
+                visibleDocument.sizing ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { setActivated(true); return expandTavernFrame(slotRef.current); } }, "展开大屏") : null,
 				React.createElement("div", { ref: homeRef },
 					React.createElement("div", { ref: slotRef, className: "dsh-tavern-message-frame-slot", style: { position: "relative", height: height + "px" } }, frames)));
 
@@ -7293,6 +8441,11 @@ window.__ModuleLoader__.load({
 
 		function tavernProjectionForTurn(view, turn) {
 			if (!view || !isPlayMode(view.mode) || !Array.isArray(view.replyProjections)) return null;
+			const lookup = createSessionViewReader.projectionLookup;
+			if (lookup?.has(view.replyProjections)) {
+				const projection = lookup.row(view.replyProjections,turn);
+				return projection && (Number(projection.version)===1 || Number(projection.version)===2) ? projection : null;
+			}
 			for (let index = view.replyProjections.length - 1; index >= 0; index -= 1) {
 				const projection = view.replyProjections[index];
 				if (Number(projection && projection.turn) === Number(turn)) return Number(projection.version) === 1 || Number(projection.version) === 2 ? projection : null;
@@ -7300,8 +8453,17 @@ window.__ModuleLoader__.load({
 			return null;
 		}
 
+		function tavernLatestProjectionTurn(view) {
+			const rows = view?.replyProjections;
+			if (!Array.isArray(rows)) return 0;
+			const lookup = createSessionViewReader.projectionLookup;
+			return lookup?.has(rows) ? lookup.max(rows) : rows.reduce((latest,item)=>Math.max(latest,Number(item && item.turn)||0),0);
+		}
+
 		function tavernStoryTurnForDshTurn(view, turn) {
 			const mappings = view && view.regeneratedDshTurns && typeof view.regeneratedDshTurns === "object" ? view.regeneratedDshTurns : {};
+			const lookup = createSessionViewReader.storyTurnLookup;
+			if (lookup?.has(mappings)) return lookup.read(mappings,turn);
 			for (const storyTurn of Object.keys(mappings)) {
 				if (Number(mappings[storyTurn]) === Number(turn)) return Number(storyTurn);
 			}
@@ -7310,6 +8472,10 @@ window.__ModuleLoader__.load({
 
 		function tavernMvuReceiptForTurn(view, turn) {
 			const receipts = view && Array.isArray(view.mvuReceipts) ? view.mvuReceipts : [];
+			const ordered = createSessionViewReader.receiptOrderedIndex;
+			if (ordered?.info(receipts)) return Number.isNaN(Number(turn)) ? null : ordered.get(receipts,Number(turn))?.receipt || null;
+			const lookup = createSessionViewReader.receiptLookup;
+			if (lookup?.has(receipts)) return lookup.read(receipts, turn);
 			for (let index = receipts.length - 1; index >= 0; index -= 1) {
 				if (Number(receipts[index] && receipts[index].turn) === Number(turn)) return receipts[index].receipt || null;
 			}
@@ -7427,7 +8593,7 @@ window.__ModuleLoader__.load({
 			return parts.map(function (part, index) {
 				if (part.kind === "markdown") return h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
 				const content = String(part.content !== undefined ? part.content : part.html || "");
-				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, helperContext: options.helperContext, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
+				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, frameSizing: options.frameSizing, helperContext: options.helperContext, helperContextReader: options.helperContextReader, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
 			});
 		}
 
@@ -7451,7 +8617,7 @@ window.__ModuleLoader__.load({
 				if (block.kind === "text") {
 					if (input.projection && projected) continue;
 					const projection = input.projection;
-					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, helperContext: input.helperContext, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
+					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
 					else rendered.push(h(TavernColoredMarkdown, { key: index, text: String(block.text || ""), streaming: input.streaming, labels: { code: codeLabels, footnotes: "脚注" }, codeLabels: codeLabels, fileMentions: input.mentions }));
 					projected = true;
 					continue;
@@ -7470,7 +8636,7 @@ window.__ModuleLoader__.load({
 				if (block.kind !== "tool-call") rendered.push(h(DshUi.JsonBlock, { key: index, label: translate("message.unknownBlock"), payload: block.block || block, truncatedLabel: function (total) { return translate("json.truncated", { total: total }); } }));
 			}
 			if (input.projection && !projected) {
-				rendered.push(h(React.Fragment, { key: "projection" }, renderTavernProjection(input.projection, { streaming: false, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, helperContext: input.helperContext, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
+				rendered.push(h(React.Fragment, { key: "projection" }, renderTavernProjection(input.projection, { streaming: false, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
 			}
 			if (input.interrupted) rendered.push(h("span", { key: "stopped", className: "dsh-tavern-assistant-stopped" }, translate("message.stopped")));
 			return rendered;
@@ -7612,7 +8778,7 @@ window.__ModuleLoader__.load({
 				const location = props.node.location;
 				const turnRef = location && (location.kind === "turn" || location.kind === "step") ? location.turn : null;
 				const turn = turnRef ? Number(turnRef.turn) : 0;
-				const liveState = useLiveTavernView(props.sessionId, String(data.time || ""));
+				const liveState = useScopedLiveTavernView(props.sessionId, String(data.time || ""), [["inputSources", String(turn)], ["inputTemplateDisplays", String(turn)]]);
 				const parts = userContentParts(data.content);
 				const text = tavernUserTextForTurn(liveState.view, turn, data.content);
 				const [copied, setCopied] = React.useState(false);
@@ -7632,7 +8798,7 @@ window.__ModuleLoader__.load({
 				});
 				const time = Number.isFinite(Number(data.time)) ? new Date(Number(data.time)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 				return React.createElement("div", { className: "dsh-tavern-user-row" },
-					React.createElement("div", { className: "dsh-tavern-user-stack" }, renderedImages, (text !== "" || extras.length > 0) ? React.createElement("div", { className: "dsh-tavern-user-bubble" }, liveState.view?.inputTemplateDisplays?.[turn] ? React.createElement(TavernMessageFrame, {content:liveState.view.inputTemplateDisplays[turn],sessionId:props.sessionId,turn:turn,partIndex:"user-template",frameOwner:props.frameOwner,eager:true}) : React.createElement(DshUi.MessageText, { text: text }), extras) : null),
+					React.createElement("div", { className: "dsh-tavern-user-stack" }, renderedImages, (text !== "" || extras.length > 0) ? React.createElement("div", { className: "dsh-tavern-user-bubble" }, liveState.view?.inputTemplateDisplays?.[turn] ? React.createElement(TavernMessageFrame, {content:liveState.view.inputTemplateDisplays[turn],sessionId:props.sessionId,turn:turn,partIndex:"user-template",frameOwner:props.frameOwner,eager:true}) : React.createElement("div", { style: { whiteSpace: "pre-wrap" } }, text), extras) : null),
 					React.createElement("div", { className: "dsh-tavern-user-actions" }, time ? React.createElement("span", null, time) : null, React.createElement(DshUi.Tooltip, { label: copied ? "已复制" : "复制", side: "bottom" }, React.createElement("button", { type: "button", className: "dsh-tavern-user-copy", "aria-label": copied ? "已复制" : "复制", onClick: copy }, React.createElement(copied ? DshUi.IconCheckOutline16 : DshUi.IconCopyOutline16, null))))
 				);
 			}
@@ -7777,18 +8943,42 @@ window.__ModuleLoader__.load({
 					error || state && state.error ? React.createElement("span", { role: "alert", className: "dsh-tavern-settings-error" }, error || state.error) : null
 				);
 			}
+			function tavernAssistantViewPaths(turn, eager = true) {
+				return ["mode", eager ? "tavernHelper" : "$helperAvailable",
+					"tavernRuntimePolicy", "releaseCapabilities", "statusBarPlacement"].map(field => [field]).concat([["$projectionTurn", String(turn)], ["$projectionLatestTurn", String(turn)]]);
+			}
+			function tavernReceiptViewPaths(turn, receipt, latest) {
+				const paths = [["$mvuReceiptTurn", String(turn)], ["$settlementOwner", String(turn)]];
+				if (latest || receipt?.status === "pending") paths.push(["$receiptBusy"]);
+				return paths;
+			}
+			function TavernTurnMvuReceipt(props) {
+				const current = liveTavernView.getSnapshot(props.sessionId).view;
+				const state = useLiveTavernView(props.sessionId, "receipt", tavernReceiptViewPaths(props.turn,
+					tavernMvuReceiptForTurn(current, props.turn), props.turn === current?.settlementTurn));
+				const receipt = tavernMvuReceiptForTurn(state.view, props.turn);
+				return receipt ? React.createElement(TavernMvuReceipt, { ...props, receipt,
+					latest: props.turn === state.view?.settlementTurn, busy: Boolean(state.view?.activity?.busy) }) : null;
+			}
+			function TavernInlineStatusRuntime(props) {
+				const state = useLiveTavernView(props.sessionId, "inline-status");
+				return state.view ? React.createElement(TavernPersistentStatusRuntime, {
+					sessionId: props.sessionId, view: state.view, executeSlash: props.executeSlash
+				}) : null;
+			}
 			function TavernAssistantNodeView(props) {
 				const data = props.node.data;
 				const turnRef = props.node.location.kind === "turn" || props.node.location.kind === "step" ? props.node.location.turn : null;
 				const turn = turnRef ? Number(turnRef.turn) : 0;
 				const settled = data.status !== "running";
 				const revision = String(data.status || "") + ":" + String(data.finalNode && data.finalNode.seq || "");
-				const liveState = useLiveTavernView(props.sessionId, revision);
-				const storyTurn = tavernStoryTurnForDshTurn(liveState.view, turn);
+				const mapping = useLiveTavernView(props.sessionId, revision, [["$storyHostTurn", String(turn)]]);
+				const storyTurn = tavernStoryTurnForDshTurn(mapping.view, turn);
+				const currentView = liveTavernView.getSnapshot(props.sessionId).view;
+                const liveState = useLiveTavernView(props.sessionId, revision, tavernAssistantViewPaths(storyTurn, storyTurn > 0 && storyTurn === tavernLatestProjectionTurn(currentView)));
 				const sessionTransitioning = React.useSyncExternalStore(tavernSessionTransition.subscribe, tavernSessionTransition.getSnapshot, tavernSessionTransition.getSnapshot);
 					const projection = settled ? tavernProjectionForTurn(liveState.view, storyTurn) : null;
-					const mvuReceipt = settled ? tavernMvuReceiptForTurn(liveState.view, storyTurn) : null;
-					const latestProjectionTurn = liveState.view && Array.isArray(liveState.view.replyProjections) ? liveState.view.replyProjections.reduce(function (latest, item) { return Math.max(latest, Number(item && item.turn) || 0); }, 0) : 0;
+					const latestProjectionTurn = tavernLatestProjectionTurn(liveState.view);
 				const tail = props.useTurnData("turn-tail");
 				const owner = React.useMemo(function () {
 					if (!turnRef || turnRef.status !== "closed" || !data.finalNode || !tail || !tail.closing || tail.closing.finalNode.seq !== data.finalNode.seq) return undefined;
@@ -7801,6 +8991,8 @@ window.__ModuleLoader__.load({
 					interrupted: data.status === "interrupted",
 					projection: projection,
 					helperContext: liveState.view && liveState.view.tavernHelper,
+                    frameSizing: liveState.view?.tavernRuntimePolicy?.frameSizing,
+                    helperContextReader: () => liveTavernView.getSnapshot(props.sessionId).view?.tavernHelper,
 					trustedCardMode: Boolean(liveState.view && liveState.view.tavernRuntimePolicy && liveState.view.tavernRuntimePolicy.trustedCardMode),
 					frameOwner: props.frameOwner,
                     eagerFrame: storyTurn > 0 && storyTurn === latestProjectionTurn,
@@ -7812,13 +9004,15 @@ window.__ModuleLoader__.load({
 					t: props.t
 				});
 				if (!(data.status === "running" || data.status === "interrupted" || rendered.length > 0)) return null;
-				const mvuReceiptNode = mvuReceipt ? React.createElement(TavernMvuReceipt, { receipt: mvuReceipt, sessionId: props.sessionId, turn: storyTurn, latest: storyTurn === liveState.view?.settlementTurn, busy: Boolean(liveState.view?.activity?.busy) }) : null;
+				const mvuReceiptNode = settled ? React.createElement(TavernTurnMvuReceipt, { sessionId: props.sessionId, turn: storyTurn }) : null;
 				const sceneImagesEnabled = Boolean(liveState.view && liveState.view.releaseCapabilities && liveState.view.releaseCapabilities.sceneImages);
 				const illustration = sceneImagesEnabled && settled && storyTurn > 0 && isPlayMode(liveState.view && liveState.view.mode) && !sessionTransitioning ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn }) : null;
-				return React.createElement("div", { className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, rendered, illustration, mvuReceiptNode);
+                const inlineStatus = liveState.view?.statusBarPlacement === "body" && !sessionTransitioning && storyTurn > 0 && storyTurn === latestProjectionTurn && data.finalNode && tail?.closing?.finalNode?.seq === data.finalNode.seq
+                    ? React.createElement(TavernInlineStatusRuntime, { sessionId: props.sessionId, executeSlash: props.executeSlash }) : null;
+				return React.createElement("div", { className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, rendered, illustration, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
-				const liveState = useLiveTavernView(props.sessionId, String(props.messageId || ""));
+				const liveState = useScopedLiveTavernView(props.sessionId, String(props.messageId || ""), [["mode"], ["forkTurnsByMessageId", String(props.messageId || "")]]);
 				const [forking, setForking] = React.useState(false);
 				const view = liveState.view;
 				const forkTurn = Number(view && view.forkTurnsByMessageId && view.forkTurnsByMessageId[String(props.messageId || "")]) || 0;
@@ -8089,7 +9283,7 @@ window.__ModuleLoader__.load({
 			async function removeSelected() {
 				if (busy || running.current || !selected.length) return;
 				const names = selected.slice(0, 20).map(card => "• " + card.name + "（" + card.path + "）").join("\n");
-				if (!await askConfirm("删除所选的 " + selected.length + " 张人物卡吗？\n\n" + names + (selected.length > 20 ? "\n……共 " + selected.length + " 张" : "") + "\n\n人物卡工作版和原版都会删除，已有对话会保留。此操作不可撤销。")) return;
+				if (!await askConfirm("删除所选的 " + selected.length + " 张人物卡吗？\n\n" + names + (selected.length > 20 ? "\n……共 " + selected.length + " 张" : "") + "\n\n此操作不可撤销。")) return;
 				running.current = true; setBusy(true); setNotice("");
 				try {
 					const results = await deleteTavernCards(selected, path => rpc("deleteCard", { path }));
@@ -8316,12 +9510,13 @@ window.__ModuleLoader__.load({
 			function notifyDataChanged(kinds) {
 				notifyTavernDataChanged(kinds, "sidebar");
 			}
-			function refresh() {
+			function refresh(kinds) {
+                if (!Array.isArray(kinds) || !kinds.length || kinds.indexOf("*") >= 0) kinds = null;
 				return Promise.all([
-					call("listCards").then(function (result) {
+					(!kinds || kinds.indexOf("cards") >= 0) && call("listCards").then(function (result) {
 						setCards(result.cards || []); tavernErrorHub.resolve("左侧栏人物卡");
 					}, function (err) { tavernErrorHub.report("左侧栏人物卡", err); }),
-					call("listSessions").then(function (result) {
+					(!kinds || kinds.indexOf("sessions") >= 0) && call("listSessions").then(function (result) {
 						const sessions = result.sessions || [];
 						setHistory(sessions); setTrustedCardMode(!result.capabilities || result.capabilities.trustedCardMode !== false); publishSessionModes(sessions);
 						if (!sessions.some(function (entry) { return entry.sessionId === current && isPlayMode(entry.mode); })) {
@@ -8338,7 +9533,7 @@ window.__ModuleLoader__.load({
 			}, [props.sessionId]);
 			React.useEffect(function () {
 				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["cards", "sessions"], "sidebar")) refresh(); }
+				function onData(event) { if (tavernDataChangeAffects(event, ["cards", "sessions"], "sidebar")) refresh(event && event.detail && event.detail.kinds); }
 				window.addEventListener("dsh-tavern-data-changed", onData);
 				return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
 			}, []);
@@ -8424,7 +9619,7 @@ window.__ModuleLoader__.load({
 				if (openingPicker.preparedKey === preparedKey) return;
 				const timer = window.setTimeout(async function () {
 					try {
-						const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { path: cardPath, userName: userName, requestMode: compatibilityAvailable && (openingPicker.requestMode || requestMode) === "sillytavern" ? "sillytavern" : "dsh" }));
+						const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { previewTransport: "deferred-v1", path: cardPath, userName: userName, requestMode: compatibilityAvailable && (openingPicker.requestMode || requestMode) === "sillytavern" ? "sillytavern" : "dsh" }));
 						if (stopped) return;
 						setOpeningPicker(function (current) {
 							if (!current || current.card.path !== cardPath || (String(current.userName || "你").trim() || "你") !== userName) return current;
@@ -8560,7 +9755,7 @@ window.__ModuleLoader__.load({
 			async function openSessionWhenReady(sessionId) {
 				await sessionListRecoveryRef.current.open(sessionId);
 				await call("markConversationOpened", { sessionId: sessionId });
-				await refresh();
+				await refresh(["sessions"]);
 				setError("");
 			}
 			async function finishPendingOpen(pending) {
@@ -8592,6 +9787,7 @@ window.__ModuleLoader__.load({
 			}
 			const conversationLifecycle = createConversationLifecycleModule({
                 attempts: startAttemptsRef.current,
+                trace: stage => openingPerformance.begin(stage),
 				archiveCurrent: archiveCurrentBlankSession,
 				resolveWorkspace: async function (request) {
 					if (request.kind !== "card") return playWorkspaceResolverRef.current();
@@ -8676,6 +9872,8 @@ window.__ModuleLoader__.load({
 			async function newConversation(card, requestedMode, openingId, userName, initialMessage) {
 				const targetMode = requestedMode || (uiMode === "play" ? playModeOfCard(card) : "card");
 				const startedAt = Date.now();
+                const timing = openingPerformance.begin("startClick");
+                let successful = false;
 				const previousOpeningPicker = openingPicker;
                 let created = null;
 				const transitionOpening = previousOpeningPicker && previousOpeningPicker.openings ? previousOpeningPicker.openings.filter(function (item) { return item.id === openingId; })[0] : null;
@@ -8684,27 +9882,31 @@ window.__ModuleLoader__.load({
 				try {
 					const resolvedUserName = String(userName || "你").trim() || "你";
 					let preparedWorkspaceId = "";
-					try { preparedWorkspaceId = await playPrewarmRef.current.claim(card && card.path); }
+					try { preparedWorkspaceId = await timing.measure("claimPrewarm", () => playPrewarmRef.current.claim(card && card.path)); }
 					catch (prewarmError) { console.warn("dsh-tavern: 工作区预热不可用，改为正常创建", prewarmError); }
 					created = await conversationLifecycle.start({ kind: "play", targetMode: targetMode, card: card, preparationId: previousOpeningPicker && previousOpeningPicker.preparationId || "", openingId: openingId || "", userName: resolvedUserName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh", preparedWorkspaceId: preparedWorkspaceId });
-					if (initialMessage) await props.executeSlash("/send " + initialMessage + "|/trigger", created.sessionId);
+					if (initialMessage) await timing.measure("submitInitialMessage", () => props.executeSlash("/send " + initialMessage + "|/trigger", created.sessionId));
 					if (targetMode !== "card") window.localStorage.setItem("dsh-tavern-player-name", resolvedUserName);
+					successful = true;
 					console.info("dsh-tavern: 开始游戏完成", (Date.now() - startedAt) + "ms", preparedWorkspaceId ? "工作区已就绪" : "即时创建");
 				} catch (err) { if (!created) setOpeningPicker(previousOpeningPicker); setError((created ? "游戏已创建，开局消息发送失败：" : String(err && err.phase || "创建对话") + "失败：") + String(err && err.message || err)); if (initialMessage) throw err; }
-				finally { tavernSessionTransition.end(); setBusy(false); }
+				finally { timing.finish(successful); tavernSessionTransition.end(); setBusy(false); }
 			}
 			async function preparePlayConversation(card) {
 				setBusy(true); setError("");
+                const timing = typeof openingPerformance !== "undefined" ? openingPerformance.begin("preparePreview") : null;
+                let successful = false;
 				playPrewarmRef.current.begin({ key: card.path, kind: "play" });
 				try {
 					const userName = String(window.localStorage.getItem("dsh-tavern-player-name") || "你").trim() || "你";
 					const preparedKey = JSON.stringify([userName, compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh"]);
 					setOpeningPicker({ card: card, requestMode: requestMode, openings: [], index: 0, userName: userName, preparing: true });
-					const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { path: card.path, userName: userName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh" }));
+					const response = await initializeFullOpeningTemplate(await call("getCardOpenings", { previewTransport: "deferred-v1", path: card.path, userName: userName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh" }));
 					const openings = response.openings || [];
 					setOpeningPicker({ card: card, requestMode: requestMode, preparing: false, preparedKey: preparedKey, preparationId: response.preparationId || "", openings: openings, index: 0, userName: userName, trustedCardMode: response.trustedCardMode });
+				successful = true;
 				} catch (err) { setOpeningPicker(null); playPrewarmRef.current.cancel(); setError(String(err && err.message || err)); }
-				finally { setBusy(false); }
+				finally { if (timing) timing.finish(successful); setBusy(false); }
 			}
 			async function importCard(file) {
 				setBusy(true); setError("");
@@ -9005,6 +10207,7 @@ window.__ModuleLoader__.load({
 					sessionId: "",
 					turn: 1,
 					helperContext: selectedOpening.helperContext,
+                    frameSizing: selectedOpening.frameSizing,
 					openingPreview: selectedOpening.openingPreview,
                     onSubmitOpening: function (text) { if (busy || !picking || uiMode !== "play" || collapsed) throw new Error("请返回开局准备页后继续"); return newConversation(openingPicker.card, null, selectedOpening.id, openingPicker.userName || "你", text); },
 					onSelectOpening: function (id) {
@@ -9018,7 +10221,7 @@ window.__ModuleLoader__.load({
 				h("div", { className: "dsh-tavern-picker-foot", style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "24px", flexWrap: "wrap" } }, h("input", { ref: chatImportFile, type: "file", accept: ".jsonl", style: { display: "none" }, onChange: function (event) { previewChatImport(event.target.files && event.target.files[0]); event.target.value = ""; } }), h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" } }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { chatImportFile.current.click(); } }, "导入聊天记录"), h("small", { style: { opacity: .7 } }, "（必须和人物卡匹配）")), h("button", { className: "dsh-tavern-question-primary", disabled: busy || openingPicker.preparing || (openingPicker.openings.length > 0 && !selectedOpening), onClick: function () { newConversation(openingPicker.card, null, selectedOpening ? selectedOpening.id : "", openingPicker.userName || "你"); } }, "开始新游戏"))
 			) : null;
 			const playPicker = h("div", { className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": openingPicker ? "游戏准备" : "选择人物卡开始游玩" }, pickerError, openingPicker ? h(React.Fragment, null, importChoice, h("div", { style: { display: importChoice ? "none" : "contents" } }, openingChoice)) : h(React.Fragment, null,
-				h("div", { className: "dsh-tavern-card-picker-head" }, h("span", null, "选择人物卡 · 开始游玩"), h("span", { className: "dsh-tavern-spacer" }), h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }), h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
+				h("div", { className: "dsh-tavern-card-picker-head" }, h("span", null, "选择人物卡 · 开始游玩"), h("span", { className: "dsh-tavern-spacer" }), h("button", { className: "dsh-tavern-btn", disabled: busy || (!cardBatch.managing && !cards.length), onClick: function () { if (cardBatch.managing) cardBatch.reset(); else cardBatch.begin(); } }, cardBatch.managing ? "取消" : "批量删除"), h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }), h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
 				h("input", { ref: fileRef, type: "file", accept: ".png,.json", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importCard(f); e.target.value = ""; } }),
 				organization.toolbar(),
 				organization.visible.length ? h(React.Fragment, null, h("div", { className: "dsh-tavern-side-empty", style: { padding: "4px 6px" } }, "已绑定剧本的人物卡将自动按剧本推进；未绑定的按自由故事推进。剧本绑定在“卡片模式”中管理。"), organization.renderCards(function (card) { return h("div", { key: card.path, className: "dsh-tavern-card-pick-wrap" },
@@ -9097,7 +10300,9 @@ window.__ModuleLoader__.load({
 					h("button", { className: "dsh-tavern-card-pick", disabled: busy, onClick: function () { newCardConversation(null); } }, h("b", null, "空白开始"), h("span", null, "不追加任务提示词，自由使用完整卡片 Agent"))
 				)
 			);
-			const updateMessage = updateStatus.phase === "checking"
+			const updateMessage = updateStatus.phase === "package-managed"
+				? "关闭酒馆后，在终端重新运行安装命令，再启动 tavern。"
+				: updateStatus.phase === "checking"
 				? "正在向 GitHub 核实最新构建…"
 				: updateStatus.phase === "up-to-date"
 					? "✓ 未发现更新构建"
@@ -9120,9 +10325,13 @@ window.__ModuleLoader__.load({
 						: "尚未检查更新";
 			const currentVersionLabel = updateStatus.currentVersion && updateStatus.currentVersion !== "unknown" ? "v" + updateStatus.currentVersion : "版本未知";
 			const currentCommitLabel = (updateStatus.currentCommit || "").slice(0, 7) || "构建未知";
-			const updateHostLabel = updateStatus.host === "desktop" ? "Desktop 版" : (updateStatus.host === "android" ? "Android 版" : "命令行版");
+			const updateHostLabel = updateStatus.phase === "package-managed" ? "插件安装版" : updateStatus.host === "desktop" ? "Desktop 版" : (updateStatus.host === "android" ? "Android 版" : "命令行版");
 			const checkingOrRunning = updateStatus.phase === "checking" || updateStatus.phase === "running" || updateStatus.phase === "loading";
-			const updateActions = updateStatus.phase === "update-available"
+			const updateActions = updateStatus.phase === "package-managed"
+				? h("details", { className: "dsh-tavern-update-actions" },
+					h("summary", { className: "dsh-tavern-update-button" }, "查看更新命令"),
+					h("code", { style: { display: "block", overflowWrap: "anywhere", userSelect: "text" } }, updateStatus.updateCommand))
+				: updateStatus.phase === "update-available"
 				? h("div", { className: "dsh-tavern-update-actions" },
 					h("button", { className: "dsh-tavern-update-button", onClick: checkUpdate }, "检查更新"),
 					h("button", { className: "dsh-tavern-update-button primary", onClick: performUpdate }, "进行更新"))
@@ -9465,7 +10674,7 @@ window.__ModuleLoader__.load({
 			if (!label) return null;
 			return React.createElement("div", {
 				className: "dsh-tavern-background-model",
-				title: label + "（可在顶栏“本局设置”中修改）",
+				title: label + "（可在本局设置中修改）",
 				"aria-label": "后台模型：" + label
 			}, React.createElement("span", null, label));
 		}
@@ -9478,7 +10687,7 @@ window.__ModuleLoader__.load({
             async function change(name, enabled) {
                 if (busy) return;
                 setBusy(true); setError(""); setNotice("");
-                try { await rpc(props.globalDefaults ? "setDefaultWritingSkill" : "setConversationWritingSkill", { sessionId: props.sessionId, name, enabled }, props.sessionId); setSkills(skills.map(skill => skill.name === name ? { ...skill, enabled } : skill)); setNotice(props.globalDefaults ? "已保存，下次新游戏生效" : "已保存"); }
+                try { await rpc(props.globalDefaults ? "setDefaultWritingSkill" : "setConversationWritingSkill", { sessionId: props.sessionId, name, enabled }, props.sessionId); setSkills(skills.map(skill => skill.name === name ? { ...skill, enabled } : skill)); setNotice(props.globalDefaults ? "已保存，下次新游戏生效" : "已生效，后续请求采用新设置"); }
                 catch (err) { setError(String(err.message || err)); } finally { setBusy(false); }
             }
             return h("section", { className: "dsh-local-section", "aria-label": props.globalDefaults ? "默认写作 Skill" : "写作 Skill" }, h("h3", null, props.globalDefaults ? "默认写作 Skill" : "写作 Skill"),
@@ -9487,7 +10696,7 @@ window.__ModuleLoader__.load({
                     h("label", { className: "dsh-tavern-writing-skill-heading" }, h("span", null, skill.name), h("input", { type: "checkbox", role: "switch", "aria-label": skill.name, checked: skill.enabled, disabled: busy, onChange: event => change(skill.name, event.target.checked) })),
                     h("p", { className: "dsh-tavern-settings-desc" }, skill.description))),
                 skills && !skills.length ? h("p", null, "暂无写作 Skill，请在 Skill 库中分配给前台。") : null,
-                !props.globalDefaults ? h("p", { className: "dsh-local-warning" }, "切换会使提示词缓存失效，首次请求会增加耗时和费用。已载入历史的内容不会删除。") : null,
+                !props.globalDefaults ? h("p", { className: "dsh-local-help" }, "开关立即更新，后续模型请求生效；已发出的请求不受影响。通过追加通知保留已有缓存前缀，关闭后停止沿用该 Skill，历史内容保留。") : null,
                 error ? h("p", { role: "alert" }, error) : h("span", { role: "status" }, busy ? "保存中…" : skills ? notice : "正在读取…"),
                 error ? h("button", { className: "dsh-tavern-btn", onClick: load }, "重新加载") : null);
         }
@@ -9613,7 +10822,6 @@ window.__ModuleLoader__.load({
                 React.createElement(TavernConversationWritingSkills, { globalDefaults: true }),
                 React.createElement(CandidatePreferencesSettings),
                 React.createElement(PromptTemplateSettingsEntry),
-                React.createElement(TavernTextColorSettings),
                 React.createElement(ContextCompactionSettings),
 				state.sceneImages ? React.createElement(SceneImageSettings, null) : null,
 				state.error ? React.createElement("div", { className: "dsh-tavern-settings-error", role: "alert" }, "保存失败：" + state.error) : null
@@ -10048,6 +11256,75 @@ window.__ModuleLoader__.load({
 		return Object.freeze({ register: register });
 		}
 		const resourcesLibraryFeature = createResourcesLibraryFeatureModule();
+
+        function TavernCardMemoryTab(props) {
+            const h = React.createElement;
+            const [memory, setMemory] = React.useState(null);
+            const [query, setQuery] = React.useState("");
+            const [error, setError] = React.useState("");
+            const [busy, setBusy] = React.useState(false);
+            const [draft, setDraft] = React.useState(null);
+            const askConfirm = useTavernConfirm(props.sessionId);
+            const statuses = { unverified: "待验证", "static-validated": "静态校验通过", "runtime-verified": "运行实测通过", "user-confirmed": "用户确认" };
+            const owner = React.useRef(props.sessionId);
+            owner.current = props.sessionId;
+            async function refresh() {
+                const sessionId = props.sessionId;
+                const result = await rpc("getCardMemory", { query: query }, sessionId);
+                if (owner.current === sessionId) setMemory(result);
+            }
+            async function run(action) {
+                setBusy(true); setError("");
+                try { await action(); } catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            React.useEffect(function () {
+                setMemory(null); setDraft(null); setError("");
+                run(refresh);
+            }, [props.sessionId]);
+            async function editPreference(oldText) {
+                const content = await askTavernText({ title: oldText ? "修改改卡偏好" : "添加改卡偏好", initialValue: oldText || "", maxLength: 1000 });
+                if (content === null || !content.trim()) return;
+                await rpc("changeCardMemoryPreference", { action: oldText ? "replace" : "add", oldText: oldText, content: content }, props.sessionId);
+                await refresh();
+            }
+            function field(label, key) {
+                return h("label", { className: "dsh-tavern-memory-field" }, label, h("textarea", { value: draft[key] || "", maxLength: key === "title" ? 160 : 2000, rows: key === "title" ? 1 : 3, onChange: event => setDraft(Object.assign({}, draft, { [key]: event.target.value })) }));
+            }
+            return h("div", { className: "dsh-tavern-card-memory" },
+                h("h3", null, "改卡记忆"),
+                h("p", null, "记录改卡偏好和错误修复经验，仅卡片模式使用。"),
+                error ? h("p", { role: "alert" }, error) : null,
+                !memory ? h("p", null, "正在读取…") : !memory.enabled ? h("p", null, "请先打开一个卡片模式对话。游玩模式不读取或记录这些记忆。") : h(React.Fragment, null,
+                    h("div", { className: "dsh-tavern-memory-actions" },
+                        h("input", { "aria-label": "检索改卡记忆", placeholder: "输入错误或关键词", value: query, onChange: event => setQuery(event.target.value), onKeyDown: event => { if (event.key === "Enter") run(refresh); } }),
+                        h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(refresh) }, "检索 / 刷新")),
+                    h("h4", null, "改卡偏好"),
+                    (memory.preferences || []).map(content => h("div", { className: "dsh-tavern-memory-entry", key: content },
+                        h("p", null, content), h("div", { className: "dsh-tavern-memory-actions" },
+                            h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(() => editPreference(content)) }, "修改"),
+                            h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(async () => { if (await askConfirm("移除这条改卡偏好？")) { await rpc("changeCardMemoryPreference", { action: "remove", oldText: content }, props.sessionId); await refresh(); } }) }, "移除")))),
+                    h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(() => editPreference()) }, "添加偏好"),
+                    h("h4", null, "错误与修复经验"),
+                    h("p", null, "显示当前卡片和通用经验的检索结果。待验证记录不代表已有可靠解决方案。"),
+                    !(memory.experiences || []).length ? h("p", null, "没有匹配的经验。") : null,
+                    (memory.experiences || []).map(entry => {
+                        let record;
+                        try { record = JSON.parse(entry.content); } catch (_error) { record = { problem: entry.content }; }
+                        return h("details", { className: "dsh-tavern-memory-entry", key: entry.scope + entry.id },
+                            h("summary", null, entry.title + " · " + (entry.scope === "shared" ? "通用" : "当前卡片")),
+                            h("p", null, statuses[record.status] || "待验证"),
+                            [ ["问题", "problem"], ["尝试", "attempts"], ["修复方法", "solution"], ["验证依据", "evidence"] ].map(([label, key]) => record[key] ? h("p", { key: key }, h("strong", null, label + "："), record[key]) : null),
+                            h("div", { className: "dsh-tavern-memory-actions" },
+                                h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => setDraft(Object.assign({}, record, { id: entry.id, scope: entry.scope, title: entry.title })) }, "修改"),
+                                h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(async () => { if (await askConfirm("删除这条改卡经验？删除后不再检索或用于改卡，底层记录仍保留。")) { await rpc("changeCardMemoryExperience", { action: "archive", id: entry.id, scope: entry.scope }, props.sessionId); await refresh(); } }) }, "删除")));
+                    }),
+                    draft ? h("form", { className: "dsh-tavern-memory-entry", onSubmit: event => { event.preventDefault(); run(async () => { await rpc("changeCardMemoryExperience", Object.assign({}, draft, { action: "save" }), props.sessionId); setDraft(null); await refresh(); }); } },
+                        field("标题", "title"), field("问题", "problem"), field("失败或修复尝试", "attempts"), field("修复方法", "solution"), field("验证依据", "evidence"),
+                        h("label", { className: "dsh-tavern-memory-field" }, "验证状态", h("select", { value: draft.status || "unverified", onChange: event => setDraft(Object.assign({}, draft, { status: event.target.value })) }, Object.entries(statuses).map(([value, label]) => h("option", { value: value, key: value }, label)))),
+                        h("div", { className: "dsh-tavern-memory-actions" }, h("button", { className: "dsh-tavern-btn", type: "submit", disabled: busy }, "保存"), h("button", { className: "dsh-tavern-btn", type: "button", onClick: () => setDraft(null) }, "取消"))) : null
+                ));
+        }
 
 		function TavernSkillsTab(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
@@ -10837,7 +12114,7 @@ window.__ModuleLoader__.load({
 				finally { setBusy(false); }
 			}
 			async function deleteCardFile() {
-				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？\n人物卡工作版和原版都会删除，已有对话会保留。")) return;
+				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？")) return;
 				setBusy(true); setError("");
 				try { await rpc("deleteCard", { path: card.path }); setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards"); }
 				catch (err) { setError(String(err && err.message || err)); }
@@ -11110,6 +12387,17 @@ window.__ModuleLoader__.load({
 					)
 				);
 			}
+			function scriptCode(label, value) {
+				const content = String(value || "（空）");
+				const lines = content.split(/\r\n|\r|\n/);
+				return h("details", { className: "dsh-tavern-script-code" },
+					h("summary", null, label, h("span", { className: "dsh-tavern-script-code-count" }, lines.length + " 行 · 只读")),
+					h("div", { className: "dsh-tavern-script-code-scroll", tabIndex: 0, role: "region", "aria-label": label },
+						h("div", { className: "dsh-tavern-script-code-lines", "aria-hidden": true }, lines.map(function (_, index) { return h("div", { key: index }, index + 1); })),
+						h("pre", null, h("code", null, content))
+					)
+				);
+			}
 			function helperScriptRow(item, index) {
 				const snippet = String(item.content || "").replace(/\s+/g, " ").trim() || "空脚本";
 				return h("details", { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-script" },
@@ -11119,8 +12407,8 @@ window.__ModuleLoader__.load({
 						h("span", { className: "dsh-tavern-prompt-state" + (item.enabled ? "" : " off") }, item.enabled ? "已启用" : "已关闭")
 					),
 					h("div", { className: "dsh-tavern-regex-body" },
-						h("div", { className: "dsh-tavern-regex-label" }, "脚本内容"), h("pre", { className: "dsh-tavern-regex-code" }, item.content || "（空）"),
-						item.dataText ? h("div", null, h("div", { className: "dsh-tavern-regex-label" }, "脚本配置"), h("pre", { className: "dsh-tavern-regex-code" }, item.dataText)) : null,
+						scriptCode("脚本内容", item.content),
+						item.dataText ? scriptCode("脚本配置", item.dataText) : null,
 						item.info ? h("div", null, h("div", { className: "dsh-tavern-regex-label" }, "说明"), h("pre", { className: "dsh-tavern-regex-code" }, item.info)) : null,
 						item.exportWith !== null ? h("div", { className: "dsh-tavern-regex-meta" }, "export_with: " + JSON.stringify(item.exportWith)) : null
 					)
@@ -11262,6 +12550,7 @@ window.__ModuleLoader__.load({
 					content: String(statusView.content), sessionId: props.sessionId,
 					turn: Math.max(1, Number(statusView.targetTurn) || 1), partIndex: Math.max(0, Number(statusView.sourcePartIndex) || 0),
 					panelId: statusView.viewId, helperContext: view.tavernHelper,
+                    frameSizing: view.tavernRuntimePolicy?.frameSizing,
 					trustedCardMode: Boolean(view.tavernRuntimePolicy && view.tavernRuntimePolicy.trustedCardMode),
 					eager: true, persistent: true, followContentFont: false, executeSlash: props.executeSlash,
 					observeMvuView: false, runtimeReporting: true
@@ -11691,64 +12980,7 @@ window.__ModuleLoader__.load({
 
 		function createPlayControlsFeatureModule() {
 			const historyProjection = createTurnHistoryProjection();
-            function SessionInventoryDialog(props) {
-                const [result, setResult] = React.useState(null);
-                const [error, setError] = React.useState("");
-                const [busy, setBusy] = React.useState(false);
-                const [query, setQuery] = React.useState("");
-                const [showHistory, setShowHistory] = React.useState(false);
-                const [page, setPage] = React.useState(0);
-                const generation = React.useRef(0);
-                const h = React.createElement;
-                async function refresh() {
-                    const ticket = ++generation.current;
-                    setBusy(true); setError("");
-                    try {
-                        const value = await rpc("getSessionInventory", {}, props.sessionId);
-                        if (ticket === generation.current) { setResult(value); setPage(0); }
-                    } catch (error) { if (ticket === generation.current) setError(String(error.message || error)); }
-                    finally { if (ticket === generation.current) setBusy(false); }
-                }
-                React.useEffect(() => { refresh(); return () => { generation.current++; }; }, [props.sessionId]);
-                const bytes = value => value == null ? "未知" : (value / 1024 / 1024).toFixed(2) + " MiB";
-                const date = value => value ? new Date(value).toLocaleString() : "未知";
-                const historyCount = (result?.rows || []).filter(row => row.backgroundState === "historical").length;
-                const rows = (result?.rows || []).filter(row => (showHistory || row.backgroundState !== "historical") && (row.sessionId + " " + row.references.map(ref => ref.title).join(" ")).toLowerCase().includes(query.toLowerCase()));
-                return h("div", { role: "dialog", "aria-modal": true, "aria-label": "会话统计", className: "dsh-tavern-modal-backdrop", onKeyDown: event => {
-                    if (event.key === "Escape") { event.stopPropagation(); props.onClose(); }
-                    if (event.key === "Tab") {
-                        const controls = [...event.currentTarget.querySelectorAll("button:not(:disabled), input")];
-                        const first = controls[0], last = controls[controls.length - 1];
-                        if (event.shiftKey && event.target === first) { event.preventDefault(); last?.focus(); }
-                        else if (!event.shiftKey && event.target === last) { event.preventDefault(); first?.focus(); }
-                    }
-                }, style: { position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center" } },
-                    h("section", { className: "dsh-tavern-panel", style: { background: "var(--background, Canvas)", color: "var(--foreground, CanvasText)", padding: 20, width: "min(1100px, 94vw)", maxHeight: "85vh", overflow: "auto" } },
-                        h("h2", null, "会话统计"),
-                        h("p", null, "只读统计，不加载历史。事件数仅统计已加载会话；磁盘大小不是内存占用。关联包含 Tavern 直接关联及通过父会话追溯的来源；来源不代表当前仍在使用，未找到关联不代表孤儿会话。后台身份来自剧情绑定索引；旧索引或独立任务信息不足时显示待确认，不能据此删除。"),
-                        h("button", { type: "button", disabled: busy, onClick: refresh }, busy ? "读取中…" : "刷新"),
-                        h("button", { type: "button", autoFocus: true, onClick: props.onClose }, "关闭"),
-                        error ? h("p", { role: "alert" }, error) : null,
-                        result ? h("p", null, "会话 " + result.totals.sessions + " · 已加载 " + result.totals.loaded + " · 已知磁盘占用 " + bytes(result.totals.knownDiskBytes) + "（" + result.totals.unknownDiskSize + " 条未知） · 进程 RSS " + bytes(result.memory.rss) + " · JS 堆 " + bytes(result.memory.heapUsed) + " · 采样 " + date(result.capturedAt)) : null,
-                        h("input", { "aria-label": "筛选会话", placeholder: "会话 ID 或对话名称", value: query, onChange: event => { setQuery(event.target.value); setPage(0); } }),
-                        h("button", { type: "button", "aria-expanded": showHistory, onClick: () => { setShowHistory(value => !value); setPage(0); } }, (showHistory ? "收起历史后台" : "展开历史后台") + "（" + historyCount + "）"),
-                        h("table", { style: { width: "100%", textAlign: "left" } },
-                            h("thead", null, h("tr", null, ["会话", "状态", "事件数", "磁盘大小", "文件修改时间", "关联对话 / 最后打开"].map(label => h("th", { key: label }, label)))),
-                            h("tbody", null, rows.slice(page * 50, (page + 1) * 50).map(row => h("tr", { key: row.sessionId },
-                                h("td", { style: { overflowWrap: "anywhere" } }, row.sessionId),
-                                h("td", null, ({ current: "当前后台 · ", historical: "历史后台（仅存档） · ", unknown: "后台归属状态待确认 · ", transitioning: "非当前后台，任务仍在运行 · " }[row.backgroundState] || "") + (row.running ? "运行中" : row.loaded ? "已加载" : "未加载") + (row.archived === true ? " · 已归档" : row.archived === null ? " · 归档状态未知" : "")),
-                                h("td", null, row.eventCount == null ? "未知" : row.eventCount),
-                                h("td", null, row.storageError || bytes(row.diskBytes)),
-                                h("td", null, date(row.fileModifiedAt)),
-                                h("td", null, row.references.length ? row.references.map(ref => h("div", { key: ref.chatId }, ref.title + (ref.relation === "ancestor" ? " · 来源会话 " + ref.viaSessionId : " · 直接关联") + " · " + date(ref.lastOpenedAt))) : "未找到关联")
-                            )))),
-                        h("p", null, rows.length + " 条 · 第 " + (page + 1) + " 页"),
-                        h("button", { type: "button", disabled: page === 0, onClick: () => setPage(page - 1) }, "上一页"),
-                        h("button", { type: "button", disabled: (page + 1) * 50 >= rows.length, onClick: () => setPage(page + 1) }, "下一页")
-                    ));
-            }
 			function TavernConversationExportAction(props) {
-				const [inventoryOpen, setInventoryOpen] = React.useState(false);
                 const [available, setAvailable] = React.useState(false);
 				const [busy, setBusy] = React.useState(false);
 				React.useEffect(function () {
@@ -11800,27 +13032,10 @@ window.__ModuleLoader__.load({
 					} catch (err) { tavernErrorHub.report("导出日志", err); }
 					finally { setBusy(false); }
 				}
-                async function exportWorldbookRecall() {
-                    setBusy(true);
-                    try {
-                        const result = await rpc("getWorldBookRecallLog", {}, props.sessionId);
-                        if (!result.log) throw new Error(result.message || "尚无世界书召回日志，请先进行一轮对话。");
-                        const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
-                        const link = document.createElement("a"); link.href = url;
-                        link.download = "世界书召回-第" + result.log.turn + "轮.json";
-                        document.body.appendChild(link); link.click(); link.remove();
-                        window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-                    } catch (error) { tavernErrorHub.report("世界书召回日志", error); }
-                    finally { setBusy(false); }
-                }
-                return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
-                    inventoryOpen ? React.createElement(SessionInventoryDialog, { sessionId: props.sessionId, onClose: () => setInventoryOpen(false) }) : null,
+				return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
                     React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } }, busy ? "导出中…" : "导出 ▾"),
                     React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", "aria-label": "导出", hidden: !open, onClick: function (event) { if (event.target.closest("button:not(:disabled)")) setOpen(false); } },
-                        React.createElement("button", { type: "button", role: "menuitem", onClick: () => setInventoryOpen(true) }, "会话统计"),
                         React.createElement("button", { type: "button", role: "menuitem", "data-tavern-log-export": "", disabled: busy, "aria-label": "日志", title: "下载 Session、MVU、生图与更新日志；含私人剧情，分享前请检查隐私", onClick: exportLogs }, "日志"),
-                        React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "最近一轮的命中词、扫描来源、排序、排除原因与最终投影正文", onClick: exportWorldbookRecall }, "世界书召回日志"),
-                        React.createElement("button", { type: "button", role: "menuitem", title: "最近 10 分钟，最多 120 条；不含输入或聊天内容。刷新页面后清空", onClick: () => tavernInteractionDiagnostics.download() }, "交互诊断"),
                         React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "导出只包含玩家与角色正文的 TXT", onClick: exportText }, "纯对话 TXT")
                     ));
             }
@@ -12234,7 +13449,7 @@ window.__ModuleLoader__.load({
 			}
 			async function applyUpdatedCard() {
 				if (cardUpdateBusy || !view?.cardUpdate || view.cardUpdate.error) return;
-				if (!await askConfirm("将预检最新状态栏、EJS、世界书与变量结构，再应用到当前游戏。已有剧情和数值保留，新增变量补默认值；人物卡声明的字段迁移会同步到历史快照，以便回退后继续玩。预检失败不修改存档。更新可能增加 Token 费用和等待时间。是否继续？" + (view.cardUpdate.migrations?.length ? "\n\n声明的变量迁移：\n" + view.cardUpdate.migrations.join("\n") : ""))) return;
+				if (!await askConfirm("将从资源库重新加载人物卡及绑定的世界书，本局脚本对世界书的修改会被替换。将预检最新状态栏、EJS、世界书与变量结构，再应用到当前游戏。已有剧情和保留字段的当前数值不变，新增变量补对应开场的初值，已从人物卡定义删除的变量会从当前及历史快照同步删除；显式改名迁移保留原值，以便回退后继续玩。预检失败不修改存档。更新会破坏提示词缓存，增加下一轮的 Token 费用和等待时间。是否继续？" + (view.cardUpdate.migrations?.length ? "\n\n声明的变量迁移：\n" + view.cardUpdate.migrations.join("\n") : ""))) return;
 				setCardUpdateBusy(true); setCardUpdateError("");
 				try { await rpc("applyUpdatedCard", { digest: view.cardUpdate.digest }, props.sessionId); liveTavernView.invalidate(props.sessionId); }
 				catch (error) { setCardUpdateError(String(error.message || error)); }
@@ -12274,19 +13489,25 @@ window.__ModuleLoader__.load({
 			);
 			if (view.mode === "card") return null;
 			const statusText = view.settleStatus === "running" ? "正在执行后台结算" : (view.settleStatus === "error" ? "后台结算失败" : "后台结算已完成");
+			const cardUpdateNotice = !view.cardUpdate ? "" : view.cardUpdate.error ? "检查更新失败：" + view.cardUpdate.error
+				: view.cardUpdate.worldbookSyncRequired || view.cardUpdate.legacy ? "旧存档需同步"
+				: view.cardUpdate.cardChanged && view.cardUpdate.worldbookChanged ? "人物卡和世界书有变化"
+				: view.cardUpdate.cardChanged ? "人物卡有变化"
+				: view.cardUpdate.worldbookChanged ? "世界书有变化" : "";
 			return h("aside", { className: "dsh-tavern-status" },
 				h("div", { className: "dsh-tavern-status-head" },
-					h("div", { className: "dsh-tavern-status-title" }, "酒馆状态"),
 					h("div", { className: "dsh-tavern-status-role" }, view.card.name),
 					(view.card.tags || []).length ? h("div", { className: "dsh-tavern-status-tags" }, (view.card.tags || []).slice(0, 8).map(function (tag) { return h("span", { key: tag, className: "dsh-tavern-status-tag" }, tag); })) : null,
 					h("div", { className: "dsh-tavern-status-settle" }, h("span", { className: "dsh-tavern-status-dot " + (view.settleStatus || "idle") }), statusText)
 				),
 					h("div", { className: "dsh-tavern-status-body" },
-					view.requestMode !== "sillytavern" && view.cardUpdate?.available ? h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, view.cardUpdate.error ? "世界书更新暂不可用" : view.cardUpdate.legacy ? "此存档尚未记录人物卡版本" : view.cardUpdate.worldbookChanged ? (view.cardUpdate.cardChanged ? "人物卡信息与世界书已变化" : "世界书内容已变化") : "人物卡信息已变化"),
-						h("p", { className: "dsh-tavern-settings-desc" }, view.cardUpdate.error || "应用前会预检状态栏、EJS、世界书与变量结构。保留剧情和已有数值，补齐新增变量；字段改名或类型变化需在人物卡声明迁移。成功后可继续当前游戏，无需重开。"),
-						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null,
-						h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在应用变化…" : "应用变化到当前游戏")
+                        h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
+					["story", "script"].includes(view.mode || "story") && view.requestMode !== "sillytavern" && view.cardUpdate ? h("section", { className: "dsh-tavern-status-section" },
+						h("div", { className: "dsh-tavern-card-reload" },
+							h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在重新加载人物卡和世界书…" : "重新加载人物卡和世界书"),
+							cardUpdateNotice ? h("span", { className: "dsh-tavern-card-reload-notice", role: "status" }, cardUpdateNotice) : null
+						),
+						cardUpdateError ? h("p", { className: "dsh-card-error", role: "alert" }, "未应用更新：" + cardUpdateError) : null
 					) : null,
 					h(TavernCardAppDock, { sessionId: props.sessionId }),
 					view.settleStatus === "error" ? h("div", { className: "dsh-card-error" },
@@ -12295,8 +13516,7 @@ window.__ModuleLoader__.load({
 					) : null,
 					view.worldBookError ? h("div", { className: "dsh-card-error" }, "世界书召回失败：" + view.worldBookError) : null,
 					view.foregroundError ? h("div", { className: "dsh-card-error" }, view.foregroundError.message || "前台正文生成失败，请重新生成本轮正文。") : null,
-					view.tavernHelper ? h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, "人物卡状态栏"),
+					view.tavernHelper && view.statusBarPlacement !== "body" ? h("section", { className: "dsh-tavern-status-section" },
 						h(TavernPersistentStatusRuntime, { sessionId: props.sessionId, view: view, executeSlash: props.executeSlash })
 					) : null,
 					(view.presentationWarnings || []).map(function (warning, index) {
@@ -12732,6 +13952,46 @@ window.__ModuleLoader__.load({
 					h("button", { className: "dsh-tavern-question-free", disabled: panel.busy, onClick: function () { setBodyEditPanel(null); } }, "取消")));
 		}
 
+        function backgroundWaitMessage(progress, now) {
+            if (!progress || now - progress.startedAt < 60000) return "";
+            if (progress.phase === "model") {
+                return now - progress.lastProgressAt < 15000
+                    ? "模型仍在输出思考、正文或工具参数，后台任务尚未完成。可以继续等待或停止后台；已生成的正文会保留。"
+                    : "正在等待模型 API 的有效输出。连续 5 分钟没有有效输出会停止并报错；也可以现在停止后台，保留已生成的正文。";
+            }
+            return progress.phase === "tool"
+                ? "正在执行后台工具或等待人物卡变量处理。若长时间没有完成，可以停止后台；已生成的正文会保留。"
+                : "正在准备后台请求。若长时间没有完成，可以停止后台；已生成的正文会保留。";
+        }
+        function TavernBackgroundWait(props) {
+            const [progress, setProgress] = React.useState(null);
+            const [now, setNow] = React.useState(Date.now);
+            const active = props.activity?.busy || props.activity?.phase === "pending";
+            React.useEffect(function () {
+                let disposed = false, loading = false;
+                setProgress(null);
+                if (!active) return;
+                async function refresh() {
+                    setNow(Date.now());
+                    if (loading) return;
+                    loading = true;
+                    try {
+                        const result = await rpc("getBackgroundProgress", {}, props.sessionId);
+                        if (!disposed) setProgress(result.progress);
+                    } catch (_) { /* Existing task status and stop controls remain usable. */ }
+                    finally { loading = false; }
+                }
+                void refresh();
+                const timer = window.setInterval(refresh, 5000);
+                return function () { disposed = true; window.clearInterval(timer); };
+            }, [active, props.sessionId, props.activity?.operationId]);
+            const message = backgroundWaitMessage(progress || {phase:"preparing",startedAt:props.activity?.updatedAt || now}, now);
+            if (!active || !message) return null;
+            return React.createElement("div", {className:"dsh-tavern-status-section", role:"status"},
+                React.createElement("p", null, message),
+                React.createElement(TavernStopBackgroundAction, {sessionId:props.sessionId}));
+        }
+
 		function TavernStopBackgroundAction(props) {
 			const [busy, setBusy] = React.useState(false);
 			const state = useTavernCoordination(props.sessionId);
@@ -12789,6 +14049,26 @@ window.__ModuleLoader__.load({
                 React.createElement("p", { className: "dsh-local-help" }, "离开输入框后保存，仅用于后续内容。"), React.createElement("span", { role: "status", className: "dsh-local-feedback" }, status));
         }
 
+        function TavernStatusBarSetting(props) {
+            const h = React.createElement;
+            const state = useLiveTavernView(props.sessionId, "status-bar-setting");
+            const [busy, setBusy] = React.useState(false);
+            const [error, setError] = React.useState("");
+            async function change(placement) {
+                setBusy(true); setError("");
+                try {
+                    await rpc("setStatusBarPlacement", { placement: placement }, props.sessionId);
+                    liveTavernView.invalidate(props.sessionId);
+                } catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            return h("div", { className: "dsh-local-field" },
+                h("label", null, "状态栏位置", h("select", { className: "dsh-tavern-settings-select", "aria-label": "状态栏位置",
+                    value: state.view?.statusBarPlacement || "sidebar", disabled: busy || !state.view, onChange: event => change(event.target.value) },
+                    h("option", { value: "sidebar" }, "侧边栏"), h("option", { value: "body" }, "正文下方"))),
+                error ? h("p", { role: "alert" }, "保存失败：" + error) : null);
+        }
+
         function TavernConversationSettingsTab(props) {
             const h = React.createElement;
             const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
@@ -12799,6 +14079,7 @@ window.__ModuleLoader__.load({
                     h("p", { className: "dsh-local-intro" }, "仅影响本局，修改后自动保存。已有对话和变量会保留。"),
                     h("section", { className: "dsh-local-section" }, h("h3", null, "基本信息"),
                         h(TavernLocalPlayerName, { key: owner + ":name", sessionId: owner }),
+                        h(TavernStatusBarSetting, { key: owner + ":status", sessionId: owner }),
                         h(TavernConversationPreset, { key: owner + ":preset", sessionId: owner }),
                         h(UserPreferenceProfileTab, { key: owner + ":profile", scope: { sessionId: owner }, conversationOnly: true }),
                         h("p", { className: "dsh-local-warning" }, "切换预设或用户画像会使提示词缓存失效，首次请求会增加耗时和费用。")),
@@ -12809,7 +14090,7 @@ window.__ModuleLoader__.load({
             const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
             const mode = useTavernSessionMode(owner);
             if (!isPlayMode(mode)) return null;
-            return React.createElement("button", { type: "button", className: "dsh-tavern-btn", "aria-label": "本局设置", title: "本局设置：仅影响本局", onClick: () => props.open(owner) }, "⚙ 本局设置");
+            return React.createElement("button", { type: "button", className: "dsh-tavern-btn", "aria-label": "酒馆状态", title: "查看本局酒馆状态", onClick: () => props.open(owner) }, "酒馆状态");
         }
 
         function TavernConversationBackgroundModel(props) {
@@ -13230,7 +14511,7 @@ window.__ModuleLoader__.load({
             )), "dsh-tavern: immersive header action");
             ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
                 { name: "conversation.session.header.utilities", id: "dsh-tavern-conversation-settings", order: 80 },
-                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => openTavernSidebarTab(ctx, { type: "dsh-tavern:conversation-settings" }, { sessionId }) })
+                props => React.createElement(TavernConversationSettingsAction, { ...props, sessions: ctx.sessions, open: sessionId => openTavernSidebarTab(ctx, { type: "dsh-tavern:status" }, { sessionId }) })
             )), "dsh-tavern: conversation settings action");
 			ctx.effect(() => ctx.betterSidebar.registerTab({
 				id: "dsh-tavern:status",
@@ -13551,9 +14832,16 @@ window.__ModuleLoader__.load({
 					input.setDraft("/debug-card" + targetSection + "\n\n" + supplement.trim() + "\n\n请结合已引用的游玩记录，检查这张人物卡的异常表现，按需读取相关日志和状态，说明原因并给出修改建议。");
 					return;
 				}
+				if (task === "edit") {
+					const editPrompt = String(result && result.text || "").trim();
+					const target = targetPath ? "\n\n目标卡：@\"" + targetPath + "\"" : "";
+					input.setDraft(editPrompt.replace("/edit-card", "/edit-card" + target) + resourceSection + (supplement ? "\n\n" + supplement : ""));
+					return;
+				}
 				const taskText = "【卡片任务：" + label + "】" + targetSection + "\n\n" + String(result && result.text || "").trim() + resourceSection;
 				input.setDraft(taskText + supplement);
 			}
+			registerTavernStartPage(ctx, slots);
 			playControlsFeature.register({ ctx: ctx, slots: slots });
 			assistantRendererFeature.register({ ctx: ctx, slots: slots });
 			// Native history paging owns loading; TavernWindowedNode bounds live bodies without shadowing its slots.
@@ -13572,6 +14860,7 @@ window.__ModuleLoader__.load({
 					label: function () { return "DSH Tavern"; }
 				}, TavernSettingsSection); });
 			}, "dsh-tavern: settings section");
+
 			ctx.effect(function () {
 				const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:system-prompts", title: "系统提示词", order: 5, single: true, component: SystemPromptSidebarTab });
 				return function () { if (typeof dispose === "function") dispose(); };
@@ -13580,6 +14869,7 @@ window.__ModuleLoader__.load({
 			presetLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			resourcesLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:skills", title: "Skill 库", order: 8, single: true, component: props => React.createElement(TavernSkillsTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: Skill library");
+            ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:card-memory", title: "改卡记忆", order: 9, single: true, component: props => React.createElement(TavernCardMemoryTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: card memory");
 			worldBookLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			cardLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			ctx.effect(function () {
@@ -13607,7 +14897,6 @@ window.__ModuleLoader__.load({
 		exports.findTavernQuoteRanges = findTavernQuoteRanges;
         exports.installTavernTextColors = installTavernTextColors;
         exports.TavernColoredMarkdown = TavernColoredMarkdown;
-        exports.TavernTextColorSettings = TavernTextColorSettings;
         exports.apply = apply;
 		exports.createTurnHistoryProjection = createTurnHistoryProjection;
 		exports.createTurnErrorControls = createTurnErrorControls;
@@ -13648,6 +14937,7 @@ window.__ModuleLoader__.load({
 		exports.createCardLibraryRefreshModule = createCardLibraryRefreshModule;
 		exports.tavernDataChangeAffects = tavernDataChangeAffects;
 		exports.createLiveTavernViewModule = createLiveTavernViewModule;
+        exports.createSessionViewReader = createSessionViewReader;
 		exports.applyBodyRegenerationResult = applyBodyRegenerationResult;
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
 		exports.describeTavernActivity = describeTavernActivity;
@@ -13670,6 +14960,33 @@ window.__ModuleLoader__.load({
 		exports.createTavernAssistantRendererFeatureModule = createTavernAssistantRendererFeatureModule;
 		exports.createTavernShellFeatureModule = createTavernShellFeatureModule;
 		exports.createTavernRuntimeGenerationMonitor = createTavernRuntimeGenerationMonitor;
+		// DSH 0.1.5 may withdraw an already materialized assistant when a stream block
+		// becomes empty. Preserve its identity at the assembler boundary, before the
+		// core enforces monotonic node membership. React renderers cannot enforce this.
+		function installTavernAssistantVisibilityPatch(require) {
+			let conversation;
+			try { conversation = require("@deepseek-ai/dsh-client-ui-conversation/client"); }
+			catch (_) { return; }
+			const proto = conversation && conversation.ConversationNodeAssembler && conversation.ConversationNodeAssembler.prototype;
+			if (!proto || typeof proto.buildNode !== "function" || proto.__dshTavernAssistantVisibility) return;
+			const buildNode = proto.buildNode;
+			proto.buildNode = function (context, target) {
+				const node = buildNode.call(this, context, target);
+				if (target !== "chat" || context.kind !== "assistant-step") return node;
+				if (node === null) {
+					const previous = context.current.get(target);
+					if (!previous) return null;
+					return Object.assign({}, previous, { visibility: "hidden" });
+				}
+				const messageId = node.data && node.data.finalNode && node.data.finalNode.messageId;
+				if (/^tavern-seed-trajectory:v1:.+:2$/.test(String(messageId || ""))) {
+					return Object.assign({}, node, { visibility: "hidden" });
+				}
+				return node;
+			};
+			Object.defineProperty(proto, "__dshTavernAssistantVisibility", { value: true });
+		}
+		installTavernAssistantVisibilityPatch(require);
 		function evaluatePatchedSessionClient(source, require) {
 			let exports
 			const previous = window.__ModuleLoader__

@@ -22,7 +22,9 @@ export function createAutoCompaction(deps) {
   const blocked = chat => reserved.has(chat.id) || chat.contextCompaction?.operation?.status === 'running'
   async function save(id, mutate) { return deps.updateChat(id, chat => { chat.contextCompaction = mutate(chat.contextCompaction || {}); return chat }, { source: 'compaction.server' }) }
   async function run(sessionId, options = {}) {
-    const chat = await deps.readChat(sessionId)
+    // Eligibility uses only rounds, timeline and compaction metadata. Load full
+    // history only after deciding to perform compression under the exclusive lock.
+    const chat = await (deps.readState || deps.readChat)(sessionId)
     if (!chat || !['story', 'script'].includes(chat.mode)) return null
     if (jobs.has(chat.id)) {
       const active = jobs.get(chat.id)
@@ -91,11 +93,11 @@ export function createAutoCompaction(deps) {
       // Wait for preceding settlement. No reservation yet: it must be allowed to finish.
       while (true) {
         signal.throwIfAborted()
-        chat = await deps.readChat(initial.sessionId)
+        chat = await (deps.readState || deps.readChat)(initial.sessionId)
         if (!chat) return null
         const activity = deps.activity(chat)
         if (activity.role === 'settlement' && ['pending', 'running'].includes(activity.phase) && deps.settle) {
-          await deps.settle(chat)
+          await deps.settle(await deps.readChat(initial.sessionId))
           await delay(50, undefined, { signal })
           continue
         }
@@ -189,7 +191,7 @@ export function createAutoCompaction(deps) {
     } finally { reserved.delete(chat.id) }
   }
   async function recordForeground(sessionId) {
-    const chat = await deps.readChat(sessionId)
+    const chat = await (deps.readState || deps.readChat)(sessionId)
     if (!chat) return
     const policyKey = JSON.stringify(compactionPolicy(await deps.policy()))
     await save(chat.id, old => ({ ...old, sessionId, branch: chat.timeline?.branchId || '', policyKey, baseline: storyRoundKeys(chat),

@@ -15,9 +15,11 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
 class Launcher : Form {
- // Bump the suffix whenever patch-runtime.cjs changes; never patch a running installation.
- const string Version="a272f20b3f1f5b15-setup2";
- Label label=new Label(); ProgressBar bar=new ProgressBar();
+ // Bump for any embedded runtime/bootstrap change; never patch a running installation.
+ const string Version="a272f20b3f1f5b15-setup4";
+ Label label=new Label(), activity=new Label(); ProgressBar bar=new ProgressBar();
+ Button logs=new Button(); System.Windows.Forms.Timer progressTimer=new System.Windows.Forms.Timer();
+ Stopwatch elapsed=Stopwatch.StartNew(); TimeSpan lastProgress=TimeSpan.Zero; string lastStatus="";
  string root, runtime, data; string[] args;
  string installedLauncher; bool showCompletion, installationSelected;
  const string LauncherName="DSH Tavern.exe";
@@ -63,19 +65,31 @@ class Launcher : Form {
   Application.EnableVisualStyles(); Application.Run(new Launcher(args));
  }
  Launcher(string[] a) {
-  args=a; Text="DSH Tavern"; ClientSize=new Size(460,115); StartPosition=FormStartPosition.CenterScreen;
+  args=a; Text="DSH Tavern"; ClientSize=new Size(560,205); StartPosition=FormStartPosition.CenterScreen;
   FormBorderStyle=FormBorderStyle.FixedDialog; MaximizeBox=false; ControlBox=false;
-  label.SetBounds(20,18,420,45); label.Text="正在检查运行文件…"; Controls.Add(label);
-  bar.SetBounds(20,75,420,18); bar.Style=ProgressBarStyle.Marquee; Controls.Add(bar);
+  label.SetBounds(20,18,520,48); label.Text="正在检查运行文件…"; Controls.Add(label);
+  bar.SetBounds(20,75,520,18); bar.Style=ProgressBarStyle.Marquee; Controls.Add(bar);
+  activity.SetBounds(20,105,520,52); Controls.Add(activity);
+  logs.SetBounds(20,164,110,28); logs.Text="查看更新日志"; logs.Enabled=false; Controls.Add(logs);
+  logs.Click+=delegate {try {string file=Path.Combine(data,"setup-upgrade.log");if(File.Exists(file))Process.Start(new ProcessStartInfo("notepad.exe",Quote(file)){UseShellExecute=false});}catch(Exception e){MessageBox.Show(e.Message,"无法打开日志");}};
+  progressTimer.Interval=1000;
+  progressTimer.Tick+=delegate {
+   var idle=elapsed.Elapsed-lastProgress;
+   activity.Text="已用时 "+(int)elapsed.Elapsed.TotalMinutes+" 分 "+elapsed.Elapsed.Seconds+" 秒 · 距上次状态变化 "+(int)idle.TotalSeconds+" 秒\n"+
+    (idle.TotalSeconds>=60?"暂未收到新进展；可能在等待网络或本地处理，可查看日志判断。":"按实际步骤显示；下载、安装和本地配置耗时不同。");
+   logs.Enabled=data!=null&&File.Exists(Path.Combine(data,"setup-upgrade.log"));
+  };
+  progressTimer.Start(); FormClosed+=delegate {progressTimer.Dispose();};
   Shown+=async delegate { while(true) {try {
-   if(!installationSelected){if(!SelectInstallation()){Close();return;}installationSelected=true;}
+   if(!installationSelected){if(!SelectInstallation()){Close();return;}installationSelected=true;elapsed.Restart();lastProgress=TimeSpan.Zero;}
    await Task.Run((Action)Run);
    try{File.Delete(Path.Combine(root,"launcher-error.txt"));}catch{}
    if(showCompletion&&TestRoot==null)MessageBox.Show("安装完成，酒馆已启动。\n\n以后请从桌面或开始菜单打开「DSH Tavern」。\n\n程序位置："+root+"\n数据位置："+data+"\n\n下载的安装包可以删除。请勿直接运行 runtime 文件夹中的 DSH Desktop.exe。", "DSH Tavern",MessageBoxButtons.OK,MessageBoxIcon.Information);
    Close(); return; } catch(Exception e) {
    try {Directory.CreateDirectory(root);File.WriteAllText(Path.Combine(root,"launcher-error.txt"),e.ToString());}catch{}
    if(TestRoot!=null){Environment.ExitCode=1;Close();return;}
-   if(MessageBox.Show("启动失败："+e.Message+"\n\n文件位置："+root,"DSH Tavern",MessageBoxButtons.RetryCancel,MessageBoxIcon.Warning)==DialogResult.Retry)continue;
+   progressTimer.Stop();
+   if(MessageBox.Show("启动失败："+e.Message+"\n\n文件位置："+root,"DSH Tavern",MessageBoxButtons.RetryCancel,MessageBoxIcon.Warning)==DialogResult.Retry){elapsed.Restart();lastProgress=TimeSpan.Zero;lastStatus="";progressTimer.Start();continue;}
    Environment.ExitCode=1; Close(); return;
   }}};
  }
@@ -157,7 +171,7 @@ class Launcher : Form {
    link.GetType().InvokeMember("Save",BindingFlags.InvokeMethod,null,link,null);
   } finally {if(link!=null)Marshal.FinalReleaseComObject(link);if(shell!=null)Marshal.FinalReleaseComObject(shell);}
  }
- void Status(string text,int percent=-1) { BeginInvoke((Action)(()=>{label.Text=text;bar.Style=percent<0?ProgressBarStyle.Marquee:ProgressBarStyle.Continuous;if(percent>=0)bar.Value=Math.Min(100,percent);})); }
+ void Status(string text,int percent=-1) { BeginInvoke((Action)(()=>{if(text!=lastStatus){lastProgress=elapsed.Elapsed;lastStatus=text;}label.Text=text;bar.Style=percent<0?ProgressBarStyle.Marquee:ProgressBarStyle.Continuous;if(percent>=0)bar.Value=Math.Min(100,percent);})); }
  void Resource(string name,string path) {using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var f=File.Create(path))s.CopyTo(f);}
  static string Quote(string s) {return "\""+Regex.Replace(s,@"(\\*)""", "$1$1\\\"").TrimEnd('\\')+new string('\\',(s.Length-s.TrimEnd('\\').Length)*2)+"\"";}
  void Run() {
@@ -166,13 +180,15 @@ class Launcher : Form {
   using(var mutex=new Mutex(false,"Local\\DSHTavernPrepare-Online")) {
    Status("正在等待运行文件准备完成…"); bool locked=false;
    try {try {locked=mutex.WaitOne();}catch(AbandonedMutexException){locked=true;}
+    runtime=ChooseRuntime(root);
     if(Array.IndexOf(args,"--prepare-only")<0 && NeedsUpgrade()) StopInstallationProcesses();
     SaveEntry();
-    if(!File.Exists(Path.Combine(runtime,"ready"))) {
+    if(!IsRuntimeReady(runtime)) {
      Status("首次准备运行环境，后续启动无需重复解压…");
      var stage=Path.Combine(root,"preparing-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(stage);
      try {
-     var archive=Path.Combine(stage,"payload.7z");var seven=Path.Combine(stage,"7za.exe");var app=Path.Combine(stage,"app");
+     PrepareRuntime(runtime,delegate(string app) {
+     var archive=Path.Combine(stage,"payload.7z");var seven=Path.Combine(stage,"7za.exe");
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
@@ -183,6 +199,7 @@ class Launcher : Form {
      pi.EnvironmentVariables["TEMP"]=stage;pi.EnvironmentVariables["TMP"]=stage;
      using(var p=Process.Start(pi)) {char[] buf=new char[256];int n;while((n=p.StandardOutput.Read(buf,0,buf.Length))>0){var m=Regex.Match(new string(buf,0,n),@"(\d{1,3})%");if(m.Success)Status("首次准备运行环境："+m.Value,int.Parse(m.Groups[1].Value));}p.WaitForExit();if(p.ExitCode!=0)throw new Exception("解压失败，代码 "+p.ExitCode);}
      if(!File.Exists(Path.Combine(app,"DSH Desktop.exe")))throw new Exception("运行环境不完整");
+     Status("本地处理：解压完成，正在配置运行环境…");
      var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
      var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
      Resource("setupUpgrade",Path.Combine(app,@"resources\setup-upgrade.mjs"));
@@ -192,7 +209,7 @@ class Launcher : Form {
      patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
      patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
      using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
-     Directory.Move(app,runtime);File.WriteAllText(Path.Combine(runtime,"ready"),Version);
+     });
      // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
      // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.
      } finally {TryDeleteTree(stage);}
@@ -210,6 +227,36 @@ class Launcher : Form {
   start.Arguments=string.Join(" ",Array.ConvertAll(args,Quote));
   start.EnvironmentVariables.Remove("ELECTRON_RUN_AS_NODE");
   using(var p=Process.Start(start)){if(Array.IndexOf(args,"--tavern-smoke")>=0){p.WaitForExit();if(p.ExitCode!=0)throw new Exception("启动检查失败");}}
+ }
+ static bool IsRuntimeReady(string path) {
+  try {return File.Exists(Path.Combine(path,"DSH Desktop.exe"))&&File.ReadAllText(Path.Combine(path,"ready"))==Version;}
+  catch(IOException){return false;}
+  catch(UnauthorizedAccessException){return false;}
+ }
+ static string ChooseRuntime(string root) {
+  string legacy=Path.Combine(root,"runtime-"+Version);
+  if(IsRuntimeReady(legacy))return legacy;
+  if(Directory.Exists(root)) {
+   var candidates=Directory.GetDirectories(root,"runtime-"+Version+"-*");
+   Array.Sort(candidates,StringComparer.OrdinalIgnoreCase);
+   foreach(string candidate in candidates)if(IsRuntimeReady(candidate))return candidate;
+  }
+  return legacy+"-"+Guid.NewGuid().ToString("N");
+ }
+ static void PrepareRuntime(string runtime,Action<string> prepare) {
+  if(Directory.Exists(runtime)||File.Exists(runtime))throw new IOException("运行环境目录已存在："+runtime);
+  // Prepare at the final unique path. Renaming a directory containing an open
+  // child file can fail with ERROR_ACCESS_DENIED regardless of elevation.
+  // The exact ready marker is the commit point; incomplete directories are
+  // never selected, even when a scanner prevents best-effort cleanup.
+  bool complete=false;
+  Directory.CreateDirectory(runtime);
+  try {
+   prepare(runtime);
+   if(!File.Exists(Path.Combine(runtime,"DSH Desktop.exe")))throw new IOException("运行环境不完整："+runtime);
+   File.WriteAllText(Path.Combine(runtime,"ready"),Version);
+   complete=true;
+  } finally {if(!complete)TryDeleteTree(runtime);}
  }
  void EnsureTavern() {
   if(!NeedsUpgrade())return;

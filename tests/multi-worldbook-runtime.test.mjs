@@ -12,6 +12,7 @@ test('普通开场的真实 startChat 入口也建立多书快照，并复用交
     const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
     const startSource = source.slice(source.indexOf('async function startChat('), source.indexOf('\n  async function scriptPreviewOf('))
     const start = vm.runInNewContext('(' + startSource + ')', {
+      requestPerformance: { stage(_name, run) { return run() } },
       openingPreparation, groupOfMode: mode => mode === 'card' ? 'card' : 'play',
       conversationInitialization: { async start(input) { return input } }
     })

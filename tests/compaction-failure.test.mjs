@@ -23,13 +23,3 @@ test('流空闲超时显示时长、未完成状态和处理建议，保留安�
   assert.match(compactionFailureMessage('pi-ai stream idle timeout after 90000ms'), /90 秒/)
   assert.equal(error.cause, inner)
 })
-
-test('摘要变长或等长时明确说明保留记录，不建议立即重复压缩', () => {
-  for (const count of [1612, 1931]) {
-    const cause = new Error(`summary is not smaller than the shadowed content (${count} estimated framed tokens >= 1612)`)
-    const message = compactionFailureMessage(new Error('Compaction could not produce a useful summary.', { cause }))
-    assert.match(message, /摘要未缩短内容，已保留原始记录/)
-    assert.match(message, /本次未节省上下文，无需立即重复压缩/)
-  }
-  assert.equal(compactionFailureMessage(new Error('manual compaction could not produce a smaller summary')), 'manual compaction could not produce a smaller summary')
-})

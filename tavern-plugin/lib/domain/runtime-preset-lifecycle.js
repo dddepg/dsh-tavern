@@ -108,7 +108,7 @@ export function projectRuntimePresetRequest(request, snapshot, options = {}) {
   const back = runtimePresetPhaseMessages(snapshot, 'back', options).map(function (message) {
     return Object.assign({}, message, { role: 'user' })
   })
-  const systemText = str(request.system)
+  let systemText = str(request.system)
   const moveSystem = front.length > 0 && systemText !== ''
   if (!moveSystem && front.length === 0 && back.length === 0 && ordinary.length === source.length) return request
   // V3 carries the assembled system prompt as a native message, sometimes
@@ -116,9 +116,36 @@ export function projectRuntimePresetRequest(request, snapshot, options = {}) {
   // presets; ordinary in-story system notes retain their existing treatment.
   const isNativeSystem = message => message.role === 'system' && message.source?.kind === 'plugin' &&
     message.source.plugin === '@deepseek-ai/dsh-system-prompt'
-  const nativeSystems = ordinary.filter(isNativeSystem)
+  let nativeSystems = ordinary.filter(isNativeSystem)
   const history = ordinary.filter(message => !isNativeSystem(message))
-  const systemMessages = moveSystem ? [{
+  // The assembly hook already puts this instruction first. External presets
+  // are projected later, so lift only that known prefix across their boundary.
+  const instruction = str(options.systemAppend).trim()
+  let lifted = false
+  function withoutInstruction(text) {
+    if (!instruction || (text !== instruction && !text.startsWith(instruction + '\n\n'))) return text
+    lifted = true
+    return text.slice(instruction.length).replace(/^\n\n/, '')
+  }
+  if (front.length > 0 && instruction) {
+    systemText = withoutInstruction(systemText)
+    nativeSystems = nativeSystems.flatMap(message => {
+      if (!textOnly(message) || hasToolSemantics(message)) return [message]
+      const text = messageText(message)
+      const remaining = withoutInstruction(text)
+      if (remaining === text) return [message]
+      if (!remaining) return []
+      return [{ ...message, content: [{ type: 'text', text: remaining }], source: {
+        ...message.source,
+        ...(Array.isArray(message.source.sections) ? { sections: message.source.sections.filter(section => section.name !== 'tavern:system-append') } : {})
+      } }]
+    })
+  }
+  const instructions = lifted ? [{
+    role: 'system', content: [{ type: 'text', text: instruction }],
+    source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot', sections: [{ name: 'tavern:system-append', text: instruction }] }
+  }] : []
+  const systemMessages = moveSystem && systemText ? [{
     id: 'dsh-tavern-runtime-system-' + randomUUID(),
     role: 'system',
     content: [{ type: 'text', text: systemText }],
@@ -129,6 +156,6 @@ export function projectRuntimePresetRequest(request, snapshot, options = {}) {
   }] : []
   return Object.assign({}, request, {
     ...(moveSystem ? { system: '' } : {}),
-    messages: normalizeRuntimeRequestRoles(front.concat(systemMessages, nativeSystems, history, back))
+    messages: normalizeRuntimeRequestRoles(instructions.concat(front, systemMessages, nativeSystems, history, back))
   })
 }

@@ -1,3 +1,4 @@
+import { inputAttachments } from './player-input-content.js'
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
@@ -150,11 +151,11 @@ export function compileSillyTavernRequest(options = {}) {
   const diagnostics = []
   const history = (Array.isArray(options.history) ? options.history : []).map(function (item) {
     const sourceText = str(item.sourceText || item.text || item.content)
-    return { role: role(item.role), content: sourceText, source: { kind: 'chat-history' } }
+    return { role: role(item.role), content: sourceText, ...(item.inputAttachments?.length ? { inputAttachments: inputAttachments(item.inputAttachments) } : {}), source: { kind: 'chat-history' } }
   })
   const inputText = str(options.input).trim()
-  if (inputText !== '') {
-    history.push({ role: 'user', content: inputText, source: { kind: 'current-input' } })
+  if (inputText !== '' || options.inputAttachments?.length) {
+    history.push({ role: 'user', content: inputText, ...(options.inputAttachments?.length ? { inputAttachments: inputAttachments(options.inputAttachments) } : {}), source: { kind: 'current-input' } })
   }
   for (const [index, item] of history.entries()) {
     const rendered = macro(item.content, resolveMacros, state, card)
@@ -205,9 +206,10 @@ export function compileSillyTavernRequest(options = {}) {
       const alreadyProjected = value.source && (value.source.kind === 'chat-history' || value.source.kind === 'current-input' || value.source.kind === 'preset-depth')
       const rendered = alreadyProjected ? { text: value.content, diagnostics: [] } : macro(value.content, resolveMacros, state, card)
       diagnostics.push(...rendered.diagnostics)
-      if (rendered.text.trim() === '') continue
+      if (rendered.text.trim() === '' && !value.inputAttachments?.length) continue
       messages.push({
         role: role(value.role), content: rendered.text,
+        ...(value.inputAttachments?.length ? { inputAttachments: inputAttachments(value.inputAttachments) } : {}),
         ...(value.name ? { name: value.name } : {}),
         source: { kind: entry.marker ? 'marker' : 'preset', entryKey: entry.entryKey, identifier: entry.identifier, name: entry.name }
       })

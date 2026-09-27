@@ -165,3 +165,43 @@ test('角色归一化不合并或破坏 DSH 工具消息', () => {
   assert.equal(projected.messages[3].tool_call_id, 'call-1')
   assert.equal(request.messages[3].role, 'system')
 })
+
+for (const native of [false, true]) test(`附加指令在外部预设之前且只保留一份（${native ? 'V3 消息' : '顶层 system'}）`, () => {
+  const instruction = '用户附加指令\n第二行'
+  const system = instruction + '\n\n内置系统上下文'
+  const nativeSystem = { role: 'system', content: [{ type: 'text', text: system }], source: {
+    kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', sections: [
+      { name: 'tavern:system-append', text: instruction }, { name: 'persona', text: '内置系统上下文' }
+    ]
+  } }
+  const request = { ...(native ? {} : { system }), messages: [
+    ...(native ? [nativeSystem] : []), { role: 'user', content: [{ type: 'text', text: '本轮输入' }] }
+  ] }
+  const before = structuredClone(request)
+  const snapshot = { front: { entries: [{ role: 'system', content: '外部预设前段' }] }, back: { entries: [{ role: 'system', content: '外部预设后段' }] } }
+  const result = projectRuntimePresetRequest(request, snapshot, { systemAppend: instruction })
+  assert.deepEqual(result.messages.map(m => [m.role, m.content[0].text]), [
+    ['system', instruction + '\n\n外部预设前段\n\n内置系统上下文'], ['user', '本轮输入\n\n外部预设后段']
+  ])
+  assert.equal(result.messages[0].source.sections[0].name, 'tavern:system-append')
+  assert.equal(result.messages[0].source.sections.filter(s => s.name === 'tavern:system-append').length, 1)
+  assert.deepEqual(request, before)
+  assert.equal(projectRuntimePresetRequest(request, null, { systemAppend: instruction }), request)
+})
+
+test('关闭或未组装附加指令时不注入、不从历史中删除相同文字', () => {
+  const request = { system: '内置系统', messages: [{ role: 'user', content: [{ type: 'text', text: '附加指令' }] }] }
+  const snapshot = { front: { entries: [{ content: '外部预设' }] } }
+  for (const systemAppend of ['', '附加指令']) {
+    const result = projectRuntimePresetRequest(request, snapshot, { systemAppend })
+    assert.equal(result.messages[0].content[0].text, '外部预设\n\n内置系统')
+    assert.equal(result.messages[1].content[0].text, '附加指令')
+  }
+})
+
+test('只有附加指令时不留下空 system，预设内容仍然保留', () => {
+  const result = projectRuntimePresetRequest({ system: '附加', messages: [] }, { front: { entries: [{ content: '预设' }] } }, { systemAppend: '附加' })
+  assert.equal(result.system, '')
+  assert.equal(result.messages.length, 1)
+  assert.equal(result.messages[0].content[0].text, '附加\n\n预设')
+})

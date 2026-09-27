@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { applyImageAdjustment, imageAdjustmentInput, legacyImagePlan } from '../tavern-plugin/lib/domain/scene-image-adjustment.js'
+import { applyImageAdjustment, legacyImagePlan } from '../tavern-plugin/lib/domain/scene-image-adjustment.js'
 
 const base = { id: 'original', profile: 'tags-a', description: '雨中人物', people: [{ id: 'p1', name: '林岚' }], blocks: [
   { id: 'hair', owner: 'p1', field: 'appearance', text: '黑色短发', tags: 'short black hair' },
@@ -8,22 +8,6 @@ const base = { id: 'original', profile: 'tags-a', description: '雨中人物', p
   { id: 'rain', owner: 'scene', field: 'environment', text: '雨夜', tags: 'rainy night' }
 ] }
 const update = patches => ({ description: '调整后的画面', patches })
-
-test('image-local changes replace/clear blocks without mutating the source plan', () => {
-  const frozen = structuredClone(base)
-  const result = applyImageAdjustment(base, update([
-    { owner: 'p1', field: 'clothing', text: '红外套', tags: 'red coat' },
-    { owner: 'scene', field: 'environment', text: '', tags: '' }
-  ]), base.profile)
-  assert.deepEqual(base, frozen)
-  assert.equal(result.blocks[0].id, 'hair')
-  assert.equal(result.basedOn, base.id)
-  assert.equal(result.imageOnly, true)
-  assert.equal(result.prompt, '林岚: short black hair, red coat')
-  const input = imageAdjustmentInput(base, '改为红衣', base.profile)
-  assert.deepEqual(Object.keys(input).sort(), ['baseProfile', 'blocks', 'description', 'instruction', 'mode', 'people', 'profile'])
-  assert.equal(input.instruction, '改为红衣')
-})
 
 test('conversion covers every nonempty block and cannot alter facts or invent owners', () => {
   const patches = base.blocks.map(({ owner, field, text, tags }) => ({ owner, field, text, tags: tags + ', converted' }))

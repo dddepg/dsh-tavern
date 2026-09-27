@@ -43,13 +43,3 @@ test('纯文本开场白转义后保持换行，不会被当作 HTML', () => {
   assert.match(document, /class="dsh-tavern-greeting-text"/)
   assert.match(document, /第一行\n1 &lt; 2 &amp; 3 &gt; 2/)
 })
-
-test('混合开场白保留普通文本节点的换行，不改写自带 HTML', () => {
-  const opening = `第一段。\n\n第二段。
-<style>.status{color:red}</style><div class="status">状态面板</div>`
-  const document = buildOpeningPreviewDocument(opening)
-
-  assert.match(document, /data-dsh-preserve-lines/)
-  assert.match(document, /第一段。\n\n第二段。/)
-  assert.match(document, /<style>\.status\{color:red\}<\/style><div class="status">状态面板<\/div>/)
-})

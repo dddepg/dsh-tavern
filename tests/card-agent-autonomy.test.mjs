@@ -12,7 +12,7 @@ const scriptTask = await read('tavern-plugin/prompts/card-task-script.md')
 const advancedSkill = await read('presets/tavern/skills/advanced-capabilities/SKILL.md')
 const mvuSkill = await read('presets/tavern/skills/card-to-mvu/SKILL.md')
 
-test('卡片 system 默认空白，任务与技能独立保留', () => {
+test('卡片 system 与任务技能独立保留', () => {
   assert.equal(typeof cardMode, 'string')
   assert.doesNotMatch(advancedSkill, /普通 Tavern 资源能由专用工具完成时，仍优先走专用工具/)
 })
@@ -25,7 +25,7 @@ test('任务提示继承用户已有授权，不强制重复确认或禁止适�
 })
 
 test('MVU 转换 Skill 说明专用工具、来源保护和清理边界', () => {
-  assert.match(mvuSkill, /`tavern_convert_to_mvu\.inspect`/)
+  assert.match(mvuSkill, /`tavern_card_draft\.inspect`/)
   assert.match(mvuSkill, /默认保留无关字段/)
   assert.match(mvuSkill, /原卡和共享资源保持不变/)
   assert.match(mvuSkill, /保留内容由工具复制/)

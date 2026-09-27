@@ -134,7 +134,7 @@ export function createSceneIllustrations(deps) {
   const statusReads = new Map()
   function readStatusChat(sessionId) {
     if (!statusReads.has(sessionId)) {
-      const pending = Promise.resolve().then(() => deps.chatForSession(sessionId)).finally(() => statusReads.delete(sessionId))
+      const pending = Promise.resolve().then(() => (deps.sceneStateForSession || deps.chatForSession)(sessionId)).finally(() => statusReads.delete(sessionId))
       statusReads.set(sessionId, pending)
     }
     return statusReads.get(sessionId)
@@ -247,6 +247,8 @@ export function createSceneIllustrations(deps) {
     return present(target, record)
   }
   async function start(sessionId, turn, expectedKey, options = {}) {
+    const conversation = await deps.backgroundConfigForSession?.(sessionId)
+    if (conversation?.sceneImagesEnabled === false) throw new Error('请先在本局设置中开启场景生图')
     const kind = options.kind || 'generate'
     if (!['generate', 'repaint', 'adjust'].includes(kind)) throw new Error('未知生图操作')
     const instruction = typeof options.instruction === 'string' ? options.instruction.trim() : ''

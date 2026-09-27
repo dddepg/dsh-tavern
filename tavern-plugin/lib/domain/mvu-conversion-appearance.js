@@ -52,7 +52,16 @@ export function freezeMvuAppearance(data, plan) {
     while ((node=walker.nextNode())) if (!['STYLE','SCRIPT'].includes(node.parentElement?.tagName)) for (const m of node.textContent.matchAll(capturePattern)) visible.add(Number(m[1]))
     if (captures.some(n=>!visible.has(n))) throw Error('美化捕获不在可更新的正文文本节点中')
     if (!captures.length) throw Error('美化没有可映射的 $1、$2 状态字段，需专门适配')
-    if (!Array.isArray(plan.bindings) || plan.bindings.length !== captures.length || new Set(plan.bindings.map(b=>b.capture)).size !== captures.length || plan.bindings.some(b=>!captures.includes(b.capture) || typeof b.path !== 'string' || Object.keys(b).some(k=>!['capture','path'].includes(k)))) throw Error('必须为原美化的每个捕获字段提供唯一变量映射')
+    if (!Array.isArray(plan.bindings) || plan.bindings.length !== captures.length || new Set(plan.bindings.map(b=>b.capture)).size !== captures.length || plan.bindings.some(b=>!captures.includes(b.capture) || typeof b.path !== 'string' || Object.keys(b).some(k=>!['capture','path','display'].includes(k) || k==='display' && !['text','list'].includes(b[k])))) throw Error('必须为原美化的每个捕获字段提供唯一变量映射')
+    for (const binding of plan.bindings.filter(binding=>binding.display==='list')) {
+      const texts=doc.createTreeWalker(doc.body,dom.window.NodeFilter.SHOW_TEXT)
+      let text
+      while ((text=texts.nextNode())) {
+        if (![...text.nodeValue.matchAll(capturePattern)].some(match=>Number(match[1])===binding.capture)) continue
+        const item=text.parentElement,list=item?.parentElement
+        if (text.nodeValue!=='$'+binding.capture || item?.tagName!=='LI' || item.childNodes.length!==1 || !['UL','OL'].includes(list?.tagName) || list.children.length!==1) throw Error('列表绑定需要独立 ul/ol 内的单个 li 文本占位')
+      }
+    }
     return { version:1, ...(plan.collectionPath ? {collectionPath:plan.collectionPath} : {}), sourcePath:entry.path, sourceDigest:entry.digest, html, htmlDigest:hash(html), bindings:structuredClone(plan.bindings) }
   } finally { dom.window.close() }
 }
@@ -76,7 +85,7 @@ export function renderFrozenAppearance(frozen, pointerKeys, initialState) {
       if (value == null || !Object.hasOwn(value,key)) throw Error('美化变量路径不存在: '+binding.path)
       value=value[key]
     }
-    return {capture:binding.capture,keys}
+    return {capture:binding.capture,keys,display:binding.display}
   })
   const encoded=JSON.stringify(bindings).replace(/</g,'\\u003c')
   const script=`<script data-dsh-frozen-mvu>
@@ -85,7 +94,7 @@ const bindings=${encoded};
 const collectionKeys=${JSON.stringify(collectionKeys).replace(/</g,'\\u003c')};
 const nodes=[];const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;
 while((node=walker.nextNode())){if(['SCRIPT','STYLE'].includes(node.parentElement?.tagName))continue;if(/[\\x24]([1-9]\\d?)/.test(node.nodeValue))nodes.push({node,source:node.nodeValue});}
-function bind(items,state){const values={};for(const binding of bindings){let value=state;for(const key of binding.keys)value=value!=null&&Object.prototype.hasOwnProperty.call(value,key)?value[key]:undefined;values[binding.capture]=value==null?'':typeof value==='object'?JSON.stringify(value):String(value);}for(const item of items)item.node.nodeValue=item.source.replace(/[\\x24]([1-9]\\d?)/g,(_,id)=>values[id]??'');}
+function bind(items,state){const values={};for(const binding of bindings){let value=state;for(const key of binding.keys)value=value!=null&&Object.prototype.hasOwnProperty.call(value,key)?value[key]:undefined;values[binding.capture]=binding.display==='list'?(Array.isArray(value)?value:value==null?[]:[value]):value==null?'':typeof value==='object'?JSON.stringify(value):String(value);}for(const item of items){const match=item.source.match(/^[\\x24]([1-9]\\d?)/);const list=match&&match[0]===item.source&&bindings.find(binding=>binding.capture===Number(match[1])&&binding.display==='list');if(list){item.list??=item.node.parentElement?.parentElement;if(!item.list||!['UL','OL'].includes(item.list.tagName))throw Error('列表组件需要独立的 ul/ol 与 li 占位');item.list.replaceChildren(...values[list.capture].map(value=>{const li=document.createElement('li');li.textContent=typeof value==='object'?JSON.stringify(value):String(value);return li;}));continue;}item.node.nodeValue=item.source.replace(/[\\x24]([1-9]\\d?)/g,(_,id)=>values[id]??'');}}
 let prototypeView,container;const members=new Map();
 if(collectionKeys){prototypeView=document.createElement('template');for(const child of [...document.body.childNodes]){if(child.nodeName==='SCRIPT'||child.nodeName==='STYLE')continue;prototypeView.content.appendChild(child);}container=document.createElement('div');document.body.appendChild(container);}
 function render(){const state=Mvu.getMvuData({type:'message',message_id:'latest'}).stat_data;if(!collectionKeys){bind(nodes,state);return;}let collection=state;for(const key of collectionKeys)collection=collection?.[key];const entries=Object.entries(collection||{}).filter(([key])=>!key.startsWith('$')&&!key.startsWith('__'));const active=new Set(entries.map(([key])=>key));for(const [key,item] of members)if(!active.has(key)){item.root.remove();members.delete(key);}for(const [key,value] of entries){let item=members.get(key);if(!item){const root=document.createElement('div');root.appendChild(prototypeView.content.cloneNode(true));const items=[],walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let text;while((text=walk.nextNode()))if(!['STYLE','SCRIPT'].includes(text.parentElement?.tagName))items.push({node:text,source:text.nodeValue});item={root,items};members.set(key,item);container.appendChild(root);}bind(item.items,value);}}

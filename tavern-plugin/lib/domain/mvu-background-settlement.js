@@ -87,6 +87,20 @@ function retryPromptState(variables, initialSchema) {
   }
 }
 
+// Bounded per-failure evidence avoids forcing another lookup merely to discover
+// which submitted value the card discarded. Never infer the card's allowed set.
+function rejectedOperations(operations, failures, after) {
+  const json = value => {
+    const text = JSON.stringify(value)
+    return text === undefined ? '(missing)' : text.length > 1024 ? text.slice(0, 1024) + '…(truncated)' : text
+  }
+  return operations.filter(operation => failures.some(failure => failure.path === operation.path && failure.operation === operation.op)).slice(0, 20).map(operation => ({
+    operation: operation.op, path: operation.path,
+    ...(Object.hasOwn(operation, 'value') ? {submittedJson:json(operation.value)} : {}),
+    observedJson: json(valueAtPointer(after, variablesPointer(operation.path)).value)
+  }))
+}
+
 function pointerSegment(value) {
   return str(value).replaceAll('~', '~0').replaceAll('/', '~1')
 }
@@ -413,6 +427,7 @@ export function createMvuSettlementModule(options = {}) {
   async function applySubmission(input, frame, submission, diagnosticId) {
     if (input.onSubmission) await input.onSubmission(clone(submission))
     const applied = await options.runtime.settleMvuUpdate({
+      compactResult: true,
       durable: Boolean(input.onSubmission), signal: input.signal,
       operationId: input.operationId,
       chatId: input.chatId, branchId: input.branchId, basedOnRevision: input.basedOnRevision,
@@ -426,7 +441,7 @@ export function createMvuSettlementModule(options = {}) {
     })
     if (applied.deferred === true || applied.stale === true) return { applied }
     const projected = applied.context?.messages?.[input.messageId]
-    const after = clone(projected?.variables || {})
+    const after = clone(applied.variables || projected?.variables || {})
     const audit = applied.validation || auditMvuSettlement(input.currentVariables, after, submission.operations)
     const rolledBack = applied.rejected === true
     const changes = rolledBack ? [] : audit.changes
@@ -573,7 +588,7 @@ export function createMvuSettlementModule(options = {}) {
         retryable: rolledBack && applied.applied.retryable === true && attempt < maxAttempts,
         rolledBack, status, changes, failures: audit.failures,
         runtimeDiagnostics: applied.applied.diagnostics || [],
-        ...(audit.failures.length === 0 ? {} : { error: '变量更新未通过校验；请根据具体错误修正。', ...retryPromptState(after, frame.authoritativeState.variableSchema) }),
+        ...(audit.failures.length === 0 ? {} : { error: '变量更新未通过校验；请对照 rejectedOperations 的提交值与执行后值检查人物卡约束，修正完整 operations，不得原样重试失败项，也不得绕过校验。', rejectedOperations: rejectedOperations(submission.operations, audit.failures, after), ...retryPromptState(after, frame.authoritativeState.variableSchema) }),
         attemptsRemaining: maxAttempts - attempt
       }
       await record('result', { status, rolledBack, retryable: feedback.retryable, variables: variableDiagnosticSummary(after), changes, sideEffects, failures: audit.failures, runtimeDiagnostics: applied.applied.diagnostics || [] })
@@ -604,7 +619,7 @@ export function createMvuSettlementModule(options = {}) {
       traceSessionId = str(error.traceSessionId) || traceSessionId
       await record('model-failed', { error: str(error.message || error) })
       // Never re-run the entire model task after a possible commit.
-      if (!result) {
+      if (!result || (error.cause?.code === 'BACKGROUND_MODEL_IDLE_TIMEOUT' && !['updated', 'unchanged'].includes(result.receipt?.status))) {
         error.traceSessionId = traceSessionId
         throw error
       }

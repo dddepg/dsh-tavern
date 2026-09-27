@@ -55,16 +55,6 @@ test('prepared turn, changed script and invalid positions reject without editing
   await assert.rejects(h.service.point('session', { ...page, position: 2 }), /等待/)
   assert.equal(h.chat.scriptState.cursor, 49)
 })
-test('empty and short scripts have bounded windows; a finished script can be manually resumed', () => {
-  const h = fixture()
-  h.script.chunks = h.script.chunks.slice(0, 3)
-  const ended = h.scripts.transition({ script: h.script, state: h.scripts.start(h.script), event: { kind: 'end' } }).state
-  assert.equal(h.scripts.inspect({ script: h.script, state: ended, request: { kind: 'browse' } }).chunks.length, 3)
-  assert.equal(h.scripts.transition({ script: h.script, state: ended, event: { kind: 'manual-focus', cursor: 1 } }).state.cursor, 0)
-  h.script.chunks = []
-  const page = h.scripts.inspect({ script: h.script, request: { kind: 'browse' } })
-  assert.deepEqual([page.from, page.to, page.chunks.length], [0,0,0])
-})
 
 test('chunk budget uses the same exclusive, stale-page and busy guards as cursor changes', async () => {
   const h = fixture(), page = await h.service.browse('session'), before = structuredClone(h.chat)

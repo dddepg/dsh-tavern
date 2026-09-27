@@ -1,3 +1,5 @@
+import { inputAttachments } from './player-input-content.js'
+
 const DEFAULT_PLACEHOLDER = '[Start a new chat]'
 
 function str(value) {
@@ -6,6 +8,7 @@ function str(value) {
 
 function cloneMessage(message) {
   const copy = Object.assign({}, message)
+  if (message?.inputAttachments?.length) copy.inputAttachments = inputAttachments(message.inputAttachments)
   copy.content = str(message && message.content)
   if (Array.isArray(message && message.tool_calls)) {
     copy.tool_calls = message.tool_calls.map(function (item) { return Object.assign({}, item) })
@@ -36,8 +39,9 @@ function squashConsecutiveRoles(messages) {
   const merged = []
   for (const message of messages) {
     const previous = merged[merged.length - 1]
-    if (previous && previous.role === message.role && message.content && message.role !== 'tool') {
-      previous.content += '\n\n' + message.content
+    if (previous && previous.role === message.role && (message.content || message.inputAttachments?.length) && message.role !== 'tool') {
+      if (message.content) previous.content += (previous.content ? '\n\n' : '') + message.content
+      if (message.inputAttachments?.length) previous.inputAttachments = [...(previous.inputAttachments || []), ...message.inputAttachments]
     } else {
       merged.push(message)
     }
@@ -47,7 +51,7 @@ function squashConsecutiveRoles(messages) {
 
 /**
  * Reproduce SillyTavern 1.18.0 `strict_tools` prompt post-processing for the
- * text-only messages produced by the compatibility compiler.
+ * messages produced by the compatibility compiler.
  */
 export function applySillyTavernStrictTools(messages, options = {}) {
   const names = {

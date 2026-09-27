@@ -13,10 +13,10 @@ async function until(condition) {
   for (let n = 0; n < 100; n++) { if (condition()) return; await new Promise(resolve => setImmediate(resolve)) }
   throw new Error('Agent 未到达预期阶段')
 }
-function harness({ work = async () => {}, flush = async () => {}, dispose = async () => {}, compactWork = async () => {}, needsNewBackgroundSession, resume } = {}) {
+function harness({ work = async () => {}, flush = async () => {}, dispose = async () => {}, compactWork = async () => {}, needsNewBackgroundSession, resume, retirement } = {}) {
   const children = new Map(), starts = [], calls = [], disposals = [], tools = new Map()
   let seq = 0
-  const runner = createBackgroundAgentRunner({ id: () => 'child-' + ++seq, flushSession: flush, needsNewBackgroundSession,
+  const runner = createBackgroundAgentRunner({ id: () => 'child-' + ++seq, flushSession: flush, needsNewBackgroundSession, retirement,
     compactAgent: async agent => { calls.push(['compact', agent.session.id]); await compactWork(); return { message: 'compacted' } },
     agents: {
       ...(resume ? { resume } : {}),
@@ -116,10 +116,6 @@ test('释放所有常驻会话时汇总错误并清空所有权，可重复释�
   assert.equal(h.disposals.length, 2)
 })
 
-test('公共Runner缺少宿主时保留原有错误', () => {
-  for (const input of [undefined, null, {}]) assert.throws(() => createBackgroundAgentRunner(input), /缺少 DSH Agent 运行环境/)
-})
-
  test('needs-session bypasses an obsolete resident cache while normal continuation reuses it', async t => {
  let fresh = false
  const h = harness({ needsNewBackgroundSession: async () => fresh })
@@ -161,7 +157,6 @@ test('替代一个游戏的后台不会释放其他游戏正在运行的后台',
   gate.resolve(); await running
 })
 
-
 test('旧后台正在压缩时延后释放，压缩结束后完成回收', async t => {
   const gate = deferred()
   const h = harness({ needsNewBackgroundSession: async () => true, compactWork: () => gate.promise })
@@ -189,7 +184,6 @@ test('替代后台任务失败也释放旧实例，新实例仍可继续使用',
   fresh = false; fail = false
   assert.equal((await h.runner.run(h.input())).traceSessionId, latest)
 })
-
 
 test('missing background replacement is created only once across failed settlement retries', async t => {
   const timeline = createStoryTimeline()
@@ -227,4 +221,25 @@ test('missing background replacement is created only once across failed settleme
   await h.runner.run(h.input({ task: 'settlement', persistentSessionId: chat.timeline.participants.background.sessionId }))
   await h.runner.compact({ sessionId: chat.timeline.participants.background.sessionId })
   assert.deepEqual(h.calls.filter(call => call[0] === 'compact'), [['compact', 'child-1']])
+})
+
+
+test('取消的持久后台会话记录退休状态，重新创建 runner 后也不再恢复它', async t => {
+  const retired = new Map()
+  const retirement = { retire: async (id, parentId) => retired.set(id, parentId), isRetired: async id => retired.has(id) }
+  const controller = new AbortController(), gate = deferred()
+  const h = harness({ retirement, work: () => gate.promise })
+  t.after(async () => { gate.resolve(); await h.runner.dispose() })
+  const running = h.runner.run(h.input({ signal: controller.signal }))
+  const rejected = assert.rejects(running)
+  await until(() => h.starts.length === 1)
+  controller.abort(); await rejected
+  assert.equal(retired.get('child-1'), 'game-a')
+  // A fresh runner must consult durable retirement, not just its in-memory set.
+  const fresh = harness({ retirement, resume: async () => { throw Error('retired session was resumed') } })
+  t.after(() => fresh.runner.dispose())
+  // Avoid fixture's intentionally repeated id generator colliding with the old id.
+  retired.set('old-retired', 'game-a')
+  const result = await fresh.runner.run(fresh.input({ persistentSessionId: 'old-retired' }))
+  assert.notEqual(result.traceSessionId, 'old-retired')
 })

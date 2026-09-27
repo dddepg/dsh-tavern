@@ -218,6 +218,11 @@ function isStandaloneWorldBook(raw) {
   })
 }
 
+export function projectCardSummary(value) {
+  const data = rawData(rawOf(value))
+  return { name: str(data.name).trim() || '未命名角色', importedAt: Number(value?.meta?.importedAt) || 0 }
+}
+
 function projectedCard(value) {
   const raw = rawOf(value)
   if (!object(raw)) throw new Error('人物卡格式错误')

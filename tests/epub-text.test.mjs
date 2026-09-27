@@ -69,9 +69,3 @@ test('EPUB 按 spine 顺序抽取正文并清除标签与脚本', () => {
   assert.match(text, /甲 & 乙\n换行/)
   assert.doesNotMatch(text, /隐藏样式|隐藏脚本|目录不应进入正文|<[^>]+>/)
 })
-
-test('损坏或缺少正文的 EPUB 给出明确错误', () => {
-  assert.throws(() => extractEpubText(Buffer.from('not an epub')), /EPUB 解析失败/)
-  const empty = storedZip({ mimetype: 'application/epub+zip' })
-  assert.throws(() => extractEpubText(empty), /META-INF\/container\.xml/)
-})

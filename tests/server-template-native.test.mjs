@@ -24,7 +24,7 @@ test('server engine uses real journal, delta snapshots, persistent variable writ
  readCard:async()=>({name:'Alice',mes_example:'',description:'',personality:'',scenario:''}),scriptDispatch:{},globalVariables:globals,fullExtensionSettings:createTavernExtensionSettings(store),modelFor:()=>model,
  worldBooks:{bound:async()=>({source:{kind:'standalone',path:'book'},view:{displayName:'book'}}),export:async()=>({document:{entries:{0:{uid:0,comment:'Guide',key:[],constant:true,content:'HP <%= getMessageVar("hp") %>',position:0,order:100}}}})}})
  const sync=[]
- const runtime=createServerTemplateRuntime({store,rpc:async(method,args)=>{
+ const runtime=createServerTemplateRuntime({store,onDiagnostic:diagnostic=>t.diagnostic(JSON.stringify(diagnostic)),rpc:async(method,args)=>{
   if(method==='getFullPromptTemplateState'){const result=await adapter.readFullPromptTemplateState(args.sessionId,args.cursor);sync.push(result.delta?'delta':'full');return result}
   if(method==='saveFullPromptTemplateSettings')return adapter.saveFullPromptTemplateSettings(args.sessionId,args.settings,args.expectedSettings)
   if(method==='saveFullPromptTemplateState')return adapter.saveFullPromptTemplateState(args.sessionId,args.state)

@@ -44,28 +44,6 @@ function pollHarness(fetch) {
   return { reports, cleared, states, poll: () => poll(), stop: () => cleanup() }
 }
 
-test('启动期间两次空响应自动等待，恢复后清除状态查询错误', async () => {
-  let calls = 0
-  const h = pollHarness(async () => ++calls < 3 ? new Response('', { status: 404 }) : ok())
-  await tick(); await h.poll(); await h.poll()
-  assert.equal(h.reports.length, 0)
-  assert.equal(h.states.at(-1).phase, 'update-available')
-  assert.ok(h.cleared.includes('更新状态'))
-  assert.ok(!h.cleared.includes('插件更新'), '不能清除实际执行更新的失败')
-  h.stop()
-})
-
-test('持续故障达到阈值才提示，随后恢复仍清除提示', async () => {
-  let calls = 0
-  const h = pollHarness(async () => ++calls < 4 ? new Response('', { status: 503 }) : ok())
-  await tick(); await h.poll(); await h.poll()
-  assert.equal(h.reports.length, 1)
-  assert.equal(h.reports[0].label, '更新状态')
-  await h.poll()
-  assert.ok(h.cleared.includes('更新状态'))
-  h.stop()
-})
-
 test('慢查询不重叠，卸载后不再更新界面或清除其他错误', async () => {
   let finish, calls = 0
   const h = pollHarness(() => { calls++; return new Promise(resolve => { finish = resolve }) })

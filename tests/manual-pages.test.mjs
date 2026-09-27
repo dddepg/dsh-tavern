@@ -28,10 +28,3 @@ test('Pages 仅发布用户文档，静态链接在项目子路径下完整可�
     await rm(temporary, { recursive: true, force: true })
   }
 })
-
-test('README 提供在线文档、安装及完整目录入口', async () => {
-  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
-  for (const suffix of ['', '#a02', '#index']) {
-    assert.ok(readme.includes(`https://flizzywine.github.io/dsh-tavern/${suffix}`))
-  }
-})

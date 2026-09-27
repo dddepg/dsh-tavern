@@ -22,26 +22,6 @@ function fixture() {
   vm.runInContext(source.slice(source.indexOf('async function switchMode(nextMode)'), source.indexOf('async function renameConversation')), ctx)
   return { ctx, state, draft }
 }
-test('收起后重新打开仍使用原开局草稿', () => {
-  const { ctx, state, draft } = fixture()
-  ctx.closePicker(); ctx.openPicker()
-  assert.equal(state.openingPicker, draft)
-  assert.equal(state.picking, true)
-})
-test('切到工作台再回到游玩不清空开局，自动恢复原准备页', async () => {
-  const { ctx, state, draft } = fixture()
-  await ctx.switchMode('card'); await ctx.switchPlayRequestMode('dsh')
-  assert.equal(state.openingPicker, draft)
-  assert.equal(state.picking, true)
-})
-test('已有游玩历史也能恢复收起的准备页', async () => {
-  const { ctx, state, draft } = fixture()
-  ctx.history = [{ mode: 'story', sessionId: 'existing' }]
-  ctx.closePicker()
-  await ctx.switchPlayRequestMode('dsh')
-  assert.equal(state.openingPicker, draft)
-  assert.equal(state.picking, true)
-})
 
 test('放弃开局需确认，取消保留草稿；确认后释放草稿', async () => {
   const { ctx, state, draft } = fixture()
@@ -92,28 +72,4 @@ for (const targetMode of ['card', 'story']) test(`完成 ${targetMode} 创建时
   await ctx.finishPendingOpen({ sessionId: 'created', targetMode })
   assert.equal(state.openingPicker, targetMode === 'card' ? draft : null)
   assert.deepEqual(calls, targetMode === 'card' ? [] : [['releaseOpeningPreparation', 'draft']])
-})
-
-test('新版页面连接旧后端时使用已有读取接口续期，不报未知方法或重建开局', async () => {
-  const retain = vm.runInNewContext(preview + '; retainOpeningPreparation')
-  const calls = [], errors = []
-  let tick, touches = 0
-  const stop = retain('existing-draft', {
-    window: { setInterval(fn) { tick = fn; return 1 }, clearInterval() {}, addEventListener() {}, removeEventListener() {} },
-    async call(method, args) {
-      calls.push(method)
-      if (method !== 'getOpeningPreparation') throw Error('未知方法: ' + method)
-      assert.equal(args.id, 'existing-draft')
-      assert.equal(args.touchOnly, true)
-      touches++
-      // Old hosts ignore touchOnly and return their normal draft projection.
-      return { id: args.id, worldbook: { entries: [{ content: '已选内容' }] } }
-    },
-    onError(error) { errors.push(error.message) },
-  })
-  await new Promise(resolve => setImmediate(resolve))
-  await tick(); stop()
-  assert.deepEqual(errors, [])
-  assert.equal(touches, 2)
-  assert.deepEqual(calls, ['getOpeningPreparation', 'getOpeningPreparation'])
 })

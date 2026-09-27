@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
+import {createInterface} from 'node:readline';
 
 // Bundled bootstrap for both first installation and an explicit Setup upgrade.
 // The normal installed entry does not call this after a successful upgrade.
@@ -35,13 +36,24 @@ try {
   // stderr to the log; Write-Host still reaches that stdout when the console is redirected.
   env.DSH_SETUP_INSTALLER=path.join(resources,'install.ps1');
   const command="$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; try { Invoke-Expression ([IO.File]::ReadAllText($env:DSH_SETUP_INSTALLER,[Text.Encoding]::UTF8)) } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }";
-  console.log('DSH_STATUS 正在安装或更新最新版 Tavern，请等待…');
+  console.log('DSH_STATUS 正在检查更新与下载源…');
   const output=fs.openSync(log,'a');
   let code;
   try {
     const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-OutputFormat','Text','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],
-      {env,windowsHide:true,stdio:['ignore',output,output]});
-    code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve)});
+      {env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+    // Preserve diagnostics, but only forward structured status and package counts.
+    // Arbitrary command output can contain private paths or registry credentials.
+    for(const stream of [child.stdout,child.stderr]) {
+      stream.on('data',chunk=>fs.writeSync(output,chunk));
+      createInterface({input:stream,crlfDelay:Infinity}).on('line',line=>{
+        if(line.startsWith('DSH_STATUS '))console.log(line);
+        const progress=line.match(/Progress: resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/);
+        if(progress)console.log(`DSH_STATUS 安装依赖：已下载 ${progress[3]}，复用 ${progress[2]}，已安装 ${progress[4]}（已解析 ${progress[1]}）`);
+        if(/WARN.*(?:retry|ETIMEDOUT|ECONNRESET|ENOTFOUND|ERR_SOCKET)/i.test(line))console.log('DSH_STATUS 依赖下载遇到网络错误，包管理器正在重试；详细原因见日志。');
+      });
+    }
+    code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)});
   } finally {fs.closeSync(output)}
   if(code!==0)throw Error('安装或更新失败，请查看日志：'+log);
   // Older online installers may have left a pending first-install marker.

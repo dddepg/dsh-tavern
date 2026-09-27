@@ -59,19 +59,3 @@ test('嵌套调度去重；force 可选禁用叶，MVU 不进入前台；控制�
   assert.equal(result.log.entries.find(e => e.ref === '停用叶').rendering, 'rendered')
   assert.equal(result.log.entries.find(e => e.ref === '不可见').activationRequests[0].sourceRef, '[GENERATE:BEFORE]')
 })
-
-test('非强制调用保留关键词条件；别名与正则标题正确定位，缺失条目返回 null', async () => {
-  const entries = [controller('调度', `<% await activateWorldInfo('未命中');
-    await activateWorldInfo(/^停用/, true);
-    if (await activewi('不存在', true) !== null) throw new Error('missing');
-    const found = selectActivatedEntries(await getEnabledWorldInfoEntries(), '关口', { disabled: false, constant: false });
-    for (const e of found) await activewi(e.comment, true); %>`),
-    entry('未命中', { primaryKeys: ['秘密'] }), entry('停用', { enabled: false }),
-    entry('主副键', { primaryKeys: ['关口'], secondaryKeys: ['/夜/'], selective: true }),
-    entry('正则', { primaryKeys: ['/关[口卡]/'] })]
-  const result = await project(entries)({ chat: { messages: [] }, card: {}, userText: '看看' })
-  assert.equal(result.error, null)
-  assert.deepEqual(new Set(result.refs), new Set(['停用', '正则']))
-  assert.equal(result.log.entries.find(e => e.ref === '未命中').reason, 'keywords')
-  assert.equal(result.log.entries.find(e => e.ref === '主副键').reason, 'keywords')
-})

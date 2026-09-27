@@ -1,5 +1,5 @@
 import { createPromptTemplateGlobalVariables } from '../tavern-plugin/lib/domain/prompt-template-global-variables.js'
-import { createNativeTemplateConnection, reconcileTemplateReceipt } from '../tavern-plugin/lib/vendor/st-prompt-template/host-build/native-connection.js'
+import { createNativeTemplateConnection } from '../tavern-plugin/lib/vendor/st-prompt-template/host-build/native-connection.js'
 import { createProfileDataStore } from '../tavern-plugin/lib/profile-data-store.js'
 import { createTavernExtensionSettings } from '../tavern-plugin/lib/domain/tavern-extension-settings.js'
 import test from 'node:test'
@@ -81,7 +81,6 @@ test('官方模板永久改写正文与变量原子保存',async t=>{
   assert.equal(saved.messages[0].sourceText,'模板改写正文')
 })
 
-
 test('浏览器连接使用实际宿主接口保存设置与变量，回执推进读取版本',async t=>{
   const {adapter,open}=await fixture(t)
   const rpc=async(method,args)=>{
@@ -108,17 +107,6 @@ test('浏览器连接使用实际宿主接口保存设置与变量，回执推�
   await connection.callbacks.saveChatConditional(state)
   assert.equal((await adapter.readFullPromptTemplateState('session')).environment.extension_settings.variables.global.LAST_SEND_TOKENS,166)
 })
-
-test('保存回执保留等待期间的新编辑，合入服务器上的无关更新',()=>{
-  const submitted={variables:{hp:1,mp:2},flags:[true,false]}
-  const current={variables:{hp:3,mp:2},flags:[true,false]}
-  const saved={variables:{hp:1,mp:4,other:7},flags:[true]}
-  const held=current.variables
-  reconcileTemplateReceipt(current,submitted,saved)
-  assert.equal(current.variables,held)
-  assert.deepEqual(current,{variables:{hp:3,mp:4,other:7},flags:[true]})
-})
-
 
 test('纯 EJS 人物卡无需启用 MVU 或配套脚本即可读取和保存模板状态',async t=>{
   const {adapter,persistence}=await fixture(t)
@@ -178,7 +166,6 @@ test('无变化的模板保存不写完整聊天，变量变化只提交一次',
   assert.equal(writes,1)
   assert.equal((await adapter.readFullPromptTemplateState('session')).state.chat[0].variables[0].hp,27)
 })
-
 
 test('增量同步经过原生 journal：追加、变量写入、回退、全局配置及过期游标恢复',async t=>{
   const {adapter,persistence}=await fixture(t)

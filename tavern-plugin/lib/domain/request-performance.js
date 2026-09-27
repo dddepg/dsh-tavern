@@ -4,12 +4,12 @@ import { performance } from 'node:perf_hooks'
 // Only fixed metadata is retained; arguments, paths and response bodies never enter traces.
 export function createRequestPerformance({ now = () => performance.now(), wall = Date.now } = {}) {
   const context = new AsyncLocalStorage()
-  const recent = [], slow = []
+  const recent = [], slow = [], openings = []
   let active = 0
   function append(rows, row, limit) { rows.push(row); if (rows.length > limit) rows.shift() }
   return {
     async run(method, id, operation) {
-      if (!['getSession', 'syncSession'].includes(method)) return operation()
+      if (!['getSession', 'syncSession', 'getCardOpenings', 'initializeOpeningTemplate', 'preparePlayStart', 'startChat'].includes(method)) return operation()
       const start = now(), utilization = performance.eventLoopUtilization()
       const row = { method, id: /^[a-f0-9-]{36}$/.test(id || '') ? id : '', receivedAt: wall(), active: ++active, stages: [] }
       let lastTick = now()
@@ -29,6 +29,7 @@ export function createRequestPerformance({ now = () => performance.now(), wall =
         row.durationMs = Math.round(now() - start)
         row.eventLoopUtilization = performance.eventLoopUtilization(utilization).utilization
         append(recent, row, 120)
+        if (!['getSession', 'syncSession'].includes(method)) append(openings, row, 60)
         if (row.durationMs >= 1000) append(slow, row, 60)
       }
     },
@@ -46,6 +47,6 @@ export function createRequestPerformance({ now = () => performance.now(), wall =
         if (Number.isSafeInteger(helperMessageCount) && helperMessageCount >= 0) row.helperMessageCount = helperMessageCount
       }
     },
-    read() { return structuredClone({ recent, slow }) }
+    read() { return structuredClone({ recent, slow, openings }) }
   }
 }

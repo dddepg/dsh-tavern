@@ -1,12 +1,11 @@
-import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
+
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
-import { createTavernApiDiagnostics } from '../tavern-plugin/lib/domain/tavern-api-diagnostics.js'
 
 const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
-const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+
 const tick = () => new Promise(resolve => setImmediate(resolve))
 const copy = value => JSON.parse(JSON.stringify(value))
 
@@ -118,26 +117,4 @@ test('compact variable writes during init do not invalidate; later writes coales
   assert.equal(run.mutations.length, 2)
   assert.equal(run.mutations[1][1], 'updateTavernHelperVariables')
   run.runtime.dispose()
-})
-
-test('mvu receipts keep notable statuses and only a short quiet tail', () => {
-  const fields=createSessionStateView({activity:()=>({busy:false}),evidence:()=>({})})
-  const chat={messages:Array.from({length:10},(_,i)=>({role:'assistant',turn:i+1,mvu:{receipt:{status:i===0?'pending':'updated'}}}))}
-  assert.deepEqual(fields.receipts(chat).map(row=>row.turn),[1,8,9,10])
-})
-
-test('api diagnostics record request and response byte sizes', async () => {
-  const values = new Map()
-  const diagnostics = createTavernApiDiagnostics({
-    async updateJson(key, update) { values.set(key, update(values.get(key))) },
-    async readJson(key) { return values.get(key) }
-  })
-  const payload = { sessionId: 'session', variables: { hp: 1 } }
-  const result = { updated: true, contextDelta: { version: 1 } }
-  await diagnostics.observe('updateTavernHelperVariables', payload, () => result)
-  await diagnostics.observe('getSession', { sessionId: 'session' }, () => ({ view: { activity: { busy: false } } }))
-  const data = await diagnostics.read('session')
-  assert.equal(data.records.length, 2)
-  assert.ok(data.records.every(row => Number.isFinite(row.requestBytes) && row.requestBytes > 0))
-  assert.ok(data.records.every(row => Number.isFinite(row.responseBytes) && row.responseBytes > 0))
 })

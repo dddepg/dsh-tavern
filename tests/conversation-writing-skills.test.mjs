@@ -42,6 +42,7 @@ test('全局与本局 Skill 面板分别保存，失败不改变开关显示', a
     await toggle().props.onChange({ target: { checked: false } })
     assert.equal(calls.at(-1).method, globalDefaults ? 'setDefaultWritingSkill' : 'setConversationWritingSkill')
     assert.equal(toggle().props.checked, false)
+    assert.match(tree().find(n => n.props?.role === 'status').children.join(''), globalDefaults ? /下次新游戏生效/ : /已生效.*后续请求/)
     fail = true
     await toggle().props.onChange({ target: { checked: true } })
     assert.equal(toggle().props.checked, false)

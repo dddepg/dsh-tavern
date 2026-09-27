@@ -13,8 +13,7 @@
 
 独立 APK 与原版 DSHA 可以同时安装，数据各自独立，不会自动迁移旧聊天。覆盖升级请安装本项目同签名的新 APK；不要为了更新先卸载应用，以免删除应用数据。
 
-Android 仍属实验性支持，不保证一定可用。本包要求 Android 11 及以上、ARM64；已在 MuMu Android 12 验证首次安装、启动、重启及覆盖安装，尚未完成实体手机测试。其他系统版本可参考下方 DSHA 方案。
-
+本包要求 Android 11 及以上、ARM64。其他系统版本可参考下方 DSHA 方案。
 
 [返回项目首页](../README.md) · [在线使用文档](https://flizzywine.github.io/dsh-tavern/)
 
@@ -31,7 +30,24 @@ Android 仍属实验性支持，不保证一定可用。本包要求 Android 11 
 
 Windows Desktop 更新会在数据根目录的 `harness/tools/desktop-package-manager`（普通 Desktop 为 `DSH_HOME/tools/desktop-package-manager`）准备经过 SHA-256 校验的 Node 22.22.3，仅用于包管理。首次需要联网下载，之后复用；不依赖电脑上其他软件附带的 Node，不更换 DSH。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
 
-Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。CLI 与 Desktop 安装和更新均内置 **`dsh-pocket 2.10.6`**（固定版本），并移除冲突的 `dsh-web-mobile`；手机扫码入口在 **设置 → 手机访问**，无需自行安装插件。Android / DSHA 不安装 Pocket，继续使用 `dsh-web-mobile`。切换到下面的 CLI 安装方式不会自动同步这份数据。
+Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。仅 Desktop 安装和更新内置 **`dsh-pocket 2.10.6`**（固定版本），并移除冲突的 `dsh-web-mobile`；手机扫码入口在 **设置 → 手机访问**，无需自行安装插件。CLI 不安装 Pocket，升级时会移除旧版 Pocket。Android / DSHA 不安装 Pocket，继续使用 `dsh-web-mobile`。切换到下面的 CLI 安装方式不会自动同步这份数据。
+
+### 标准插件安装（试验）
+
+适用于已经安装 **DSH 0.1.5-rc.2、Node.js 22.19+、pnpm**、准备新建独立 `tavern` Profile 的用户：
+
+需要 Git，在终端运行：
+
+```bash
+dsh plugin --profile tavern add github:flizzywine/dsh-tavern
+dsh --profile tavern
+```
+
+第一条命令由 DSH 创建 Profile、安装完整运行包并启用酒馆；第二条启动网页。酒馆使用当前 DSH，不会另装或升级宿主。运行包包含 Web 配置、侧栏、人物卡功能、预设和 Skill，无需自行构建。启动时检查 DSH 适配版本。
+
+数据位于当前 `DSH_HOME` 下的 `profile-data/tavern/`；未设置 `DSH_HOME` 时通常为 `~/.dsh/profile-data/tavern/`。程序由 Profile 的包管理器维护。更新时先关闭酒馆，重新运行第一条安装命令，再启动。页面中的「查看更新命令」提供同一条命令，不使用原来的源码更新器。
+
+当前先支持普通 DSH CLI 的新安装。不要往专用安装器已经管理的 `tavern` Profile 直接叠装；原 CLI、Desktop、Android 安装继续使用各自原有方式。这条路线不会迁移旧 CLI 的独立数据，也不附带 Desktop 的 Pocket 手机访问配置或宿主字体文件修改。侧栏终端复用宿主提供的 `node-pty`；宿主缺少此依赖时，终端会显示修复提示，酒馆仍可使用。
 
 ### 命令行及宿主内安装
 
@@ -45,7 +61,7 @@ CLI 首次安装可选择：**默认目录 `~/.dsh-tavern/`、当前目录（回
 | --- | --- | --- |
 | 命令行版（Windows / macOS / Linux） | 使用独立的 DSH `0.1.5-rc.2`；版本匹配且可启动时直接复用，不要求预装 DSH，不复用或替换全局 DSH | 默认 `~/.dsh-tavern/`，与外部 DSH 数据分开 |
 | DSH Desktop | 适配版本：**2.0.13**（内置 DSH `0.1.5-rc.2`），复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | Desktop 的 Tavern Profile 数据目录 |
-| DSHA（Android，实验性支持） | 适配版本：**0.1.5-rc2**（内置 DSH `0.1.5-rc.2`），复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | DSHA 的 Tavern Profile 数据目录 |
+| DSHA（Android） | 适配版本：**0.1.5-rc2**（内置 DSH `0.1.5-rc.2`），复用宿主自带 DSH，要求内置 DSH 版本完全匹配 | DSHA 的 Tavern Profile 数据目录 |
 
 命令行版与 Desktop / DSHA 不再共用一套数据。切换安装方式不会自动同步人物卡或对话；首次升级旧 CLI 时会复制旧 CLI 配置和游戏数据，保留原件，Desktop / DSHA 数据不会自动迁入。
 
@@ -59,7 +75,7 @@ Desktop / DSHA 安装器会检查宿主内置的 DSH 版本：与适配版本不
 
 适配版本：**DSH Desktop 2.0.13**（内置 DSH `0.1.5-rc.2`），内置 DSH 版本必须匹配，否则停止安装。请自行打开 [历史版本下载页面](https://github.com/anywhere-labs/dsh-desktop/releases)，找到 **v2.0.13**，展开 **Assets**，下载适合自己系统的安装包；不要下载 Source code。
 
-安装后，从系统托盘（macOS 菜单栏）打开 **Open DSH Terminal**，运行对应命令：
+安装后，进入 DSH Desktop **设置 → 通用设置**，点击窗口顶部的 **打开 DSH 终端**，在弹出的终端窗口运行对应系统的命令。Windows 使用 PowerShell，macOS 使用下面的终端命令；代码框上方的语言标签不用输入。
 
 Windows：
 
@@ -73,9 +89,11 @@ macOS：
 curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=desktop sh
 ```
 
-安装完成后，重启 DSH Desktop，并从托盘的 **Profile** 菜单选择 **tavern**。Desktop 会自动管理启停和端口；更新 dsh-tavern 时，在 DSH Terminal 中重新运行上述安装命令即可。
+安装完成后，重启 DSH Desktop，进入 **设置 → 桌面设置**，在右侧 **Profile** 列表点击 **tavern**，旁边显示 **当前** 即为选中。Desktop 会自动管理启停和端口；更新 dsh-tavern 时，在 DSH Terminal 中重新运行上述安装命令即可。
 
-旧版内置更新失败时，也直接运行上面的命令：它会获取最新安装器，绕过本地旧更新脚本。Windows 命令按 UTF-8 解码，避免中文乱码。若仍失败，请提供日志最前面的具体错误和文件路径。
+旧版内置更新失败时，也直接运行上面的命令：它会获取安装器，绕过本地旧更新脚本（CDN 缓存可能延迟刷新）。Windows 命令按 UTF-8 解码，避免中文乱码。
+
+Windows 安装失败时，请提供终端显示的 `update-diagnostics.jsonl` 文件，默认位于 `%USERPROFILE%\.dsh\profile-data\tavern\data\`；自定义 `DSH_HOME` 时以终端显示的位置为准。日志记录实际安装路径、失败步骤、退出码和脱敏后的错误输出。包管理环境首次下载失败会尝试三次；文件缺失会直接显示缺失路径。依赖安装期间会实时显示输出。若提示日志写入失败，请保留终端中的具体错误。
 
 ### 命令行版
 
@@ -125,7 +143,7 @@ pnpm run start:tavern
 
 然后使用终端显示的完整访问地址，或运行 `dsh-tavern open`。若当前终端尚未识别该命令，可在仓库目录运行 `node ./bin/dsh-tavern.mjs open`。
 
-如果使用 DSH Desktop，请从托盘打开 **DSH Terminal**，在解压目录运行：
+如果使用 DSH Desktop，请从 **设置 → 通用设置 → 打开 DSH 终端**，在解压目录运行：
 
 ```bash
 node ./bin/dsh-tavern.mjs install --host desktop
@@ -135,7 +153,7 @@ node ./bin/dsh-tavern.mjs install --host desktop
 
 ### Android
 
-> **Android 属于实验性支持，不保证一定可用。** 不同手机系统、DSHA 版本、网络和后台限制都可能导致安装或运行失败。
+> 不同手机系统、DSHA 版本、网络和后台限制都可能导致安装或运行失败。
 
 v2.1 要求宿主 DSH `0.1.5-rc.2`。请安装 **[DSHA v0.1.5-rc2](https://github.com/DSH-APP/DSHA/releases/tag/v0.1.5-rc2)**（内置这个版本）。Android 11 及以上用标准包 `dsha-0.1.5-rc2.apk`，更早的系统用兼容包 `dsha-0.1.5-rc2low.apk`。旧的 DSHA 1.2.0-rc1.4 内置的不是这个版本，安装会停止。历史包见 [DSHA 历史版本下载页面](https://github.com/DSH-APP/DSHA/releases)。
 
@@ -176,31 +194,72 @@ node -e "fetch('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74f5/androi
 
 ### 命令行版的启动、停止与更新
 
-安装完成后，新开一个终端或 PowerShell。
+安装完成后，新开一个 PowerShell / 终端即可使用下列命令。Windows、macOS、Linux / WSL2 的 `dsh-tavern` 命令写法相同。**每次只复制你要执行的那条，不要把整张表依次执行。**
 
-启动：
+| 命令 | 用途 | 什么时候用 |
+| --- | --- | --- |
+| `dsh-tavern start` | 启动酒馆后台服务 | 开机后，或服务已经停止时 |
+| `dsh-tavern open` | 在浏览器中打开当前酒馆 | 服务已启动，但网页关掉了或没有自动打开时 |
+| `dsh-tavern status` | 查看服务状态及可用的访问地址 | 确认是否正在运行，或排查网页打不开时 |
+| `dsh-tavern stop` | 停止酒馆后台服务 | 暂时不用、备份数据或准备覆盖重装时 |
+| `dsh-tavern restart` | 先停止，再启动酒馆服务 | 更新后需要手动重启，或按排错提示重启时 |
+| `dsh-tavern update` | 在原安装位置更新酒馆 | 想通过终端更新时 |
+| `dsh-tavern install` | 使用当前本地程序安装或修复 Tavern Profile、依赖及所需运行时 | 手动部署或修复本地安装配置时 |
+| `dsh-tavern --help` | 显示命令帮助 | 忘记有哪些命令时 |
+
+不带参数运行 `dsh-tavern` 等同于 `dsh-tavern status`。帮助命令也可以写成 `dsh-tavern help` 或 `dsh-tavern -h`。
+
+**启动服务：**
 
 ```bash
 dsh-tavern start
 ```
 
-停止：
+**打开网页：** 只负责打开页面，不会自动启动尚未运行的服务。若提示尚未就绪，先运行上面的启动命令。
+
+```bash
+dsh-tavern open
+```
+
+**查看运行状态和访问地址：** 地址可能包含鉴权 token，请勿公开分享。
+
+```bash
+dsh-tavern status
+```
+
+**停止服务：** 停止后网页无法继续生成，已有聊天和人物卡仍保留。先等当前生成结束并保存编辑内容。
 
 ```bash
 dsh-tavern stop
 ```
 
-重启：
+**重启服务：** 如果浏览器没有恢复连接，完成后再运行 `dsh-tavern open`。
 
 ```bash
 dsh-tavern restart
 ```
 
-更新：
+**更新酒馆：** 更新沿用已安装目录，保留数据。完整覆盖重装步骤见[更新与重新安装](https://flizzywine.github.io/dsh-tavern/#a02--section-9)。
 
 ```bash
 dsh-tavern update
 ```
+
+**安装或修复本地配置：** 此命令使用已经下载到本地的程序，不负责获取最新版酒馆源码。第一次安装请使用上面的完整安装命令；要更新程序，请用 `update`，或按覆盖重装步骤重新执行完整安装命令。
+
+```bash
+dsh-tavern install --host cli
+```
+
+在命令行版环境中，`dsh-tavern install` 默认使用 CLI 宿主；这里显式写出 `--host cli` 便于确认安装目标。`--host desktop` 和 `--host android` 用于对应宿主内安装，命令行版用户无需切换。
+
+**查看帮助：**
+
+```bash
+dsh-tavern --help
+```
+
+**常见操作顺序：** 开机后先 `start` 再 `open`；只关闭了浏览器，直接 `open`；打不开先看 `status`；更新用 `update`；需要停止服务用 `stop`。关闭终端或浏览器不等于停止后台服务。
 
 命令行版的 `dsh-tavern update` 更新插件，并检查独立 DSH 的版本与启动状态；符合要求就直接复用，否则重新安装指定版本。全局 DSH 的升级不会改变这份运行时。Desktop / DSHA 更新只更新酒馆，保留宿主版本；兼容报错时请自行下载适配宿主版本。Desktop 版由 DSH Desktop 统一管理启停。
 
@@ -227,4 +286,3 @@ macOS / Linux：
 ```sh
 DSH_TAVERN_REINSTALL_RUNTIME=1 dsh-tavern update
 ```
-

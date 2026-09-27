@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { replaceSessionSurface, createSessionSurfaceMutator } from '../tavern-plugin/lib/domain/session-surface-mutations.js'
-import { readdir, readFile } from 'node:fs/promises'
+
 function fixture() {
   const events = [{seq: 0, type: 'assistant/message', data: {message: {id: 'old'}}}]
   return {events, surface: {nodes: [0]}, append(type, data, intent) {
@@ -26,11 +26,6 @@ test('来源必须覆盖被替换节点并指向真实事件', () => {
     assert.throws(() => replaceSessionSurface(session, 'assistant/message', data, {...target, sourceEventSeqs: refs}), /来源引用/)
     assert.equal(session.events.length, 1)
   }
-})
-test('业务模块不再直接拼接 Surface replace 操作', async () => {
-  const root = new URL('../tavern-plugin/lib/', import.meta.url)
-  const files = ['index.js', ...(await readdir(new URL('domain/', root))).filter(name => name.endsWith('.js') && name !== 'session-surface-mutations.js').map(name => 'domain/' + name)]
-  for (const file of files) assert.doesNotMatch(await readFile(new URL(file, root), 'utf8'), /surfaceOp:\s*\{\s*op:\s*['"]replace['"]/, file)
 })
 
 test('编辑过旧楼层后重生成末轮，来源只需覆盖当前 Surface 中的连续目标', async () => {

@@ -18,7 +18,7 @@ export async function buildTemplatePlugin({ dependencyRoot, outputPath }) {
     mode: 'production', target: 'web', context: root, entry: resolve(here, 'entry.js'),
     output: { path: resolve(outputPath), filename: 'index.js', chunkFilename: '[name].[contenthash].js', library: { type: 'module' }, publicPath: 'auto', clean: true },
     experiments: { outputModule: true },
-    resolve: { extensions: ['.ts', '.js'], modules: [resolve(dependencyRoot, 'node_modules'), 'node_modules'] },
+    resolve: { extensions: ['.ts', '.js'], alias: { marked$: createRequire(import.meta.url).resolve('marked') }, modules: [resolve(dependencyRoot, 'node_modules'), 'node_modules'] },
     module: { rules: [
       { resourceQuery: /language-only/, enforce: 'pre', use: resolve(here, 'editor-language-loader.cjs') },
       { test: /\.ts$/, exclude: /node_modules/, use: { loader: require.resolve('babel-loader'), options: { configFile: false, babelrc: false, presets: [require.resolve('@babel/preset-typescript')] } } },

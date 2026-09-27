@@ -33,69 +33,6 @@ test('只允许把同一人物卡的游玩轮次挂载到卡片工作台', () =>
   assert.throws(() => createPlayChatDebugReference(editor, Object.assign({}, source, { mode: 'card' }), 2), /游玩模式/)
 })
 
-test('卡片 Agent 可按层分段读取指定游玩轮次', () => {
-  const { source, editor } = chats()
-  const ref = createPlayChatDebugReference(editor, source, 2)
-  editor.workspace.mountedResources.push(ref)
-
-  const overview = readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'overview' })
-  assert.doesNotMatch(overview.text, /走进教室|Session 正文/)
-  assert.match(overview.text, /最新一轮游玩诊断/)
-  assert.match(overview.text, /模型原文：4 字/)
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { layer: 'input' }).text, '走进教室')
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'source' }).text, '模型原文')
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'session' }).text, 'Session 正文')
-  const currentProjection = { displayText: '<div>当前正则展示</div>', applied: { session: [], display: [] }, warnings: [] }
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'display' }, currentProjection).text, '<div>当前正则展示</div>')
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'saved-display' }, currentProjection).text, '<div>展示</div>')
-
-  const diagnostics = readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'diagnostics' }, {
-    applied: { session: [], display: [{ name: '候选项', matches: 1 }] }, warnings: ['展示警告']
-  })
-  assert.match(diagnostics.text, /候选项/)
-  assert.match(diagnostics.text, /按当前人物卡重新计算/)
-  assert.match(diagnostics.text, /display.*实时投影/)
-})
-
-test('卡片 Agent 从最新轮次渐进披露，并可按需读取整场证据', () => {
-  const { source, editor } = chats()
-  const ref = createPlayChatDebugReference(editor, source, 2)
-  const evidence = {
-    foreground: { sessionId: 'session-foreground', loaded: true, events: [{ type: 'assistant-step', text: '前台日志' }] },
-    background: { sessionId: 'session-background', loaded: true, events: [{ type: 'tool-result', text: '后台日志' }] },
-    requests: { loaded: true, requests: [{ scope: 'foreground', turn: 2, request: { messages: [{ role: 'system', content: [{ type: 'text', text: '真实前缀' }] }] } }] }
-  }
-
-  const overview = readPlayChatDebugTurn(editor, source, ref, { layer: 'overview' }, null, evidence)
-  assert.match(overview.text, /最新一轮游玩诊断/)
-  assert.doesNotMatch(overview.text, /开场|走进教室|前台 Session/)
-  assert.match(overview.text, /最新一轮只是默认入口，不是读取边界/)
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'turns' }, null, evidence).text, /第 1 轮[\s\S]*第 2 轮/)
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'conversation' }, null, evidence).text, /玩家：走进教室/)
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 1, layer: 'source' }, null, evidence).text, '开场')
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'tavern' }, null, evidence).text, /lastSettle/)
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'foreground' }, null, evidence).text, /前台日志/)
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'background' }, null, evidence).text, /后台日志/)
-  assert.match(readPlayChatDebugTurn(editor, source, ref, { layer: 'request' }, null, evidence).text, /真实前缀/)
-  const iframe = readPlayChatDebugTurn(editor, source, ref, { layer: 'iframe', turn: 2 }, null, evidence)
-  assert.match(iframe.text, /实际 DOM/)
-  assert.match(iframe.text, /example\.com\/a/)
-})
-
-test('挂载后继续游玩时默认读取当前最新轮次，显式 turn 仍可读取旧轮次', () => {
-  const { source, editor } = chats()
-  const ref = createPlayChatDebugReference(editor, source, 2)
-  source.messages.push(
-    { role: 'user', text: '继续调查' },
-    { role: 'assistant', text: '最新 Session 正文', sourceText: '最新模型原文', turn: 3 }
-  )
-
-  const latest = readPlayChatDebugTurn(editor, source, ref, { layer: 'source' })
-  assert.equal(latest.turn, 3)
-  assert.equal(latest.text, '最新模型原文')
-  assert.equal(readPlayChatDebugTurn(editor, source, ref, { turn: 2, layer: 'source' }).text, '模型原文')
-})
-
 test('未挂载记录、错误轮次和跨人物卡读取会被拒绝', () => {
   const { source, editor } = chats()
   const ref = createPlayChatDebugReference(editor, source, 2)

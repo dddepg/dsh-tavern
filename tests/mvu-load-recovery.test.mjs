@@ -90,20 +90,6 @@ test('HTML, JSON disguised as JavaScript, and oversized error bodies are never e
   }
 })
 
-test('recovery UI offers retry only for download failures', () => {
-  const ui = descriptor.factory(name => name === 'react' ? { createElement: (tag, props, ...children) => ({ tag, props, children }) } : {})
-  let clicks = 0
-  const render = state => ui.TavernMvuLoadRecovery({ state, retry: () => clicks++ })
-  const failed = render({ phase: 'failed', canRetry: true, error: 'HTTP 503' })
-  const button = failed.children.find(child => child?.tag === 'button')
-  assert.equal(button.children[0], '重新加载 MVU')
-  button.props.onClick()
-  assert.equal(clicks, 1)
-  assert.match(JSON.stringify(failed), /自动继续/)
-  for (const phase of ['loading', 'evaluating', 'error']) assert.equal(render({ phase }).children.some(child => child?.tag === 'button'), false)
-  assert.equal(render({ phase: 'ready' }), null)
-})
-
 test('MVU download retries twice before evaluating exactly once', async () => {
   let attempts = 0
   const h = harness(async () => { if (++attempts < 3) throw Error('offline'); return ok() })

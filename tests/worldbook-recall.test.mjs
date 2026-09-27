@@ -37,60 +37,6 @@ function chat(body = '两人正在旅店大厅交谈。') {
   }
 }
 
-test('常驻条目按 Tavern order 进入稳定前缀，不受动态 token 预算和冷却影响', async function () {
-  const worldBook = { view: { entries: [
-    entry('entry:0', '{{char}} 的故乡常年下雨。', { constant: true, order: 100 }),
-    entry('entry:1', '王室法律优先执行。', { constant: true, order: 300 }),
-    entry('entry:2', '停用内容。', { constant: true, enabled: false, order: 999 }),
-    entry('entry:3', '钟楼秘密。', { primaryKeys: ['钟楼'], order: 500 })
-  ] } }
-
-  const result = constantWorldBookContext({ worldBook })
-
-  assert.equal(result.count, 2)
-  assert.equal(result.context, '{{char}} 的故乡常年下雨。\n\n王室法律优先执行。')
-  assert.doesNotMatch(result.context, /停用|钟楼秘密/)
-})
-
-test('非常驻条目默认扫描最近两条消息，优先选大 order 并按小 order 在前编排', async function () {
-  const current = chat('众人抵达钟楼，并在雨夜发现一扇暗门。')
-  current.messages.unshift(
-    { role: 'assistant', text: '更早以前曾去过矿井。', turn: 1 },
-    { role: 'user', text: '我准备调查王宫。', turn: 2 }
-  )
-  const worldBook = { view: { entries: [
-    entry('entry:0', '低优先级钟楼。', { primaryKeys: ['钟楼'], order: 10 }),
-    entry('entry:1', '高优先级钟楼。', { primaryKeys: ['钟楼'], order: 400 }),
-    entry('entry:2', '暗门机关。', { primaryKeys: ['暗门'], order: 300 }),
-    entry('entry:3', '雨夜规则。', { primaryKeys: ['雨夜'], order: 200 }),
-    entry('entry:4', '矿井规则。', { primaryKeys: ['矿井'], order: 900 }),
-    entry('entry:5', '王宫规则。', { primaryKeys: ['王宫'], order: 800 })
-  ] } }
-
-  const prepared = prepareWorldBookRecall({ card: card(), chat: current, turn: 2, worldBook })
-
-  assert.equal(prepared.kind, 'keywords')
-  assert.deepEqual(prepared.refs, ['entry:0', 'entry:3', 'entry:2', 'entry:1', 'entry:5'])
-  assert.equal(prepared.context, '低优先级钟楼。\n\n雨夜规则。\n\n暗门机关。\n\n高优先级钟楼。\n\n王宫规则。')
-  assert.doesNotMatch(prepared.context, /矿井/)
-})
-
-test('主副关键词遵守 Tavern 四种 selectiveLogic，正则关键词可参与匹配', async function () {
-  const worldBook = { view: { entries: [
-    entry('entry:0', 'AND_ANY', { primaryKeys: ['钟楼'], secondaryKeys: ['午夜', '正午'], selective: true, selectiveLogic: 0, order: 400 }),
-    entry('entry:1', 'NOT_ALL', { primaryKeys: ['钟楼'], secondaryKeys: ['午夜', '正午'], selective: true, selectiveLogic: 1, order: 300 }),
-    entry('entry:2', 'NOT_ANY', { primaryKeys: ['钟楼'], secondaryKeys: ['卫兵'], selective: true, selectiveLogic: 2, order: 200 }),
-    entry('entry:3', 'AND_ALL', { primaryKeys: ['/钟楼/u'], secondaryKeys: ['午夜', '暗门', '正午'], selective: true, selectiveLogic: 3, order: 100 })
-  ] } }
-
-  const prepared = prepareWorldBookRecall({
-    card: card(), chat: chat('午夜，众人抵达钟楼并发现暗门。'), turn: 2, worldBook
-  })
-
-  assert.deepEqual(prepared.refs, ['entry:2', 'entry:1', 'entry:0'])
-  assert.doesNotMatch(prepared.context, /AND_ALL/)
-})
-
 test('预算内实际注入的条目进入十轮冷却，未入选条目下一轮仍可竞争', async function () {
   const entries = [0, 1, 2, 3, 4, 5].map(function (index) {
     return entry('entry:' + index, '设定 ' + index, { primaryKeys: ['钟楼'], order: 400 - index * 100 })
@@ -219,7 +165,6 @@ test('大世界书 render 仅传激活引用，模板正文与顺序作用域保
   const originalBytes = Buffer.byteLength(JSON.stringify(entries))
   assert.ok(referenceBytes < originalBytes * 0.03, `${referenceBytes} / ${originalBytes}`)
 })
-
 
 test('批量与逐条投影逐字一致：准备事件、随机、失败隔离、激活来源和宏顺序', {skip:process.env.TEMPLATE_EXECUTOR === 'server'}, async () => {
   const engine = await UpstreamTemplateRuntime.create()

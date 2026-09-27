@@ -1,3 +1,4 @@
+import { projectPlayerContent } from './player-input-content.js'
 import { assertRescueHistoryEditable } from './chat-history-rescue.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { canUndoRollback, restoreSurface, preflightSurfaceRestore, unchangedSinceRollback } from './surface-restoration.js'
@@ -6,7 +7,7 @@ import { sessionEvents, appendSessionEvent } from './session-events.js'
 import { randomUUID } from 'node:crypto'
 import { createRegenerationRecovery } from './regeneration-recovery.js'
 import { isDeepStrictEqual } from 'node:util'
-import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, replayableFailedTurn } from './rollback-surface.js'
+import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, failedTurnReplayAvailability } from './rollback-surface.js'
 import { assertRegenerationSourceCurrent, replaceLastRound } from './last-round-replacement.js'
 import { diagnosticIdentity, regenerationTargetDiagnostic } from './regeneration-diagnostics.js'
 
@@ -84,7 +85,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
   }
 
   function rollbackBodyMessages(chat) {
-    return (chat.messages || []).map(({ role, turn, text, sourceText, content, greeting, swipes, swipeId }) => ({ role, turn, text, sourceText, content, greeting, swipes, swipeId }))
+    return (chat.messages || []).map(({ role, turn, text, sourceText, content, inputAttachments, greeting, swipes, swipeId }) => ({ role, turn, text, sourceText, content, inputAttachments, greeting, swipes, swipeId }))
   }
 
   function assertRollbackSnapshot(current, expected) {
@@ -204,7 +205,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       agent.followup({
         id: randomUUID(),
         role: 'user',
-        content: [{ type: 'text', text: syntheticText }],
+        content: projectPlayerContent(msgs0[oldAssistantIndex - 1].inputAttachments, syntheticText),
         source: { kind: 'plugin', plugin: 'dsh-tavern-regen', regenerationId: operationId }
       })
       await agent.whenIdle()
@@ -300,8 +301,9 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (agent.phase !== undefined && agent.phase !== null && agent.phase.kind === 'running') throw new Error('正在生成，请先停止后再重新生成')
     const session = agent.session
     const events = sessionEvents(session)
-    const target = replayableFailedTurn({ events })
-    if (target === null) throw new Error('当前没有可重新生成的失败回合')
+    const replay = failedTurnReplayAvailability({ events, nodes: session.surface?.nodes || [] })
+    const target = replay.target
+    if (target === null) throw new Error(replay.reason)
     // Read the card before spending a generation: a broken card must fail here,
     // not after the new turn has already committed.
     const card = await readChatCard(chat)
@@ -328,7 +330,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       agent.followup({
         id: randomUUID(),
         role: 'user',
-        content: [{ type: 'text', text: target.userText }],
+        content: projectPlayerContent(target.inputAttachments, target.userText),
         source: target.source
       })
       await agent.whenIdle()

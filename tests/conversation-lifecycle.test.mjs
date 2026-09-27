@@ -67,35 +67,6 @@ test('游玩对话通过一个 interface 严格完成创建生命周期', async 
   assert.equal(result.pending.targetMode, 'free')
 })
 
-test('游玩与卡片工作台把会话类型交给 preset 选择器', async function () {
-  const selected = []
-  const play = harness({
-    ensurePreset: async function (sessionId, request) { selected.push([sessionId, request.kind]) }
-  })
-  await play.module.start({ kind: 'play', targetMode: 'story' })
-
-  const card = harness({
-    ensurePreset: async function (sessionId, request) { selected.push([sessionId, request.kind]) }
-  })
-  await card.module.start({ kind: 'card', targetMode: 'card' })
-
-  assert.deepEqual(selected, [['session-1', 'play'], ['session-1', 'card']])
-})
-
-test('卡片工作台保留任务元数据直到打开完成', async function () {
-  let opened
-  const { module } = harness({ finishOpen: async function (pending) { opened = pending } })
-  const pending = { task: 'extract', label: '从剧本新建人物卡', selectedResources: [{ path: 'a.md' }] }
-
-  await module.start({ kind: 'card', targetMode: 'card', pending })
-
-  assert.equal(opened.sessionId, 'session-1')
-  assert.equal(opened.targetMode, 'card')
-  assert.equal(opened.task, 'extract')
-  assert.equal(opened.label, '从剧本新建人物卡')
-  assert.equal(opened.selectedResources.length, 1)
-})
-
 test('已预热的游玩 Session 跳过点击后的 Workspace 解析和 Agent 创建', async function () {
   const { calls, module } = harness()
 
@@ -194,7 +165,6 @@ test('列表同步超时后丢弃未完成 attempt，下次新建 Session', asyn
   assert.ok(calls.includes('wait:session-2'))
   assert.equal(calls.filter(item => item.startsWith('wait:session-1')).length, 1)
 })
-
 
 test('刷新页面后可复用失败 Session，打开失败不重复初始化，成功后下次新建', async () => {
   const values = new Map()

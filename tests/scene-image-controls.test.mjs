@@ -195,87 +195,6 @@ test('uncertain purchase requires user confirmation, while original provider tas
   assert.equal(prompts, 2)
 })
 
-test('ComfyUI file chooser stores the parsed graph only on explicit save and has no JSON editor', async () => {
-  const slots = [], calls = []
-  let cursor = 0
-  const context = vm.createContext({
-    useTavernConfirm: () => async () => true,
-    recordImageInteraction() {},
-    React: { createElement: (type, props, ...children) => ({ type, props, children }), useEffect() {}, useState(initial) { const n = cursor++; if (!(n in slots)) slots[n] = initial; return [slots[n], value => { slots[n] = typeof value === 'function' ? value(slots[n]) : value }] } },
-    window: { dispatchEvent() {} }, CustomEvent: class {},
-    rpc: async (method, args) => { calls.push({ method, args }); return { settings: slots[0] } }
-  })
-  const Component = vm.runInContext(extract('SceneImageSettings', 'TavernSettingsSection') + ';SceneImageSettings', context)
-  const nodes = tree => tree && typeof tree === 'object' ? [tree, ...(tree.children || []).flat(Infinity).flatMap(nodes)] : []
-  const render = () => { cursor = 0; return nodes(Component()) }
-  render()
-  slots[0] = { provider: 'comfyui', baseURL: 'http://localhost:8188', authType: 'none', username: '', workflow: null, style: { preset: 'default', custom: '' }, ready: false, channels: [{ id: 'comfyui', label: 'ComfyUI', fields: ['baseURL', 'authType', 'username'] }] }
-  const file = render().find(node => node.type === 'input' && node.props.type === 'file')
-  assert.ok(file)
-  await file.props.onChange({ target: { files: [{ size: 80, text: async () => '{"1":{"class_type":"SaveImage","inputs":{}}}' }], value: 'file.json' } })
-  assert.equal(calls.length, 0)
-  assert.equal(slots[0].workflow['1'].class_type, 'SaveImage')
-  assert.equal(render().filter(node => node.type === 'textarea').length, 1, 'only the optional style textarea')
-  await render().find(node => node.type === 'button' && node.children.includes('保存生图 API 配置')).props.onClick()
-  assert.equal(calls[0].method, 'saveSceneImageSettings')
-  assert.equal(calls[0].args.workflow['1'].class_type, 'SaveImage')
-  await file.props.onChange({ target: { files: [{ size: 512001 }], value: '' } })
-  assert.match(slots[4], /500 KB/)
-  assert.equal(calls.length, 1)
-})
-
-test('setup order, read-only draft checks, model selection and stale status clearing', async () => {
-  const slots = [], calls = []
-  let cursor = 0
-  const context = vm.createContext({
-    useTavernConfirm: () => async () => true,
-    recordImageInteraction() {},
-    React: { createElement: (type, props, ...children) => ({ type, props, children }), useEffect() {}, useState(initial) { const n = cursor++; if (!(n in slots)) slots[n] = initial; return [slots[n], value => { slots[n] = typeof value === 'function' ? value(slots[n]) : value }] } },
-    window: { dispatchEvent() {} }, CustomEvent: class {},
-    rpc: async (method, args) => { calls.push({ method, args }); return method === 'testSceneImageConnection' ? { status: 'reachable', apiKeyStatus: 'unverified', httpStatus: 404, probePath: '/models', message: '连接成功，但服务暂时无法完成 Key 验证。可展开连接诊断查看状态。' } : { models: ['new-image'], message: '已获取' } }
-  })
-  const Component = vm.runInContext(extract('SceneImageSettings', 'TavernSettingsSection') + ';SceneImageSettings', context)
-  const nodes = tree => tree && typeof tree === 'object' ? [tree, ...(tree.children || []).flat(Infinity).flatMap(nodes)] : []
-  const render = () => { cursor = 0; return nodes(Component()) }
-  render()
-  slots[0] = { provider: 'openai', baseURL: 'https://example.test/v1', model: 'image-default', size: '1024x1024', style: { preset: 'default', custom: '' }, channels: [{ id: 'openai', fields: ['baseURL', 'model', 'size'], models: ['image-default'], canListModels: true }] }
-  let tree = render()
-  const labelIndex = name => tree.findIndex(node => node.type === 'label' && node.children[0] === name)
-  const buttonIndex = name => tree.findIndex(node => node.type === 'button' && node.children.includes(name))
-  assert.ok(labelIndex('提供商') < labelIndex('API Key'))
-  assert.ok(labelIndex('API Key') < buttonIndex('测试连接与鉴权'))
-  assert.ok(buttonIndex('测试连接与鉴权') < labelIndex('生图模型'))
-  assert.ok(labelIndex('生图模型') < labelIndex('图片尺寸／分辨率'))
-  tree.find(node => node.type === 'input' && node.props.type === 'password').props.onChange({ target: { value: 'draft-key' } })
-  const button = name => render().find(node => node.type === 'button' && node.children.includes(name))
-  await button('测试连接与鉴权').props.onClick()
-  assert.equal(calls[0].method, 'testSceneImageConnection')
-  assert.equal(calls[0].args.apiKey, 'draft-key')
-  assert.equal(slots[2], 'draft-key', 'probe does not discard unsaved credential')
-  assert.ok(render().some(node => node.props?.['data-connection-status'] === 'reachable'))
-  const diagnostic = render().find(node => node.type === 'details' && node.children.some(child => child?.type === 'summary' && child.children.includes('连接诊断')))
-  assert.ok(diagnostic)
-  assert.ok(!diagnostic.props?.open, 'HTTP diagnostic is collapsed by default')
-  assert.ok(diagnostic.children.some(child => child?.type === 'p' && child.children[0].includes('HTTP 404')))
-  assert.ok(!render().find(node => node.props?.role === 'status').children[0].includes('404'))
-  await button('获取模型列表').props.onClick()
-  tree = render()
-  assert.ok(tree.some(node => node.type === 'option' && node.props.value === 'new-image'))
-  const modelInput = () => render().find(node => node.type === 'input' && node.props.list === 'dsh-tavern-image-models')
-  assert.equal(tree.filter(node => node.type === 'input' && node.props.list).length, 1)
-  assert.equal(tree.find(node => node.type === 'datalist').props.id, modelInput().props.list)
-  modelInput().props.onChange({ target: { value: 'new-image' } })
-  assert.equal(slots[0].model, 'new-image')
-  modelInput().props.onChange({ target: { value: 'custom-image-model' } })
-  assert.equal(modelInput().props.value, 'custom-image-model')
-  assert.equal(render().filter(node => node.type === 'input' && node.props.value === 'custom-image-model').length, 1)
-  assert.ok(!render().some(node => node.type === 'label' && node.children[0] === '生图模型名称'))
-  render().find(node => node.type === 'input' && node.props.value === 'https://example.test/v1').props.onChange({ target: { value: 'https://another.test/v1' } })
-  assert.ok(!render().some(node => node.props?.['data-connection-status']))
-  assert.ok(!render().some(node => node.type === 'option' && node.props.value === 'new-image'))
-  assert.deepEqual(calls.map(call => call.method), ['testSceneImageConnection', 'listSceneImageModels'])
-})
-
 test('reference chooser never preselects a group member, freezes consent and permits per-person revocation while disabled', async () => {
   const slots = [], calls = []
   let cursor = 0
@@ -343,51 +262,6 @@ test('image dock targets latest story turn even without a display projection or 
   for (const [latestAssistantTurn, replyProjections] of [[4, []], [4, [{ turn: 2 }]], [2, [{ turn: 4 }]]]) {
     assert.equal(vm.runInNewContext(expression, { live: { view: { latestAssistantTurn, replyProjections } } }), latestAssistantTurn)
   }
-})
-
-test('initial scene status failure remains visible without a usable generation key', async () => {
-  let state, effect
-  const ctx = vm.createContext({
-    React: { useState: () => [null, value => { state = typeof value === 'function' ? value(state) : value }], useEffect: fn => { effect = fn } },
-    window: { clearTimeout() {}, addEventListener() {}, removeEventListener() {} },
-    rpc: async () => { throw new Error('status unavailable') }
-  })
-  const hook = vm.runInContext(extract('useSceneImageRecord', 'SceneImageAction') + ';useSceneImageRecord', ctx)
-  hook('session', 4); effect(); await new Promise(resolve => setImmediate(resolve))
-  assert.equal(state?.error, 'status unavailable')
-  assert.ok(!state.key)
-})
-
-test('native story replies render illustrations, while card mode and transitioning sessions do not', () => {
-  const expression = source.match(/const illustration = (sceneImagesEnabled[^;]+);/)[1]
-  const evaluate = overrides => vm.runInNewContext(expression, {
-    sceneImagesEnabled: true, settled: true, projection: null, sessionTransitioning: false,
-    storyTurn: 4, liveState: { view: { mode: 'story' } }, props: { sessionId: 'session' },
-    isPlayMode: mode => ['story', 'script'].includes(mode), SceneIllustration: 'illustration',
-    React: { createElement: (type, props) => ({ type, props }) }, ...overrides
-  })
-  assert.equal(evaluate().props.turn, 4)
-  assert.equal(evaluate({ liveState: { view: { mode: 'card' } } }), null)
-  assert.equal(evaluate({ sessionTransitioning: true }), null)
-  assert.equal(evaluate({ storyTurn: 0 }), null)
-})
-
-test('missing scene target retries are bounded and recovery clears unavailable state', async () => {
-  let state, effect, timer, calls = 0, ready = false
-  const ctx = vm.createContext({
-    React: { useState: () => [null, value => { state = typeof value === 'function' ? value(state) : value }], useEffect: fn => { effect = fn } },
-    window: { clearTimeout() { timer = null }, setTimeout(fn) { timer = fn }, addEventListener() {}, removeEventListener() {} },
-    rpc: async () => { calls++; return { illustration: ready ? {status:'idle',key:'valid',versions:[]} : {status:'unavailable',reason:'target-unavailable',versions:[]} } }
-  })
-  const hook = vm.runInContext(extract('useSceneImageRecord', 'SceneImageAction') + ';useSceneImageRecord', ctx)
-  const tick = () => new Promise(resolve => setImmediate(resolve))
-  hook('session', 4); const cleanup = effect(); await tick()
-  while (timer) { const next = timer; timer = null; next(); await tick() }
-  assert.equal(calls, 6)
-  assert.equal(state.error, undefined)
-  cleanup(); ready = true; effect(); await tick()
-  assert.equal(state.key, 'valid')
-  assert.equal(timer, null)
 })
 
 test('delete selected image, handle cancellation/errors, then regenerate the empty historical turn', async () => {

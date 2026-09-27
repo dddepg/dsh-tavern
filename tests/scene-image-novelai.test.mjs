@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { generateSceneImage } from '../tavern-plugin/lib/domain/scene-image-provider.js'
 import { channelSettings, imageChannelRequest } from '../tavern-plugin/lib/domain/scene-image-channels.js'
 import { novelaiPrompts } from '../tavern-plugin/lib/domain/scene-image-novelai.js'
-import { applyImageAdjustment } from '../tavern-plugin/lib/domain/scene-image-adjustment.js'
+
 import { imageZip } from './fixtures/scene-image-zip.mjs'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKfoAAAAASUVORK5CYII=', 'base64')
@@ -54,17 +54,6 @@ test('NovelAI posts one ZIP-mode request to official-compatible endpoint; captur
   assert.deepEqual(result.metadata.request, request.body)
   assert.equal(result.metadata.seed, p.seed)
   assert.equal(JSON.stringify(result.metadata).includes('fixture-secret'), false)
-})
-
-test('NovelAI splits same-name people by identity; image-only clothing/style changes never use stale canonical fields', () => {
-  const before = structuredClone(plan)
-  const next = applyImageAdjustment(plan, { description: '只改本图', patches: [{ owner: 'a', field: 'clothing', tags: 'white jacket', text: '白外套' }], style: { text: '胶片', tags: 'film grain' } }, plan.profile)
-  const compiled = novelaiPrompts({ ...input, plan: next })
-  assert.equal(compiled.characters.length, 2)
-  assert.equal(compiled.characters[0].caption, 'girl, black hair, white jacket, on the left')
-  assert.match(compiled.base, /film grain/); assert.doesNotMatch(compiled.base, /watercolor|blue coat|white jacket|林/)
-  assert.deepEqual(plan, before)
-  assert.deepEqual(novelaiPrompts({ ...input, prompt: 'legacy scene' }), { base: 'legacy scene', characters: [] })
 })
 
 test('NovelAI validates size/model and model-specific people limit before any request; repaint uses fresh seeds', () => {

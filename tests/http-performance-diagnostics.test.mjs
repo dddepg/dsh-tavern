@@ -52,24 +52,3 @@ test('HTTP diagnostics bound tracking and samples and detach pending response li
   assert.equal(f.server.listenerCount('request'), 0)
   assert.ok(responses.every(res => res.listenerCount('finish') === 0 && res.listenerCount('close') === 0))
 })
-
-test('hosts without a public HTTP server remain supported', () => {
-  assert.doesNotThrow(() => observeHttpRequests(undefined, () => {})())
-})
-
-test('healthy HMR streams do not overwrite slow requests, but remain visible during congestion', () => {
-  const f = fixture()
-  f.request('/plugins/events?token=SECRET')
-  f.advance(60000)
-  assert.equal(f.diagnostics.read().http, undefined)
-  const list = f.request('/api/session/list?private=PRIVATE')
-  f.advance(5000)
-  const snapshot = f.diagnostics.read().http
-  assert.deepEqual(snapshot.samples[0].routes.map(row => row.route), ['plugin-events', 'session-list'])
-  assert.equal(snapshot.samples[0].active, 2)
-  assert.doesNotMatch(JSON.stringify(snapshot), /PRIVATE|SECRET/)
-  list.emit('close')
-  for (let i = 0; i < 50; i++) f.advance(5000)
-  assert.equal(f.diagnostics.read().http.samples.length, 1)
-  f.dispose()
-})

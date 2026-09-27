@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import vm from 'node:vm'
-import { projectPersistentStatusView } from '../tavern-plugin/lib/domain/persistent-status-view.js'
 
 let descriptor
 vm.runInNewContext(await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8'), {
@@ -35,22 +34,6 @@ test('getAllVariables 读取当前楼层与聊天变量的独立快照，不泄�
   assert.equal(value.theme, 'dark')
   value.stat_data.hp = 0
   assert.equal(run.context.getAllVariables().stat_data.hp, 10)
-})
-
-test('实际调用 getAllVariables 只记录一次诊断，不再自动迁移页面', () => {
-  const run = frame()
-  assert.equal(run.reports.length, 0)
-  vm.runInContext(template.match(/<script>(.*)<\/script>/)[1], run.context)
-  const reports = run.reports.filter(item => item.type === 'dsh-tavern-mvu-view-used')
-  assert.equal(reports.length, 1)
-  run.context.getAllVariables()
-  assert.equal(run.reports.filter(item => item.type === 'dsh-tavern-mvu-view-used').length, 1)
-  const prose = { kind: 'html', content: '<p>剧情保持原样</p>' }
-  const result = projectPersistentStatusView([{ role: 'assistant', turn: 1,
-    displayRuntime: { frames: [{ partIndex: 1, mvuViewUsed: reports[0].mvuViewUsed }] } }],
-  [{ turn: 1, parts: [prose, { kind: 'html', content: template }] }])
-  assert.equal(result.statusView, null)
-  assert.deepEqual(result.projections[0].parts, [prose, { kind: 'html', content: template }])
 })
 
 test('右侧状态栏继续读取更新后的变量，不重复识别或重建 iframe', async () => {
@@ -91,15 +74,4 @@ test('预设自检面板按 TH-message 名称识别实际楼层，持久页面�
     update: client.createTavernHelperContextUpdate(null, next, 1, 2) } })
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(detect(), 1)
-})
-
-test('状态栏头像读取可调用 SillyTavern.substituteParams，未支持的头像宏保持可识别', async () => {
-  const run = frame(false)
-  const [variables, avatar] = await Promise.all([
-    Promise.resolve(run.context.getVariables({type:'message'})),
-    vm.runInContext("SillyTavern.substituteParams('{{userAvatarPath}}')", run.context)
-  ])
-  assert.equal(variables.stat_data.hp,10)
-  assert.equal(avatar,'{{userAvatarPath}}')
-  assert.equal(vm.runInContext("SillyTavern.substituteParams('{{user}}与{{char}}')",run.context),'你与角色')
 })

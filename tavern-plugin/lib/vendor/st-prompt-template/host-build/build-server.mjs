@@ -15,7 +15,7 @@ export async function buildServerTemplate({ dependencyRoot, outputPath }) {
   await new Promise((accept, reject) => webpack({
     mode: 'production', target: 'web', context: root, entry: resolve(here, 'server-entry.js'),
     output: { path: resolve(outputPath), filename: 'engine.js', library: { name: 'DSHTemplate', type: 'var' }, publicPath: '', clean: true },
-    resolve: { extensions: ['.ts', '.js'], modules: [resolve(dependencyRoot, 'node_modules'), resolve(here, '../../../../../node_modules'), 'node_modules'] },
+    resolve: { extensions: ['.ts', '.js'], alias: { marked$: createRequire(import.meta.url).resolve('marked') }, modules: [resolve(dependencyRoot, 'node_modules'), resolve(here, '../../../../../node_modules'), 'node_modules'] },
     module: { rules: [{ test: /\.ts$/, exclude: /node_modules/, use: { loader: require.resolve('babel-loader'), options: { configFile: false, babelrc: false, presets: [require.resolve('@babel/preset-typescript')] } } }] },
     plugins: [new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
       new webpack.NormalModuleReplacementPlugin(/^\.\.\//, resource => {

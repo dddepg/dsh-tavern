@@ -1,4 +1,4 @@
-import { projectChatBackgroundConfig } from './chat-session-state.js'
+import { projectSceneImageState, projectChatBackgroundConfig } from './chat-session-state.js'
 import { currentBackgroundSessionId, referencedBackgroundSessionIds } from './background-identity.js'
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
@@ -51,6 +51,14 @@ export function createTavernConversationRegistry(options = {}) {
   // Same alias/recovery rules, with a detached read-only projection when supported.
   async function resolveState(sessionId) {
     return resolveUsing(sessionId, id => typeof store.readChatState === 'function' ? store.readChatState(id) : store.readChat(id))
+  }
+
+  async function resolveSceneImageState(sessionId) {
+    return resolveUsing(sessionId, async id => {
+      if (store.readSceneImageState) return store.readSceneImageState(id)
+      const chat = await store.readChat(id)
+      return chat ? projectSceneImageState(chat) : undefined
+    })
   }
 
   async function resolveBackgroundConfig(sessionId) {
@@ -156,6 +164,12 @@ export function createTavernConversationRegistry(options = {}) {
     const summaries = new Map(chatRows(index).map(function (item) { return [str(item && item.id), item] }))
     const rows = []
     for (const sessionId of Object.keys(currentLinks)) {
+      // API test identities are not ordinary sessions in the browser controller.
+      // Check ownership rather than hiding arbitrary user IDs with a test prefix.
+      if (/^test-[0-9a-f-]{36}$/i.test(sessionId) && typeof store.readAutomationOwner === 'function') {
+        const owner = await store.readAutomationOwner(sessionId)
+        if (owner?.sessionId === sessionId) continue
+      }
       const chatId = str(currentLinks[sessionId])
       const summary = summaries.get(chatId)
       if (!summary) continue
@@ -203,5 +217,5 @@ export function createTavernConversationRegistry(options = {}) {
     return { deleted: true }
   }
 
-  return { links, resolve, resolveState, resolveBackgroundConfig, publish, sync, list, touch, remove }
+  return { links, resolve, resolveState, resolveSceneImageState, resolveBackgroundConfig, publish, sync, list, touch, remove }
 }

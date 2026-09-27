@@ -1,3 +1,4 @@
+import { inputAttachments, projectPlayerContent } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
 import { projectRuntimePresetRequest } from './runtime-preset-lifecycle.js'
@@ -28,7 +29,7 @@ function replaceTurnInput(messages, text) {
     const message = result[index]
     if (!isTurnInput(message)) continue
     result[index] = Object.assign({}, message, {
-      content: [{ type: 'text', text: str(text).trim() || '（玩家已更新酒馆运行状态）' }]
+      content: projectPlayerContent(message.content, str(text).trim())
     })
     break
   }
@@ -183,7 +184,7 @@ export function createCompatibilityOrchestrationStrategy(options) {
       if (begun && begun.duplicate) throw new Error('该消息已由酒馆处理，请勿重复发送')
       chat = await options.chatForSession(sessionId)
     }
-    const compiled = await options.compileTurn(chat, chat.runtimeInputs?.[String(payload.turn)]?.text ?? userText)
+    const compiled = await options.compileTurn(chat, chat.runtimeInputs?.[String(payload.turn)]?.text ?? userText, inputAttachments(payload.messages.filter(isTurnInput).flatMap(message => message.content || [])))
     await options.persistCompiled({ chat, compiled, turn: payload.turn })
     stagedRequests.set(sessionId, {
       turn: Number(payload.turn) || 0,
@@ -232,7 +233,9 @@ export function createNativePlayOrchestrationStrategy(options) {
     const sessionId = input.sessionId
     const payload = input.payload
     const mode = await options.modeFor(sessionId)
-    const visibleMessages = options.filterMessages(input.decision.messages, mode)
+    const visibleMessages = options.filterMessages(input.decision.messages, mode, {
+      session: payload.agent?.session, disabledWritingSkills: input.chat?.disabledWritingSkills
+    })
     let agentMessages = visibleMessages
     const rawSnapshot = mode === 'story' || mode === 'script' ? await options.resolvePreset(input.chat) : null
     // Render the three phases together; the persisted preset and prior messages stay authoritative.
@@ -280,6 +283,7 @@ export function createNativePlayOrchestrationStrategy(options) {
     const baseRequest = nativeMessages === optionsValue.messages
       ? optionsValue : Object.assign({}, optionsValue, { messages: nativeMessages })
     let request = projectRuntimePresetRequest(baseRequest, staged.snapshot, {
+      systemAppend: options.systemAppend?.(),
       scope: staged.scope,
       turn: staged.turn,
       step: staged.step
@@ -325,6 +329,7 @@ export function createNativePlayOrchestrationStrategy(options) {
       if (workspace !== '') sections.push({ name: 'tavern:resource-workspace', text: workspace })
     }
     assembly.sections = sections
+    if (Array.isArray(assembly.contexts)) assembly.contexts = assembly.contexts.filter(section => section.name !== 'approval:policy')
     assembly.tools = assembly.tools.filter(function (schema) {
       return !options.controlledToolNames.has(schema.name) || visible.has(schema.name)
     })

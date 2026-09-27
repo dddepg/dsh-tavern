@@ -1,16 +1,23 @@
 import { readFile } from 'node:fs/promises'
 import { JSDOM, VirtualConsole } from 'jsdom'
+import { estimateWorldBookTokens } from './worldbook-activation.js'
 
 // Templates live in this disposable process, never in the service's JS realm.
 // jsdom supplies browser APIs; it is not the process isolation boundary.
 let session, dom, sequence = 0
 const pending = new Map()
 const send = message => { if (process.connected) process.send(message) }
-const rpc = (method, args) => new Promise((resolve, reject) => {
-  const id = ++sequence
-  pending.set(id, { resolve, reject })
-  send({ type: 'rpc', id, method, args })
-})
+const rpc = (method, args) => {
+  // Upstream schedules token statistics after returning its operation receipt.
+  // This pure estimate needs no session lease: calculate it here, using the
+  // same estimator as the host, without admitting expired state-changing RPCs.
+  if (method === 'countFullTemplateTokens') return Promise.resolve({ tokens: estimateWorldBookTokens(args.text), estimator: 'unicode-estimate' })
+  return new Promise((resolve, reject) => {
+    const id = ++sequence
+    pending.set(id, { resolve, reject })
+    send({ type: 'rpc', id, method, args })
+  })
+}
 async function initialize(sessionId, readOnly = false) {
   dom = new JSDOM('<!doctype html><div id="extensions_settings"></div>', {
     url: 'https://template.invalid/', runScripts: 'outside-only', pretendToBeVisual: true,

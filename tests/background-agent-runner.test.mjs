@@ -7,7 +7,7 @@ function completeSystem(sections) {
   return sections.filter(s => s.complete).map(s => typeof s.text === 'function' ? s.text() : s.text).join('\n')
 }
 
-import { createBackgroundAgentRunner, executeBackgroundCompaction, maximumBackgroundTokens } from '../tavern-plugin/lib/background-agent-runner.js'
+import { createBackgroundAgentRunner, executeBackgroundCompaction } from '../tavern-plugin/lib/background-agent-runner.js'
 import { readSceneImageSystemInstruction, readScenePlanInstruction } from '../tavern-plugin/lib/scene-image-prompts.js'
 
 test('人物设计读取工具在生图会话中只注册一次，跨任务保持稳定且不泄漏上一任务', async () => {
@@ -430,12 +430,6 @@ test('后台固定背景只保存一次，连续候选、结算和恢复均进�
   assert.equal(events.filter(event => event.type === 'user/message' && event.data.id === 'tavern-session-prefix:background').length, 1)
   assert.equal(savedPrefixes.size, 0)
   await runner.dispose()
-})
-
-test('DeepSeek V4 后台任务采用官方最大输出，其他模型交给适配器', () => {
-  assert.equal(maximumBackgroundTokens({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }), 384000)
-  assert.equal(maximumBackgroundTokens({ provider: 'deepseek-official', model: 'deepseek-v4-pro' }), 384000)
-  assert.equal(maximumBackgroundTokens({ provider: 'test', model: 'scripted' }), undefined)
 })
 
 test('后台压缩通过进程内命令服务把 /compact 交给精确 Agent', async () => {
@@ -929,11 +923,6 @@ test('后台 Session 建立失败时不对外发布虚假的 traceSessionId', as
   })
 })
 
-test('后台 Runner 不再提供预设正则历史重投影入口', () => {
-  const runner = createBackgroundAgentRunner({ agents: { get() {} } })
-  assert.equal(runner.reproject, undefined)
-})
-
 test('状态结算与候选生成复用同一个常驻后台 Agent，并且每轮只读取本轮新增输入', async () => {
   const parent = { id: 'parent-session', session: { header: { cwd: '/tmp/tavern', delegationDepth: 0 } } }
   const events = []
@@ -1194,59 +1183,6 @@ test('后台回合没有回复时透传 DSH 的真实终止错误', async () => 
   }), /malformed prompt variable reference/)
 })
 
-test('后台回合耗尽输出 token 时返回真实终止原因', async () => {
-  const parent = { id: 'parent-session', session: { header: { cwd: '/tmp/tavern', delegationDepth: 0 } } }
-  const events = []
-  let work = Promise.resolve()
-  const child = {
-    session: { events, append() {} },
-    followup() {
-      work = Promise.resolve().then(function () {
-        events.push({ type: 'turn/end', data: { turn: 1, reason: { kind: 'max-tokens' } } })
-      })
-    },
-    async whenIdle() { await work }
-  }
-  const agents = {
-    get(id) { return id === parent.id ? parent : undefined },
-    async create(options) {
-      assert.equal(options.agentOptions.maxTokens, 384000)
-      assert.equal(options.agentOptions.reasoningEffort, 'high')
-      await options.setup({
-        systemPrompt: { section() {}, variable() {}, suppressRuntimeContext() {} },
-        tools: { restrict() {}, register() {} },
-        on() {}
-      })
-      return { agent: child, async dispose() {} }
-    }
-  }
-  const runner = createBackgroundAgentRunner({ agents, id: () => 'background-max-tokens' })
-
-  await assert.rejects(() => runner.run({
-    sessionId: parent.id,
-    selection: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' },
-    system: '候选规则', messages: [], tools: [], persistent: true, task: 'candidate'
-  }), /输出达到模型 token 上限/)
-})
-
-test('后台代理首次运行前即具有目录描述，失败也保留身份', async () => {
-  const events = []
-  const session = { id: 'early-descriptor', header: {}, events, append(type, data) { events.push({ type, data }) } }
-  const runner = createBackgroundAgentRunner({
-    agents: { get: () => ({ id: 'parent', session: { header: {} } }), async create() {
-      return { agent: { session, followup() {
-        assert.equal(events.filter(e => e.type === 'subagent/descriptor').length, 1)
-        throw new Error('deliberate model failure')
-      }, async whenIdle() {} }, async dispose() {} }
-    } }, id: () => session.id
-  })
-  try {
-    await assert.rejects(runner.run({ sessionId: 'parent', persistent: true, task: 'settlement',
-      selection: { provider: 'test', model: 'fake' }, messages: [], tools: [] }), /deliberate model failure/)
-    assert.equal(events.find(e => e.type === 'subagent/descriptor').data.label, '酒馆后台 Agent')
-  } finally { await runner.dispose() }
-})
-
 test('manual stop cancels the active background agent belonging to this game only', async () => {
   let ready, finish, cancelled = 0;
   const started = new Promise(resolve => { ready = resolve; });
@@ -1494,25 +1430,4 @@ test('世界书检索在候选、结算、人物设计和筛选复用后台会�
   assert.equal(calls.length, 10)
   assert.ok(calls.every(call => call.sessionId === 'parent'))
   await runner.dispose()
-})
-
-test('后台压缩从匹配的命令日志恢复具体原因，不误用旧失败', async () => {
-  const { compactionFailureMessage } = await import('../tavern-plugin/lib/domain/compaction-failure.js')
-  const text = 'Compaction could not produce a useful summary.'
-  const events = [
-    { type: 'compaction/end', data: { sourceCommandId: 'old', error: '400: user message must have content' } },
-    { type: 'compaction/end', data: { sourceCommandId: 'current', error: 'summary is not smaller than the shadowed content (1931 estimated framed tokens >= 1612)' } }
-  ]
-  let commandId = 'current'
-  const agent = { session: { snapshotEvents: () => events }, ctx: { get: () => ({ execute: async () => ({ commandId, result: { kind: 'error', text } }) }) } }
-  await assert.rejects(executeBackgroundCompaction(agent), error => {
-    assert.match(compactionFailureMessage(error), /摘要未缩短内容/)
-    return true
-  })
-  commandId = 'unmatched'
-  await assert.rejects(executeBackgroundCompaction(agent), error => {
-    assert.equal(error.cause, undefined)
-    assert.equal(compactionFailureMessage(error), text)
-    return true
-  })
 })

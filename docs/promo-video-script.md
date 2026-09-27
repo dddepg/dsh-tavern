@@ -63,7 +63,7 @@ dsh-tavern 把正文、候选项和后台状态处理拆开，按需提供上下
 
 ## 电脑上能玩，手机上也可以接着探索
 
-支持 Windows、macOS 和 Linux，Android 也有实验性安装方式。
+支持 Windows、macOS 和 Linux，Android 支持独立 APK 或通过 DSHA 安装。
 
 ## 结尾
 

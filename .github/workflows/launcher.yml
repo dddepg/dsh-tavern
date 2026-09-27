@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Check launcher
-        run: node --test tests/launcher.test.mjs tests/windows-command-shim.test.mjs tests/runtime-package.test.mjs tests/cdn-upgrade.test.mjs tests/plugin-dependencies.test.mjs tests/bundled-image-plugin.test.mjs
+        run: node --test tests/windows-cdn-download.test.mjs tests/windows-setup-progress.test.mjs tests/windows-installer-command-log.test.mjs tests/desktop-package-manager.test.mjs tests/launcher.test.mjs tests/windows-command-shim.test.mjs tests/runtime-package.test.mjs tests/cdn-upgrade.test.mjs tests/plugin-dependencies.test.mjs tests/bundled-image-plugin.test.mjs
       - name: Check server template process
         run: node --test tests/server-template-runtime.test.mjs tests/server-template-native.test.mjs
       - name: Check help command

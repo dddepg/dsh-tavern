@@ -1,3 +1,4 @@
+import { projectChatSessionState } from '../tavern-plugin/lib/domain/chat-session-state.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createAutoCompaction, compactionPolicy, installCompactionPolicy } from '../tavern-plugin/lib/domain/auto-compaction.js'
@@ -5,6 +6,7 @@ function fixture() {
   let chat = { id: 'chat', mode: 'story', sessionId: 'front', messages: [], timeline: { branchId: 'main', participants: { background: { sessionId: 'back' } } } }
   let policy = { mode: 'manual' }, activity = { phase: 'idle' }, pressure = 0, fail = '', evidence = 'succeeded'
   const calls = [], deps = {
+    readState: async () => projectChatSessionState(chat),
     readChat: async () => structuredClone(chat), updateChat: async (_id, fn) => { chat = fn(structuredClone(chat)); return structuredClone(chat) },
     policy: async () => policy, activity: () => activity, pressure: async () => pressure === null ? null : { percent: pressure },
     exclusive: async (_id, fn) => fn(), checkpoint: async () => 7, recover: async () => evidence, markBackground: async () => {},
@@ -110,14 +112,6 @@ test('压缩失败原因进入持久警告，前后台结果保持独立', async
   h.restart()
   assert.equal(h.chat.contextCompaction.warning, state.warning)
 })
-
- test('capacity recovery clears only its stale warning below the compression threshold', async () => {
-  const h = fixture(); h.policy = { mode: 'percent', percent: 80 }; h.pressure = null;
-  await h.run(); assert.match(h.chat.contextCompaction.warning, /容量/);
-  h.pressure = 18; await h.run(); assert.equal(h.chat.contextCompaction.warning, ''); assert.deepEqual(h.calls, []);
-  h.chat.contextCompaction.warning = 'other failure'; await h.run(); assert.equal(h.chat.contextCompaction.warning, 'other failure');
-})
-
 
 test('后台摘要变长时保留未完成状态并解释原因，不附加立即重试提示', async () => {
   const h = fixture()
@@ -230,4 +224,14 @@ test('cancellation during the final measurement still publishes committed result
   assert.equal(result.status, 'completed')
   assert.equal(h.blocked(), false)
   assert.deepEqual(h.calls, ['foreground', 'background'])
+})
+
+test('idle automatic checks use detached session metadata without reading full story history',async()=>{
+  const h=fixture();let reads=0
+  h.deps.readState=async()=>({id:'chat',sessionId:'front',mode:'story',contextCompaction:{}})
+  const original=h.deps.readChat;h.deps.readChat=async(...args)=>{reads++;return original(...args)}
+  await h.run();await h.run()
+  assert.equal(reads,0)
+  await h.run({manual:true})
+  assert.ok(reads>0,'actual compression must still load authoritative history')
 })

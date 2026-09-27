@@ -42,16 +42,20 @@ function uniqueStrings(values) {
 export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoot, host, dshVersion }) {
   const sourceDocument = object(source)
   const currentDocument = object(current)
-  const sourceDsh = object(sourceDocument.dsh)
+  const sourceDsh = { ...object(sourceDocument.dsh) }
+  // The source package is also an installable aggregate. A legacy Profile
+  // still composes its individual bundles and must not advertise that patch.
+  delete sourceDsh.bundle
   const currentDsh = object(currentDocument.dsh)
   const sourceProfile = object(sourceDsh.profile)
   const currentProfile = object(currentDsh.profile)
-  const currentTavern = object(currentDocument.dshTavern)
+  const currentTavern = { ...object(currentDocument.dshTavern) }
+  delete currentTavern.cliPocketEnabled
   // Pocket includes mobile-nav itself. Select one layout owner per host,
   // including old/manual installs, so upgrades cannot reintroduce both.
   const excludedMobileBundles = host === 'android'
     ? ['dsh-pocket', '@dsh-external/dsh-mobile-nav']
-    : ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav']
+    : ['dsh-web-mobile', '@dsh-external/dsh-mobile-nav', ...(host !== 'desktop' ? ['dsh-pocket'] : [])]
   const sourceBundles = uniqueStrings(sourceProfile.bundles)
     .map(name => host !== 'android' && name === 'dsh-web-mobile' ? 'dsh-pocket' : name)
     .filter(name => !excludedMobileBundles.includes(name))
@@ -62,7 +66,14 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
   const userBundles = uniqueStrings(currentProfile.bundles).filter((name) => !previousManagedBundleSet.has(name))
   const bundles = uniqueStrings(sourceBundles.concat(userBundles))
 
-  const sourceDependencies = object(sourceDocument.dependencies)
+  // Local subpackages and host-specific layouts are development dependencies of
+  // the installable aggregate, but remain explicit dependencies of legacy Profiles.
+  const localDependencies = Object.fromEntries(
+    ['dsh-tavern-plugin', 'dsh-tavern-remote', 'dsh-pocket', 'dsh-web-mobile', 'dsh-better-sidebar', 'dsh-dream-skin']
+      .filter(name => sourceDocument.devDependencies?.[name] !== undefined)
+      .map(name => [name, sourceDocument.devDependencies[name]]),
+  )
+  const sourceDependencies = { ...localDependencies, ...object(sourceDocument.dependencies) }
   const currentDependencies = object(currentDocument.dependencies)
   const managedDependencies = sourceBundles.filter((name) => sourceDependencies[name] !== undefined)
   const previousManagedDependencies = uniqueStrings(currentTavern.managedDependencies).length > 0
@@ -99,6 +110,18 @@ export function mergeProfileManifest({ source, current = {}, pluginPath, dataRoo
       profileConfigurationVersion: PROFILE_CONFIGURATION_VERSION,
     },
   }
+}
+
+// Optional packages must not leave mandatory pnpm patches behind when disabled.
+export function prepareProfileWorkspace(workspaceText, manifest) {
+  const document = parseDocument(String(workspaceText || ''))
+  if (document.errors.length > 0) throw new Error(`无法读取 pnpm workspace 配置：${document.errors[0].message}`)
+  if (!manifest.dependencies?.['dsh-pocket']) {
+    for (const name of Object.keys(object(document.toJS()?.patchedDependencies))) {
+      if (name === 'dsh-pocket' || name.startsWith('dsh-pocket@')) document.deleteIn(['patchedDependencies', name])
+    }
+  }
+  return String(document)
 }
 
 export function syncProfileDependencyPatches({ sourceRoot, profileDir, workspaceText }) {

@@ -1,6 +1,8 @@
+import { desktopHostAnchors } from './desktop-host-paths.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,11 +20,29 @@ export async function prepareDesktopPackageManager(options = {}) {
   const home = options.home || env.DSH_HOME
   if (!home || !path.isAbsolute(home)) throw new Error('Desktop 包管理需要明确的 DSH_HOME')
   const executable = env.DSH_DESKTOP_APP_EXECUTABLE || process.execPath
-  const candidates = [
-    path.join(path.dirname(executable), 'resources/app/node_modules/pnpm/bin/pnpm.mjs'),
-    path.join(path.dirname(executable), 'resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs'),
-    ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [path.resolve(path.dirname(env.DSH_DESKTOP_DSH_BOOTSTRAP), '../node_modules/pnpm/bin/pnpm.mjs')] : []),
+  const unpack = value => value.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
+  const anchors = [
+    path.join(path.dirname(executable), 'resources/app/package.json'),
+    path.join(path.dirname(executable), 'resources/app.asar.unpacked/package.json'),
+    ...(env.DSH_DESKTOP_DSH_BOOTSTRAP ? [unpack(env.DSH_DESKTOP_DSH_BOOTSTRAP)] : []),
   ]
+  // The detached updater may run under system Node without Desktop terminal
+  // variables. Follow the existing host link, not an unrelated global pnpm.
+  const dependencyAnchor = env.DSH_TAVERN_HOST_DEPENDENCY_ANCHOR || fileURLToPath(new URL('../tavern-plugin/lib/index.js', import.meta.url))
+  anchors.push(dependencyAnchor)
+  const candidates = env.DSH_DESKTOP_PNPM_ENTRY ? [unpack(env.DSH_DESKTOP_PNPM_ENTRY)] : []
+  for (const anchor of new Set(anchors.flatMap(desktopHostAnchors))) {
+    for (const directory of createRequire(anchor).resolve.paths('pnpm') || []) {
+      const root = path.join(directory, 'pnpm')
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+        const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.pnpm
+        if (manifest.name === 'pnpm' && bin) candidates.push(path.resolve(root, bin))
+      } catch {}
+      // Older Desktop bundles may omit package metadata after packaging.
+      candidates.push(path.join(root, 'bin/pnpm.mjs'), path.join(root, 'bin/pnpm.cjs'))
+    }
+  }
   const entry = options.entry || candidates.find(existsSync)
   if (!entry || !existsSync(entry)) throw new Error('找不到当前 Desktop 自带的 pnpm，请从该 Desktop 的 DSH Terminal 运行安装。')
   const root = path.join(home, 'tools', 'desktop-package-manager')
@@ -33,11 +53,44 @@ export async function prepareDesktopPackageManager(options = {}) {
   let valid = false
   try { valid = digest(await readFile(node)) === hashes[arch] } catch {}
   if (!valid) {
-    options.onProgress?.('正在准备 Windows 更新运行环境…')
-    const url = `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`
-    const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
-    if (!response.ok) throw new Error(`无法下载 Windows 更新运行环境：HTTP ${response.status}`)
-    const bytes = Buffer.from(await response.arrayBuffer())
+    let bytes
+    const searchPath = Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1] || ''
+    const localNodes = new Set([process.execPath, env.NODE,
+      ...searchPath.split(';').filter(Boolean).map(directory => path.join(directory.replace(/^"|"$/g, ''), 'node.exe')),
+    ].filter(Boolean))
+    for (const candidate of localNodes) {
+      try {
+        const localBytes = await readFile(candidate)
+        if (digest(localBytes) !== hashes[arch]) continue
+        bytes = localBytes
+        options.onProgress?.(`已校验并复用本机 Windows 更新运行环境：${candidate}`)
+        break
+      } catch {}
+    }
+    const urls = [
+      `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
+      `https://npmmirror.com/mirrors/node/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
+    ]
+    for (let attempt = 1; !bytes && attempt <= 3; attempt++) {
+      const url = urls[Math.min(attempt - 1, urls.length - 1)]
+      options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${new URL(url).hostname}`)
+      try {
+        const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const chunks=[]; let received=0,reportedAt=0
+        const total=Number(response.headers.get('content-length'))
+        const report=()=>options.onProgress?.(`下载更新运行环境（${new URL(url).hostname}）：已下载 ${(received/1048576).toFixed(1)}${total>0?' / '+(total/1048576).toFixed(1):''} MB`)
+        if(response.body)for await(const chunk of response.body){
+          chunks.push(chunk);received+=chunk.length
+          if(Date.now()-reportedAt>=500){report();reportedAt=Date.now()}
+        }
+        report();bytes=Buffer.concat(chunks)
+        break
+      } catch (cause) {
+        options.onProgress?.(`更新运行环境下载失败（${new URL(url).hostname}）：${cause.name==='TimeoutError'?'请求超过 120 秒未完成':cause.cause?.code||cause.message}；${attempt<3?'正在切换或重试下载源':'已停止，请检查网络后重试'}。`)
+        if (attempt === 3) throw new Error(`Windows 更新运行环境下载失败（已尝试 3 次）：${url}`, { cause })
+      }
+    }
     if (digest(bytes) !== hashes[arch]) throw new Error('Windows 更新运行环境 SHA-256 校验失败，已停止安装')
     const temporary = node + '.' + randomUUID() + '.tmp'
     try { await writeFile(temporary, bytes); await rename(temporary, node) }
@@ -51,7 +104,7 @@ export async function prepareDesktopPackageManager(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const result = await prepareDesktopPackageManager()
+    const result = await prepareDesktopPackageManager({ onProgress: message => console.error("DSH_STATUS " + message) })
     if (result) console.log(result.bin)
-  } catch (error) { console.error(error.message); process.exitCode = 1 }
+  } catch (error) { console.error(error); process.exitCode = 1 }
 }

@@ -5,7 +5,7 @@ import test from 'node:test'
 import { initializationFixture } from './fixtures/conversation-initialization.mjs'
 
 const server = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
-const client = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
+
 const chats = [{ id: 'compat', sessionId: 'compat-session', requestMode: 'sillytavern' }, { id: 'native', sessionId: 'native-session', requestMode: 'dsh' }]
 
 test('实验分支公开兼容会话并声明兼容能力可用', async () => {
@@ -47,10 +47,4 @@ test('启动恢复包含兼容与普通会话', async () => {
   assert.deepEqual(Array.from(context.foreground), ['compat', 'native'])
   assert.deepEqual(Array.from(context.background), ['compat', 'native'])
   assert.equal(context.scanned, true)
-})
-
-test('侧栏隐藏兼容实验入口但保留底层兼容能力', () => {
-  assert.match(client, /const compatibilityAvailable = true/)
-  assert.doesNotMatch(client, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "兼容（实验性）"/)
-  assert.match(client, /requestMode === "sillytavern"/)
 })

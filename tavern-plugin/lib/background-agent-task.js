@@ -1,3 +1,4 @@
+import { createBackgroundProgress } from './domain/background-progress.js'
 import { worldbookSnapshot } from './domain/worldbook-snapshot.js'
 import { projectCandidateScriptContext } from './domain/candidate-script-context.js'
 import { projectWorldbookFilterContext } from './domain/worldbook-filter-context.js'
@@ -131,6 +132,7 @@ export function createBackgroundAgentTask(options) {
       state.ctx = childCtx
       state.modelSelection = { current: { ...state.input.selection }, assembled: undefined }
       installModelSelection(childCtx, state.modelSelection)
+      childCtx.on('agent/assistant-stream', ({frame}) => state.progress?.frame(frame))
       childCtx.on('agent/pre-step', async function ({ agent, turn, step }, next) {
         const decision = await next()
         if (!descriptorAppended && decision.kind === 'enter') {
@@ -290,6 +292,7 @@ export function createBackgroundAgentTask(options) {
             }
           }
           const invoke = async function () {
+            input.signal?.throwIfAborted()
             return shared
               ? str(await shared.execute({ input, args, execution }))
               : str(await input.onToolCall({ name: tool.name, arguments: args }))
@@ -329,7 +332,7 @@ export function createBackgroundAgentTask(options) {
               }
             }
             const call = input.task === 'image' ? imageToolCall(tool.name, args, execution, sessionEvents(session), eventStart) : { name: tool.name, arguments: args }
-            const invoke = async function () { return str(await input.onToolCall(call)) }
+            const invoke = async function () { input.signal?.throwIfAborted(); return str(await input.onToolCall(call)) }
             const result = characterDesignStage
               ? str(await characterDesignStage.execute(tool.name, invoke))
               : await invoke()
@@ -353,8 +356,11 @@ export function createBackgroundAgentTask(options) {
     const runtimeInput = state.input
     try { rewindBackgroundSurface(agent.session, input.rewindTo) }
     catch (error) { throw new Error('后台历史回退失败，本次任务已停止，未基于旧上下文继续执行。', { cause: error }) }
+    const progress = createBackgroundProgress({idleMs:options.modelIdleTimeoutMs, onCancel:()=>{state.abandoned=true;agent.cancel?.({kind:'user'})}})
+    state.progress=progress
+    runtimeInput.signal=input.signal ? AbortSignal.any([input.signal,progress.signal]) : progress.signal
     const removeTaskTools = installTaskTools(state, runtimeInput, agent.session)
-    const cancel = function () { agent.cancel?.({ kind: 'user' }) }
+    const cancel = () => progress.cancel()
     input.signal?.addEventListener('abort', cancel, { once: true })
 
     try {
@@ -395,7 +401,7 @@ export function createBackgroundAgentTask(options) {
           worldbookFilterPayload: { version: 1, start: taskText.indexOf(filterContext.payloadText), length: filterContext.payloadText.length }
         } : {}) }
       })
-      await agent.whenIdle()
+      await progress.wait(agent.whenIdle())
       input.signal?.throwIfAborted()
       const rawResult = finalMessage(sessionEvents(agent.session), eventStart)
       if (rawResult === null) {
@@ -413,6 +419,8 @@ export function createBackgroundAgentTask(options) {
     } catch (error) {
       throw traceError(error, traceSessionId, input.task)
     } finally {
+      progress.dispose()
+      state.progress=null
       input.signal?.removeEventListener('abort', cancel)
       await removeTaskTools()
     }

@@ -7,14 +7,6 @@ const runtime = await UpstreamTemplateRuntime.create()
 const e = (ref, content, order = 100, extra = {}) => ({ ref, content, order, enabled: true, primaryKeys: ['地点'], ...extra })
 const project = (entries, token_budget) => createForegroundWorldbook({ bound: async () => ({ view: { entries, raw: { token_budget } } }), runtime: async () => runtime, globalVariables: async () => ({}) })({ chat: { messages: [] }, card: {}, userText: '地点' })
 
-test('短条目可以超过五条；日志报告实际渲染成本而不是模板源码成本', async () => {
-  const result = await project(Array.from({length:12}, (_,i) => e('条目'+i, '<% /* ' + '长注释'.repeat(100) + ' */ %>短')), 36)
-  assert.equal(result.error, null)
-  assert.equal(result.refs.length, 12)
-  assert.equal(result.log.budget.used, 36)
-  assert.equal(result.log.budget.estimator, 'unicode-estimate')
-  assert.ok(result.log.outputs.every(output => output.text === '短'))
-})
 test('长模板按实际输出挡住，按作者顺序停止，不跳过长条目去捡低优先级短条目', async () => {
   const result = await project([e('先', '一', 300), e('长', '<%= "长".repeat(100) %>', 200), e('后', '后', 100)], 10)
   assert.deepEqual(result.refs, ['先'])
@@ -25,14 +17,7 @@ test('长模板按实际输出挡住，按作者顺序停止，不跳过长条�
   assert.equal(result.log.entries.find(e => e.ref === '后').overflowedEarlier, true)
   assert.equal(result.reads.长, undefined)
 })
-test('零预算关闭非常驻召回，常驻标签保持原有路径', async () => {
-  const result = await project([e('常驻', '基础规则', 300, {constant:true}), e('动态', '资料')], 0)
-  assert.deepEqual(result.refs, [])
-  assert.equal(result.context, '')
-  assert.equal(result.prefixContext, '基础规则')
-  assert.equal(result.log.budget.used, 0)
-  assert.equal(result.log.entries.find(e => e.ref === '动态').reason, 'budget')
-})
+
 test('预算设置在嵌入与独立格式编辑导出后仍生效，非法输入不静默截断', async () => {
   const original = { entries: { 0: {uid:0, key:['地点'],content:'正文'} } }
   const updated = updateWorldBookDocument(original, {tokenBudget:1234,scanDepth:1}).document

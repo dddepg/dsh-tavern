@@ -1,13 +1,11 @@
 // Real browser coverage for trusted card scripts that inject UI into the host document.
-// STATUS_SMOKE_DSH_ROOT=/path/to/installed/dsh node tests/fixtures/card-host-artifact-browser-smoke.mjs
+// node tests/fixtures/card-host-artifact-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
-const dsh = process.env.STATUS_SMOKE_DSH_ROOT
-if (!dsh) throw Error('Set STATUS_SMOKE_DSH_ROOT to the installed DSH package')
-const require = createRequire(path.join(dsh, 'node_modules/@deepseek-ai/dsh-client-ui-trajectory/package.json'))
+const require = createRequire(new URL('../../package.json', import.meta.url))
 const names = ['react', 'scheduler', 'react-dom', 'react-dom/client']
 const files = ['react.production.js', 'scheduler.production.js', 'react-dom.production.js', 'react-dom-client.production.js']
 let bundle = 'const modules={};\n'
@@ -27,11 +25,22 @@ const runtime=client.createTavernHelperScriptRuntime({rpc(){return Promise.resol
 function view(content){return {card:{name:'Fixture'},tavernRuntimePolicy:{trustedCardMode:true},tavernHelper:{messages:[],scriptVariables:{}},tavernHelperScripts:[{id:'fixture',name:'fixture',content,data:{},buttons:[]}]};}
 (async()=>{
   check(typeof runtime.sync==='function','production Helper runtime created');
-  runtime.sync('A',view(\`const button=parent.document.createElement('button');button.id='fixture-card-global';parent.document.body.appendChild(button);const style=parent.document.createElement('style');style.id='fixture-card-style';parent.document.head.appendChild(style);\`));
-  await waitFor(()=>document.querySelector('#fixture-card-global')&&document.querySelector('#fixture-card-style'));
-  check(true,'trusted card installed host artifacts');
+  runtime.sync('A',view(\`parent.__lateCardMount=()=>{const button=$('<button id="fixture-card-global">A</button>');button.on('click',()=>{parent.__cardClicks=(parent.__cardClicks||0)+1;});$('body').append(button);$('head').append('<style id="fixture-card-style"></style>');};parent.__cardReady=true;\`));
+  await waitFor(()=>window.__cardReady);
+  runtime.setForeground(false);
+  const other=document.createElement('button');other.id='other-card';document.body.append(other);
+  window.__lateCardMount();
+  await new Promise(resolve=>setTimeout(resolve,30));
+  check(!document.querySelector('#fixture-card-global')&&!document.querySelector('#fixture-card-style'),'late mount stays hidden after switching away');
+  check(other.isConnected,'other card UI remains intact');
+  runtime.setForeground(true);
+  await waitFor(()=>document.querySelector('#fixture-card-global'));
+  document.querySelector('#fixture-card-global').click();
+  check(window.__cardClicks===1,'return restores the same working button');
+  runtime.setForeground(false);
+  check(!document.querySelector('#fixture-card-global'),'switching away again removes the floating button');
   runtime.sync('B',view('void 0'));
-  check(!document.querySelector('#fixture-card-global')&&!document.querySelector('#fixture-card-style'),'switch removed old card host artifacts');
+  check(!document.querySelector('#fixture-card-global')&&!document.querySelector('#fixture-card-style'),'replacing the runtime cleans up the old artifacts');
   check(document.querySelectorAll('#dsh-tavern-helper-script-host iframe').length===1,'new card owns one fresh sandbox');
   runtime.dispose();
   report.textContent='PASS\\n'+seen.join('\\n');
@@ -51,6 +60,11 @@ const server = createServer((request, response) => {
   if (url.pathname === '/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs' || url.pathname === '/api/dsh-tavern/vendor/runtime-assets/yaml/index.mjs') {
     response.setHeader('Content-Type', 'text/javascript')
     return response.end('export default {};')
+  }
+  const prefix='/api/dsh-tavern/vendor/runtime-assets/';
+  if(url.pathname.startsWith(prefix)&&!url.pathname.includes('..')) {
+    const asset=new URL('../../tavern-plugin/lib/vendor/runtime-assets/'+url.pathname.slice(prefix.length),import.meta.url);
+    readFile(asset).then(bytes=>{response.setHeader('Content-Type',url.pathname.endsWith('.css')?'text/css':'text/javascript');response.end(bytes)},()=>{response.statusCode=404;response.end('')});return;
   }
   response.statusCode = 404
   response.end('')

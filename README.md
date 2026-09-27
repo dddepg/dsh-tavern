@@ -72,7 +72,7 @@
 
 ### Windows 一键安装
 
-**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)**（Windows x64）
+**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe)**（Windows x64，修复运行目录移动时的访问拒绝）
 
 下载后双击运行，保持联网，按提示完成安装；以后从桌面「DSH Tavern」快捷方式打开。无需另装 Node.js 或 DSH Desktop。
 
@@ -80,7 +80,7 @@
 
 **[下载 Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)**（Android 11 及以上、ARM64）
 
-安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。Android 仍属实验性支持，不保证一定可用。
+安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。
 
 ### 借助 DSH Desktop（Windows / macOS）
 
@@ -110,7 +110,13 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 安装后自动打开网页；以后用 `dsh-tavern open` 打开，`dsh-tavern update` 更新。
 
-**更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
+Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocket 及其开关。详见 [Pocket 手机访问](docs/pocket-access.md)。
+
+**上述安装方式的更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
+
+### 已有 DSH：标准插件安装（试验）
+
+已有适配版本 DSH 的用户，可将 Tavern 安装到独立 Profile。GitHub 安装命令及版本要求见[标准插件安装指南](https://flizzywine.github.io/dsh-tavern/#plugin-installation)。
 
 [完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。
 

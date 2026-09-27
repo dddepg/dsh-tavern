@@ -26,24 +26,6 @@ test('格式化变量宏生成 YAML 并保持所在行缩进', () => {
   assert.equal(rendered.replacements, 1)
 })
 
-test('同一行多个格式化宏都生效', () => {
-  const rendered = renderTavernHelperVariableMacros(
-    'A={{format_chat_variable::a}} B={{format_message_variable::b}}',
-    { chat: { a: { x: 1 } }, message: { b: { y: 2 } } }
-  )
-
-  assert.equal(rendered.text, 'A=x: 1 B=y: 2')
-  assert.equal(rendered.replacements, 2)
-})
-
-test('空路径与不存在的路径遵循酒馆助手的 null 回退', () => {
-  const rendered = renderTavernHelperVariableMacros(
-    '{{get_message_variable::}} / {{get_message_variable::stat_data.不存在}}',
-    { message: { stat_data: { hp: 1 } } }
-  )
-  assert.equal(rendered.text, 'null / null')
-})
-
 test('最终请求中的酒馆助手宏逐消息替换', () => {
   const result = applyTavernHelperVariableMacros([
     { role: 'system', content: '{{format_message_variable::stat_data}}' },

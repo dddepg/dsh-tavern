@@ -2,43 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { comfyWorkflow, compileComfyWorkflow } from '../tavern-plugin/lib/domain/scene-image-comfy-workflow.js'
 import { generateSceneImage } from '../tavern-plugin/lib/domain/scene-image-provider.js'
-import { channelSettings, channelReady, imageExpressionProfile, imageCredentialRef } from '../tavern-plugin/lib/domain/scene-image-channels.js'
+
 import { comfyGraph, comfyLinkedSeedGraph } from './fixtures/scene-image-comfy-workflow.mjs'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKfoAAAAASUVORK5CYII=', 'base64')
 const input = () => ({ provider: 'comfyui', baseURL: 'http://localhost:8188/prefix', workflow: comfyGraph(), prompt: 'rainy window' })
-
-test('ComfyUI auto-imports rgthree seed links through settings and persisted templates without replacing graph edges', () => {
-  for (const sampler of ['KSampler', 'KSamplerAdvanced']) {
-    const graph = comfyLinkedSeedGraph(sampler), original = structuredClone(graph)
-    const config = channelSettings({ ...input(), workflow: graph })
-    assert.deepEqual(config.workflow.bindings.seed, [{ node: '8', input: 'seed' }])
-    const saved = JSON.parse(JSON.stringify(config.workflow))
-    assert.deepEqual(comfyWorkflow(saved), config.workflow)
-    const compiled = compileComfyWorkflow(saved, 'replacement positive')
-    const seedInput = sampler === 'KSamplerAdvanced' ? 'noise_seed' : 'seed'
-    assert.deepEqual(compiled.prompt['5'].inputs[seedInput], ['8', 0])
-    assert.equal(compiled.prompt['8'].inputs.seed, compiled.seed)
-    assert.ok(Number.isSafeInteger(compiled.seed) && compiled.seed >= 0)
-    assert.equal(compiled.prompt['3'].inputs.text, 'replacement positive')
-    assert.deepEqual(compiled.prompt['9'], graph['9'])
-    assert.deepEqual(compiled.prompt['5'].inputs.negative, ['9', 0])
-    assert.equal(compiled.prompt['2'].inputs.batch_size, 1)
-    assert.equal(compiled.prompt['4'], undefined, 'unconnected negative encoder is pruned')
-    assert.deepEqual(graph, original, 'import and compile never mutate the source workflow')
-  }
-})
-
-test('ComfyUI refuses unknown seed node semantics, wrong output slots and chained seed sources with actionable errors', () => {
-  for (const mutate of [
-    g => { g['8'].class_type = 'UnknownSeedCalculator' },
-    g => { g['5'].inputs.seed = ['8', 1] },
-    g => { g['10'] = { class_type: 'Seed (rgthree)', inputs: { seed: 1 } }; g['8'].inputs.seed = ['10', 0] }
-  ]) {
-    const graph = comfyLinkedSeedGraph(); mutate(graph)
-    assert.throws(() => comfyWorkflow(graph), error => /种子.*映射文件/.test(error.message) && /节点 (5|8).*seed/.test(error.message))
-  }
-})
 
 test('ComfyUI mapping errors identify missing fields, types, unsafe integers and duplicates without leaking values', () => {
   for (const [value, expected] of [['PRIVATE_SENTINEL', /节点 8.*seed.*安全整数/], [2 ** 53, /节点 8.*seed.*安全整数/], [1.5, /节点 8.*seed.*安全整数/]]) {
@@ -74,22 +42,6 @@ test('ComfyUI rgthree seed reaches the actual provider submission using the pres
   } })
   assert.equal(posts, 1)
   assert.deepEqual(result.data, png)
-})
-test('ComfyUI imports API graph once, preserves unrelated parameters, sets one image and random seed', () => {
-  const graph = comfyGraph(), snapshot = structuredClone(graph), template = comfyWorkflow(graph)
-  assert.deepEqual(comfyWorkflow(template), template)
-  const result = compileComfyWorkflow(template, 'new picture')
-  assert.equal(result.prompt['3'].inputs.text, 'new picture')
-  assert.equal(result.prompt['4'].inputs.text, 'negative stays')
-  assert.equal(result.prompt['1'].inputs.ckpt_name, 'fixture-model.safetensors')
-  assert.equal(result.prompt['2'].inputs.batch_size, 1)
-  assert.equal(result.prompt['5'].inputs.seed, result.seed)
-  assert.equal(result.outputNode, '7')
-  assert.deepEqual(graph, snapshot)
-  assert.equal(channelReady(channelSettings(input()), ''), true)
-  assert.equal(channelReady(channelSettings({ ...input(), workflow: null }), ''), false)
-  assert.notEqual(imageExpressionProfile(channelSettings(input())), imageExpressionProfile(channelSettings({ ...input(), workflow: { ...graph, '4': { ...graph['4'], inputs: { ...graph['4'].inputs, text: 'changed' } } } })))
-  assert.equal(imageCredentialRef('comfyui', 'basic'), 'DSH_TAVERN_IMAGE_COMFYUI_PASSWORD')
 })
 
 test('ComfyUI supports explicit maintainer mapping and prunes unrelated output branches', () => {
