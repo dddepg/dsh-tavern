@@ -278,3 +278,50 @@ tests 2966 · pass 2903 · fail 44 · skipped 19
 - §9 记录的上游漂移失败（`extract-flow`、`settlement-restart-recovery`、`dsh-version-policy`、`dsh-compatibility`、`superseded-turn-errors`、`workspace-instruction-presentation`、`foreground-frame-retirement`）在 v2.3 上已全部消失。
 - 新暴露的 `tests/user-extensions.test.mjs`「实际 Unix 安装脚本更新程序两次」失败**不是本次合并引入**：在合并前的 `ef6ba4a4` 和纯净 `upstream/main`（`5ae0c1f5`）上逐一复现，原因属用例自身（mock `dsh --version` 无输出 → `dsh-compatibility.mjs --check` 抛「无法识别当前 DSH 版本」）。
 - 与本地修复直接相关的 `rollback-surface`、`reply-completeness`、`foreground-handoff`、`turn-orchestration`、`prompt-streamlining`、`card-memory` 全部通过；本次合并没有引入断言级失败（日志中 `AssertionError` 为 0）。
+
+## 11. 同步上游 v2.4 与实例整体更新（2026-09-28）
+
+### 同步结果
+
+`upstream/main` 从 `5ae0c1f5` 前进到 `9f5adaf8`（包版本 **2.4.0**，长会话存储重构，77 个提交，新增 tag `v2.4`），并入本地 `main`：**无冲突**，合并提交 `5318f6c9`。上一轮解决的两处冲突这次没有再出现：
+
+- `rollback-surface.js` 的 `turnIntervals()` 仍用 `isFailedTurnReason()`（`error` / `aborted` / `max-tokens`），上游本轮没有再把判定退回 `['error','aborted']`；`isFailedTurnReason` 出现 3 处，本地截断语义保持。
+- `tests/prompt-streamlining.test.mjs` 保持上游精简后的结构（64 行）+ 本地补回的最小断言，共 77 行；`assertCompleteReply` 仍排在 `foregroundHandoff.finalize()` 之前（`index.js:4539` 早于 `:4546`）。
+- 上游 v2.4 仍然**没有**实现前台截断保护（`git grep isFailedTurnReason|assertCompleteReply|truncatedForegroundReply upstream/main -- tavern-plugin` 为空），所以本地这批修复继续是 fork 独有，更新时必须走本地源。
+
+`node bin/build-tavern-client.mjs --check` 报「已是最新」；`rollback-surface` / `reply-completeness` / `foreground-handoff` / `prompt-streamlining` 四个文件 36 个用例先跑一遍全绿，再更新实例。
+
+### 实例整体更新
+
+沿用 §10 的做法（本地源 + 安装器全流程），备份 `backups/app-pre-20260928-213817.tar.gz`：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli
+DSH_TAVERN_CLI_HOME=$PWD DSH_TAVERN_HOST=cli \
+DSH_TAVERN_GIT_URL=/home/ezio/workspace/dsh-tavern \
+sh /home/ezio/workspace/dsh-tavern/install.sh
+```
+
+日志确认走的是本地仓库（`From /home/ezio/workspace/dsh-tavern`，未回退 jsDelivr）；`apps/dsh-tavern/.dsh-tavern-release.json` 记为 `5318f6c9`；实例内 `reply-completeness.js` 存在、`rollback-surface.js` 含 3 处 `isFailedTurnReason`、`index.js` 含 `assertCompleteReply`。
+
+### 端口与启动
+
+安装器收尾仍因 DSH Pocket 占着 `0.0.0.0:3081`（本机 DSH 会话 pid 2411）而 `拒绝启动`，安装本身成功。按既有做法：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli && DSH_TAVERN_PORT=3091 dsh-tavern start
+```
+
+本次 PID 3172，`service.ready` @ 2026-09-28T13:39:13Z，`127.0.0.1:3091` 监听正常；无 token 401 / 带 token 303→200，`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`。
+
+### 回归（v2.4）
+
+`DSH_TAVERN_CLI_HOME=/home/ezio/workspace/dsh-tavern-cli node bin/test-tavern.mjs`：
+
+```
+tests 3251 · pass 3183 · fail 46 · skipped 22
+```
+
+- 46 个失败中 45 个是浏览器缺失（`chromium_headless_shell-1208` 不存在），仍集中在 `worldbook-*`、`full-template-*`、`template-html-fence-boundaries`、`tavern-prompt-template-runtime`、`dynamic-constant-worldbook` 这 9 个文件；日志里 `AssertionError` 为 0，没有逻辑断言失败。
+- 余下 1 个是 §10 已定性的 `tests/user-extensions.test.mjs`「实际 Unix 安装脚本更新程序两次」：本次在纯净 `upstream/main`（`9f5adaf8`）上再次复现（`4 pass / 1 fail`，同一个 `无法识别当前 DSH 版本`），确认与本地修复、本地源更新无关。
+- 与本地截断修复直接相关的 4 个文件（`rollback-surface` / `reply-completeness` / `foreground-handoff` / `prompt-streamlining`）更新前后分别跑过，36 个用例全绿；实例内也已核对修复代码仍在位。
