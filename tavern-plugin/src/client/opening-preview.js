@@ -104,7 +104,7 @@ function installOpeningPreviewBridge(token, preview) {
     return function () { return Promise.resolve().then(() => callback.apply(this, arguments)).catch(console.error); };
   };
   window.setChatMessages = async function (patches) {
-    if (original && Array.isArray(patches) && patches.every(patch => patch.swipe_id === undefined && patch.message === undefined)) return original.setChatMessages(patches);
+    if (original && Array.isArray(patches) && patches.every(patch => patch.swipe_id === undefined)) return original.setChatMessages(patches);
     if (!Array.isArray(patches) || patches.length !== 1) throw new Error('开场预览只能选择一条开场');
     const patch = patches[0];
     const index = Number(patch && patch.swipe_id);
@@ -166,8 +166,8 @@ function installSessionOpeningBridge(token, descriptor) {
     return window.setChatMessage(swipes[index], 0, { swipe_id: index });
   } };
   if (!window.toastr) window.toastr = { info: console.info, success: console.info, warning: console.warn, error: console.error };
-  window.SillyTavern = Object.assign({}, window.SillyTavern, {
-    extensionSettings: descriptor.extensionSettings || {},
+  window.SillyTavern = Object.assign(window.SillyTavern || {}, {
+    extensionSettings: window.SillyTavern?.extensionSettings || descriptor.extensionSettings || {},
     TavernHelper: window.TavernHelper,
     chat, swipe,
     getContext: function () { return window.SillyTavern; },

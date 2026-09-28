@@ -1,5 +1,18 @@
 # 游玩验收 E2E
 
+## 超长存档结算计时
+
+`TAVERN_E2E_TIMEOUT_MS=120000 node tests/e2e/gameplay.mjs --settlement-performance`
+在隔离 Profile 中生成匹配的 Chat 与原生 Session，使用真实官方 MVU、浏览器和日志存储，只有模型输出固定。
+默认 1000 轮、20 个合成字段加金币、连续 5 次重新结算；可用 `TAVERN_PERF_ROUNDS`、`TAVERN_PERF_FIELDS`、`TAVERN_PERF_RUNS` 调整。
+设置 `TAVERN_PERF_APPEND=1` 改为实际继续游玩、追加新一轮；此模式与重新结算分别统计。阶段事件同时记录执行上下文是否为增量及包含的消息数量。
+合成字段从人物卡初始变量正常进入 MVU，每次独立读档验证所有字段和结算回执。
+
+`settlement-performance.json` 区分浏览器 MVU 事件完成、服务端 runtime 返回、结算日志 append 完成、commit 返回和状态栏显示。
+跨进程时间使用同机 epoch 时钟；`persistenceKind` 区分新格式 Head 发布与旧格式日志 append。新格式在原子 Head 发布并完成同步后记录，旧日志 append 表示操作系统可读写入，不代表 fsync。
+计时关闭 Playwright tracing，避免长历史快照采集干扰。探针只通过隔离子进程的 ESM loader 注入；生产代码不变。
+超大变量快照可能使冷加载或 UI 超时，失败不能作为成功耗时样本。
+
 自动执行：启动酒馆 → 选择角色卡 → 新开一局 → 发消息玩一轮 → 检查正文、金币和人物姿势 → 刷新页面 → 确认同一局的数据仍然保留 → 生成 4+1 候选项并选择行动 → 再玩一轮 → 重新生成正文 → 编辑正文并刷新 → 回退并刷新 → 撤销回退 → Guide 添加/删除 → 重新结算变量 → 导出纯对话 → 切换本局预设并继续游玩。
 
 ## 运行
@@ -101,3 +114,9 @@ TAVERN_E2E_WRONG_GOLD=1 TAVERN_E2E_TIMEOUT_MS=10000 pnpm test:e2e
 `node tests/e2e/gameplay.mjs --surface-recovery`：在真实 DSH 中新开一局，从首次模型请求开始注入“只有思考、没有正文”，覆盖历史系统槽位更新。恢复操作使用 430×932 触摸浏览器窗口（服务重启后的历史导航在 1440×1000 宽屏完成，再切回窄屏），点击清除未完成回复并继续、原样重试、重启服务、重新生成失败再成功、回退并撤销，以及失败后不手动清理而直接继续。独立读取落盘 Chat 与 Session，核对未提交失败正文、原始输入重放、消息面无思考残留、历史和后续正文保留。
 
 只在模型边界读取 `recovery-control.json` 控制故障，不模拟酒馆接口或直接修改存档；`recovery-requests.jsonl` 记录故障实际到达模型边界。输出还包含 `recovery-*.png` 和公共的 `report.json` / `trace.zip`。这是 Chromium 触摸与窄屏验证，不等同于手机真机远程访问。
+
+## 原生新存档验收
+
+`node tests/e2e/gameplay.mjs --native-format` 在普通完整游玩流程上增加磁盘格式断言和服务重启恢复：必须直接写入 `conversation-state-v2` 的 `head.json` / `blocks`，不能出现旧 snapshots/journals 或兼容迁移标记。页面变量还必须与独立原生读取器读出的当前世界一致。
+
+`node tests/e2e/gameplay.mjs --native-format --mvu-incremental` 进一步验证 Helper 历史楼、末楼、chat/script 变量、第二页面实时同步、MVU 重算及重启后继续写入。两者都只创建合成新局，不测试迁移。

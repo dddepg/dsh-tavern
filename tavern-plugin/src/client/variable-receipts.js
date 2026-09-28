@@ -12,7 +12,10 @@ function applyTavernVariableReceipt(previous, delta) {
             if (delta.stateRevision < previous.stateRevision) return previous;
             if (delta.baseRevision !== previous.stateRevision || previous.messagesPending) return null;
         } else if (delta.kind === 'dispatch') {
-            if (previous.transaction || delta.baseRevision !== previous.stateRevision || previous.messagesPending) return null;
+            // The committed view may arrive between claiming and dispatching.
+            // Its exact target revision is also a valid base for this draft.
+            if (previous.transaction || (delta.baseRevision !== previous.stateRevision && delta.stateRevision !== previous.stateRevision) || previous.messagesPending) return null;
+            if (delta.stateRevision === previous.stateRevision && delta.messageCount !== (previous.messages || []).length) return null;
         } else return null;
         const context = Object.assign({}, previous, delta.header || {}, {
             stateRevision: delta.stateRevision,
@@ -20,7 +23,8 @@ function applyTavernVariableReceipt(previous, delta) {
         });
         if (delta.kind === 'committed') delete context.transaction;
         const api = applyTavernVariableReceipt.indexApi;
-        const length = delta.kind === 'dispatch' ? delta.messageCount : (previous.messages || []).length;
+        const length = delta.kind === 'dispatch' ? delta.messageCount : delta.kind === 'committed' ? (delta.messageCount ?? (previous.messages || []).length) : (previous.messages || []).length;
+        if (delta.kind === 'committed' && length < (previous.messages || []).length) return null;
         if (!Number.isInteger(length) || length < 0 || length > 0xffffffff) return null;
         const entries = [];
         for (const source of delta.messages || []) {
@@ -35,7 +39,18 @@ function applyTavernVariableReceipt(previous, delta) {
             entries.push([index, message]);
         }
         context.messages = api.update(previous.messages || [], entries, length);
-        if (!api.info(context.messages).complete) return null;
+        const information=api.info(context.messages);
+        if (!information.complete && !(previous.historyAccess && information.count===length
+            && entries.every(([,row])=>!row.stub))) return null;
+        if (delta.turnMessageIdChanges?.length) {
+            const fields = applyTavernVariableReceipt.turnFields;
+            if (delta.kind !== 'dispatch' || !fields) return null;
+            const source = fields.from(previous.turnMessageIds || {});
+            const changes = delta.turnMessageIdChanges;
+            if (!fields.has(source) || !changes.every(row => Array.isArray(row) && row.length === 2 && fields.validKey(row[0])
+                && Number.isInteger(row[1]) && row[1] >= (delta.stateRevision === previous.stateRevision ? 0 : (previous.messages || []).length) && row[1] < length)) return null;
+            context.turnMessageIds = fields.update(source, changes, []);
+        }
         for (const key of ['chatVariables', 'scriptVariables', 'scriptPrompts']) if (Object.hasOwn(delta, key)) context[key] = JSON.parse(JSON.stringify(delta[key]));
         return context;
     }

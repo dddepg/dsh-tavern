@@ -1,3 +1,7 @@
+import { diffJson } from './json-mutation.js'
+import { copyJsonTree } from './copy-json-tree.js'
+import { taskStateFields } from './task-state-reader.js'
+
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
@@ -54,10 +58,33 @@ export function createDurableTaskMailbox(options = {}) {
     throw new Error('Durable Task Mailbox 缺少存储 adapter')
   }
 
+  const scoped = typeof store.readState === 'function' && typeof store.patchChat === 'function'
+  const retryWrite = Symbol('mailbox revision conflict')
+  const baselines = new WeakMap()
+  const readWritable = async id => {
+    const chat=await (scoped ? store.readState(id) : store.readChat(id))
+    if(scoped && chat) baselines.set(chat,copyJsonTree(chat.taskMailbox))
+    return chat
+  }
+  async function saveMailbox(chat, metadata) {
+    if (!scoped) return store.writeChat(chat, metadata)
+    const saved = await store.patchChat(chat.id, chat._storageRevision,
+      diffJson(baselines.get(chat) === undefined ? {} : {taskMailbox:baselines.get(chat)}, {taskMailbox:chat.taskMailbox}),
+      { ...metadata, returnProjection: taskStateFields })
+    if (!saved) throw retryWrite
+    return saved
+  }
+
   function serialize(chatId, work) {
     const id = str(chatId)
     const previous = mutationTails.get(id) || Promise.resolve()
-    const current = previous.catch(function () {}).then(work)
+    const current = previous.catch(function () {}).then(async function () {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        try { return await work() }
+        catch (error) { if (error !== retryWrite) throw error }
+      }
+      throw new Error('候选任务状态持续被并发修改，请重试')
+    })
     mutationTails.set(id, current)
     return current.finally(function () {
       if (mutationTails.get(id) === current) mutationTails.delete(id)
@@ -99,7 +126,7 @@ export function createDurableTaskMailbox(options = {}) {
 
   async function submit(chatId, input = {}) {
     return await serialize(chatId, async function () {
-      const chat = await store.readChat(chatId)
+      const chat = await readWritable(chatId)
       if (!chat) throw new Error('聊天不存在: ' + chatId)
       const mailbox = mailboxOf(chat)
       const requestId = str(input.requestId).trim().slice(0, 160)
@@ -119,8 +146,8 @@ export function createDurableTaskMailbox(options = {}) {
         taskId,
         requestId,
         kind,
-        status: 'queued',
-        stage: str(input.stage) || 'queued',
+        status: input.startImmediately === true ? 'running' : 'queued',
+        stage: str(input.stage) || (input.startImmediately === true ? 'preparing' : 'queued'),
         input: input.input && typeof input.input === 'object' ? input.input : {},
         operationId: '',
         result: null,
@@ -135,24 +162,38 @@ export function createDurableTaskMailbox(options = {}) {
         return (Number(mailbox.tasks[right].createdAt) || 0) - (Number(mailbox.tasks[left].createdAt) || 0)
       })
       for (const oldId of ids.slice(30)) delete mailbox.tasks[oldId]
-      await store.writeChat(chat, { source: kind + '.mailbox.queued', requestId })
+      await saveMailbox(chat, { source: kind + '.mailbox.' + (input.startImmediately === true ? 'preparing' : 'queued'), requestId })
       return publicTask(task)
     })
   }
 
   async function transition(chatId, taskId, patch = {}) {
     return await serialize(chatId, async function () {
-      const chat = await store.readChat(chatId)
+      const chat = await readWritable(chatId)
       if (!chat) throw new Error('聊天不存在: ' + chatId)
       const mailbox = mailboxOf(chat)
       const task = findTask(mailbox, { taskId })
       if (!task) throw new Error('持久任务不存在: ' + taskId)
-      if (applyPatch(mailbox, task, patch)) await store.writeChat(chat, { source: str(task.kind) + '.mailbox.' + (str(patch.stage) || str(patch.status) || 'transition'), requestId: str(task.requestId), operationId: str(patch.operationId || task.operationId) })
+      if (applyPatch(mailbox, task, patch)) await saveMailbox(chat, { source: str(task.kind) + '.mailbox.' + (str(patch.stage) || str(patch.status) || 'transition'), requestId: str(task.requestId), operationId: str(patch.operationId || task.operationId) })
       return publicTask(task)
     })
   }
 
   async function sync(chatId, selector = {}, project) {
+    // A durable candidate result is sufficient even while its bookkeeping
+    // transition holds the mailbox writer queue.
+    if (options.projectReconciledState === true && store.readState) {
+      const state = await store.readState(chatId)
+      if (state) {
+        const mailbox = mailboxOf(state), task = findTask(mailbox, selector)
+        const repair = task ? await reconcile(state, publicTask(task)) : null
+        if (repair) {
+          const projected = structuredClone(mailbox), projectedTask = findTask(projected, selector)
+          applyPatch(projected, projectedTask, repair)
+          return { mailboxVersion: projected.version, task: publicTask(projectedTask), ...(project ? { projection: project(state) } : {}) }
+        }
+      }
+    }
     return await serialize(chatId, async function () {
       // Inspect a detached projection first. Only a repair may acquire a writable Chat.
       if (store.readState) {
@@ -163,9 +204,17 @@ export function createDurableTaskMailbox(options = {}) {
         if (!task || !repair || !applyPatch(structuredClone(mailbox), structuredClone(task), repair)) {
           return { mailboxVersion: mailbox.version, task: publicTask(task), ...(project ? { projection: project(state) } : {}) }
         }
+        // The caller may derive completion from another already-durable result.
+        // Publishing that projection need not wait for a redundant mailbox write.
+        if (options.projectReconciledState === true) {
+          const projected = structuredClone(mailbox)
+          const projectedTask = findTask(projected, selector)
+          applyPatch(projected, projectedTask, repair)
+          return { mailboxVersion: projected.version, task: publicTask(projectedTask), ...(project ? { projection: project(state) } : {}) }
+        }
         // Re-read and reconcile below: a concurrent write may have changed the task.
       }
-      let chat = await store.readChat(chatId)
+      let chat = await readWritable(chatId)
       const result = (mailboxVersion, task) => ({ mailboxVersion, task, ...(project ? { projection: project(chat) } : {}) })
       if (!chat) return result(0, null)
       const mailbox = mailboxOf(chat)
@@ -173,7 +222,7 @@ export function createDurableTaskMailbox(options = {}) {
       if (!task) return result(mailbox.version, null)
       const repair = await reconcile(chat, publicTask(task))
       if (repair && typeof repair === 'object' && applyPatch(mailbox, task, repair)) {
-        const saved = await store.writeChat(chat, { source: str(task.kind) + '.mailbox.reconcile', requestId: str(task.requestId), operationId: str(task.operationId) })
+        const saved = await saveMailbox(chat, { source: str(task.kind) + '.mailbox.reconcile', requestId: str(task.requestId), operationId: str(task.operationId) })
         if (saved?.id === chat.id) chat = saved
       }
       return result(mailboxOf(chat).version, publicTask(findTask(mailboxOf(chat), selector)))
@@ -190,7 +239,7 @@ export function createDurableTaskMailbox(options = {}) {
           return { mailboxVersion: mailbox.version, tasks: Object.values(mailbox.tasks).map(publicTask) }
         }
       }
-      const chat = await store.readChat(chatId)
+      const chat = await readWritable(chatId)
       if (!chat) return { mailboxVersion: 0, tasks: [] }
       const mailbox = mailboxOf(chat)
       let changed = false
@@ -201,10 +250,16 @@ export function createDurableTaskMailbox(options = {}) {
           status: 'interrupted', stage: 'interrupted', error: '服务重启中断了本次后台任务'
         }) || changed
       }
-      if (changed) await store.writeChat(chat, { source: 'mailbox.recover' })
+      if (changed) await saveMailbox(chat, { source: 'mailbox.recover' })
       return { mailboxVersion: mailbox.version, tasks: Object.values(mailbox.tasks).map(publicTask) }
     })
   }
 
-  return Object.freeze({ submit, transition, sync, recover })
+  function startInChat(chat, taskId, operationId) {
+    const mailbox=mailboxOf(chat),task=mailbox.tasks[taskId]
+    if (!task || task.status !== 'running' || task.stage !== 'preparing') throw new Error('候选任务已过期，不能开始执行')
+    applyPatch(mailbox,task,{status:'running',stage:'generating',operationId})
+    return true
+  }
+  return Object.freeze({ submit, transition, sync, recover, startInChat })
 }

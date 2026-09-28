@@ -12,6 +12,7 @@ function installLegacyTavernComposer() {
   controls.append(area, button);
   document.body.append(controls);
   area.addEventListener('input', function () {
+    if (typeof window.submitTavernInput === 'function') return;
     Promise.resolve().then(function () {
       if (typeof window.triggerSlash !== 'function') throw new Error('当前对话输入框尚未就绪');
       return window.triggerSlash('/setinput ' + String(area.value || ''));
@@ -26,11 +27,11 @@ function installLegacyTavernComposer() {
   button.addEventListener('click', function () {
     const text = String(area.value || '').trim();
     if (pending || !text) return;
-    if (typeof window.triggerSlash !== 'function') throw new Error('当前对话发送入口尚未就绪');
+    if (typeof window.submitTavernInput !== 'function' && typeof window.triggerSlash !== 'function') throw new Error('当前对话发送入口尚未就绪');
     pending = true;
     button.disabled = true;
     Promise.resolve().then(function () {
-      return window.triggerSlash('/send ' + text + '|/trigger');
+      return typeof window.submitTavernInput === 'function' ? window.submitTavernInput(text) : window.triggerSlash('/send ' + text + '|/trigger');
     }).then(function () {
       if (area.value.trim() === text) area.value = '';
     }, function (error) {
@@ -102,4 +103,118 @@ function installFrameHostComposer(doc, ownsFrame, submit, report) {
     state.owners.delete(owner);
     if (!state.owners.size) { state.controls.remove(); tavernHostComposers.delete(doc); }
   };
+}
+
+// Give each module a view of the host DOM whose standard ST composer controls
+// belong to that module's sandbox. Never install a shared, focus-routed sender.
+function createTavernComposerWindow(frame, host = frame.parent) {
+  const ids = new Set(['send_textarea', 'send_but']);
+  const documents = new WeakMap(), windows = new WeakMap();
+  const jq = frame.jQuery;
+  const anchors = new Map();
+  let observedViewport = null;
+  function notifyLayout() {
+    const rect = observedViewport?.getBoundingClientRect();
+    if (!rect) return;
+    // Legacy scripts observe their layout anchor's style/class changes.
+    for (const node of anchors.values()) {
+      const value = `--dsh-layout:${rect.left},${rect.top},${rect.width},${rect.height}`;
+      if (node.getAttribute('style') !== value) node.setAttribute('style', value);
+    }
+  }
+  const layoutObserver = host?.ResizeObserver ? new host.ResizeObserver(notifyLayout) : null;
+  let layoutFrame = null;
+  function onLayoutScroll() {
+    if (layoutFrame !== null) return;
+    layoutFrame = host.requestAnimationFrame(function () { layoutFrame = null; notifyLayout(); });
+  }
+  if (layoutObserver) {
+    host.addEventListener('scroll', onLayoutScroll, true);
+    frame.addEventListener?.('pagehide', function () {
+      layoutObserver.disconnect();
+      host.removeEventListener('scroll', onLayoutScroll, true);
+      if (layoutFrame !== null) host.cancelAnimationFrame(layoutFrame);
+    }, {once:true});
+  }
+  function layoutAnchor(id) {
+    if (!['sheld', 'top-settings-holder'].includes(id)) return null;
+    const doc = host.document;
+    function viewport() {
+      let node = doc.querySelector('.dsh-tavern-assistant');
+      for (; node && node !== doc.body; node = node.parentElement) {
+        const style = host.getComputedStyle(node);
+        if (/auto|scroll/.test(style.overflowY) && node.getBoundingClientRect().height > 0) {
+          if (layoutObserver && observedViewport !== node) {
+            layoutObserver.disconnect(); observedViewport = node; layoutObserver.observe(node);
+          }
+          return node;
+        }
+      }
+      return null;
+    }
+    if (!viewport()) return null;
+    if (!anchors.has(id)) {
+      const node = doc.createElement('div');
+      node.id = id;
+      node.getBoundingClientRect = function () {
+        const rect = viewport()?.getBoundingClientRect();
+        if (!rect) return new host.DOMRect();
+        return id === 'sheld' ? rect : new host.DOMRect(rect.left, 0, rect.width, rect.top);
+      };
+      anchors.set(id, node);
+    }
+    return anchors.get(id);
+  }
+  function lookup(doc, id) {
+    return ids.has(id) ? frame.document.getElementById(id) : doc.getElementById(id) || layoutAnchor(id);
+  }
+
+  function documentView(doc) {
+    if (documents.has(doc)) return documents.get(doc);
+    const proxy = new Proxy({}, { get(_, key) {
+      if (key === 'createElement' || key === 'createElementNS') return function (...args) {
+        const node = doc[key](...args);
+        frame.frameElement?.__dshTavernHostArtifacts?.trackNode(node);
+        return node;
+      };
+      if (key === 'getElementById') return id => lookup(doc, id);
+      if (key === 'querySelector' || key === 'querySelectorAll') return selector =>
+        (/^#(?:sheld|top-settings-holder)$/.test(selector) && !doc.querySelector(selector))
+          ? (key === 'querySelector' ? layoutAnchor(selector.slice(1)) : [layoutAnchor(selector.slice(1))].filter(Boolean))
+          : /^#(?:send_textarea|send_but)$/.test(selector) ? frame.document[key](selector) : doc[key](selector);
+      if (key === 'defaultView') return windowView(doc.defaultView);
+      const value = doc[key];
+      return typeof value === 'function' ? value.bind(doc) : value;
+    }, set(_, key, value) { doc[key] = value; return true; } });
+    documents.set(doc, proxy);
+    return proxy;
+  }
+  function jquery(selector, context) {
+    if (typeof selector === 'string' && /^#(?:send_textarea|send_but)$/.test(selector)) return jq(frame.document.querySelector(selector));
+    if (typeof selector === 'string' && /^#(?:sheld|top-settings-holder)$/.test(selector) && !host.document.querySelector(selector)) return jq(layoutAnchor(selector.slice(1)));
+    if (context === documentView(host.document)) context = host.document;
+    if (selector === documentView(host.document)) {
+      const result = jq(host.document);
+      const find = result.find;
+      result.find = function (selector) {
+        return /^#(?:send_textarea|send_but)$/.test(selector) ? jq(frame.document.querySelector(selector)) : find.call(this, selector);
+      };
+      return result;
+    }
+    return jq(selector, context);
+  }
+  function windowView(target) {
+    if (windows.has(target)) return windows.get(target);
+    const proxy = new Proxy({}, { get(_, key) {
+      if (key === 'window' || key === 'self' || key === 'globalThis') return proxy;
+      if (key === 'parent' || key === 'top') return windowView(host);
+      if (key === 'document') return target === frame ? frame.document : documentView(target.document);
+      if ((key === '$' || key === 'jQuery') && jq) return new Proxy(jq, {apply(_, receiver, args) { return jquery(...args); }});
+      const value = target[key];
+      return typeof value === 'function' && !value.prototype ? value.bind(target) : value;
+    }, set(_, key, value) { target[key] = value; return true; } });
+    windows.set(target, proxy);
+    return proxy;
+  }
+  return windowView(frame);
 }

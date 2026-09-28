@@ -1,3 +1,6 @@
+import { createConversationPageStore } from '../../tavern-plugin/lib/domain/conversation-page-store.js'
+import { createConversationState } from '../../tavern-plugin/lib/domain/conversation-state.js'
+import { settlementPerformanceChecks, settlementPerformanceInitialVariables } from './settlement-performance.mjs'
 import {setupRealVariables,realVariableLookupChecks} from './real-variable-lookup.mjs'
 import { incrementalMvuChecks } from './mvu-incremental.mjs'
 import {openingUpdateChecks} from './opening-update.mjs'
@@ -37,7 +40,7 @@ const profile = join(root, 'profiles/tavern'), data = join(root, 'profile-data/t
 const timeout = Number(process.env.TAVERN_E2E_TIMEOUT_MS) || 30000
 const report = { status: 'running', scope: 'real isolated DSH + Tavern + Chromium; fixed model only', steps: [] }
 const started = Date.now(), errors = []
-let log = '', browser, context, child, page, restartServer
+let log = '', browser, context, child, page, restartServer, cpuProfiler
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function step(name, action) {
   const start = Date.now()
@@ -53,6 +56,26 @@ async function savedChat() {
   const games = chats.filter(chat => chat.mode !== 'card')
   assert.equal(games.length, 1, '本次只应创建一局游戏')
   return games[0]
+}
+async function assertNativeStorage() {
+  let chat=await savedChat()
+  const pages=createConversationPageStore({root:join(data,'chats')})
+  const domain=createConversationState({store:pages})
+  const view=await domain.open(chat.id,{limit:2})
+  // Display maintenance can commit between these reads. Compare both formats
+  // at the immutable revision selected by the domain, not two different heads.
+  if(chat._storageRevision!==view.state.chatRevision)chat=await createChatJournalStore({dataRoot:data}).readRevision(chat.id,view.state.chatRevision)
+  assert.equal(view.metadata.format,'conversation-state-v2')
+  assert.equal(view.metadata.settings.runtimeLayout,1)
+  assert.equal(view.messageCount,chat.messages.length)
+  assert.equal(view.state.chatRevision,chat._storageRevision)
+  assert.ok(view.messages.every(row=>row.message.runtimeRef&&!Object.hasOwn(row.message,'variables')))
+  const latest=[...chat.messages].reverse().find(row=>row.variables?.[row.swipeId||0])
+  if(latest)assert.deepEqual(view.state.world.variables,latest.variables[latest.swipeId||0])
+  const files=await readdir(join(data,'chats',chat.id))
+  assert.ok(files.includes('head.json')&&files.includes('blocks'))
+  if(!process.argv.includes('--migrate-native'))assert.ok(!files.includes('snapshots')&&!files.includes('journals')&&!files.includes('storage-format.json'))
+  report.nativeFormat={format:view.metadata.format,chatId:chat.id,messageCount:view.messageCount,revision:view.state.chatRevision,gold:view.state.world.variables.stat_data?.gold,files}
 }
 function inspectSaved(chat) {
   const replies = chat.messages.filter(message => message.role === 'assistant' && !message.greeting)
@@ -136,7 +159,7 @@ try {
     await writeFile(join(data, 'resources/cards/e2e.json'), JSON.stringify({ spec: 'chara_card_v2', spec_version: '2.0', data: {
       name: 'E2E 奖励验收', description: '固定验收角色', first_mes: (process.argv.includes('--text-colors') ? '她说：“欢迎光临。” *窗外下着雨。*' : '欢迎领取奖励。') + (process.argv.includes('--opening-update') ? '\n<initvar>{"gold":0,"old":1}</initvar>' : '') + '\n\n<StatusPlaceHolderImpl/>',
       mes_example: '', scenario: '', personality: '',
-      character_book: { name: '验收初始变量', entries: [{ id: 1, keys: [], comment: '[initvar]初始值', content: 'gold: 0', enabled: true, constant: true, insertion_order: 1 }] },
+      character_book: { name: '验收初始变量', entries: [{ id: 1, keys: [], comment: '[initvar]初始值', content: process.argv.includes('--settlement-performance') ? JSON.stringify(settlementPerformanceInitialVariables()) : 'gold: 0', enabled: true, constant: true, insertion_order: 1 }] },
       extensions: { mvu: {}, regex_scripts: [{ id: 'e2e-status', scriptName: '金币状态', findRegex: '<StatusPlaceHolderImpl/>',
         replaceString: '```html\n' + status + '\n```', placement: [2], markdownOnly: true, disabled: false }, ...(displayScenario ? displayRegressionRules() : [])] }
     } }))
@@ -147,10 +170,13 @@ try {
       const logOffset = log.length
       // Do not inherit provider credentials or a production profile configuration.
       const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
-      child = spawn(process.execPath, [cli, '--profile', 'tavern', '--host', '127.0.0.1', '--port', '0', '--no-open'], {
+      child = spawn(process.execPath, [...(process.argv.includes('--settlement-performance') ? ['--import', join(source, 'tests/e2e/settlement-perf-register.mjs')] : []), cli, '--profile', 'tavern', '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd: source, env: { ...env, DSH_HOME: root, DSH_CWD: root,
           TAVERN_E2E_COMPACTION_DIR: compactionScenario ? output : '',
           TAVERN_E2E_RECOVERY_DIR: recoveryScenario ? output : '',
+          TAVERN_E2E_PERFORMANCE_DIR: process.argv.includes('--settlement-performance') ? output : '',
+          TAVERN_PERF_HISTORY_READY: process.env.TAVERN_PERF_HISTORY_READY || '',
+          TAVERN_PERF_BODY_REPEATS: process.env.TAVERN_PERF_BODY_REPEATS || '',
           TAVERN_E2E_BACKGROUND_DIR: process.argv.includes('--background-lifecycle') ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
           TAVERN_E2E_MEMORY_AUDIT: process.argv.includes('--card-memory') ? join(output, 'memory-requests.jsonl') : '',
@@ -175,27 +201,45 @@ try {
     const url = await launchServer()
     restartServer = async (whileStopped) => {
       const current = new URL(page.url())
+      // A cold restart closes the old page before shutting down its server;
+      // otherwise background polling races shutdown and reports spurious fetch errors.
+      await page.goto('about:blank')
       child.kill('SIGTERM')
       await Promise.race([new Promise(resolve => child.once('exit', resolve)), pause(5000)])
       assert.notEqual(child.exitCode, null, '旧服务必须退出后再重启')
       await whileStopped?.()
+      const bootStarted = Date.now()
       const next = new URL(await launchServer())
+      const bootMs = Date.now() - bootStarted
       current.host = next.host
       current.searchParams.set('token', next.searchParams.get('token'))
+      const openStarted = Date.now()
       await page.goto(current.toString(), { waitUntil: 'domcontentloaded' })
       const history = page.locator('.dsh-tavern-history-group-toggle').filter({ hasText: 'E2E 奖励验收' })
       const sidebarToggle = page.getByRole('button', { name: /^(Open|Expand) sidebar$/ })
       await history.filter({visible:true}).or(sidebarToggle.filter({visible:true})).first().waitFor()
       if (!await history.isVisible()) await sidebarToggle.click()
       await history.click()
+      const openSessionStarted=Date.now()
       await page.locator('.dsh-tavern-side-row-name').first().click()
       await openStatus()
+      return {bootMs,openStarted,openSessionStarted}
     }
     browser = await chromium.launch({ headless: true })
     context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...(recoveryScenario ? { hasTouch: true } : {}) })
     context.setDefaultTimeout(timeout)
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true })
+    if (!process.argv.includes('--settlement-performance')) await context.tracing.start({ screenshots: true, snapshots: true, sources: true })
     page = await context.newPage()
+    if(process.argv.includes('--history-demand')) {
+      await page.addInitScript(()=>{
+        const open=XMLHttpRequest.prototype.open;let captured=0;
+        XMLHttpRequest.prototype.open=function(method,url,...args){
+          if(String(url).includes('/helper-history?') && captured++<3)console.info('[history-read-stack] '+new Error().stack);
+          return open.call(this,method,url,...args);
+        };
+      });
+      page.on('console',message=>{if(message.text().startsWith('[history-read-stack]'))log+=message.text()+'\n'});
+    }
     page.on('pageerror', error => errors.push(error.message))
     // Slot error boundaries catch React failures, so pageerror alone misses them.
     page.on('console', message => {
@@ -213,6 +257,7 @@ try {
     await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
       .locator('#e2e-gold').filter({ hasText: /^金币：0$/ }).waitFor()
   })
+  if(process.argv.includes('--native-format'))await step('确认新局直接写入原生分页存档',assertNativeStorage)
   if (process.argv.includes('--text-colors')) {
     await step('实际正文挂载主题对白高亮', async () => {
       await page.locator('.dsh-tavern-colored-markdown').waitFor()
@@ -258,7 +303,72 @@ try {
     assert.deepEqual(errors, [], '浏览器不得出现未捕获异常')
     await page.screenshot({ path: join(output, 'after-reload.png'), fullPage: true })
   })
-  if (process.argv.includes('--mvu-incremental')) {
+  if(process.argv.includes('--export-readiness'))await step('完整视图未返回时导出按钮仍可立即显示',async()=>{
+    let release
+    const ready=new Promise(resolve=>{release=resolve})
+    const route=async request=>{await ready;await request.continue()}
+    await page.route('**/api/dsh-tavern/getSession',route)
+    try{
+      await page.reload({waitUntil:'domcontentloaded'})
+      const button=page.getByRole('button',{name:'导出 ▾',exact:true})
+      await button.waitFor({timeout:5000})
+      await button.click()
+      await page.getByRole('menuitem',{name:'纯对话 TXT',exact:true}).waitFor({timeout:1000})
+      await page.keyboard.press('Escape')
+      report.exportReadiness={visibleBeforeSessionView:true}
+    }finally{release();await page.unrouteAll({behavior:'wait'})}
+    await inspectScreen()
+  })
+  if(process.argv.includes('--migrate-native'))await step('通过酒馆状态按钮迁移旧 journal 存档',async()=>{
+    let history, original
+    await restartServer(async()=>{
+      original=await savedChat();history=[]
+      const old=createChatJournalStore({dataRoot:data})
+      for(let revision=1;revision<=original._storageRevision;revision++)history.push(await old.readRevision(original.id,revision))
+      assert.ok(history.every(Boolean),'夹具必须保留全部迁移前版本')
+      // Isolated generated fixture only; never alter the host Session log.
+      await rm(join(data,'chats',original.id),{recursive:true,force:true})
+      const legacy=createChatJournalStore({dataRoot:data})
+      for(const snapshot of history)await legacy.update(original.id,()=>snapshot)
+      await legacy.flushMaintenance()
+      assert.deepEqual(await legacy.read(original.id),original)
+    })
+    await inspectScreen()
+    const migration=page.getByRole('region',{name:'存档格式',exact:true})
+    const button=migration.getByRole('button',{name:'迁移旧存档',exact:true})
+    await button.waitFor()
+    await page.screenshot({path:join(output,'migration-before.png'),fullPage:true})
+    await page.setViewportSize({width:390,height:844})
+    await button.scrollIntoViewIfNeeded()
+    const box=await button.boundingBox()
+    assert.ok(box.x>=0&&box.x+box.width<=390,'迁移按钮在窄屏内可见')
+    await page.screenshot({path:join(output,'migration-mobile.png'),fullPage:true})
+    const started=Date.now()
+    await button.click()
+    await migration.getByText('已迁移为新版存档，旧文件和历史版本已保留。',{exact:true}).waitFor()
+    const migrated=createChatJournalStore({dataRoot:data})
+    for(let i=0;i<history.length;i++)assert.deepEqual(await migrated.readRevision(original.id,i+1),history[i])
+    // Live iframe diagnostics can change when the viewport changes; migration
+    // history above remains byte-for-byte equivalent at each original revision.
+    const story=messages=>messages.map(({displayRuntime,...message})=>message)
+    assert.deepEqual(story((await migrated.read(original.id)).messages),story(original.messages))
+    report.migration={status:'native',via:'status-button',elapsedMs:Date.now()-started,retainedRevisions:history.length}
+    await page.setViewportSize({width:1440,height:1000})
+    await page.screenshot({path:join(output,'migration-complete.png'),fullPage:true})
+    await page.reload({waitUntil:'domcontentloaded'})
+    await inspectScreen()
+    assert.equal(await page.getByRole('button',{name:'迁移旧存档',exact:true}).count(),0)
+    await assertNativeStorage()
+  })
+  if (process.argv.includes('--settlement-performance')) {
+    if(process.env.TAVERN_PERF_PROFILE==='1'){
+      cpuProfiler=await context.newCDPSession(page)
+      await cpuProfiler.send('Profiler.enable')
+      await cpuProfiler.send('Profiler.setSamplingInterval',{interval:10000})
+      await cpuProfiler.send('Profiler.start')
+    }
+    await settlementPerformanceChecks({page,step,savedChat,output,report,restartServer,root,data,runtime,readLog:()=>log})
+  } else if (process.argv.includes('--mvu-incremental')) {
     await incrementalMvuChecks({page,step,savedChat,output,report,restartServer})
   } else if (process.argv.includes('--background-lifecycle')) {
     await backgroundLifecycleChecks({page,step,savedChat,data,output,report,restartServer})
@@ -380,6 +490,26 @@ try {
   if (process.argv.includes('--card-update')) await cardUpdateChecks({page,step,savedChat,data,output,report})
   if (process.argv.includes('--sidebar') || process.argv.includes('--sidebar-only')) await sidebarUpgrade({ page, step, savedChat, output, report })
   }
+  if((process.argv.includes('--native-format')||process.argv.includes('--migrate-native')) && !process.argv.includes('--opening-only'))await step('服务重启后打开同一原生存档并核对当前变量',async()=>{
+    const before=await savedChat()
+    await restartServer()
+    const expected=[...before.messages].reverse().find(row=>row.variables?.[row.swipeId||0]).variables[0].stat_data.gold
+    await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame').locator('#e2e-gold').filter({hasText:new RegExp('^金币：'+expected+'$')}).waitFor()
+    // The long-archive fixture deliberately starts with unfinished historical
+    // display derivation. Restart may finish those four derived fields; story,
+    // variables, receipts and every other extension field must remain identical.
+    const persistentMessages=messages=>messages.map(message=>{
+      const copy=structuredClone(message)
+      if(process.argv.includes('--settlement-performance')&&copy.tavernPluginData){
+        for(const field of ['variables_initialized','is_ejs_processed','template_display','template_rendered'])delete copy.tavernPluginData[field]
+        if(!Object.keys(copy.tavernPluginData).length)delete copy.tavernPluginData
+      }
+      return copy
+    })
+    assert.deepEqual(persistentMessages((await savedChat()).messages),persistentMessages(before.messages))
+    await assertNativeStorage()
+    report.nativeFormat.restart=true
+  })
   assert.deepEqual(errors, [], '整个验收不得出现未捕获浏览器异常')
   assert.doesNotMatch(log, /服务端模板进程异常|Unsupported or expired template RPC/, '验收期间模板子进程不得异常退出')
   report.status = 'passed'
@@ -387,12 +517,26 @@ try {
 } catch (error) {
   report.status = 'failed'; report.error = error.stack; process.exitCode = 1
   if (page) {
+    if (process.argv.includes('--settlement-performance')) {
+      report.failureRuntime = await Promise.race([
+        Promise.all(page.frames().map(frame => frame.evaluate(() => ({
+          name:window.name, mvu:typeof window.Mvu, helper:typeof window.getVariables,
+          messages:window.SillyTavern?.chat?.length,
+          resources:performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/api/dsh-tavern/')).slice(-20).map(entry=>({method:entry.name.split('/').at(-1),durationMs:Math.round(entry.duration),bytes:entry.decodedBodySize}))
+        })).catch(error=>({error:String(error.message).slice(0,150)})))),
+        pause(5000).then(()=>({timeout:true}))
+      ])
+    }
     await page.screenshot({ path: join(output, 'failure.png'), fullPage: true }).catch(() => {})
-    await writeFile(join(output, 'failure.txt'), await page.locator('body').innerText()).catch(() => {})
+    await writeFile(join(output, 'failure.txt'), await page.locator('body').innerText().catch(() => 'Page unavailable')).catch(() => {})
   }
 } finally {
+  if(cpuProfiler){
+    const captured=await Promise.race([cpuProfiler.send('Profiler.stop').catch(()=>null),pause(10000).then(()=>null)])
+    if(captured?.profile)await writeFile(join(output,'browser.cpuprofile'),JSON.stringify(captured.profile))
+  }
   // Read-only evidence, independent of the status iframe and its UI assertions.
-  const chat = await savedChat().catch(error => { report.savedStateError = String(error.message || error); return null })
+  const chat = process.argv.includes('--settlement-performance') ? null : await savedChat().catch(error => { report.savedStateError = String(error.message || error); return null })
   if (chat) await writeFile(join(output, 'saved-state.json'), JSON.stringify({ id: chat.id, posture: chat.posture, contextCompaction: chat.contextCompaction, timeline: chat.timeline,
     messages: chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text, turn: message.turn, variables: message.variables, mvu: message.mvu, ...(displayScenario ? {tavernPluginData:message.tavernPluginData} : {}) })) }, null, 2))
   await context?.tracing.stop({ path: join(output, 'trace.zip') }).catch(() => {})

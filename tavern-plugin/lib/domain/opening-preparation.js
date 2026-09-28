@@ -11,8 +11,8 @@ import { projectTavernHelperWorldbook, replaceTavernHelperWorldbookOperations } 
 
 const copy = value => structuredClone(value)
 
-/** Private pre-game host state. No Session or shared resource is written here. */
-export function createOpeningPreparation({ readCard, worldBooks, generateRaw, readRuntimeExtensions, now = Date.now }) {
+/** Private pre-game state; explicit plugin-setting saves use the profile store. */
+export function createOpeningPreparation({ readCard, worldBooks, generateRaw, readRuntimeExtensions, extensionSettings, now = Date.now }) {
   const drafts = new Map()
   const lifetime = 2 * 60 * 60 * 1000
   function requireDraft(id) {
@@ -28,7 +28,7 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
     return { ...projectTavernHelperContext(draft.chat), worldbook: draft.document ? projectTavernHelperWorldbook(inspectWorldBookDocument(draft.document)) : null,
       characterName: draft.card.name, playerName: draft.userName, character: copy(draft.card),
       globalVariables: copy(draft.globalVariables || {}), characterVariables: copy(draft.characterVariables || {}),
-      extensionSettings: copy(draft.extensionSettings), regexScripts: { global: [], character: [] } }
+      extensionSettings: copy(draft.extensionSettings), regexScripts: copy(draft.regexScripts || { global: [], character: [] }) }
   }
   function present(draft) {
     return copy({ id: draft.id, cardPath: draft.cardPath, openings: draft.openings,
@@ -57,9 +57,10 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
       const extensions = settings.extensions || (readRuntimeExtensions ? await readRuntimeExtensions(cardPath) : {})
       const projected = projectTavernHelperScripts(extensions.helperScripts)
       draft.helperScripts = projected.scripts
+      draft.regexScripts = { global: extensions.globalRegexScripts || [], character: extensions.characterRegexScripts || extensions.regexScripts || [] }
       draft.diagnostics = projected.diagnostics.concat(extensions.diagnostics || [])
       draft.runtimeEnabled = projected.scripts.length > 0
-      draft.extensionSettings = {}
+      draft.extensionSettings = extensionSettings ? await extensionSettings.read() : {}
       if (settings.runtime === true) { draft.extensionSettings.EjsTemplate = { enabled: true }; draft.runtimeEnabled = true }
       draft.chat.sessionId = 'opening:' + draft.id
       drafts.set(draft.id, draft)
@@ -120,14 +121,14 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
         else if (type === 'character') draft.characterVariables = copy(args.variables)
         else replaceTavernHelperVariables(draft.chat, args)
       } else if (method === 'updateTavernHelperMessages') {
-        // The variable framework may write data, but cannot invent a story floor.
+        // Interactive wizards may edit the existing draft greeting, never add story floors.
         for (const patch of args.messages || []) {
-          if (Number(patch.message_id) !== 0 || Object.keys(patch).some(key => !['message_id', 'data', 'swipes_data'].includes(key))) throw new Error('准备阶段变量运行时只能更新开场变量')
+          if (Number(patch.message_id) !== 0 || Object.keys(patch).some(key => !['message_id', 'message', 'data', 'swipes_data'].includes(key))) throw new Error('准备阶段只能更新已有开场内容和变量')
         }
         replaceTavernHelperMessages(draft.chat, args.messages)
       } else if (method === 'saveTavernExtensionSettings') {
         if (JSON.stringify(draft.extensionSettings) !== JSON.stringify(args.expectedSettings)) throw new Error('设置已变化，请重新读取')
-        draft.extensionSettings = copy(args.settings)
+        draft.extensionSettings = extensionSettings ? await extensionSettings.save(args.settings, args.expectedSettings) : copy(args.settings)
         draft.chat._storageRevision++
         return { updated: true, extensionSettings: copy(draft.extensionSettings), context: runtimeContext(draft) }
       } else if (method === 'recordMvuRuntimeDiagnostic' || method === 'recordMvuLoadDiagnostic') {
@@ -162,7 +163,7 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
       const selected = openingId || 'primary'
       const selectedIndex = draft.openings.findIndex(opening => opening.id === selected)
       if (selectedIndex < 0) throw new Error('人物卡开场白不存在')
-      return copy({ openingVariables: Object.fromEntries(draft.openings.map((opening, index) => [opening.id, draft.chat.messages[0]?.variables?.[index] || {}])), variables: draft.chat.variables || {}, messageVariables: draft.chat.messages[0]?.variables?.[selectedIndex] || {}, openingId: selected, sourceSessionId: draft.sourceSessionId, sourceLifecycleRevision: draft.sourceLifecycleRevision, worldbookSnapshot: { version: 1, libraryDigest: draft.libraryDigest, source: draft.source, document: draft.document } })
+      return copy({ openingMessages: Object.fromEntries(draft.openings.map((opening,index)=>[opening.id,draft.chat.messages[0]?.swipes?.[index] ?? opening.text])), openingVariables: Object.fromEntries(draft.openings.map((opening, index) => [opening.id, draft.chat.messages[0]?.variables?.[index] || {}])), variables: draft.chat.variables || {}, messageVariables: draft.chat.messages[0]?.variables?.[selectedIndex] || {}, openingId: selected, sourceSessionId: draft.sourceSessionId, sourceLifecycleRevision: draft.sourceLifecycleRevision, worldbookSnapshot: { version: 1, libraryDigest: draft.libraryDigest, source: draft.source, document: draft.document } })
     }
   }
 }

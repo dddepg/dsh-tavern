@@ -1,3 +1,4 @@
+import { taskStateFields } from './task-state-reader.js'
 import { createScopedMessages } from './scoped-messages.js'
 import { diffMvuChanges } from './mvu-settlement-effect.js'
 import { diffJson } from './json-mutation.js'
@@ -107,49 +108,78 @@ export function createBackgroundTaskCoordinator(options = {}) {
     const chatId = str(chat && chat.id)
     const requestId = str(input.requestId).trim().slice(0, 160)
     const begun = await serialize(chatId, async function () {
-      const latest = await store.readChat(chatId)
-      const source = latest === undefined ? chat : latest
-      const requestedRole = str(role)
-      if (blocked(source)) {
-        const error = new Error('Tavern 正在压缩前台与后台上下文，请等待完成')
-        error.code = 'COMPACTION_RUNNING'
-        throw error
+      if (role === 'candidate' && store.readRecoveryState) {
+        const state = await store.readRecoveryState(chatId)
+        if (state) chat = {...chat,...state}
       }
-      if (requestId !== '') {
-        const operations = Object.values(timeline.inspect({ chat: source }).operations || {})
-        const existing = operations.find(function (operation) {
-          return operation && operation.kind === 'agent' && str(operation.requestId) === requestId
-        })
-        if (existing !== undefined) {
-          if (str(existing.role) !== requestedRole) {
-            const error = new Error('同一后台请求标识对应了不同 Agent role')
-            error.code = 'IDEMPOTENCY_CONFLICT'
-            throw error
-          }
-          return {
-            chat: source,
-            value: { operationId: existing.id, basedOn: existing.basedOn, participant: null, created: false }
+      let fast = (input.reuseSnapshot === true && requestId === '' || role === 'candidate' && store.readRecoveryState) && store.patchChat && Number.isSafeInteger(chat?._storageRevision)
+        && chat.timeline?.schemaVersion === 1 && !Object.values(chat.timeline.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
+      let source = fast ? chat : (await store.readChat(chatId) ?? chat)
+      while (true) {
+        const requestedRole = str(role)
+        if (blocked(source)) {
+          const error = new Error('Tavern 正在压缩前台与后台上下文，请等待完成')
+          error.code = 'COMPACTION_RUNNING'
+          throw error
+        }
+        if (requestId !== '') {
+          const operations = Object.values(timeline.inspect({ chat: source }).operations || {})
+          const existing = operations.find(function (operation) {
+            return operation && operation.kind === 'agent' && str(operation.requestId) === requestId
+          })
+          if (existing !== undefined) {
+            if (str(existing.role) !== requestedRole) {
+              const error = new Error('同一后台请求标识对应了不同 Agent role')
+              error.code = 'IDEMPOTENCY_CONFLICT'
+              throw error
+            }
+            return {
+              chat: source,
+              value: { operationId: existing.id, basedOn: existing.basedOn, participant: null, created: false }
+            }
           }
         }
+        const currentActivity = activity(source)
+        const expectedPending = currentActivity.phase === 'pending' && currentActivity.role === requestedRole
+        const conflictingPending = currentActivity.phase === 'pending' && currentActivity.role !== requestedRole
+        if ((currentActivity.busy || conflictingPending) && !expectedPending) {
+          const error = new Error('后台 Agent 正在执行 ' + currentActivity.role + '，请等待完成')
+          error.code = 'BACKGROUND_BUSY'
+          error.activity = currentActivity
+          throw error
+        }
+        // agent.begin only changes timeline metadata. Omit historic checkpoints
+        // from cloning/diffing; retain them in the returned full snapshot.
+        const projected = fast ? { ...(input.prepareCommit ? {taskMailbox:source.taskMailbox} : {}), timeline: { ...source.timeline, checkpoints: [] }, ...(Object.hasOwn(source, 'candidateAgent') ? { candidateAgent: source.candidateAgent } : {}) } : source
+        const next = timeline.apply({ chat: projected, intent: { kind: 'agent.begin', role, requestId } })
+        if (input.bindExistingSession && next.value.participant?.sessionId) {
+          next.chat = timeline.apply({chat:next.chat,intent:{kind:'agent.bind',operationId:next.value.operationId,sessionId:next.value.participant.sessionId}}).chat
+        }
+        if (input.prepareCommit) next.value.startCommitted = input.prepareCommit(next.chat,next.value) === true
+        if (fast) {
+          const changes = diffJson(projected, next.chat)
+          const safe = changes.every(change => change.path[0] === 'candidateAgent' || input.prepareCommit && change.path[0] === 'taskMailbox' ||
+            change.path[0] === 'timeline' && change.path.length > 1 && change.path[1] !== 'checkpoints')
+          const saved = safe && await store.patchChat(chatId, source._storageRevision, changes,
+            { source: 'background.' + requestedRole + '.begin', operationId: next.value.operationId, requestId, returnProjection: taskStateFields })
+          if (saved) return { ...next, chat: { ...source, ...saved,
+            timeline: { ...next.chat.timeline, checkpoints: source.timeline.checkpoints }, messages: source.messages } }
+          // A concurrent writer invalidated our snapshot. Revalidate all guards
+          // against authoritative state using the established compatibility path.
+          fast = false
+          source = await store.readChat(chatId) ?? chat
+          continue
+        }
+        await store.writeChat(next.chat, { source: 'background.' + requestedRole + '.begin', operationId: next.value.operationId, requestId })
+        return next
       }
-      const currentActivity = activity(source)
-      const expectedPending = currentActivity.phase === 'pending' && currentActivity.role === requestedRole
-      const conflictingPending = currentActivity.phase === 'pending' && currentActivity.role !== requestedRole
-      if ((currentActivity.busy || conflictingPending) && !expectedPending) {
-        const error = new Error('后台 Agent 正在执行 ' + currentActivity.role + '，请等待完成')
-        error.code = 'BACKGROUND_BUSY'
-        error.activity = currentActivity
-        throw error
-      }
-      const next = timeline.apply({ chat: source, intent: { kind: 'agent.begin', role, requestId } })
-      await store.writeChat(next.chat, { source: 'background.' + requestedRole + '.begin', operationId: next.value.operationId, requestId })
-      return next
     })
     const task = {
       chat: begun.chat,
       operationId: begun.value.operationId,
       basedOn: begun.value.basedOn,
       created: begun.value.created !== false,
+      startCommitted: begun.value.startCommitted === true,
       participantRequest: begun.value.participant || {},
       participant(trace) {
         const sessionId = str(trace && (trace.traceSessionId || trace.sessionId))
@@ -161,18 +191,27 @@ export function createBackgroundTaskCoordinator(options = {}) {
           boundary: Number.isSafeInteger(boundary) ? boundary : null
         }
       },
-      async bindSession(sessionId) {
+      async bindSession(sessionId, { stateOnly = false } = {}) {
         return serialize(chatId, async () => {
           const intent = { kind: 'agent.bind', operationId: begun.value.operationId, sessionId }
           const metadata = { source: 'background.' + str(role) + '.bind', operationId: begun.value.operationId }
           if (store.readState && store.patchChat) {
-            const state = await store.readState(chatId)
+            const state = await (store.readRecoveryState || store.readState)(chatId)
             const legacy = Object.values(state?.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')
             if (state?.timeline?.schemaVersion === 1 && !legacy) {
-              const next = timeline.apply({ chat: state, intent }).chat
+              // Binding changes metadata only. Recovery projections deliberately
+              // omit rollback snapshots; never replace the entire timeline.
+              const before={timeline:{...state.timeline,checkpoints:[]},...(Object.hasOwn(state,'candidateAgent')?{candidateAgent:state.candidateAgent}:{})}
+              const next = timeline.apply({ chat: before, intent }).chat
+              // Begin may already have bound a durable reused session. Still
+              // validate the operation above; a late callback must not bypass it.
+              if (state.timeline.operations[begun.value.operationId]?.startedSessionId === sessionId &&
+                state.timeline.participants?.background?.sessionId === sessionId) {
+                return stateOnly ? state : store.readChat(chatId)
+              }
               const saved = await store.patchChat(chatId, state._storageRevision,
-                [{ op: 'set', path: ['timeline'], value: next.timeline }], metadata)
-              if (saved) return store.readChat(chatId)
+                diffJson(before,next), {...metadata,returnProjection:taskStateFields})
+              if (saved) return stateOnly ? (role === 'candidate' ? saved : store.readState(chatId)) : store.readChat(chatId)
             }
           }
           return store.updateChat(chatId, source => timeline.apply({ chat: source, intent }).chat, metadata)
@@ -243,6 +282,20 @@ export function createBackgroundTaskCoordinator(options = {}) {
               if (saved) return {chat:{...completed.chat,...saved,messages:completed.chat.messages},status:completed.value.status}
             }
           }
+          if (role === 'candidate' && input.headerOnly === true && store.readSlice && store.patchChat) {
+            const fields = [...taskStateFields, 'scriptState']
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const before = (await store.readSlice(begun.chat.id, [], fields))?.chat
+              if (before?.timeline?.schemaVersion !== 1 || Object.values(before.timeline.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')) break
+              before.timeline={...before.timeline,checkpoints:[]}
+              const completed = timeline.complete({chat:before,operationId:begun.value.operationId,basedOn:begun.value.basedOn,
+                outcome:{status:input.status||'success',stateChanged:input.stateChanged===true,participant:input.participant||null},apply:input.apply})
+              const changes = diffJson(before, completed.chat)
+              if (changes.some(change => !['timeline','candidateAgent','candidates','scriptState'].includes(change.path[0]))) break
+              const saved = await store.patchChat(begun.chat.id,before._storageRevision,changes,{...metadata,returnProjection:fields})
+              if (saved) return {chat:saved,status:completed.value.status}
+            }
+          }
           let status = 'missing'
           const saved = await store.updateChat(begun.chat.id, function (latest) {
             const completed = timeline.complete({
@@ -280,8 +333,8 @@ export function createBackgroundTaskCoordinator(options = {}) {
   async function recover(chat, options = {}) {
     const chatId = str(chat && chat.id)
     return await serialize(chatId, async function () {
-      if (store.readState && !options.operationId) {
-        const state = await store.readState(chatId)
+      if ((store.readRecoveryState || store.readState) && !options.operationId) {
+        const state = await (store.readRecoveryState || store.readState)(chatId)
         if (state?.timeline?.schemaVersion === 1) {
           const operations = Object.values(state.timeline.operations || {})
           const needsRecovery = operations.some(operation =>

@@ -192,7 +192,8 @@ window.__ModuleLoader__.load({
 			if (trace) payload._traceId = trace.id;
 			if (sessionId) payload.sessionId = sessionId;
 			const viewRead = method === "getSession" ? beginSessionViewRead(payload.sessionId) : null;
-			if (viewRead) { payload.viewSync = 1; payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
+			if (viewRead) { payload.viewSync = 1; payload.resourceSync = 1; payload.openingWindow = 1; if (completeHistorySessions.has(payload.sessionId)) payload.fullView = true; payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
+			if (method === "getTavernHelperContext" && !payload.eventId && !payload.fullView && !completeHistorySessions.has(payload.sessionId)) payload.openingWindow = 1;
 			const requestBody = JSON.stringify(payload);
 			if (trace) {
 				try { trace.requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).length : requestBody.length; }
@@ -228,7 +229,9 @@ window.__ModuleLoader__.load({
 					if (typeof result?.errorCode === "string" && result.errorCode) error.code = result.errorCode;
 					throw error;
 				}
-				return viewRead ? viewRead.accept(result) : result;
+				const accepted = viewRead ? viewRead.accept(result) : result;
+                if (accepted.contextWindow) return {...accepted,context:expandTavernOpeningWindow(accepted.contextWindow).tavernHelper};
+                return accepted.view && accepted.view.historyWindow ? {...accepted,view:expandTavernOpeningWindow(accepted.view)} : accepted;
 			}).catch(function (error) {
                 if (trace) trace.failed = true;
 				if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "failed", "rpc-error");
@@ -330,6 +333,18 @@ window.__ModuleLoader__.load({
 			return /^人物卡不存在:\s*/.test(String(value && value.message || value || ""));
 		}
 
+        // @include helper-history.js
+        // @include helper-resources.js
+        // @include helper-model.js
+
+        function expandTavernOpeningWindow(view) {
+            const range=view && view.historyWindow, helper=view && view.tavernHelper;
+            if (!range || !helper || !Array.isArray(helper.messages)) return view;
+            const messages=Array.from({length:range.messageCount},function (_,message_id) { return {message_id:message_id,stub:true}; });
+            for (const row of helper.messages) messages[row.message_id]=row;
+            return {...view,tavernHelper:{...helper,messages:messages}};
+        }
+
 		function applyTavernHelperMessageHydration(view, payload) {
 			if (!view || !view.tavernHelper || !Array.isArray(view.tavernHelper.messages) || !payload || !Array.isArray(payload.messages)) return view;
 			const messages = view.tavernHelper.messages.slice();
@@ -344,9 +359,15 @@ window.__ModuleLoader__.load({
 		}
 
 		async function hydrateLiveTavernHelperMessages(sessionId, view) {
+            // First paint is independent of compatibility/history preparation.
+            // A window must not be promoted to a complete view by filling only
+            // Helper rows: historical display projections need their full read.
+            if (view && view.historyWindow) return (await rpc("getSession", {fullView:true}, sessionId)).view;
 			const pending = view && view.tavernHelper && view.tavernHelper.messagesPending;
 			if (!pending) return view;
 			const payload = await rpc("hydrateTavernHelperMessages", {
+                chatId: view.tavernHelper.chatId,
+                revision: view.tavernHelper.stateRevision,
 				from: pending.from,
 				to: pending.to
 			}, sessionId);
@@ -517,6 +538,16 @@ window.__ModuleLoader__.load({
 			}, [sessionId, revision]);
 			return state;
 		}
+
+        const completeHistorySessions = new Set();
+        const completeHistoryLoads = new Map();
+        function requestCompleteHistory(sessionId) {
+            if(completeHistoryLoads.has(sessionId))return completeHistoryLoads.get(sessionId);
+            completeHistorySessions.add(sessionId);
+            const task=rpc("getSession",{fullView:true},sessionId).then(result=>liveTavernView.setView(sessionId,result.view)).finally(()=>completeHistoryLoads.delete(sessionId));
+            completeHistoryLoads.set(sessionId,task);
+            return task;
+        }
 
 		function useScopedLiveTavernView(sessionId, revision, paths) {
 			const key = JSON.stringify(paths);
@@ -1131,13 +1162,31 @@ window.__ModuleLoader__.load({
             const owners = hostDocument.__dshTavernArtifactOwners || (hostDocument.__dshTavernArtifactOwners = new WeakMap());
             const identity = {};
             const host = hostDocument.defaultView;
+            // Keep the card's DOM searchable while it is absent from the shared
+            // document. In particular, delayed callbacks query fixed IDs again.
+            const parking = hostDocument.createElement ? hostDocument.createElement("html") : null;
+            const parkingRoots = new Map();
+            if (parking) for (const root of roots) {
+                const container = hostDocument.createElement(root === hostDocument.head ? "head" : "body");
+                parking.appendChild(container);
+                parkingRoots.set(root, container);
+            }
             let observer = null;
+            function parkNode(node, previous) {
+                previous.nextSibling = node.nextSibling;
+                const container = parkingRoots.get(previous.root);
+                if (container) container.appendChild(node);
+                else previous.root.removeChild(node);
+                previous.parked = true;
+            }
+            function ownerOf(node) {
+                for (; node; node = node.parentNode) if (owners.has(node)) return owners.get(node);
+                return null;
+            }
             function park() {
                 if (visible || disposed) return;
                 for (const [node, previous] of owned) if (node.parentNode === previous.root) {
-                    previous.nextSibling = node.nextSibling;
-                    previous.root.removeChild(node);
-                    previous.parked = true;
+                    parkNode(node, previous);
                 }
             }
             function remember(node, root) {
@@ -1146,27 +1195,41 @@ window.__ModuleLoader__.load({
                 if (owned.has(node) || owners.has(node) || node.hasAttribute?.("data-tavern-retained-frames")
                     || node.hasAttribute?.("data-dsh-tavern-text-colors")) return;
                 owners.set(node, identity);
+                node.setAttribute?.("data-dsh-tavern-host-artifact", "");
                 owned.set(node, { hidden: node.hidden, disabled: node.disabled, body: root === hostDocument.body,
                     root: root, nextSibling: node.nextSibling, parked: false });
             }
-            let baselines, disposed = false, visible = true;
-            function baseline() { baselines = roots.map(root => ({ root: root, nodes: new Set(Array.from(root.childNodes || root.children || [])) })); }
-            function capture() {
-                for (const entry of baselines) for (const node of Array.from(entry.root.childNodes || entry.root.children || [])) {
-                    if (!entry.nodes.has(node)) remember(node, entry.root);
-                }
+            let disposed = false, visible = true;
+            const created = new Set();
+            function captureCreated() {
+                for (const node of created) if (roots.includes(node.parentNode)) remember(node, node.parentNode);
             }
-            baseline();
             if (host && host.MutationObserver) {
-                observer = new host.MutationObserver(park);
+                observer = new host.MutationObserver(function (changes) {
+                    for (const change of changes) for (const node of change.addedNodes) {
+                        if (created.has(node)) remember(node, change.target);
+                    }
+                    park();
+                });
                 for (const root of roots) observer.observe(root, { childList: true });
             }
             return Object.freeze({
+                trackNode: function (node) { created.add(node); return node; },
                 // Scope the mounting operation, not the whole asynchronous import.
                 // Other conversations and the app can render while that import waits.
                 bindJQuery: function (jquery) {
                     const wrappers = new WeakMap();
                     const mutations = new Set(["append", "prepend", "before", "after", "appendTo", "prependTo", "insertBefore", "insertAfter", "replaceWith", "replaceAll", "html"]);
+                    function select(selector, context, result) {
+                        result = result.filter(function () { const owner = ownerOf(this); return !owner || owner === identity; });
+                        if (!parking || disposed) return result;
+                        const contexts = context == null ? [hostDocument] : context.jquery ? context.toArray() : [context];
+                        for (const root of contexts) {
+                            const container = root === hostDocument ? parking : parkingRoots.get(root);
+                            if (container) result = result.add(jquery(container).find(selector).filter(function () { return ownerOf(this) === identity; }));
+                        }
+                        return result;
+                    }
                     function wrap(value) {
                         if (!value || !value.jquery) return value;
                         if (wrappers.has(value)) return wrappers.get(value);
@@ -1175,6 +1238,14 @@ window.__ModuleLoader__.load({
                             if (typeof method !== "function" || key === "constructor") return method;
                             return function () {
                                 const before = mutations.has(key) ? roots.map(root => ({ root, nodes: new Set(root.childNodes) })) : null;
+                                // Explicit removal must not resurrect a parked panel
+                                // when the conversation becomes visible again.
+                                if (key === "remove") {
+                                    const removed = arguments[0] ? target.filter(arguments[0]) : target;
+                                    for (const node of owned.keys()) if (removed.toArray().some(root => root === node || root.contains?.(node))) {
+                                        owned.delete(node); owners.delete(node);
+                                    }
+                                }
                                 let result;
                                 try { result = method.apply(target, arguments); }
                                 finally {
@@ -1182,17 +1253,22 @@ window.__ModuleLoader__.load({
                                         if (!entry.nodes.has(node)) { if (disposed) node.remove(); else remember(node, entry.root); }
                                     }
                                 }
+                                if (key === "find" && typeof arguments[0] === "string") result = select(arguments[0], target, result);
                                 return wrap(result);
                             };
                         } });
                         wrappers.set(value, proxy); wrappers.set(proxy, proxy);
                         return proxy;
                     }
-                    return new Proxy(jquery, { apply(target, receiver, args) { return wrap(Reflect.apply(target, receiver, args)); } });
+                    return new Proxy(jquery, { apply(target, receiver, args) {
+                        let result = Reflect.apply(target, receiver, args);
+                        if (typeof args[0] === "string" && !args[0].trim().startsWith("<")) result = select(args[0], args[1], result);
+                        return wrap(result);
+                    } });
                 },
                 setVisible: function (next) {
                     if (disposed || visible === next) return;
-                    if (visible) capture();
+                    captureCreated();
                     visible = next;
                     for (const [node, previous] of owned) {
                         // Hidden nodes still match the fixed IDs used by card scripts
@@ -1200,9 +1276,7 @@ window.__ModuleLoader__.load({
                         // the shared document so another conversation can initialize.
                         // Use native DOM removal: jQuery.remove() discards handlers.
                         if (!next && node.parentNode === previous.root) {
-                            previous.nextSibling = node.nextSibling;
-                            previous.root.removeChild(node);
-                            previous.parked = true;
+                            parkNode(node, previous);
                         }
                         if (previous.body) node.hidden = next ? previous.hidden : true;
                         else if (node.tagName === "STYLE" || node.tagName === "LINK") node.disabled = next ? previous.disabled : true;
@@ -1210,16 +1284,15 @@ window.__ModuleLoader__.load({
                     if (next) for (const [node, previous] of Array.from(owned).reverse()) {
                         if (!previous.parked) continue;
                         previous.parked = false;
-                        if (node.parentNode) continue;
+                        if (node.parentNode && node.parentNode !== parkingRoots.get(previous.root)) continue;
                         if (previous.nextSibling && previous.nextSibling.parentNode === previous.root) {
                             previous.root.insertBefore(node, previous.nextSibling);
                         } else previous.root.append(node);
                     }
-                    if (next) baseline();
                 },
                 dispose: function () {
                     if (disposed) return;
-                    if (visible) capture();
+                    captureCreated();
                     disposed = true;
                     if (observer) observer.disconnect();
                     for (const node of owned.keys()) {
@@ -1227,6 +1300,7 @@ window.__ModuleLoader__.load({
                         else if (node.parentNode && typeof node.parentNode.removeChild === "function") node.parentNode.removeChild(node);
                     }
                     owned.clear();
+                    created.clear();
                 }
             });
         }
@@ -1720,7 +1794,7 @@ window.__ModuleLoader__.load({
 				? buildTavernHelperScriptParts({ token: input.token, context: input.openingPreview.runtime.context, scripts: input.openingPreview.runtime.scripts, previewScope: true }) : null;
 			const helperDependencies = input && (input.helperContext || input.openingPreview) ? tavernHelperMessageDependencies() : sillyTavernCssCompatibilityDependencies() + (/<script\b/i.test(html) ? tavernHelperMessageDependencies() : "");
 			const storageShim = '<script data-dsh-tavern-storage>(function(){try{void window.localStorage;return;}catch(e){}var values=Object.create(null),keys=[];var storage={getItem:function(key){key=String(key);return Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;},setItem:function(key,value){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))keys.push(key);values[key]=String(value);},removeItem:function(key){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))return;delete values[key];keys.splice(keys.indexOf(key),1);},clear:function(){values=Object.create(null);keys=[];},key:function(index){index=Number(index);return index>=0&&index<keys.length?keys[index]:null;}};Object.defineProperty(storage,"length",{enumerable:true,get:function(){return keys.length;}});try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,value:storage});}catch(e){}})();<\/script>';
-			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[all[currentId()]];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(all[i]);}else items=[all[normalizeId(target)]];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=state.messages[normalizeId(option.message_id)];if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=state.messages[normalizeId(patch.message_id)];if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables((state.messages||[])[normalizeId(option.message_id)]);};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
+			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var readMessage=(' + createTavernHistoryReader.toString() + ')({context:function(){return state;},install:function(row){state.messages[row.message_id]=row;}});var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[readMessage(currentId())];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(readMessage(i));}else items=[readMessage(normalizeId(target))];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=readMessage(normalizeId(option.message_id));if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=readMessage(normalizeId(patch.message_id));if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables(readMessage(normalizeId(option.message_id)));};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
 			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")});};var worldbook=' + JSON.stringify(input && input.helperContext && input.helperContext.worldbook || null).replace(/</g, '\\u003c') + ';window.getCharWorldbookNames=function(){return {primary:worldbook&&worldbook.name||null,additional:[]};};window.getWorldbookNames=function(){return worldbook&&worldbook.name?[worldbook.name]:[];};window.TavernHelper=window.TavernHelper||{};["getCurrentCharacterName","getVariables","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
 			const mvuViewObservationShim = input && input.helperContext && input.observeMvuView !== false ? '<script data-dsh-tavern-mvu-view-observer>(function(){var token=' + token + ',reported=false;function report(){if(reported)return;reported=true;window.__dshTavernMvuViewUsed=true;parent.postMessage({type:"dsh-tavern-mvu-view-used",token:token,mvuViewUsed:true},"*");}var getMvuData=window.Mvu&&window.Mvu.getMvuData;if(typeof getMvuData==="function")window.Mvu.getMvuData=function(){report();return getMvuData.apply(window.Mvu,arguments);};var getVariables=window.getVariables;if(typeof getVariables==="function")window.getVariables=function(){report();return getVariables.apply(window,arguments);};})();<\/script>' : '';
 			// parent.Mvu may throw an Error from another iframe: instanceof alone loses its stack.
@@ -1743,7 +1817,7 @@ window.__ModuleLoader__.load({
 				+ '<meta name="viewport" content="width=device-width,initial-scale=1">'
 				+ '<meta name="referrer" content="no-referrer">'
 				+ '<meta http-equiv="Content-Security-Policy" content="default-src https: http: data: blob:; img-src https: http: data: blob:; media-src https: http: data: blob:; font-src https: http: data:; style-src \'unsafe-inline\' https: http:; script-src \'unsafe-inline\' \'unsafe-eval\' https: http: data: blob:; connect-src https: http: wss: data: blob:; frame-src https: http: data: blob:; object-src \'none\'; base-uri \'none\'; form-action \'none\'">'
-				+ '<style>:root{color-scheme:light dark}html,body{box-sizing:border-box;margin:0;min-height:0;background:transparent;color:CanvasText;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;line-height:1.75}body{padding:0 1px;overflow-wrap:anywhere;white-space:pre-wrap}html[data-dsh-tavern-scroll]{overflow-y:auto!important}html[data-dsh-tavern-scroll] body{overflow-y:visible!important}body>*{white-space:normal}maintext{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.dsh-tavern-plain-text{white-space:pre-wrap;overflow-wrap:anywhere}*,*:before,*:after{box-sizing:border-box}img,video,svg,canvas{max-width:100%;height:auto}pre{max-width:100%;overflow:auto;white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}a{color:LinkText}</style>' + (preparationRuntime ? preparationRuntime.head : helperDependencies) + tavernStaticAssetShim() + '<script data-dsh-tavern-remote-document>(' + installTavernRemoteDocumentLoader.toString() + ')();<\/script>' + storageShim + helperShim + interactiveHelperShim + mvuViewObservationShim + cleanRuntimeReporter + sizingStyle
+				+ '<style>:root{color-scheme:light dark}html,body{box-sizing:border-box;margin:0;min-height:0;background:transparent;color:CanvasText;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;line-height:1.75}body{padding:0 1px;overflow-wrap:anywhere;white-space:pre-wrap}html[data-dsh-tavern-scroll]{overflow-y:auto!important}html[data-dsh-tavern-scroll] body{overflow-y:visible!important}body>*{white-space:normal}maintext{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.dsh-tavern-plain-text{white-space:pre-wrap;overflow-wrap:anywhere}*,*:before,*:after{box-sizing:border-box}img,video,svg,canvas{max-width:100%;height:auto}pre{max-width:100%;overflow:auto;white-space:pre-wrap}table{max-width:100%;border-collapse:collapse}a{color:LinkText}</style>' + (preparationRuntime ? preparationRuntime.head : helperDependencies) + ((!sizing || sizing.mode === "content") ? '<style data-dsh-tavern-content-roots>html:root,html:root body{height:auto!important;min-height:0!important}</style>' : '') + tavernStaticAssetShim() + '<script data-dsh-tavern-remote-document>(' + installTavernRemoteDocumentLoader.toString() + ')();<\/script>' + storageShim + helperShim + interactiveHelperShim + mvuViewObservationShim + cleanRuntimeReporter + sizingStyle
 				+ (input && input.helperContext && input.helperContext.openingHost ? '<script data-dsh-tavern-session-opening>(' + installSessionOpeningBridge.toString() + ')(' + token + ',' + JSON.stringify(Object.assign({}, input.helperContext.openingHost, { extensionSettings: input.helperContext.extensionSettings || {} })).replace(/</g, '\\u003c') + ');<\/script>' : '')
 				+ (input && input.helperContext ? '<script data-dsh-tavern-frame-variable-aliases>(' + installTavernFrameVariableAliases.toString() + ')();<\/script>' : '')
 				+ (input && input.helperContext && input.persistent === true && input.preserveInstance !== true ? '<script data-dsh-tavern-status-refresh>(' + installTavernStatusRefresh.toString() + ')(' + token + ');<\/script>' : '')
@@ -1755,21 +1829,20 @@ window.__ModuleLoader__.load({
 				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
-		function encodeTavernScriptSource(value) {
-			const binary = encodeURIComponent(String(value || "")).replace(/%([0-9A-F]{2})/g, function (_, hex) { return String.fromCharCode(parseInt(hex, 16)); });
-			if (typeof btoa === "function") return btoa(binary);
-			const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-			let result = "";
-			for (let index = 0; index < binary.length; index += 3) {
-				const a = binary.charCodeAt(index);
-				const b = index + 1 < binary.length ? binary.charCodeAt(index + 1) : 0;
-				const c = index + 2 < binary.length ? binary.charCodeAt(index + 2) : 0;
-				result += alphabet[a >> 2] + alphabet[((a & 3) << 4) | (b >> 4)]
-					+ (index + 1 < binary.length ? alphabet[((b & 15) << 2) | (c >> 6)] : "=")
-					+ (index + 2 < binary.length ? alphabet[c & 63] : "=");
-			}
-			return result;
-		}
+        function startTavernHelperLoader(source) {
+            // A multi-MB data URL can crash Chromium before the frame load event.
+            // Keep the URL small and release its backing storage after evaluation.
+            const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+            let released = false;
+            function release() {
+                if (released) return;
+                released = true;
+                URL.revokeObjectURL(url);
+                window.removeEventListener("pagehide", release);
+            }
+            window.addEventListener("pagehide", release, { once: true });
+            return import(url).finally(release);
+        }
 
 		function createTavernHelperTransport(options) {
 			const { parent, token, copy, identity, onContext, onEvent } = options;
@@ -1983,8 +2056,8 @@ window.__ModuleLoader__.load({
 				return core;
 			}
 			function identity(core) { return [core.message_id, core.role, core.message, core.swipe_id, core.swipes]; }
-			function layoutMatches() { return chat.length === rows.length && rows.every((row, index) => chat[index] === row.view); }
-			function dirty() { return !layoutMatches() || !same(metadata, metadataBase) || rows.some(row => !same(pluginData(row.view), row.base)); }
+			function layoutMatches() { return exposedLayoutMatches() && chat.length === rows.length && rows.every((row, index) => chat[index] === row.view); }
+			function dirty() { return !layoutMatches() || !same(metadata, metadataBase) || rows.some(row => !row.core.stub && (!same(pluginData(row.view), row.base) || !same(row.view.variables, row.variablesBase))); }
 			function sync(value, acknowledged, variableDelta) {
 				if (!value) return;
 				if (saving && !acknowledged) {
@@ -2004,15 +2077,21 @@ window.__ModuleLoader__.load({
                     && rows.length === (value.messages || []).length;
                 const changedRows = variableDelta?.version === 2 ? new Set((variableDelta.messages || []).map(m=>m.message_id)) : new Set([variableDelta?.messageId]);
                 function mergeRow(message, index) {
+                    if(message?.stub && rows[index] && !rows[index].core.stub && options.readMessage
+                        && !same(pluginData(rows[index].view),rows[index].base)) message=options.readMessage(index);
 					const core = coreOf(message), remote = copy(message.pluginData || {});
 					let row = rows[index];
 					if (!row || !same(identity(row.core), identity(core))) {
 						const view = copy(remote); for (const key of Object.keys(core)) set(view, key, core[key]);
-						return { view: view, core: core, base: remote, revision: revision };
+						return { view: view, core: core, base: remote, revision: revision, variablesBase: core.variables, variablesRevision: revision };
 					}
 					const ack = acknowledged && acknowledged.messages.find(item => item.message_id === core.message_id);
 					mergeView(row.view, ack ? ack.data : row.base, remote, key => !reserved.has(key));
-					mergeView(row.view, row.core, core, key => reserved.has(key));
+					const variableAck = acknowledged && (acknowledged.variableUpdates || []).find(item => item.message_id === core.message_id);
+                    const priorCore = Object.assign({}, row.core, { variables: variableAck ? copy(row.variablesBase) : row.variablesBase });
+                    if (variableAck) priorCore.variables[variableAck.swipe_id] = copy(variableAck.data);
+                    mergeView(row.view, priorCore, core, key => reserved.has(key));
+                    if (variableAck || same(row.view.variables, core.variables)) { row.variablesBase = core.variables; row.variablesRevision = revision; }
 					row.core = core;
 					if (ack || same(pluginData(row.view), remote)) { row.base = remote; row.revision = revision; }
 					return row;
@@ -2030,6 +2109,7 @@ window.__ModuleLoader__.load({
                     if (!layoutMatches()) return;
                     rows = (value.messages || []).map(mergeRow);
                     chat.splice(0, chat.length, ...rows.map(row => row.view));
+                    refreshExposed();
                 }
 				const remoteMetadata = copy(value.chatMetadata || {}), ackMetadata = acknowledged && acknowledged.metadata;
 				mergeView(metadata, ackMetadata ? ackMetadata.data : metadataBase, remoteMetadata);
@@ -2038,13 +2118,21 @@ window.__ModuleLoader__.load({
 			}
 			function snapshot() {
 				if (!layoutMatches()) throw new Error("saveChat 不支持新增、删除、替换或重排历史消息");
-				const messages = [];
+				const messages = [], variableUpdates = [];
 				for (const row of rows) {
-					for (const key of reserved) if (own(row.view, key) !== own(row.core, key) || !same(row.view[key], row.core[key])) throw new Error("saveChat 只保存插件数据，不支持修改正文、身份或消息版本: " + key);
+                    if (row.core.stub) continue;
+					for (const key of reserved) if (key !== "variables" && (own(row.view, key) !== own(row.core, key) || !same(row.view[key], row.core[key]))) throw new Error("saveChat 不支持修改正文、身份或消息版本: " + key);
+                    if (!same(row.view.variables, row.variablesBase)) {
+                        const desired = row.view.variables, base = row.variablesBase, swipe = row.core.swipe_id || 0;
+                        if (!Array.isArray(desired) || !Array.isArray(base) || desired.length !== base.length || !base[swipe]
+                            || desired.some((value, index) => index !== swipe && !same(value, base[index]))) throw new Error("saveChat 不支持删除变量历史或修改其他消息版本");
+                        variableUpdates.push({message_id:row.core.message_id, swipe_id:swipe, stateRevision:row.variablesRevision, data:copy(desired[swipe])});
+                    }
 					const data = pluginData(row.view);
 					if (!same(data, row.base)) messages.push({ message_id: row.core.message_id, stateRevision: row.revision, data: data });
 				}
 				const result = { chatId: chatId, lifecycleRevision: lifecycleRevision, messages: messages };
+                if (variableUpdates.length) result.variableUpdates = variableUpdates;
 				if (!same(metadata, metadataBase)) result.metadata = { stateRevision: metadataRevision, data: copy(metadata) };
 				return result;
 			}
@@ -2053,7 +2141,7 @@ window.__ModuleLoader__.load({
 				const task = tail.catch(function () {}).then(async function () {
 					if (binding !== requestedBinding) throw new Error("聊天已切换，已取消旧聊天的排队保存");
 					const submitted = snapshot();
-					if (!submitted.messages.length && !submitted.metadata) return;
+					if (!submitted.messages.length && !submitted.metadata && !submitted.variableUpdates?.length) return;
 					saving = true;
 					try {
 						const result = await request("saveTavernChatData", { request: submitted });
@@ -2073,8 +2161,43 @@ window.__ModuleLoader__.load({
 				if (reset) reconcile(metadata, values);
 				else for (const key of Object.keys(values)) set(metadata, key, values[key]);
 			}
-			sync(options.context());
-			return { sync: sync, save: save, updateMetadata: updateMetadata, chat: () => chat, metadata: () => metadata };
+            let exposed, exposedFor, accessors=[];
+            function exposedLayoutMatches() {
+                if(exposedFor!==chat)return true;
+                if(exposed.length!==chat.length)return false;
+                return accessors.slice(0,chat.length).every((pair,id)=>{
+                    const descriptor=Object.getOwnPropertyDescriptor(exposed,String(id));
+                    return descriptor?.get===pair.get && descriptor?.set===pair.set;
+                });
+            }
+            function refreshExposed() {
+                if(exposedFor!==chat)return;
+                const target=chat;
+                exposed.length=chat.length;
+                for(let id=0;id<chat.length;id++) {
+                    if(Object.hasOwn(exposed,id))continue;
+                    const pair={
+                        get() {
+                            if(target===chat && rows[id]?.core.stub && chat[id]===rows[id].view && options.readMessage) {
+                                const source=options.readMessage(id), core=coreOf(source), remote=copy(source.pluginData || {});
+                                const view=copy(remote);for(const field of Object.keys(core))set(view,field,core[field]);
+                                rows[id]={view,core,base:remote,revision:lastRevision,variablesBase:core.variables,variablesRevision:lastRevision};chat[id]=view;
+                            }
+                            return target[id];
+                        },
+                        set(value) {target[id]=value;}
+                    };
+                    accessors[id]=pair;
+                    Object.defineProperty(exposed,String(id),{...pair,enumerable:true,configurable:true});
+                }
+            }
+            function exposedChat() {
+                if(exposedFor===chat)return exposed;
+                exposedFor=chat;exposed=[];accessors=[];refreshExposed();
+                return exposed;
+            }
+            sync(options.context());
+            return { sync: sync, save: save, updateMetadata: updateMetadata, chat: () => options.readMessage ? exposedChat() : chat, metadata: () => metadata };
 		}
 
 		function installTavernCompatibilityDiagnostics(options) {
@@ -2113,13 +2236,14 @@ window.__ModuleLoader__.load({
 		// @include local-variables.js
         // @include variable-receipts.js
         applyTavernVariableReceipt.indexApi = createIndexedArrayApi({valid: row => Boolean(row && !row.stub), eligible: row => Boolean(row?.variables?.stat_data !== undefined && row?.variables?.schema !== undefined)});
+        applyTavernVariableReceipt.turnFields = createTurnFieldIndex();
 
 		function installTavernHelperFacade(options) {
 			const nativeWorldInfoSnapshots = new WeakMap();
 			const nativeWorldInfoByName = new Map();
 			const functionTools = new Map();
 			const { window, copy, context, request: call, Popup: HelperPopup } = options;
-			const chatData = options.createChatData({ copy: copy, context: context, request: call });
+			const chatData = options.createChatData({ copy: copy, context: context, request: call, readMessage:options.readMessage });
             const localVariables = options.createLocalVariables({ context, request: call, copy, currentScript: options.currentScript, reportError: error => console.error(error) });
             async function saveChatData() {
                 const chatId = context().chatId, revision = context().lifecycleRevision;
@@ -2131,7 +2255,13 @@ window.__ModuleLoader__.load({
 			// Tavern applies enabled card regexes without ST's per-avatar opt-in.
 			// Project that host-owned permission without persisting a fabricated setting.
 			const visibleExtensionSettings = new Proxy(extensionSettings, {
+                set: function (target, key, value) {
+                    target[key] = key === "mvu_settings" && options.normalizeMvuSettings ? options.normalizeMvuSettings(value, target[key]) : value;
+                    return true;
+                },
 				get: function (target, key) {
+                    if (key === "mvu_settings" && options.projectMvuSettings) return options.projectMvuSettings(target[key]);
+                    if (key === "regex" && !Array.isArray(target.regex)) return options.readGlobalRegexes ? options.readGlobalRegexes() : [];
 					if (key !== "character_allowed_regex") return target[key];
 					const allowed = Array.isArray(target[key]) ? target[key].slice() : [];
 					const character = context().character;
@@ -2201,9 +2331,20 @@ window.__ModuleLoader__.load({
 				// These ST rewriting/media restrictions are disabled in Tavern rendering.
 				powerUserSettings: Object.freeze({ auto_fix_generated_markdown: false, trim_sentences: false, forbid_external_media: false, encode_tags: false }),
 				get characters() {
-					const character = context().character;
+					const character = options.readCharacter ? options.readCharacter() : context().character;
 					if (!character || typeof character !== "object") return [];
 					const current = copy(character);
+                    if (!current.data) current.data = copy(character);
+                    // Legacy exports wrap scripts in {type, value}; expose the same
+                    // effective script records that the host execution reader uses.
+                    const extensions = current.data.extensions;
+                    if (Array.isArray(extensions?.TavernHelper_scripts)) {
+                        extensions.TavernHelper_scripts = extensions.TavernHelper_scripts.map(function (entry) {
+                            if (entry?.type !== "script" || !entry.value || typeof entry.value !== "object" || Array.isArray(entry.value)) return entry;
+                            return Object.assign({}, entry.value, { type: entry.type,
+                                enabled: entry.enabled !== false && entry.disabled !== true && entry.value.enabled !== false && entry.value.disabled !== true });
+                        });
+                    }
 					if (!current.avatar) current.avatar = String(current.path || "");
 					return [current];
 				},
@@ -2223,7 +2364,7 @@ window.__ModuleLoader__.load({
 				unregisterFunctionTool: function (name) { functionTools.delete(String(name || "")); },
 				getCurrentChatId: function () { return String(context().chatId || ""); },
 				getCurrentLocale: function () { return "zh-CN"; },
-				getCharacterCardFields: function () { return copy(context().character && (context().character.data || context().character) || {}); },
+				getCharacterCardFields: function () { const character = options.readCharacter ? options.readCharacter() : context().character; return copy(character && (character.data || character) || {}); },
 				loadWorldInfo: async function (name) {
 					const result = await call("loadTavernWorldInfo", { name: name });
 					const document = copy(result.worldInfo);
@@ -2321,6 +2462,7 @@ window.__ModuleLoader__.load({
 
 		function tavernHelperScriptBootstrap(metadata, initialContext, modules) {
             modules.applyVariableReceipt.indexApi = modules.createIndexedArrayApi({valid: row => Boolean(row && !row.stub), eligible: row => Boolean(row?.variables?.stat_data !== undefined && row?.variables?.schema !== undefined)});
+            modules.applyVariableReceipt.turnFields = modules.createTurnFieldIndex({createIndex:modules.createOrderedNumericIndex,visit:function(){}});
             const initializationTiming = modules.createInitializationTiming({ report: function (timings) { parent.postMessage({ type: "dsh-tavern-mvu-load-diagnostic", token: metadata.token, diagnostic: { phase: "initialization-timing", timings: timings } }, "*"); } });
             window.__dshTavernInitializationTiming = initializationTiming;
             window.addEventListener("pagehide", initializationTiming.dispose, { once: true });
@@ -2339,7 +2481,18 @@ window.__ModuleLoader__.load({
 				try { Object.defineProperty(window, "localStorage", { configurable: true, value: storage }); } catch (_) {}
 			}
 			let state = initialContext && typeof initialContext === "object" ? initialContext : {};
+            const resources = modules.createResourceReader();
+            function readCharacter() {
+                if (!state.characterResourceAccess) return state.character;
+                const character = resources.read(state.characterResourceAccess);
+                return character && !character.data ? {...character, data: copy(character)} : character;
+            }
             state = {...state, messages:modules.applyVariableReceipt.indexApi.from(state.messages || [])};
+            const readMessage = modules.createHistoryReader({context:()=>state,install:row=>{
+                row.mes=row.message; row.is_user=row.role==='user'; row.is_system=row.role==='system';
+                if(!row.name)row.name=row.is_user ? (state.playerName || '你') : (state.characterName || '角色');
+                state = {...state,messages:modules.applyVariableReceipt.indexApi.update(state.messages,[[row.message_id,row]])};
+            }});
 			const token = String(metadata.token || "");
 			const officialMvuEnabled = metadata.officialMvu === true;
 			let lorebookSettings = { selected_global_lorebooks: [] };
@@ -2591,14 +2744,14 @@ window.__ModuleLoader__.load({
 			function messagesFor(target, options) {
 				const all = state.messages || [];
 				let items = [];
-				if (target === undefined || target === null) items = [all[currentId()]];
+				if (target === undefined || target === null) items = [readMessage(currentId())];
 				else if (typeof target === "string" && target.includes("-")) {
 					const value = target.replace(/{{\s*lastMessageId\s*}}/gi, String(lastId()));
 					const parts = value.split("-");
 					const from = normalizeId(parts[0]);
 					const to = normalizeId(parts[1]);
-					for (let index = Math.min(from, to); index <= Math.max(from, to); index += 1) items.push(all[index]);
-				} else items = [all[normalizeId(target)]];
+					for (let index = Math.min(from, to); index <= Math.max(from, to); index += 1) items.push(readMessage(index));
+				} else items = [readMessage(normalizeId(target))];
 				items = items.filter(Boolean);
 				if (options && options.role && options.role !== "all") items = items.filter(function (item) { return item.role === options.role; });
 				return copy(items);
@@ -2609,7 +2762,7 @@ window.__ModuleLoader__.load({
 				if (resolved.type === "character") return copy(state.characterVariables || {});
 				if (resolved.type === "chat") return copy(state.chatVariables || {});
 				if (resolved.type === "script") return copy(state.scriptVariables && state.scriptVariables[resolved.script_id] || {});
-				const message = (state.messages || [])[normalizeId(resolved.message_id)];
+				const message = readMessage(normalizeId(resolved.message_id));
 				return copy(message && message.variables && typeof message.variables === "object" ? message.variables : {});
 			}
 			function localReplace(variables, option) {
@@ -2621,7 +2774,7 @@ window.__ModuleLoader__.load({
 					if (!state.scriptVariables || typeof state.scriptVariables !== "object") state.scriptVariables = {};
 					state.scriptVariables[resolved.script_id] = copy(variables);
 				} else {
-					const message = (state.messages || [])[normalizeId(resolved.message_id)];
+					const message = readMessage(normalizeId(resolved.message_id));
 					if (message) {
 						message.variables = copy(variables);
 						if (Array.isArray(message.swipes_data)) message.swipes_data[message.swipe_id || 0] = copy(variables);
@@ -2631,7 +2784,7 @@ window.__ModuleLoader__.load({
 			}
 			function localSetMessages(patches) {
 				(patches || []).forEach(function (patch) {
-					const message = (state.messages || [])[normalizeId(patch.message_id)];
+					const message = readMessage(normalizeId(patch.message_id));
 					if (!message) return;
 					if (patch.swipe_id !== undefined) {
 						message.swipe_id = Math.max(0, Math.min((message.swipes || []).length - 1, Number(patch.swipe_id) || 0));
@@ -2704,7 +2857,7 @@ window.__ModuleLoader__.load({
 				return copy(next);
 			};
 			window.getButtonEvent = buttonEvent;
-			window.getCharData = function () { return copy(state.character || null); };
+			window.getCharData = function () { return copy(readCharacter() || null); };
 			window.getCurrentCharacterName = function () { return String(state.characterName || state.character && state.character.name || ""); };
 			window.getCurrentMessageId = currentId;
 			window.getLastMessageId = lastId;
@@ -2812,7 +2965,13 @@ window.__ModuleLoader__.load({
 			window.getWorldbookNames = function () { return state.worldbook && state.worldbook.name ? [state.worldbook.name] : []; };
 			window.getCharWorldbookNames = function () { return { primary: state.worldbook && state.worldbook.name || null, additional: [] }; };
 			window.getWorldbook = async function (name) {
-				if (state.worldbook && (name === "current" || name === state.worldbook.name)) return copy(state.worldbook.entries || []);
+				if (state.worldbook && (name === "current" || name === state.worldbook.name)) {
+                    const access = state.worldbook.resourceAccess;
+                    if (!access) return copy(state.worldbook.entries || []);
+                    const book = await resources.readAsync(access);
+                    if (state.worldbook?.resourceAccess?.token === access.token) state.worldbook = copy(book);
+                    return copy(book && book.entries || []);
+                }
 				const result = await call("getTavernHelperWorldbook", { name: name });
 				state.worldbook = copy(result.worldbook);
 				return copy(state.worldbook.entries || []);
@@ -3014,7 +3173,9 @@ window.__ModuleLoader__.load({
 					.replace(/{{\s*user\s*}}/gi, String(state.playerName || "你"))
 					.replace(/{{\s*char\s*}}/gi, String(state.characterName || "角色"));
 			};
-			facade = modules.installFacade({ installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
+			window.submitTavernInput = function (text) { return call("submitTavernHelperInput", { text: String(text || "") }); };
+            const backgroundModel = modules.installBackgroundModel({ window: window, request: call });
+			facade = modules.installFacade({ projectMvuSettings: backgroundModel.projectMvuSettings, normalizeMvuSettings: backgroundModel.normalizeMvuSettings, readGlobalRegexes: function () { return regexGroups().global.map(rawRegex); }, installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, readMessage:readMessage, readCharacter:readCharacter, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
 				Popup: modules.createPopup({ document: window.document, parent: parent, token: token }) });
 			let regexSaveTimer = null;
 			async function persistGlobalRegexes() {
@@ -3272,6 +3433,7 @@ window.__ModuleLoader__.load({
 			// Bind the managed MVU module to its runtime dependency, not page globals.
 			if (scriptId === "__dsh_official_mvu__") source = "const $ = window.jQuery;\n" + source;
 			if (previewScope && scriptId !== "__dsh_official_mvu__") source = "const window = (" + createTavernPreviewWindow.toString() + ")(globalThis); const parent = window, top = window, self = window;\n" + source;
+            if (!previewScope && scriptId !== "__dsh_official_mvu__" && window.__dshTavernComposerWindow) source = "const window = globalThis.__dshTavernComposerWindow; const parent = window.parent, top = window.top, self = window;\n" + source;
 			const sourceUrl = "dsh-tavern-script:" + encodeURIComponent(String(scriptId || "module"));
 			const startedAt = window.performance && window.performance.now ? window.performance.now() : 0;
 			function loadFailure(event) {
@@ -3392,6 +3554,30 @@ window.__ModuleLoader__.load({
 			return script.tavernReady;
 		}
 
+        function mountTavernLegacyMessage(options) {
+            // Card scripts own this DOM subtree. Keep React's message tree separate
+            // so innerHTML replacement cannot detach nodes React still reconciles.
+            const node = options.node, native = options.native;
+            const text = node.ownerDocument.createElement("div");
+            text.className = "mes_text";
+            text.textContent = String(options.source || "");
+            node.appendChild(text);
+            const initial = text.textContent;
+            // Source differs from display after macro/regex processing too.
+            // Only an actual script DOM edit may replace the native renderer.
+            node.hidden = true;
+            native.hidden = false;
+            text.style.whiteSpace = "pre-wrap";
+            const Observer = options.MutationObserver || node.ownerDocument.defaultView.MutationObserver;
+            const observer = new Observer(function () {
+                const replaced = text.childElementCount > 0 || text.textContent !== initial;
+                node.hidden = !replaced;
+                native.hidden = replaced;
+            });
+            observer.observe(text, { childList: true, subtree: true, characterData: true });
+            return function () { observer.disconnect(); text.remove(); native.hidden = false; };
+        }
+
 		function installTavernTrustedHostFacade(host, frameWindow, priority, names) {
 			// A visible mount root supports legacy host detection and panel mounting.
 			// Never fake send_textarea: scripts must reach the real composer.
@@ -3399,6 +3585,9 @@ window.__ModuleLoader__.load({
 			if (!chatRoot && host.document && host.document.createElement) {
 				chatRoot = host.document.createElement('div');
 				chatRoot.id = 'chat';
+                // This compatibility mount is not another chat viewport. Legacy
+                // panel padding must not add a second, page-level scroll range.
+                if (chatRoot.style) chatRoot.style.setProperty('display', 'contents', 'important');
 				chatRoot.tavernCompatibilityOwners = 0;
 				host.document.body.appendChild(chatRoot);
 			}
@@ -3493,6 +3682,25 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+        // The parent sends the latest complete context after iframe load. Keep
+        // archive data out of executable srcdoc and install the facade before
+        // companion modules can continue past their existing readiness gate.
+        function startTavernHelperFromMessage(metadata, bootstrap) {
+            window.__dshTavernHelperReady = new Promise(function (resolve, reject) {
+                function receive(event) {
+                    const data = event && event.data;
+                    if (event.source !== parent || !data || data.token !== metadata.token || data.type !== "dsh-tavern-helper-context") return;
+                    window.removeEventListener("message", receive);
+                    try { bootstrap(data.context); resolve(window.__dshTavernHelperReady); }
+                    catch (error) {
+                        parent.postMessage({type:"dsh-tavern-helper-bootstrap-failed",token:metadata.token,message:String(error && error.message || error)},"*");
+                        reject(error);
+                    }
+                }
+                window.addEventListener("message", receive);
+            });
+        }
+
 		function buildTavernHelperScriptParts(input) {
 			const scripts = Array.isArray(input && input.scripts)
 				? input.scripts
@@ -3512,18 +3720,24 @@ window.__ModuleLoader__.load({
 			};
 			const context = input && input.context && typeof input.context === "object" ? input.context : {};
 			const safeMetadata = JSON.stringify(metadata).replace(/</g, "\\u003c");
-			const safeContext = JSON.stringify(context).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
-			const bootstrap = '(' + tavernHelperScriptBootstrap.toString() + ')(' + safeMetadata + ',' + safeContext + ',{'
+			const safeContext = input && input.deferContext === true ? "initialContext" : JSON.stringify(context).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+			let bootstrap = '(' + tavernHelperScriptBootstrap.toString() + ')(' + safeMetadata + ',' + safeContext + ',{'
 				+ 'createInitializationTiming:' + createTavernInitializationTiming.toString() + ','
 				+ 'createTransport:' + createTavernHelperTransport.toString() + ','
                 + 'createIndexedArrayApi:' + createIndexedArrayApi.toString() + ','
+                + 'createOrderedNumericIndex:' + createOrderedNumericIndex.toString() + ','
+                + 'createTurnFieldIndex:' + createTurnFieldIndex.toString() + ','
                 + 'applyVariableReceipt:' + applyTavernVariableReceipt.toString() + ','
 				+ 'createEvents:' + createTavernHelperEventBus.toString() + ','
 				+ 'createPopup:' + createTavernHelperPopup.toString() + ','
 				+ 'installCompatibility:' + installTavernCompatibilityDiagnostics.toString() + ','
-				+ 'createChatData:' + createTavernChatDataFacade.toString() + ','
+				+ 'createHistoryReader:' + createTavernHistoryReader.toString() + ','
+                + 'createResourceReader:' + createTavernResourceReader.toString() + ','
+                + 'createChatData:' + createTavernChatDataFacade.toString() + ','
                 + 'createLocalVariables:' + createTavernLocalVariables.toString() + ','
+				+ 'installBackgroundModel:' + installTavernBackgroundModel.toString() + ','
 				+ 'installFacade:' + installTavernHelperFacade.toString() + '});';
+            if (input && input.deferContext === true) bootstrap = '(' + startTavernHelperFromMessage.toString() + ')(' + safeMetadata + ',function(initialContext){' + bootstrap + '});';
 			const modules = scripts.map(function (script) {
 				return { id: String(script && script.id || ""), system: String(script && script.system || ""), assetUrl: String(script && script.assetUrl || ""), content: String(script && script.content || "") };
 			});
@@ -3535,6 +3749,8 @@ window.__ModuleLoader__.load({
 				+ 'const token=' + JSON.stringify(metadata.token) + ';\n'
 				+ 'try{'
 				+ (input && input.trustedCardMode ? 'const ensureHostJQuery=' + ensureTavernHostJQuery.toString() + ';await ensureHostJQuery(window.parent);const ensureHostJQueryUi=' + ensureTavernHostJQueryUi.toString() + ';await ensureHostJQueryUi(window.parent);const artifacts=window.frameElement&&window.frameElement.__dshTavernHostArtifacts;window.$=window.jQuery=artifacts?artifacts.bindJQuery(window.parent.jQuery):window.parent.jQuery;const installHostFacade=' + installTavernTrustedHostFacade.toString() + ';const releaseHostFacade=installHostFacade(window.parent,window);window.addEventListener("pagehide",releaseHostFacade,{once:true});window.addEventListener("unload",releaseHostFacade,{once:true});\n' : '')
+				+ '(' + installLegacyTavernComposer.toString() + ')();\n'
+                + 'window.__dshTavernComposerWindow=(' + createTavernComposerWindow.toString() + ')(window);if(window.jQuery){window.$=window.jQuery=window.__dshTavernComposerWindow.jQuery;}\n'
 				+ 'for(const script of scripts){window.__dshTavernHelperSetCurrentScript(script.id);try{'
 				+ 'if(script.system==="official-mvu"&&script.assetUrl){const loader=createMvuLoader({fetch:window.fetch.bind(window),evaluate:source=>loadModule(source,script.id),onDiagnostic(diagnostic){parent.postMessage({type:"dsh-tavern-mvu-load-diagnostic",token,diagnostic},"*");},onState(state){parent.postMessage({type:"dsh-tavern-mvu-load-state",token,state},"*");}});'
 				+ 'const retry=event=>{if(event.source===parent&&event.data?.token===token&&event.data.type==="dsh-tavern-mvu-reload")loader.retry();};'
@@ -3543,13 +3759,13 @@ window.__ModuleLoader__.load({
 				+ 'if(script.system==="official-mvu")await window.waitGlobalInitialized("Mvu");window.__dshTavernHelperSubscriptionsReady(script.id);'
 				+ '}catch(error){window.__dshTavernHelperSubscriptionsFailed(script.id,error);if(script.system==="official-mvu")break;}}}catch(error){for(const script of scripts)window.__dshTavernHelperSubscriptionsFailed(script.id,error);}finally{window.__dshTavernResolveCompanionScriptsReady();}';
 			// Start now: document.open() can remove deferred module tags before they run.
-			const moduleUrl = "data:text/javascript;base64," + encodeTavernScriptSource(loaderSource);
+			const safeLoader = JSON.stringify(loaderSource).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 			return {
 				head: tavernIconDependencies()
 				+ tavernStaticAssetShim()
 				+ tavernHelperScriptDependencies()
 				+ '<script data-dsh-tavern-helper-script>' + bootstrap + '<\/script>',
-				body: '<div id="extensions_settings2" hidden><select id="world_info_sort_order"><option value="13">自定义排序</option></select></div><div id="tavern_helper" hidden></div><script>void import(' + JSON.stringify(moduleUrl) + ');<\/script>'
+				body: '<div id="extensions_settings2" hidden><select id="world_info_sort_order"><option value="13">自定义排序</option></select></div><div id="tavern_helper" hidden></div><script data-dsh-tavern-helper-loader>(' + startTavernHelperLoader.toString() + ')(' + safeLoader + ');<\/script>'
 			};
         }
 
@@ -3689,7 +3905,7 @@ window.__ModuleLoader__.load({
 			function decorateHelperContext(value, fallback) {
 				const context = clone(value && typeof value === "object" ? value : {});
 				const previous = fallback && typeof fallback === "object" ? fallback : {};
-				for (const key of ["character", "characterVariables", "chatId", "playerName", "characterName", "worldbook"]) {
+				for (const key of ["character", "characterResourceAccess", "characterVariables", "chatId", "playerName", "characterName", "worldbook"]) {
 					if (context[key] === undefined && previous[key] !== undefined) context[key] = clone(previous[key]);
 				}
 				if (!context.scriptVariables || typeof context.scriptVariables !== "object") context.scriptVariables = clone(previous.scriptVariables || {});
@@ -3711,6 +3927,7 @@ window.__ModuleLoader__.load({
 				const character = clone(view && view.card || null);
 				if (character && typeof character === "object" && (!character.data || typeof character.data !== "object")) character.data = clone(character);
 				context.character = character;
+                context.characterResourceAccess = view && view.cardResourceAccess || null;
 				context.chatId = String(view && view.chatId || "");
 				context.playerName = String(view && view.playerName || "你");
 				context.characterName = String(character && character.name || "角色");
@@ -3957,7 +4174,7 @@ window.__ModuleLoader__.load({
 				frame.title = "人物卡共享脚本沙箱";
 				if (!trustedCardMode) frame.sandbox = "allow-scripts";
 				frame.referrerPolicy = "no-referrer";
-				frame.srcdoc = buildTavernHelperScriptDocument({ token: record.token, scripts: scripts, context: context, trustedCardMode: trustedCardMode });
+				frame.srcdoc = buildTavernHelperScriptDocument({ token: record.token, scripts: scripts, context: context, trustedCardMode: trustedCardMode, deferContext: true });
 				frame.addEventListener("load", function () {
 					if (records.get(record.id) !== record) return;
 					record.loaded = true;
@@ -3994,7 +4211,7 @@ window.__ModuleLoader__.load({
                 const api = applyTavernVariableReceipt.indexApi, before = record.context;
                 const changed = before && before.chatId === context.chatId
                     && before.lifecycleRevision === context.lifecycleRevision
-                    && before.messages.length === context.messages.length
+                    && before.messages.length <= context.messages.length
                     ? api.changed(before.messages,context.messages) : null;
                 record.context = context;
                 if (changed === null) { post(record,{type:"dsh-tavern-helper-context",context}); return; }
@@ -4002,7 +4219,7 @@ window.__ModuleLoader__.load({
                 if (header.turnMessageIds === before.turnMessageIds) delete header.turnMessageIds;
                 post(record,{type:"dsh-tavern-helper-context",contextDelta:{
                     version:2,kind:"committed",chatId:context.chatId,lifecycleRevision:context.lifecycleRevision,
-                    baseRevision:before.stateRevision,stateRevision:context.stateRevision,header,
+                    baseRevision:before.stateRevision,stateRevision:context.stateRevision,messageCount:context.messages.length,header,
                     messages:changed.map(id=>context.messages[id])
                 }});
             }
@@ -4024,7 +4241,7 @@ window.__ModuleLoader__.load({
                     && String(view.card?.name || "角色") === record.committedContext?.characterName
                     && Array.isArray(source.messages) && Array.isArray(record.sourceHelper.messages)
                     && record.sourceHelper.lifecycleRevision === source.lifecycleRevision
-                    && record.sourceHelper.messages.length === source.messages.length
+                    && record.sourceHelper.messages.length <= source.messages.length
                     ? sourceIndex.changed(record.sourceHelper.messages,source.messages) : null;
                 let context;
                 if (sourceChanges !== null && record.committedContext) {
@@ -4033,7 +4250,7 @@ window.__ModuleLoader__.load({
                     if (sameTurns) delete helper.turnMessageIds;
                     const partial = helperContext({...view,tavernHelper:helper},scripts);
                     context = {...partial,messages:applyTavernVariableReceipt.indexApi.update(record.committedContext.messages,
-                        sourceChanges.map((id,at)=>[id,partial.messages[at]]))};
+                        sourceChanges.map((id,at)=>[id,partial.messages[at]]),source.messages.length)};
                     if (sameTurns) context.turnMessageIds = record.committedContext.turnMessageIds;
                 } else context = helperContext(view,scripts);
 				const nextSnapshot = snapshot(context);
@@ -4242,6 +4459,20 @@ window.__ModuleLoader__.load({
 					}
 					return;
 				}
+                if (data.type === "dsh-tavern-helper-call" && data.method === "submitTavernHelperInput") {
+                    Promise.resolve().then(function () {
+                        if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，开局消息未发送；请返回原对话重试");
+                        if (data.lifecycleRevision !== undefined && Number(data.lifecycleRevision) !== Number(record.context?.lifecycleRevision || 0)) throw new Error("存档版本已变化，开局消息未发送");
+                        if (typeof options.executeSlash !== "function") throw new Error("当前对话发送入口尚未就绪");
+                        return options.executeSlash("", record.sessionId, { inputText: String(data.args?.text || "") });
+                    }).then(function (result) {
+                        post(record, { type:"dsh-tavern-helper-response", requestId:data.requestId, ok:true, result:result });
+                    }, function (error) {
+                        reportError("人物卡发送消息", error);
+                        post(record, { type:"dsh-tavern-helper-response", requestId:data.requestId, ok:false, error:String(error.message || error) });
+                    });
+                    return;
+                }
 				if (data.type !== "dsh-tavern-helper-call" || !allowedMethods.has(data.method)) return;
 				if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false, error: "事件已经结束，已拒绝迟到写入", errorCode: "TAVERN_SCRIPT_EVENT_CLOSED" });
@@ -4345,9 +4576,9 @@ window.__ModuleLoader__.load({
 					const scripts = record ? Array.from(record.scripts.values()).map(function (script) { return { id: script.id, loaded: script.loaded, subscriptionsReady: script.subscriptionsReady, initializationFailed: script.initializationFailed }; }) : [];
 					const initializationError = mvuInitializationError(record);
 					const baseline=record && record.context;
-                    const contextBaseline=baseline ? {workContextVersion:1,chatId:baseline.chatId,stateRevision:baseline.stateRevision,
+                    const contextBaseline=baseline ? {workContextVersion:1,appendContextVersion:1,chatId:baseline.chatId,stateRevision:baseline.stateRevision,
                         lifecycleRevision:Number(baseline.lifecycleRevision)||0,messageCount:(baseline.messages||[]).length,
-                        transaction:baseline.transaction,complete:!baseline.messagesPending && (applyTavernVariableReceipt.indexApi.info(baseline.messages)?.complete ?? false)} : {workContextVersion:1,full:true};
+                        transaction:baseline.transaction,historyWindowVersion:baseline.historyAccess?1:undefined,complete:!baseline.messagesPending && (applyTavernVariableReceipt.indexApi.info(baseline.messages)?.complete ?? false)} : {workContextVersion:1,full:true};
                     return { contextBaseline:contextBaseline, sessionId: activeSessionId, frameCount: record ? 1 : 0, scriptIds: scripts.map(function (script) { return script.id; }), scripts: scripts, ...(record && record.scripts.has("__dsh_official_mvu__") ? { mvuDataReady: mvuDataReady(record) } : {}), ...(record && record.mvuLoadState ? { mvuLoadState: record.mvuLoadState } : {}), ...(initializationError ? { initializationError: initializationError } : {}) };
 				}
 			});
@@ -4428,7 +4659,7 @@ window.__ModuleLoader__.load({
 				lease = { sessionId: sessionId, id: hostWindow.crypto && typeof hostWindow.crypto.randomUUID === "function" ? hostWindow.crypto.randomUUID() : String(Date.now()) + ":" + String(Math.random()) };
 				const currentLease = lease;
 				runtime = createRuntime({
-					window: hostWindow, rpc: invoke, onMutation: invalidate, foreground: foreground,
+					window: hostWindow, rpc: invoke, onMutation: invalidate, foreground: foreground, executeSlash: options.executeSlash,
 					onMvuLoadState: function (state) {
 						if (lease !== currentLease) return;
 						if (options && options.onMvuLoadState) options.onMvuLoadState(state);
@@ -4661,7 +4892,7 @@ window.__ModuleLoader__.load({
 				if (state && state.phase === "ready") {
 					const view = state.view || {};
 					// Cold getSession may ship stub Helper floors; wait for hydration before scripts.
-					if (view.tavernHelper && view.tavernHelper.messagesPending) {
+					if (!view.historyWindow?.onDemand && !view.tavernHelper?.historyAccess && (view.historyWindow || view.tavernHelper && view.tavernHelper.messagesPending)) {
 						retire(record);
 						return;
 					}
@@ -4672,9 +4903,9 @@ window.__ModuleLoader__.load({
 			}
 			function createRecord(sessionId) {
 				const record = { sessionId: sessionId, viewState: null, loadState: null, fresh: false, foregroundRunning: sessions.list.getSnapshot().byId?.[sessionId]?.running === true, stopView: null };
-				record.templatePanel = createServerTemplatePanel({ window: hostWindow, rpc: options.rpc || rpc, isActive: () => current === record });
+				record.templatePanel = createServerTemplatePanel({ window: hostWindow, rpc: options.rpc || rpc, isActive: () => current === record && String(sessions.list.getSnapshot().current || "") === record.sessionId });
 				record.execution = (options.createExecution || createTavernScriptExecutionModule)({
-					window: hostWindow, rpc: options.rpc || rpc,
+					window: hostWindow, rpc: options.rpc || rpc, executeSlash: options.executeSlash,
 					signals: options.signals || tavernSessionSignals,
 					invalidate: function (id) { views.invalidate(id); },
 					onIdle: function () { retire(record); },
@@ -4701,14 +4932,21 @@ window.__ModuleLoader__.load({
 					record.foregroundRunning = running;
 					retire(record);
 				});
-				if ((current ? current.sessionId : "") === sessionId) return;
+				if ((current ? current.sessionId : "") === sessionId) {
+                    // Child agents keep the root executor alive, but its card UI
+                    // belongs only to the actual root conversation surface.
+                    const visible = String(sessions.list.getSnapshot().current || "") === sessionId;
+                    if (current?.execution.setForeground) current.execution.setForeground(visible);
+                    if (current && !visible) current.templatePanel.close();
+                    return;
+                }
 				const previous = current;
                 if (previous) previous.templatePanel.close();
                 if (previous && previous.execution.setForeground) previous.execution.setForeground(false);
 				retention.select(sessionId);
 				hostWindow.__dshTavernSelectedSessionId = sessionId;
 				current = sessionId ? records.get(sessionId) || createRecord(sessionId) : null;
-                if (current && current.execution.setForeground) current.execution.setForeground(true);
+                if (current && current.execution.setForeground) current.execution.setForeground(String(sessions.list.getSnapshot().current || "") === sessionId);
 				if (previous) {
 					// Do not retire from a cached idle view: the settlement-start
 					// notification may still be in flight when navigation happens.
@@ -4914,7 +5152,7 @@ window.__ModuleLoader__.load({
 			let desired = createDocument();
 			let visible = desired;
 			let pending = null;
-			let height = restoredTavernFrameHeight(visible.heightKey, visible.content);
+			let height = (props.openingPreview ? 160 : restoredTavernFrameHeight(visible.heightKey, visible.content));
 			function documentKey() {
 				const values = [props.sessionId, props.content, props.persistent === true ? 0 : props.turn, props.observeMvuView, props.runtimeReporting, props.persistent, props.trustedCardMode, Boolean(props.helperContext), JSON.stringify(props.openingPreview), JSON.stringify(props.frameSizing), refreshRevision];
 				if (!documentInputs || values.some(function (value, index) { return value !== documentInputs[index]; })) {
@@ -5048,7 +5286,7 @@ window.__ModuleLoader__.load({
 					// Never keep an old conversation's page eligible for writes in a new one.
 					channels.clear();
 					visible = desired; pending = null;
-					height = restoredTavernFrameHeight(visible.heightKey, visible.content);
+					height = (props.openingPreview ? 160 : restoredTavernFrameHeight(visible.heightKey, visible.content));
 					publish();
 				} else reconcile();
 				const contextKey = helperContext ? [helperContext.version, helperContext.stateRevision, helperContext.lifecycleRevision].map(function (value) { return String(Number(value) || 0); }).join(":") : "";
@@ -5063,6 +5301,13 @@ window.__ModuleLoader__.load({
 				height = value;
 				try { hostWindow.sessionStorage.setItem(document.heightKey, value); } catch (_) {}
 			}
+            function submitOpening(document, text) {
+                if (!listener || document !== visible || document.key !== desired.key || typeof props.onSubmitOpening !== "function") return Promise.reject(new Error("开场预览已失效，请重新打开"));
+                if (!document.openingSubmit) document.openingSubmit = Promise.resolve().then(function () {
+                    return props.onSubmitOpening(String(text || ""));
+                }).catch(function (error) { document.openingSubmit = null; throw error; });
+                return document.openingSubmit;
+            }
 			function receive(event) {
 				const data = event && event.data;
 				const channel = data && channels.get(data.token);
@@ -5085,7 +5330,7 @@ window.__ModuleLoader__.load({
 					sendFontSize(sourceDocument);
 					sendContext(sourceDocument, "ready");
 					if (sourceDocument === pending && pending.key === desired.key) {
-						rememberHeight(pending, pending.height || restoredTavernFrameHeight(pending.heightKey, pending.content));
+						rememberHeight(pending, pending.height || (props.openingPreview ? 160 : restoredTavernFrameHeight(pending.heightKey, pending.content)));
 						touchRelay.stop();
 						visible = pending; pending = null;
 						publish();
@@ -5142,7 +5387,9 @@ window.__ModuleLoader__.load({
 				} else if (data.type === "dsh-tavern-helper-call" && !props.sessionId && props.openingPreview) {
 					// The pending frame initializes its private draft before it becomes visible.
 					if (sourceDocument.key !== desired.key) return;
-					invoke("callOpeningRuntime", { id: props.openingPreview.preparationId, method: data.method, args: data.args }).then(function (result) {
+					(data.method === "submitTavernHelperInput"
+                        ? submitOpening(sourceDocument, data.args && data.args.text)
+                        : invoke("callOpeningRuntime", { id: props.openingPreview.preparationId, method: data.method, args: data.args })).then(function (result) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result }, "*");
 					}, function (error) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error.message || error) }, "*");
@@ -5207,7 +5454,6 @@ window.__ModuleLoader__.load({
 					const openingArtifacts = props.openingPreview && props.trustedCardMode
 						? createTavernHostArtifactScope({ document: hostWindow.document }) : null;
 					hostWindow.addEventListener("message", receive);
-                    let openingSubmitted = false;
                     const releaseComposer = props.trustedCardMode && hostWindow.document
                         ? installFrameHostComposer(hostWindow.document, function (node) {
                             const channel = channels.get(visible.token);
@@ -5215,9 +5461,7 @@ window.__ModuleLoader__.load({
                         }, function (text) {
                             if (!listener || visible.key !== desired.key) throw new Error("卡片已失效，请重新打开");
                             if (props.openingPreview) {
-                                if (openingSubmitted) return;
-                                if (typeof props.onSubmitOpening !== "function") throw new Error("开场预览已失效，请重新打开");
-                                return Promise.resolve(props.onSubmitOpening(text)).then(function (result) { openingSubmitted = true; return result; });
+                                return submitOpening(visible, text);
                             }
                             const executeSlash = configuredSlashExecutor || props.executeSlash;
                             if (!props.sessionId || typeof executeSlash !== "function") throw new Error("当前界面无法触发生成，请刷新页面后重试");
@@ -5622,6 +5866,8 @@ window.__ModuleLoader__.load({
 			return [{ kind: "markdown", text: String(projection.text || "") }];
 		}
 
+        // @include inline-fragment.js
+
 		function renderTavernProjection(projection, options) {
 			const h = React.createElement;
 			const parts = projectionPartsOf(projection);
@@ -5635,6 +5881,9 @@ window.__ModuleLoader__.load({
 			return parts.map(function (part, index) {
 				if (part.kind === "markdown") return h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
 				const content = String(part.content !== undefined ? part.content : part.html || "");
+                if (options.trustedCardMode === true && !options.openingPreview && parseTavernInlineFragment(content, window.document)) {
+                    return h(TavernInlineFragment, {key:index, content:content});
+                }
 				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, frameSizing: options.frameSizing, helperContext: options.helperContext, helperContextReader: options.helperContextReader, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
 			});
 		}
@@ -5707,6 +5956,15 @@ window.__ModuleLoader__.load({
 		function createTavernFrameSlashExecutor(ctx, hostWindow) {
 			hostWindow = hostWindow || window;
 			return function (line, sessionId, options) {
+                if (options && typeof options.inputText === "string") {
+                    const text = options.inputText.trim();
+                    const binding = ctx.sessions.binding(sessionId);
+                    if (!text || !binding) return Promise.reject(new Error("开局消息为空或原对话已关闭"));
+                    return Promise.resolve(binding.session.prompt([{ type:"text", text:text }], "queue")).then(function (result) {
+                        if (!result?.ok) throw new Error(result?.error?.message || "消息发送失败");
+                        return { submitted:true };
+                    });
+                }
                 if (/^\/ejs(?:-refresh)?(?:\s|$)/.test(String(line))) return rpc("executeFullTemplateCommand", {text:line}, sessionId).then(function(result){return result.pipe;});
 				const draftMatch = /^\/setinput(?: ([\s\S]*))?$/.exec(String(line || ""));
                 // Preflight before touching the composer: otherwise the greedy
@@ -5987,7 +6245,7 @@ window.__ModuleLoader__.load({
 			}
 			function tavernAssistantViewPaths(turn, eager = true) {
 				return ["mode", eager ? "tavernHelper" : "$helperAvailable",
-					"tavernRuntimePolicy", "releaseCapabilities", "statusBarPlacement"].map(field => [field]).concat([["$projectionTurn", String(turn)], ["$projectionLatestTurn", String(turn)]]);
+					"tavernRuntimePolicy", "tavernMvuRuntime", "releaseCapabilities", "statusBarPlacement"].map(field => [field]).concat([["$projectionTurn", String(turn)], ["$projectionLatestTurn", String(turn)]]);
 			}
 			function tavernReceiptViewPaths(turn, receipt, latest) {
 				const paths = [["$mvuReceiptTurn", String(turn)], ["$settlementOwner", String(turn)]];
@@ -6008,8 +6266,36 @@ window.__ModuleLoader__.load({
 					sessionId: props.sessionId, view: state.view, executeSlash: props.executeSlash
 				}) : null;
 			}
+            function TavernPreparedScriptMessage(props) {
+                const [status, setStatus] = React.useState("idle");
+                const sending = React.useRef(false);
+                const [error, setError] = React.useState("");
+                return React.createElement("div", {className:"dsh-tavern-hint", "data-dsh-script-message":true},
+                    React.createElement("p", null, status === "sent" ? "卡片消息已提交。" : "有一条卡片准备的消息尚未发送。"),
+                    React.createElement("button", {type:"button", className:"dsh-tavern-btn", disabled:status !== "idle", onClick:async function () {
+                        if (sending.current) return;
+                        sending.current = true; setStatus("sending"); setError("");
+                        try {
+                            await props.executeSlash("", props.sessionId, {inputText:props.preparedText});
+                            setStatus("sent");
+                        } catch (err) { sending.current = false; setStatus("idle"); setError(String(err && err.message || err)); }
+                    }}, status === "sent" ? "已提交" : status === "sending" ? "正在提交…" : "发送卡片消息"),
+                    error ? React.createElement("p", {role:"alert"}, error) : null);
+            }
+
+            function TavernLegacyGreeting(props) {
+                const native = React.useRef(null), node = React.useRef(null);
+                React.useLayoutEffect(function () {
+                    return mountTavernLegacyMessage({node:node.current, native:native.current, source:props.source});
+                }, [props.source]);
+                return React.createElement("div", {className:"mes", mesid:"0", is_user:"false"},
+                    React.createElement("div", {ref:native}, props.children),
+                    React.createElement("div", {ref:node, "data-dsh-legacy-message":"0"}));
+            }
+
 			function TavernAssistantNodeView(props) {
 				const data = props.node.data;
+                const historyNode = React.useRef(null);
 				const turnRef = props.node.location.kind === "turn" || props.node.location.kind === "step" ? props.node.location.turn : null;
 				const turn = turnRef ? Number(turnRef.turn) : 0;
 				const settled = data.status !== "running";
@@ -6021,13 +6307,25 @@ window.__ModuleLoader__.load({
 				const sessionTransitioning = React.useSyncExternalStore(tavernSessionTransition.subscribe, tavernSessionTransition.getSnapshot, tavernSessionTransition.getSnapshot);
 					const projection = settled ? tavernProjectionForTurn(liveState.view, storyTurn) : null;
 					const latestProjectionTurn = tavernLatestProjectionTurn(liveState.view);
+                React.useEffect(function () {
+                    if(!historyNode.current || !currentView?.historyWindow || projection || storyTurn<=0 || storyTurn>=tavernLatestProjectionTurn(currentView))return;
+                    const observer = new IntersectionObserver(entries=>{
+                        if(entries.some(entry=>entry.isIntersecting)) {
+                            observer.disconnect();
+                            void requestCompleteHistory(props.sessionId).catch(error=>tavernErrorHub.report("读取历史",error));
+                        }
+                    });
+                    observer.observe(historyNode.current);
+                    return ()=>observer.disconnect();
+                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision]);
 				const tail = props.useTurnData("turn-tail");
 				const owner = React.useMemo(function () {
 					if (!turnRef || turnRef.status !== "closed" || !data.finalNode || !tail || !tail.closing || tail.closing.finalNode.seq !== data.finalNode.seq) return undefined;
 					return { turn: turnRef, seq: data.finalNode.seq, openFile: props.openFile };
 				}, [turnRef, data.finalNode, tail, props.openFile]);
 				const mentions = React.useMemo(function () { return owner === undefined ? undefined : props.fileMentions(owner); }, [owner, props.fileMentions]);
-				const rendered = sessionTransitioning ? [React.createElement("div", { key: "switching", className: "dsh-tavern-session-switching", role: "status" }, "正在完成游戏初始化…")] : renderTavernAssistantBlocks({
+				const waitingForHistory = Boolean(currentView?.historyWindow && !projection && settled && storyTurn>0 && storyTurn<latestProjectionTurn);
+                const rendered = sessionTransitioning ? [React.createElement("div", { key: "switching", className: "dsh-tavern-session-switching", role: "status" }, "正在完成游戏初始化…")] : waitingForHistory ? [React.createElement("div", {key:"history",role:"status"}, "正在读取历史内容…")] : renderTavernAssistantBlocks({
 					blocks: data.blocks,
 					streaming: data.status === "running",
 					interrupted: data.status === "interrupted",
@@ -6051,7 +6349,19 @@ window.__ModuleLoader__.load({
 				const illustration = sceneImagesEnabled && settled && storyTurn > 0 && isPlayMode(liveState.view && liveState.view.mode) && !sessionTransitioning ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn }) : null;
                 const inlineStatus = liveState.view?.statusBarPlacement === "body" && !sessionTransitioning && storyTurn > 0 && storyTurn === latestProjectionTurn && data.finalNode && tail?.closing?.finalNode?.seq === data.finalNode.seq
                     ? React.createElement(TavernInlineStatusRuntime, { sessionId: props.sessionId, executeSlash: props.executeSlash }) : null;
-				return React.createElement("div", { className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, rendered, illustration, mvuReceiptNode, inlineStatus);
+                const helper = liveState.view?.tavernHelper;
+                const greetingId = helper?.turnMessageIds?.[String(storyTurn)];
+                const legacyGreeting = settled && !sessionTransitioning && greetingId === 0 && liveState.view?.tavernRuntimePolicy?.trustedCardMode;
+                const greetingSource = helper?.messages?.[0]?.message || "";
+                // Recover messages staged by earlier system versions, independent
+                // of any card name, wording, or rendered guide DOM.
+                const prepared = helper?.chatMetadata?.dsh_pending_opening;
+                const pendingMessage = greetingId === 0 && helper?.messages?.length === 1
+                    && prepared?.lifecycleRevision === Number(helper?.lifecycleRevision || 0)
+                    && typeof prepared.text === "string" && prepared.text.trim()
+                    ? React.createElement(TavernPreparedScriptMessage, {key:props.sessionId+":"+prepared.lifecycleRevision, sessionId:props.sessionId, preparedText:prepared.text, executeSlash:props.executeSlash}) : null;
+                const body = legacyGreeting ? React.createElement(TavernLegacyGreeting, {key:props.sessionId+":greeting", source:greetingSource, sessionId:props.sessionId, executeSlash:props.executeSlash}, rendered) : rendered;
+				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, pendingMessage, illustration, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
 				const liveState = useScopedLiveTavernView(props.sessionId, String(props.messageId || ""), [["mode"], ["forkTurnsByMessageId", String(props.messageId || "")]]);
@@ -6245,6 +6555,27 @@ window.__ModuleLoader__.load({
 			const [trustedCardMode, setTrustedCardMode] = React.useState(true);
 			const [cardEntry, setCardEntry] = React.useState("");
 			const [openingPicker, setOpeningPicker] = React.useState(null);
+			const openingLayoutRef = React.useRef(null);
+			const [openingSettingsCollapsed, setOpeningSettingsCollapsed] = React.useState(false);
+			const openingSettingsManual = React.useRef(false);
+			React.useEffect(function () {
+				openingSettingsManual.current = false;
+				setOpeningSettingsCollapsed(false);
+			}, [openingPicker && openingPicker.card.path]);
+			React.useEffect(function () {
+				const dialog = openingLayoutRef.current;
+				if (!openingPicker || !dialog || typeof ResizeObserver === "undefined") return;
+				function fit() {
+					if (!openingSettingsManual.current && dialog.scrollHeight > dialog.clientHeight + 2) setOpeningSettingsCollapsed(true);
+				}
+				const observer = new ResizeObserver(fit);
+				observer.observe(dialog);
+				const preview = dialog.querySelector(".dsh-tavern-greeting-preview");
+				if (preview) observer.observe(preview);
+				fit();
+				return function () { observer.disconnect(); };
+			}, [openingPicker, picking]);
+
 			const [chatImport, setChatImport] = React.useState(null);
 			const chatImportFile = React.useRef(null);
 			const [pendingOpen, setPendingOpen] = React.useState(null);
@@ -6714,7 +7045,7 @@ window.__ModuleLoader__.load({
 					try { preparedWorkspaceId = await timing.measure("claimPrewarm", () => playPrewarmRef.current.claim(card && card.path)); }
 					catch (prewarmError) { console.warn("dsh-tavern: 工作区预热不可用，改为正常创建", prewarmError); }
 					created = await conversationLifecycle.start({ kind: "play", targetMode: targetMode, card: card, preparationId: previousOpeningPicker && previousOpeningPicker.preparationId || "", openingId: openingId || "", userName: resolvedUserName, requestMode: compatibilityAvailable && requestMode === "sillytavern" ? "sillytavern" : "dsh", preparedWorkspaceId: preparedWorkspaceId });
-					if (initialMessage) await timing.measure("submitInitialMessage", () => props.executeSlash("/send " + initialMessage + "|/trigger", created.sessionId));
+					if (initialMessage) await timing.measure("submitInitialMessage", () => props.executeSlash("/send " + substituteTavernIdentityMacros(initialMessage, { playerName: resolvedUserName, characterName: card && card.name }) + "|/trigger", created.sessionId));
 					if (targetMode !== "card") window.localStorage.setItem("dsh-tavern-player-name", resolvedUserName);
 					successful = true;
 					console.info("dsh-tavern: 开始游戏完成", (Date.now() - startedAt) + "ms", preparedWorkspaceId ? "工作区已就绪" : "即时创建");
@@ -7012,10 +7343,10 @@ window.__ModuleLoader__.load({
 					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { setChatImport(null); setError(""); } }, "返回"),
 					h("button", { className: "dsh-tavern-question-primary", disabled: busy || Boolean(pendingOpen) || (chatImport.preview.incompatible && !chatImport.textOnly), onClick: importConversation }, busy ? "正在导入…" : "导入并打开"))) : null;
 			const openingChoice = openingPicker ? h(React.Fragment, null,
-				h("div", { className: "dsh-tavern-card-picker-head" }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: discardOpening }, "放弃开局"), h("span", null, openingPicker.card.name + " · 游戏准备"), h("span", { className: "dsh-tavern-spacer" }), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: closePicker }, "暂时收起")),
+				h("div", { className: "dsh-tavern-card-picker-head" }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: discardOpening }, "放弃开局"), h("span", null, openingPicker.card.name + " · 游戏准备"), h("button", { className: "dsh-tavern-btn", "aria-expanded": !openingSettingsCollapsed, onClick: function () { openingSettingsManual.current = true; setOpeningSettingsCollapsed(function (value) { return !value; }); } }, openingSettingsCollapsed ? "展开设置" : "折叠设置"), h("span", { className: "dsh-tavern-spacer" }), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: closePicker }, "暂时收起")),
 				busy ? h("div", { className: "dsh-tavern-session-switching", role: "status", "aria-live": "polite" }, openingPicker.preparing ? "正在准备开场与脚本资源…" : "正在完成游戏初始化…", openingPicker.preparing ? h("div", { style: { marginTop: "8px", fontSize: "13px", opacity: .75 } }, "首次打开可能需要下载资源，请稍候；后续打开通常更快。") : null) : null,
-					selectedOpening ? h(React.Fragment, null,
-						h("label", { className: "dsh-tavern-player-name" }, h("span", null, "故事中的玩家称呼（可选）"), h("input", { value: openingPicker.userName ?? "", maxLength: 80, autoFocus: true, placeholder: "你", disabled: busy, onChange: function (event) { const userName = event.target.value; setOpeningPicker(function (current) { return current ? Object.assign({}, current, { userName: userName }) : current; }); } })),
+					selectedOpening ? h("div", { hidden: openingSettingsCollapsed },
+						h("label", { className: "dsh-tavern-player-name" }, h("span", null, "故事中的玩家称呼（可选）"), h("input", { value: openingPicker.userName ?? "", maxLength: 80, placeholder: "你", disabled: busy, onChange: function (event) { const userName = event.target.value; setOpeningPicker(function (current) { return current ? Object.assign({}, current, { userName: userName }) : current; }); } })),
 						h("div", { className: "dsh-tavern-player-name-help" }, "可以填写姓名、昵称或身份；默认沿用你上次使用的称呼，也可以在这里针对本局修改。开场白预览会随之更新。")
 					) : null,
 				openingPicker.openings.length > 1 ? h("div", { className: "dsh-tavern-greeting-nav" },
@@ -7049,7 +7380,7 @@ window.__ModuleLoader__.load({
 				})) : null,
 				h("div", { className: "dsh-tavern-picker-foot", style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "24px", flexWrap: "wrap" } }, h("input", { ref: chatImportFile, type: "file", accept: ".jsonl", style: { display: "none" }, onChange: function (event) { previewChatImport(event.target.files && event.target.files[0]); event.target.value = ""; } }), h("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" } }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { chatImportFile.current.click(); } }, "导入聊天记录"), h("small", { style: { opacity: .7 } }, "（必须和人物卡匹配）")), h("button", { className: "dsh-tavern-question-primary", disabled: busy || openingPicker.preparing || (openingPicker.openings.length > 0 && !selectedOpening), onClick: function () { newConversation(openingPicker.card, null, selectedOpening ? selectedOpening.id : "", openingPicker.userName || "你"); } }, "开始新游戏"))
 			) : null;
-			const playPicker = h("div", { className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": openingPicker ? "游戏准备" : "选择人物卡开始游玩" }, pickerError, openingPicker ? h(React.Fragment, null, importChoice, h("div", { style: { display: importChoice ? "none" : "contents" } }, openingChoice)) : h(React.Fragment, null,
+			const playPicker = h("div", { ref: openingLayoutRef, className: "dsh-tavern-card-picker", role: "dialog", "aria-modal": "true", "aria-label": openingPicker ? "游戏准备" : "选择人物卡开始游玩" }, pickerError, openingPicker ? h(React.Fragment, null, importChoice, h("div", { style: { display: importChoice ? "none" : "contents" } }, openingChoice)) : h(React.Fragment, null,
 				h("div", { className: "dsh-tavern-card-picker-head" }, h("span", null, "选择人物卡 · 开始游玩"), h("span", { className: "dsh-tavern-spacer" }), h("button", { className: "dsh-tavern-btn", disabled: busy || (!cardBatch.managing && !cards.length), onClick: function () { if (cardBatch.managing) cardBatch.reset(); else cardBatch.begin(); } }, cardBatch.managing ? "取消" : "批量删除"), h(MobileCardImportButton, { inputRef: fileRef, disabled: busy, onImported: async function () { await refresh(); notifyDataChanged(["cards"]); } }), h("button", { className: "dsh-tavern-btn", onClick: closePicker }, "关闭")),
 				h("input", { ref: fileRef, type: "file", accept: ".png,.json", style: { display: "none" }, onChange: function (e) { const f = e.target.files && e.target.files[0]; if (f) importCard(f); e.target.value = ""; } }),
 				organization.toolbar(),
@@ -9632,15 +9963,11 @@ window.__ModuleLoader__.load({
 		function createPlayControlsFeatureModule() {
 			const historyProjection = createTurnHistoryProjection();
 			function TavernConversationExportAction(props) {
-                const [available, setAvailable] = React.useState(false);
-				const [busy, setBusy] = React.useState(false);
-				React.useEffect(function () {
-					let stopped = false;
-					rpc("getSession", {}, props.sessionId).then(function (result) {
-						if (!stopped) setAvailable(Boolean(result && result.view));
-					}, function () { if (!stopped) setAvailable(false); });
-					return function () { stopped = true; };
-				}, [props.sessionId]);
+                // The header only needs session membership. Building a complete
+                // Tavern view here delays the button behind templates and history.
+                const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
+                const available = Boolean(useTavernSessionMode(owner));
+                const [busy, setBusy] = React.useState(false);
                 const [open, setOpen] = React.useState(false);
                 const root = React.useRef(null);
                 React.useEffect(function () {
@@ -9837,6 +10164,51 @@ window.__ModuleLoader__.load({
 
 			// @include script-navigation.js
 
+        function TavernStorageMigration(props) {
+            const [state, setState] = React.useState(null);
+            const [error, setError] = React.useState("");
+            const [started, setStarted] = React.useState(false);
+            const [requestBusy, setRequestBusy] = React.useState(false);
+            const [refresh, setRefresh] = React.useState(0);
+            React.useEffect(function () {
+                let disposed = false, timer;
+                async function read() {
+                    try {
+                        const next = await rpc("getStorageMigration", {}, props.sessionId);
+                        if (disposed) return;
+                        setState(next); setError("");
+                        if (next.phase === "running") timer = setTimeout(read, 1000);
+                        else if (next.phase === "completed" && started) liveTavernView.invalidate(props.sessionId);
+                    } catch (err) { if (!disposed) setError(String(err.message || err)); }
+                }
+                read();
+                return function () { disposed = true; clearTimeout(timer); };
+            }, [props.sessionId, refresh, started]);
+            async function migrate() {
+                if (requestBusy || state?.phase === "running") return;
+                setRequestBusy(true); setError("");
+                try {
+                    await rpc("migrateStorage", {}, props.sessionId);
+                    setStarted(true); setRefresh(value => value + 1);
+                } catch (err) { setError(String(err.message || err)); }
+                finally { setRequestBusy(false); }
+            }
+            if (!state && !error || state?.format === "native" && !started) return null;
+            const h = React.createElement;
+            const busy = requestBusy || state?.phase === "running";
+            const complete = state?.format === "native" && state.phase === "completed";
+            const stage = {reading:"正在读取旧存档…",converting:"正在转换并读回存档…",verifying:"正在校验并切换存档…"}[state?.stage] || "正在迁移…";
+            return h("section", {className:"dsh-tavern-status-section", "aria-label":"存档格式"},
+                h("div", {className:"dsh-tavern-status-label"}, "存档格式"),
+                h("div", {className:"dsh-tavern-status-empty"}, complete ? "已迁移为新版存档，旧文件和历史版本已保留。" : "本局使用旧格式。迁移后使用新版存储，剧情、变量和历史版本保留。旧文件也会保留，但不包含迁移后的新进度。"),
+                busy ? h("div", {role:"status"}, stage + " 大存档可能需要较长时间，暂时不要关闭或重启酒馆。") : null,
+                error || state?.phase === "failed" ? h("div", {className:"dsh-card-error",role:"alert"}, error || state.error) : null,
+                !state ? h("button", {className:"dsh-tavern-btn",onClick:()=>setRefresh(value=>value+1)}, "重新检查存档格式") :
+                !complete ? h("button", {type:"button",className:"dsh-tavern-btn",disabled:busy || props.busy,onClick:migrate}, busy ? "迁移中…" : state.phase === "failed" ? "重试迁移" : "迁移旧存档") : null,
+                !busy && props.busy && !complete ? h("div", {className:"dsh-tavern-status-empty"}, "请等待本轮游玩和后台结算完成后再迁移。") : null
+            );
+        }
+
 			function TavernStatusPanel(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
 			const [error, setError] = usePersistentError("酒馆状态");
@@ -9941,6 +10313,7 @@ window.__ModuleLoader__.load({
 				),
 					h("div", { className: "dsh-tavern-status-body" },
                         h(TavernBackgroundWait, {sessionId:props.sessionId, activity:view.activity}),
+                        h(TavernStorageMigration, {key:props.sessionId,sessionId:props.sessionId,busy:running || view.activity?.busy || view.settleStatus === "running"}),
 					["story", "script"].includes(view.mode || "story") && view.requestMode !== "sillytavern" && view.cardUpdate ? h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-card-reload" },
 							h("button", { className: "dsh-tavern-btn", disabled: running || cardUpdateBusy || !!view.cardUpdate.error || view.settleStatus === "running", onClick: applyUpdatedCard }, cardUpdateBusy ? "正在重新加载人物卡和世界书…" : "重新加载人物卡和世界书"),
@@ -11292,6 +11665,10 @@ window.__ModuleLoader__.load({
 		exports.createTavernInitializationTiming = createTavernInitializationTiming;
 		exports.createTavernHelperEventBus = createTavernHelperEventBus;
 		exports.buildTavernHelperScriptDocument = buildTavernHelperScriptDocument;
+        exports.startTavernHelperFromMessage = startTavernHelperFromMessage;
+        exports.createTavernChatDataFacade = createTavernChatDataFacade;
+        exports.createTavernHistoryReader = createTavernHistoryReader;
+        exports.expandTavernOpeningWindow = expandTavernOpeningWindow;
 		exports.createTavernHostStylesheetBridge = createTavernHostStylesheetBridge;
 		exports.createTavernPanelRegistry = createTavernPanelRegistry;
 		exports.createTavernCardAppPresence = createTavernCardAppPresence;
@@ -11300,6 +11677,9 @@ window.__ModuleLoader__.load({
 		exports.ensureTavernHostJQuery = ensureTavernHostJQuery;
 		exports.ensureTavernHostJQueryUi = ensureTavernHostJQueryUi;
 		exports.installTavernTrustedHostFacade = installTavernTrustedHostFacade;
+        exports.loadTavernHelperModule = loadTavernHelperModule;
+        exports.installTavernBackgroundModel = installTavernBackgroundModel;
+        exports.mountTavernLegacyMessage = mountTavernLegacyMessage;
 		exports.releaseTavernHostJQueryHandlers = releaseTavernHostJQueryHandlers;
 		exports.tavernScriptRuntimeReady = tavernScriptRuntimeReady;
 		exports.clampTavernFrameHeight = clampTavernFrameHeight;
@@ -11328,6 +11708,10 @@ window.__ModuleLoader__.load({
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
 		exports.installOpeningHostComposer = installOpeningHostComposer;
         exports.installFrameHostComposer = installFrameHostComposer;
+        exports.createTavernComposerWindow = createTavernComposerWindow;
+        exports.parseTavernInlineFragment = parseTavernInlineFragment;
+        exports.TavernInlineFragment = TavernInlineFragment;
+        exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;
 		exports.createConversationPrewarmModule = createConversationPrewarmModule;

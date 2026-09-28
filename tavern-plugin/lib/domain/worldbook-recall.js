@@ -131,8 +131,8 @@ export async function prepareTemplateWorldbook(worldBook, runtime, chat, globals
   if (!worldBook?.view || worldBook.templatePrepared || !runtime.prepareWorldbook) return worldBook
   const entries = allEntries(worldBook)
   if (!entries.some(entry => /@@|\[(?:GENERATE:|RENDER:|InitialVariables|Preprocessing)|@INJECT/.test(entry.content + '\n' + (entry.comment || entry.title)))) return worldBook
-  const result = await runtime.prepareWorldbook(entries.map(entry => templateResource(entry, worldBook.view.displayName)), {
-    worldBookEntries: entries.map(entry => templateResource(entry, worldBook.view.displayName)),
+  const result = await (runtime.prepareWorldbookProjection || runtime.prepareWorldbook)(entries.map(entry => templateResource(entry, worldBook.view.displayName)), {
+    worldBookEntries: entries.map(entry => ({uid:entry.sourceUid ?? entry.ref,ref:entry.ref,world:worldBook.view.displayName})),
     scopes: {global: globals, local: chat.variables || {}, initial: chat.promptTemplateInitialVariables || {}, message: lastTavernHelperVariables(chat.promptTemplateInput?.message ? [chat.promptTemplateInput.message] : chat.messages) || {}}
   })
   const transformed = result.entries.flatMap(entry => {
@@ -173,7 +173,7 @@ export async function projectWorldBookTemplates(input = {}) {
     userName: str(input.chat && input.chat.macroState && input.chat.macroState.userName) || '你',
     runType: 'generate',
     generateType: str(input.generateType),
-    transcript: transcriptOf(input.chat),
+    ...(runtime.historyContext === 'session' ? {} : { transcript: transcriptOf(input.chat) }),
     worldBookSettings: worldBookSettings(input.worldBook),
     worldBookRandom: input.random,
     worldBookEntries: resources.map(function (entry) {

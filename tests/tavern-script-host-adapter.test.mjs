@@ -1,3 +1,4 @@
+import {projectTavernHelperContext} from '../tavern-plugin/lib/domain/tavern-helper-context.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -62,6 +63,7 @@ test('后台 MVU 命令只在隔离草稿执行并原子提交，协议不进入
   let adapter
   const writes = []
   const adapterOptions = {
+    globalVariables: { read: async () => ({ keep: 1 }), save: async () => { throw Error('transaction must not persist globals') } },
     resolveChat: async function () { return value },
     writeChat: async function (draft, metadata) {
       writes.push({ draft: structuredClone(draft), metadata })
@@ -72,6 +74,12 @@ test('后台 MVU 命令只在隔离草稿执行并原子提交，协议不进入
     scriptDispatch: {
       async dispatch(_sessionId, _name, _args, context, work) {
         assert.match(context.messages[0].message, /<UpdateVariable>/)
+        for (const extra_analysis of [false, true, false]) {
+          const result = await adapter.updateVariables('session-1', { type: 'global' }, { keep: 1, extra_analysis }, 2, work.eventId)
+          assert.equal(result.globalVariables.extra_analysis, extra_analysis)
+        }
+        await assert.rejects(adapter.updateVariables('session-1', { type: 'global' }, { keep: 2 }, 2, work.eventId), /跨对话的全局变量/)
+
         await adapter.updatePrompts('session-1', { kind: 'inject', prompts: [{ id: 'event', content: '当前事件', position: 'in_chat', depth: 0, role: 'system' }] }, 2, work.eventId)
         await adapter.updateMessages('session-1', [{
           message_id: 0,
@@ -693,4 +701,77 @@ for (const concurrent of [false, true, 'conflict']) test(`prompt updates use exa
   assert.equal(saved.variables.concurrent,concurrent?true:undefined)
   assert.equal(result.context.stateRevision,saved._storageRevision)
   assert.equal(result.context.messages[0].message,'旧正文')
+})
+
+
+test('Helper context uses its native projection without reopening the full Chat', async () => {
+ const value=chat(),expected=projectTavernHelperContext(value)
+ const {messages,...header}=value
+ const {adapter}=harness(value,{
+  resolveChat:async()=>{throw Error('unexpected complete history read')},
+  resolveHelperContext:async()=>({chat:header,context:structuredClone(expected)}),
+  globalVariables:{read:async()=>({global:1})}
+ })
+ const actual=await adapter.context('session-1')
+ assert.deepEqual(actual.messages,expected.messages)
+ assert.deepEqual(actual.turnMessageIds,expected.turnMessageIds)
+ assert.equal(actual.globalVariables.global,1)
+ assert.equal(actual.worldbook.entries[0].content,'旧内容')
+})
+
+test('worldbook reads use header metadata rather than materializing message history',async()=>{
+ const state=chat();delete state.messages
+ let slices=0
+ const {adapter}=harness(chat(),{resolveChat:async()=>{throw Error('full history read forbidden')},resolveChatSlice:async(_session,indices,fields)=>{assert.deepEqual(indices,[]);assert.equal(fields,'settlement');slices++;return {chat:state,messageCount:20000,denseMessages:true}}})
+ const result=await adapter.getWorldbook('session-1','测试世界书')
+ assert.equal(result.worldbook.entries[0].content,'旧内容')
+ assert.equal(slices,1)
+})
+
+test('worldbook mutations retain complete writable Chat reads',async()=>{
+ let fullReads=0
+ const state=chat()
+ const {adapter,worldbook}=harness(state,{resolveChat:async()=>{fullReads++;return state},resolveChatSlice:async()=>{throw Error('a read-only header must not reach worldbook writes')}})
+ await adapter.replaceWorldbook('session-1','测试世界书',[{...worldbook.view.entries[0],uid:1,content:'updated'}])
+ assert.ok(fullReads>=2)
+})
+
+for(const type of ['global','character'])test(type+' variable writes validate Chat headers without reading message history',async()=>{
+ const header=chat();delete header.messages
+ let saved
+ const {adapter}=harness(chat(),{resolveChat:async()=>{throw Error('full history read forbidden')},resolveChatSlice:async(_session,indices)=>{assert.deepEqual(indices,[]);return {chat:header,messageCount:20000,denseMessages:true}},
+ globalVariables:{save:async value=>{saved=value;return value}},characterVariables:{save:async(_path,value)=>{saved=value;return value}}})
+ const result=await adapter.updateVariables('session-1',{type},{hp:8},2)
+ assert.equal(result.updated,true)
+ assert.deepEqual(saved,{hp:8})
+})
+
+test('extension settings eligibility does not read Chat history',async()=>{
+ const header=chat();delete header.messages
+ const {adapter}=harness(chat(),{resolveChat:async()=>{throw Error('full history read forbidden')},resolveChatSlice:async()=>({chat:header,denseMessages:true}),extensionSettings:{save:async value=>value}})
+ assert.equal((await adapter.saveExtensionSettings('session-1',{regex:[]},{regex:[]})).updated,true)
+})
+
+test('stale resource variable write returns a complete recovery context',async()=>{
+ const full=chat(),header={...full,messages:[]};let reads=0
+ const {adapter}=harness(full,{resolveChat:async()=>{reads++;return full},resolveChatSlice:async()=>({chat:header,denseMessages:true}),globalVariables:{save:async()=>{throw Error('stale write must not persist')}}})
+ const result=await adapter.updateVariables('session-1',{type:'global'},{hp:99},1)
+ assert.equal(result.stale,true)
+ assert.equal(result.context.messages.length,1)
+ assert.equal(reads,1)
+})
+
+test('template initialization opts into a bounded projection without reading complete Chat',async()=>{
+ const source={...chat(),_storageRevision:8}
+ let full=0
+ const {adapter}=harness(source,{resolveChat:async()=>{full++;return source},
+  worldBooks:{templateSnapshot:async()=>({worldName:'book',worldbooks:{book:{entries:{}}}})},
+  resolveTemplateWindow:async()=>({chat:source,historyWindow:{from:9999,messageCount:10000,revision:8,token:'grant'}})})
+ const projected=await adapter.readFullPromptTemplateState('session-1',undefined,true)
+ assert.equal(full,0)
+ assert.equal(projected.state.chat.length,1)
+ assert.equal(projected.historyWindow.from,9999)
+ assert.equal(projected.state.stateRevision,8)
+ await adapter.readFullPromptTemplateState('session-1')
+ assert.equal(full,1,'default API retains its complete-state contract')
 })

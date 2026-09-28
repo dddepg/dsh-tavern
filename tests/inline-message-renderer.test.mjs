@@ -1,3 +1,4 @@
+import { helperLoaderSource } from './fixtures/helper-loader-source.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -381,8 +382,7 @@ test('官方 MVU owner 作为共享沙箱首个系统模块本地加载', () => 
   assert.equal(frames.length, 1)
   assert.match(frames[0].srcdoc, /"officialMvu":true/)
   assert.ok(frames[0].srcdoc.indexOf('__dsh_official_mvu__') < frames[0].srcdoc.indexOf('guard'))
-  const loaderUrl = frames[0].srcdoc.match(/data:text\/javascript;base64,([^"]+)"/)[1]
-  const loader = Buffer.from(loaderUrl, 'base64').toString('utf8')
+  const loader = helperLoaderSource(frames[0].srcdoc)
   const modules = JSON.parse(loader.match(/const scripts=(\[[^\n]*\]);\n/)[1])
   assert.equal(modules[0].assetUrl, '/api/dsh-tavern/vendor/magvarupdate/bundle.js')
   const officialModule = modules[0].content
@@ -425,9 +425,7 @@ test('人物卡 Helper 脚本使用独立不透明 iframe，并获得脚本、�
     script: { id: 'dynamic-worldbook', name: '动态世界书', content: "import 'https://example.test/动态世界书.js'", data: { auto_apply: true }, buttons: [] },
     context: { messages: [], scriptVariables: { 'dynamic-worldbook': { auto_apply: true } }, worldbook: { name: '灯火阑珊', entries: [] } }
   })
-  const encoded = document.match(/data:text\/javascript;base64,([^"']+)/)
-  assert.ok(encoded)
-  const loader = Buffer.from(encoded[1], 'base64').toString('utf8')
+  const loader = helperLoaderSource(document)
   const modules = JSON.parse(loader.match(/const scripts=(\[.*\]);/)[1])
   const source = modules[0].content
   assert.equal(source, "import 'https://example.test/动态世界书.js'")
@@ -457,9 +455,7 @@ test('官方 MVU 与人物卡脚本共用沙箱时仍先提供全局 Zod 与 YAM
     ],
     context: { messages: [] }
   })
-  const encoded = document.match(/data:text\/javascript;base64,([^"']+)/)
-  assert.ok(encoded)
-  const loader = Buffer.from(encoded[1], 'base64').toString('utf8')
+  const loader = helperLoaderSource(document)
 
   assert.match(document, /const officialMvuEnabled = metadata\.officialMvu === true/)
   assert.match(document, /import\(new URL\("\/api\/dsh-tavern\/vendor\/runtime-assets\/zod\/index\.mjs",document\.baseURI\)\.href\)/)
@@ -484,6 +480,7 @@ test('Helper Host 在受信任人物卡模式中完全移除 sandbox', () => {
     body: { appendChild() {} },
     documentElement: { appendChild() {} },
     createElement(tag) {
+      if (['html', 'head', 'body'].includes(tag)) return { appendChild() {} }
       if (tag === 'div') return root
       const frame = { contentWindow: { postMessage() {} }, addEventListener() {}, remove() { this.removed = true } }
       frames.push(frame)
@@ -543,6 +540,7 @@ test('Helper Host 切换人物卡时清理旧卡注入宿主的顶层节点和�
     head,
     documentElement: body,
     createElement(tag) {
+      if (['html', 'head', 'body'].includes(tag)) return container()
       if (tag === 'div') {
         const root = container()
         root.isConnected = true
@@ -566,6 +564,8 @@ test('Helper Host 切换人物卡时清理旧卡注入宿主的顶层节点和�
   runtime.sync('session', view('card A'))
   const leakedButton = node('card A floating button')
   const leakedStyle = node('card A style')
+  frames[0].__dshTavernHostArtifacts.trackNode(leakedButton)
+  frames[0].__dshTavernHostArtifacts.trackNode(leakedStyle)
   body.appendChild(leakedButton)
   head.appendChild(leakedStyle)
 
@@ -1380,7 +1380,7 @@ test('Host acknowledgements confirm liveness without imposing a total event dead
 test('trusted scripts await host jQuery before executing; isolated scripts do not access host', () => {
   for (const trustedCardMode of [true, false]) {
     const document = client.buildTavernHelperScriptDocument({ trustedCardMode, scripts: [{ id: 'ball', content: 'void 0' }] });
-    const loader = Buffer.from(document.match(/data:text\/javascript;base64,([^"]+)"/)[1], 'base64').toString();
+    const loader = helperLoaderSource(document);
     assert.equal(loader.includes('await ensureHostJQuery(window.parent)'), trustedCardMode);
     if (trustedCardMode) assert.ok(loader.indexOf('await ensureHostJQuery(window.parent)') < loader.indexOf('for(const script of scripts)'));
   }
@@ -1455,7 +1455,7 @@ test('trusted script UI uses host body and its installed draggable; isolation re
     const window = { parent: { jQuery: hostJQuery }, $: localJQuery, jQuery: localJQuery,
       __dshTavernHelperReady: Promise.resolve(), addEventListener() {}, __dshTavernResolveCompanionScriptsReady() {} }
     const document = client.buildTavernHelperScriptDocument({ trustedCardMode, scripts: [] })
-    const loader = Buffer.from(document.match(/data:text\/javascript;base64,([^"]+)"/)[1], 'base64').toString()
+    const loader = helperLoaderSource(document)
     await vm.runInNewContext('(async()=>{' + loader + '})()', { window })
     assert.equal(window.$('body'), trustedCardMode ? hostBody : localBody)
     if (trustedCardMode) assert.equal(typeof window.$.fn.draggable, 'function')
@@ -1495,7 +1495,7 @@ test('trusted opening exposes live MVU and EJS to original parent-window checks'
       addEventListener(name, handler) { events[name] = handler },
       __dshTavernResolveCompanionScriptsReady() {} }
     const html = client.buildTavernFrameDocument({ trustedCardMode, openingPreview: { runtime: { context: {}, scripts: [] } } })
-    const loader = Buffer.from(html.match(/data:text\/javascript;base64,([^"]+)"/)[1], 'base64').toString()
+    const loader = helperLoaderSource(html)
     await vm.runInNewContext('(async()=>{' + loader + '})()', { window: frame })
     const bridge = html.match(/<script data-dsh-tavern-opening-host>([\s\S]*?)<\/script>/)
     if (bridge) vm.runInNewContext(bridge[1], { window: frame })
@@ -1528,7 +1528,7 @@ test('preparation host APIs retain priority over a background session runtime', 
 
 test('managed MVU keeps jQuery when a card declares its own lexical dollar helper', async () => {
   const html = client.buildTavernHelperScriptDocument({ scripts: [] })
-  const loader = Buffer.from(html.match(/data:text\/javascript;base64,([^"]+)"/)[1], 'base64').toString()
+  const loader = helperLoaderSource(html)
   const source = loader.slice(loader.indexOf('const loadModule=') + 17, loader.indexOf(';\nconst createMvuLoader='))
   const sandbox = { window: { jQuery: callback => callback(), addEventListener() {}, removeEventListener() {} }, document: {
     getElementById: () => null,
@@ -1595,7 +1595,7 @@ test('opening script host stays inside the preview while transport retains its r
   assert.equal(host.cardState, 1)
 })
 
-test('closing a trusted opening removes its host popup and stylesheet without removing existing UI', () => {
+test('closing a trusted opening preserves unowned host UI created during its lifetime', () => {
   const body = { childNodes: [] }, head = { childNodes: [] }
   function add(root, id) { const node = { id, remove() { root.childNodes.splice(root.childNodes.indexOf(node), 1) } }; root.childNodes.push(node); return node }
   const app = add(body, 'app'), style = add(head, 'app-style')
@@ -1605,10 +1605,10 @@ test('closing a trusted opening removes its host popup and stylesheet without re
   const lifecycle = client.createTavernMessageFrameLifecycle({ content: 'opening', sessionId: '', trustedCardMode: true,
     openingPreview: { preparationId: 'draft', swipes: ['opening'], openingIds: ['primary'], selectedIndex: 0 } }, { window: host })
   const stop = lifecycle.start(() => {})
-  add(body, 'card-popup'); add(head, 'card-style')
+  const popup=add(body, 'native-popup'), lateStyle=add(head, 'native-style')
   stop()
-  assert.deepEqual(body.childNodes, [app])
-  assert.deepEqual(head.childNodes, [style])
+  assert.deepEqual(body.childNodes, [app,popup])
+  assert.deepEqual(head.childNodes, [style,lateStyle])
 })
 
 test('trusted host exposes a visible chat mount until the final owner leaves, without a fake composer', () => {
@@ -1759,4 +1759,237 @@ test('保留多个正式会话时，parent.Mvu 随当前会话切换而不是最
   host.__dshTavernSelectedSessionId = 'A'; assert.equal(host.Mvu, a.Mvu)
   releaseB(); assert.equal(host.Mvu, a.Mvu)
   releaseA(); assert.equal(host.Mvu, undefined)
+})
+
+test('deferred Helper iframe keeps large context out of executable HTML',()=>{
+ const context={messages:[{message:'unique-large-history-payload'.repeat(20000)}]}
+ const small=client.buildTavernHelperScriptDocument({token:'deferred',scripts:[],context:{messages:[]},deferContext:true})
+ const large=client.buildTavernHelperScriptDocument({token:'deferred',scripts:[],context,deferContext:true})
+ assert.equal(large.length,small.length,'history must travel once through structured clone, not JS source')
+ assert.doesNotMatch(large,/unique-large-history-payload/)
+})
+
+test('deferred Helper starts once with authenticated complete context and waits for dependencies',async()=>{
+ const listeners=new Set(),parent={postMessage(){}}
+ const window={addEventListener(_kind,fn){listeners.add(fn)},removeEventListener(_kind,fn){listeners.delete(fn)}}
+ const start=vm.runInNewContext('('+client.startTavernHelperFromMessage.toString()+')',{window,parent,Promise})
+ let calls=0,received,finish
+ start({token:'t'},context=>{calls++;received=context;window.__dshTavernHelperReady=new Promise(resolve=>{finish=resolve})})
+ const ready=window.__dshTavernHelperReady,receive=[...listeners][0],context={messages:[{message_id:0,message:'old'},{message_id:9999,message:'latest'}]}
+ receive({source:{},data:{type:'dsh-tavern-helper-context',token:'t',context}})
+ receive({source:parent,data:{type:'dsh-tavern-helper-context',token:'wrong',context}})
+ assert.equal(calls,0)
+ receive({source:parent,data:{type:'dsh-tavern-helper-context',token:'t',context}})
+ assert.equal(calls,1);assert.equal(received,context);assert.equal(listeners.size,0)
+ let settled=false;ready.then(()=>{settled=true});await Promise.resolve();assert.equal(settled,false)
+ finish(true);assert.equal(await ready,true)
+})
+
+test('opening wire window expands absolute Helper ids without mutating the transport baseline',()=>{
+ const input={historyWindow:{from:9998,to:9999,messageCount:10000,revision:2},tavernHelper:{stateRevision:2,messages:[{message_id:9998,message:'one'},{message_id:9999,message:'two'}],messagesPending:{from:0,to:9997}}}
+ const view=client.expandTavernOpeningWindow(input)
+ assert.equal(input.tavernHelper.messages.length,2)
+ assert.equal(view.tavernHelper.messages.length,10000)
+ assert.equal(view.tavernHelper.messages[9998].message,'one')
+ assert.equal(view.tavernHelper.messages[0].stub,true)
+ assert.equal(view.tavernHelper.messages[0].message_id,0)
+ assert.equal(client.expandTavernOpeningWindow({tavernHelper:null}).tavernHelper,null)
+})
+
+test('on-demand Helper reads preserve synchronous old-floor values without loading history on open',()=>{
+ const state={historyAccess:{token:'cap',revision:7},messages:[{message_id:0,stub:true},{message_id:1,message:'latest',variables:{hp:9}}]}
+ const calls=[]
+ const read=client.createTavernHistoryReader({context:()=>state,install:row=>{state.messages[row.message_id]=row},request:args=>{calls.push(args);return {revision:7,messages:[{message_id:0,message:'old',variables:{hp:4}}]}}})
+ assert.equal(calls.length,0)
+ assert.equal(read(1).variables.hp,9)
+ assert.equal(calls.length,0)
+ assert.equal(read(0).variables.hp,4)
+ assert.equal(read(0).message,'old')
+ assert.equal(calls.length,1)
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[0])),{token:'cap',revision:7,from:0,to:0})
+})
+
+test('lazy native chat facade saves no placeholder data and keeps loaded edits across window refresh', async()=>{
+ let state={chatId:'a',lifecycleRevision:1,stateRevision:1,messages:[{message_id:0,stub:true},{message_id:1,message:'recent',role:'assistant',variables:{hp:1}}]}
+ let reads=0, saves=0
+ const facade=client.createTavernChatDataFacade({copy:structuredClone,context:()=>state,readMessage:id=>{reads++;const row={message_id:id,message:'old',role:'assistant',pluginData:{saved:1}};state.messages[id]=row;return row},request:async(_method,args)=>{saves++;return {context:state}}})
+ assert.equal(facade.chat().length,2)
+ await facade.save()
+ assert.equal(reads,0)
+ assert.equal(saves,0,'untouched placeholders are never plugin edits')
+ const old=facade.chat()[0]
+ old.local=2
+ state={...state,stateRevision:2,messages:[{message_id:0,stub:true},state.messages[1]]}
+ facade.sync(state)
+ assert.equal(facade.chat()[0],old)
+ assert.equal(old.local,2)
+ assert.equal(reads,2)
+ const held=facade.chat()
+ state={...state,chatId:'b',messages:[]}
+ facade.sync(state)
+ assert.notEqual(facade.chat(),held)
+ assert.equal(held[0],old,'an old held chat cannot resolve into a new session')
+})
+
+test('on-demand native chat remains a structured-cloneable array',()=>{
+ const state={chatId:'a',stateRevision:1,messages:[{message_id:0,stub:true}]}
+ const facade=client.createTavernChatDataFacade({context:()=>state,copy:structuredClone,request:async()=>({}),readMessage:()=>({message_id:0,role:'assistant',message:'old'})})
+ const copied=structuredClone(facade.chat())
+ assert.equal(copied[0].mes,'old')
+ assert.equal(Array.isArray(copied),true)
+})
+
+test('historical revision mismatch cannot install wrong variables',()=>{
+ let installed=false
+ const read=client.createTavernHistoryReader({context:()=>({historyAccess:{token:'cap',revision:7},messages:[{stub:true}]}),install:()=>{installed=true},request:()=>({revision:8,messages:[{message_id:0,variables:{hp:99}}]})})
+ assert.throws(()=>read(0),/版本不匹配/)
+ assert.equal(installed,false)
+})
+
+
+test('window refresh invalidates clean historical rows without eagerly fetching them',()=>{
+ let state={chatId:'a',stateRevision:1,messages:Array.from({length:100},(_,message_id)=>({message_id,role:'assistant',message:'old'}))}
+ let reads=0
+ const facade=client.createTavernChatDataFacade({context:()=>state,copy:structuredClone,request:async()=>({}),readMessage:id=>{reads++;return {message_id:id,role:'assistant',message:'fresh'}}})
+ facade.chat()
+ state={...state,stateRevision:2,messages:state.messages.map(({message_id})=>({message_id,stub:true}))}
+ facade.sync(state)
+ assert.equal(reads,0)
+ assert.equal(facade.chat()[7].mes,'fresh')
+ assert.equal(reads,1)
+})
+
+test('旧式开场脚本拥有独立 DOM，替换向导后隐藏原文且不破坏 React 节点', async () => {
+  const {JSDOM}=await import('jsdom')
+  const dom=new JSDOM('<div class="mes" mesid="0"><div id="native"><p>原文</p></div><div id="owned"></div></div>')
+  const {document}=dom.window, node=document.getElementById('owned'), native=document.getElementById('native')
+  const original=native.firstChild
+  const stop=client.mountTavernLegacyMessage({node,native,source:'BOOT <script>unsafe()</script>'})
+  assert.equal(node.hidden,true)
+  assert.equal(native.hidden,false)
+  const text=document.querySelector('.mes[mesid="0"] .mes_text')
+  assert.equal(text.querySelector('script'),null)
+  text.innerHTML='<button id="wizard">开始绑定</button>'
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(node.hidden,false)
+  assert.equal(native.hidden,true)
+  assert.equal(native.firstChild,original)
+  original.textContent='React 后续刷新'
+  assert.ok(document.getElementById('wizard'))
+  stop()
+  assert.equal(native.hidden,false)
+  assert.equal(node.children.length,0)
+  dom.window.close()
+})
+
+test('懒读取的历史楼层保存插件数据时不误判变量被修改', async () => {
+  const message={message_id:0,role:'assistant',message:'旧楼层',swipe_id:0,swipes:['旧楼层'],swipes_data:[{hp:1}],pluginData:{}}
+  const context={chatId:'lazy',stateRevision:5,lifecycleRevision:2,messages:[{...message,stub:true,swipes_data:[]}]}
+  let submitted
+  const facade=client.createTavernChatDataFacade({copy:structuredClone,context:()=>context,readMessage:()=>structuredClone(message),request:async(_method,args)=>{
+    submitted=args.request
+    return {updated:true,context:{...context,stateRevision:6,messages:[{...message,pluginData:{note:1}}]}}
+  }})
+  facade.chat()[0].note=1
+  await facade.save()
+  assert.equal(submitted.variableUpdates,undefined)
+  assert.equal(submitted.messages[0].data.note,1)
+})
+
+
+test('sandbox text submission targets its original session without parsing slash text or changing draft', async () => {
+  const calls = []
+  const execute = client.createTavernFrameSlashExecutor({ sessions: { binding(id) { return { session: { prompt: async (content, mode) => { calls.push({ id, content, mode }); return { ok:true } } } } } }, get: assert.fail }, {})
+  const text = 'Neutral opening\nLiteral | /cut 0 | /trigger'
+  await execute('', 'original-session', { inputText:text })
+  assert.equal(calls[0].id, 'original-session')
+  assert.equal(calls[0].content[0].text, text)
+  await assert.rejects(execute('', 'original-session', { inputText:'  ' }), /为空/)
+})
+
+
+test('saved greeting source never replaces the formatted native body before a DOM edit', async () => {
+  const { JSDOM } = await import('jsdom')
+  const dom = new JSDOM('<div id="native"><strong>Opening</strong><p>Hello Player</p></div><div id="owned"></div>')
+  const document = dom.window.document, native = document.getElementById('native'), node = document.getElementById('owned')
+  const stop = client.mountTavernLegacyMessage({ node, native, source:'**Opening**\nHello {{user}}', showInitial:true })
+  assert.equal(node.hidden, true)
+  assert.equal(native.hidden, false)
+  assert.equal(native.querySelector('strong').textContent, 'Opening')
+  node.querySelector('.mes_text').innerHTML = '<button>Script panel</button>'
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(node.hidden, false)
+  assert.equal(native.hidden, true)
+  stop(); dom.window.close()
+})
+
+
+test('module loader preserves card self-checks and message text', async () => {
+  const result = []
+  const window = {__dshTavernManagedMvu:true,addEventListener(){},removeEventListener(){},clearTimeout(){}}
+  const sandbox = {window,result,document:{createElement:()=>({remove(){}}),body:{appendChild(element){vm.runInNewContext(element.textContent,sandbox)}}}}
+  const load = vm.runInNewContext('('+client.loadTavernHelperModule.toString()+')',sandbox)
+  await load('function _yqDiagCheckExtraModel(){return false;} result.push(_yqDiagCheckExtraModel(), "正在生成专属开场白...");','arbitrary-card',false)
+  assert.deepEqual(result,[false,'正在生成专属开场白...'])
+})
+
+test('legacy chat mount accepts panel padding without creating its own layout box', async () => {
+  const { JSDOM } = await import('jsdom')
+  const dom = new JSDOM('<main>Native conversation</main>')
+  try {
+    const release=client.installTavernTrustedHostFacade(dom.window,{})
+    const chat=dom.window.document.getElementById('chat')
+    chat.style.setProperty('padding-top','46px','important')
+    assert.equal(dom.window.getComputedStyle(chat).display,'contents')
+    assert.equal(chat.style.getPropertyPriority('display'),'important')
+    const child=dom.window.document.createElement('div');chat.append(child)
+    assert.equal(child.isConnected,true)
+    release();assert.equal(chat.isConnected,false)
+  } finally {dom.window.close()}
+})
+
+test('opening submit helper uses native start, deduplicates and retries failures', async () => {
+  const listeners = new Map(), replies = [], sent = []
+  const frame = { contentWindow: { postMessage(data) { replies.push(data) } } }
+  const host = { sessionStorage: { getItem() { return null } }, document: null, setTimeout, clearTimeout,
+    addEventListener(name, fn) { listeners.set(name, fn) }, removeEventListener(name) { listeners.delete(name) } }
+  let fail = true
+  const lifecycle = client.createTavernMessageFrameLifecycle({ sessionId: '', content: 'opening',
+    openingPreview: { preparationId: 'draft' }, onSubmitOpening(text) {
+      sent.push(text); if (fail) throw Error('retry'); return { started: true }
+    }
+  }, { window: host, rpc() { throw Error('must not route submit to draft RPC') } })
+  const doc = lifecycle.snapshot().visibleDocument; doc.ref(frame)
+  const stop = lifecycle.start(() => {}), receive = listeners.get('message')
+  const data = { type: 'dsh-tavern-helper-call', token: doc.token, requestId: '1', method: 'submitTavernHelperInput', args: { text: 'start story' } }
+  receive({ source: {}, data }); assert.equal(sent.length, 0)
+  receive({ source: frame.contentWindow, data })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(replies.at(-1).ok, false)
+  fail = false
+  receive({ source: frame.contentWindow, data: { ...data, requestId: '2' } })
+  receive({ source: frame.contentWindow, data: { ...data, requestId: '3' } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(sent, ['start story', 'start story'])
+  assert.equal(replies.at(-1).ok, true)
+  stop()
+})
+
+test('native opening send resolves identity macros using the chosen player name', async () => {
+  const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+  const identity = source.slice(source.indexOf('function substituteTavernIdentityMacros('), source.indexOf('// @include modules/frame-touch-scroll.js'))
+  const start = source.slice(source.indexOf('async function newConversation('), source.indexOf('async function preparePlayConversation('))
+  const sent = []
+  const timing = { measure: (_name, fn) => fn(), finish() {} }
+  const sandbox = { uiMode: 'play', openingPicker: null, compatibilityAvailable: false, requestMode: 'dsh',
+    openingPerformance: { begin: () => timing }, tavernSessionTransition: { begin() {}, end() {} },
+    setBusy() {}, setError(error) { if (error) throw Error(error) }, setOpeningPicker() {},
+    playPrewarmRef: { current: { claim: async () => '' } },
+    conversationLifecycle: { start: async () => ({ sessionId: 'new-session' }) },
+    props: { executeSlash: async (line, sessionId) => sent.push({ line, sessionId }) },
+    window: { localStorage: { setItem() {} } }, console: { info() {}, warn() {} }
+  }
+  vm.runInNewContext(identity + start + '\nthis.start = newConversation;', sandbox)
+  await sandbox.start({ name: '角色甲' }, 'play', 'primary', '小林', '{{user}}遇见{{char}}，{{ USER }}继续。')
+  assert.deepEqual(sent, [{ line: '/send 小林遇见角色甲，小林继续。|/trigger', sessionId: 'new-session' }])
 })

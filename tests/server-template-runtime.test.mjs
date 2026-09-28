@@ -18,6 +18,7 @@ function fixture(t, options = {}) {
     await options.beforeRpc?.(method,args)
     const current = state(args.sessionId)
     if (method === 'getFullPromptTemplateState') return structuredClone(current)
+    if (method === 'getPromptTemplateHistory' && options.readHistory) return options.readHistory(args)
     if (method === 'saveFullPromptTemplateSettings') { current.environment.extension_settings.EjsTemplate = structuredClone(args.settings); return {updated:true,settings:args.settings} }
     if (method === 'saveFullPromptTemplateGlobals') { current.environment.extension_settings.variables.global = structuredClone(args.variables); return {updated:true,variables:args.variables} }
     if (method === 'saveFullPromptTemplateState') { current.state=structuredClone(args.state); return {updated:true,state:args.state} }
@@ -236,4 +237,55 @@ test('deferred upstream token statistics cannot crash an idle template worker', 
   assert.deepEqual(diagnostics, [])
   assert.equal((await runtime.inspect('s')).present, true)
   assert.equal((await engine.render('still alive')).text, 'still alive')
+})
+
+test('bounded formatting mirror preserves full historical data and template input rendering', async t => {
+  const {engine,state} = fixture(t)
+  state('s').state.chat = Array.from({length:401}, (_, i) => ({mes:'history '+i,name:'User',is_user:true,is_system:false,swipe_id:0,swipes:['history '+i],variables:[{gold:i}]}))
+  const result = await engine.renderInput('<%= window.SillyTavern.getContext().chat[0].variables[0].gold %> / <%= window.SillyTavern.getContext().chat.length %>')
+  assert.match(result.message.template_display?.html || result.message.mes, /0 \/ 402/)
+  assert.equal(state('s').state.chat.length, 401)
+  assert.equal((await engine.render('<%= window.SillyTavern.getContext().chat[0].mes %>')).text, 'history 0')
+})
+
+
+test('actual isolated template engine keeps logical floors and reads old content through its scoped pipe',async t=>{
+ const {engine,state,calls}=fixture(t,{readHistory:args=>{
+  assert.equal(args.token,'pinned');assert.equal(args.sessionId,'s')
+  return {revision:3,messages:[{message_id:args.messageId,message:'historical '+args.messageId,role:'assistant',swipe_id:0,swipes:['historical '+args.messageId],swipes_data:[{}],pluginData:{}}]}
+ }})
+ const current=state('s')
+ current.historyWindow={from:9800,messageCount:10000,revision:3,token:'pinned'}
+ current.state.stateRevision=3
+ current.state.chat=Array.from({length:200},()=>({mes:'recent',is_user:false,is_system:false,name:'',swipe_id:0,swipes:['recent'],variables:[{}]}))
+ const result=await engine.render('<%= window.SillyTavern.getContext().chat.length %>:<%= window.SillyTavern.getContext().chat[3].mes %>')
+ assert.equal(result.text,'10000:historical 3')
+ assert.deepEqual(calls.filter(c=>c.method==='getPromptTemplateHistory').map(c=>c.args.messageId),[3])
+})
+
+test('worldbook projection preserves upstream evaluation without routine execution journals',async t=>{
+ const {engine,journals}=fixture(t)
+ const entries=[{uid:1,world:'book',ref:'entry',content:'plain',comment:'Guide',key:[],keysecondary:[],disable:false}]
+ const projected=await engine.prepareWorldbookProjection(entries,{})
+ assert.equal(projected.entries[0].content,'plain')
+ assert.equal(journals.size,0)
+ const regular=await engine.prepareWorldbook(entries,{})
+ assert.deepEqual(projected,regular)
+ assert.equal([...journals.values()].at(-1).phase,'completed')
+})
+
+test('request projection keeps exact prompt bytes without a redundant execution journal',async t=>{
+ const {engine,journals}=fixture(t)
+ const request={system:'stable\n',messages:[{role:'user',content:'next'}],model:'model'}
+ assert.deepEqual(await engine.projectRequestProjection(request),{system:request.system,messages:request.messages})
+ assert.equal(journals.size,0)
+})
+
+test('connect prepares the isolated engine without evaluating generation templates',async t=>{
+ const {engine,state,runtime,journals}=fixture(t)
+ state('s').environment.worldbooks.book.entries={0:{uid:0,comment:'[GENERATE:BEFORE]',content:'<% window.generated=true %>',constant:true,disable:false,key:[]}}
+ await engine.connect()
+ assert.equal((await runtime.inspect('s')).ready,true)
+ assert.equal(journals.size,0)
+ assert.equal((await engine.renderProjection('<%= typeof window.generated %>')).text,'undefined')
 })

@@ -11,8 +11,9 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
   const runtimeGeneration = sessions.runtimeGeneration
   const candidateTaskJobs = new Map()
   const taskMailbox = createDurableTaskMailbox({
-    store: { readChat, writeChat, readState: chats.readState },
+    store: { readChat, writeChat, readState: chats.readState, patchChat: chats.patch },
     now,
+    projectReconciledState: true,
     reconcile(chat, task) {
       if (task.kind !== 'candidate') return null
       const saved = chat.candidates
@@ -30,23 +31,26 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
 
   function scheduleCandidateTask(chatId, task) {
     const taskId = str(task && task.taskId)
-    if (taskId === '' || candidateTaskJobs.has(taskId) || (task && task.status) !== 'queued') return
+    if (taskId === '' || candidateTaskJobs.has(taskId) || !(task?.status === 'queued' || task?.status === 'running' && task.stage === 'preparing')) return
     const job = Promise.resolve().then(async function () {
       let operationId = ''
       try {
-        await taskMailbox.transition(chatId, taskId, { status: 'running', stage: 'preparing', error: '' })
+        // New tasks persist their claim with submission; recovered queued tasks
+        // still need to claim before preparation. No model starts before the
+        // durable generating transition below.
+        if (task.status === 'queued') await taskMailbox.transition(chatId, taskId, { status: 'running', stage: 'preparing', error: '' })
         const input = task.input || {}
         const prepared = await candidateGenerator.prepare({
           sessionId: input.sessionId,
           messageId: input.messageId,
           guidance: input.guidance,
           requestId: task.requestId,
-          async onStage(stage) {
-            await taskMailbox.transition(chatId, taskId, { status: 'running', stage, operationId })
-          }
+          prepareCommit: (chat, operation) => taskMailbox.startInChat(chat, taskId, operation.operationId)
+          // Validation/commit/publication are one durable completion, not three
+          // additional whole task checkpoints on the result delivery path.
         })
         operationId = str(prepared.operationId)
-        await taskMailbox.transition(chatId, taskId, { status: 'running', stage: 'generating', operationId })
+        if (!prepared.startCommitted) await taskMailbox.transition(chatId, taskId, { status: 'running', stage: 'generating', operationId })
         if (prepared.created === false) {
           await taskMailbox.sync(chatId, { taskId })
           return
@@ -126,7 +130,8 @@ export function createCandidateTasks({ chats, generator, backgroundTasks, sessio
     const task = await taskMailbox.submit(chat.id, {
       requestId: args.requestId,
       kind: 'candidate',
-      stage: 'queued',
+      startImmediately: true,
+      stage: 'preparing',
       input: {
         sessionId,
         messageId: str(args.messageId),

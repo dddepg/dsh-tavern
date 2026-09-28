@@ -1,3 +1,4 @@
+import { applyJsonChanges } from '../tavern-plugin/lib/domain/json-mutation.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -126,4 +127,50 @@ test('read-only polling avoids full reads; repair rechecks a writable snapshot',
   assert.equal(chat.messages[0].text, 'preserve history')
   await mailbox.sync('c', { taskId: 't' }); await mailbox.recover('c')
   assert.equal(fullReads, 1); assert.equal(writes, 1)
+})
+
+test('mailbox scoped writes retry revision conflicts without reading or overwriting story data', async () => {
+  let chat = { id: 'c', _storageRevision: 1, story: 'original' }, conflict = true
+  const mailbox = createDurableTaskMailbox({ store: {
+    readChat() { throw new Error('full read forbidden') },
+    writeChat() { throw new Error('full write forbidden') },
+    async readState() { const { story, ...state } = chat; return structuredClone(state) },
+    async patchChat(id, revision, changes) {
+      if (conflict) { conflict = false; chat.story = 'concurrent'; chat._storageRevision++; return undefined }
+      assert.equal(revision, chat._storageRevision)
+      assert.ok(changes.every(change=>change.path[0]==='taskMailbox'))
+      if(chat.taskMailbox) assert.ok(changes.every(change=>change.path.length>1),'do not replace existing mailbox')
+      chat = applyJsonChanges(chat,changes); chat._storageRevision++
+      const { story, ...state } = chat; return structuredClone(state)
+    }
+  } })
+  const task = await mailbox.submit('c', { kind: 'candidate', requestId: 'r' })
+  await mailbox.transition('c', task.taskId, {status:'running',stage:'generating'})
+  await mailbox.transition('c', task.taskId, {status:'succeeded',result:{choices:[]}})
+  assert.equal((await mailbox.sync('c',{requestId:'r'})).task.status,'succeeded')
+  assert.equal(chat.story,'concurrent')
+})
+
+test('durable result can project completion without waiting for a second write', async () => {
+ const task={taskId:'t',requestId:'r',kind:'candidate',status:'running',version:1}
+ const state={id:'c',candidates:{choices:['ready']},taskMailbox:{version:1,tasks:{t:task},latestByKind:{candidate:'t'}}}
+ const mailbox=createDurableTaskMailbox({projectReconciledState:true,store:{readChat(){throw Error('full read')},writeChat(){throw Error('redundant write')},async readState(){return structuredClone(state)}},reconcile:chat=>({status:'succeeded',result:chat.candidates})})
+ const result=await mailbox.sync('c',{kind:'candidate'})
+ assert.equal(result.task.status,'succeeded')
+ assert.deepEqual(result.task.result,{choices:['ready']})
+ assert.equal(state.taskMailbox.tasks.t.status,'running')
+})
+
+test('durable completion is readable while a mailbox write is blocked', async () => {
+ let unblock,started
+ const entered=new Promise(resolve=>started=resolve), blocked=new Promise(resolve=>unblock=resolve)
+ const state={id:'c',_storageRevision:1,taskMailbox:{version:1,tasks:{t:{taskId:'t',requestId:'r',kind:'candidate',status:'queued',version:1}},latestByKind:{candidate:'t'}}}
+ const mailbox=createDurableTaskMailbox({projectReconciledState:true,store:{async readChat(){return structuredClone(state)},async readState(){return structuredClone(state)},async writeChat(){started();await blocked}},reconcile:chat=>chat.candidates?{status:'succeeded',result:chat.candidates}:null})
+ const writing=mailbox.transition('c','t',{status:'running'})
+ await entered
+ state.candidates={choices:['persisted']}
+ try {
+  const result=await Promise.race([mailbox.sync('c',{kind:'candidate'}),new Promise((_,reject)=>setTimeout(()=>reject(Error('waited for mailbox writer')),200))])
+  assert.equal(result.task.status,'succeeded')
+ } finally {unblock();await writing}
 })
