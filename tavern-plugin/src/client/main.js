@@ -10398,6 +10398,9 @@ window.__ModuleLoader__.load({
                     }) : null,
 					h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "Guide（注入上下文）"),
+                        h("div", { className: "dsh-tavern-guide-destinations" },
+                            h("div", null, "长期偏好写入用户画像。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开用户画像 ↗")),
+                            h("div", null, "故事专属设定写入人物卡。", h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"))),
 						h("div", { className: "dsh-tavern-guide-list" },
 							(view.guides || []).length ? (view.guides || []).map(function (guide, index) {
 								return h("div", { key: guide.id || index, className: "dsh-tavern-guide-item" },
@@ -10444,14 +10447,8 @@ window.__ModuleLoader__.load({
 					h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "人物姿势"),
 						view.posture ? h("div", { className: "dsh-tavern-status-now" }, view.posture) : h("div", { className: "dsh-tavern-status-empty" }, "等待第一轮状态结算")
-					),
-					h("section", { className: "dsh-tavern-status-section dsh-tavern-style-guide", "aria-label": "调整文风" },
-						h("div", { className: "dsh-tavern-style-title" }, "想调整文风？"),
-						h("button", { type: "button", onClick: function () { guideInputRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }); guideInputRef.current?.focus({ preventScroll: true }); } }, h("span", null, "1. 当前故事"), h("small", null, "通过 Guide 调整后续写法")),
-						h("button", { type: "button", onClick: function () { props.openStyleTab("dsh-tavern:user-profile"); } }, h("span", null, "2. 长期偏好"), h("small", null, "在用户画像中设置新游戏偏好")),
-						h("button", { type: "button", disabled: running, onClick: function () { window.dispatchEvent(new CustomEvent("dsh-tavern-adjust-card-style", { detail: { card: view.card } })); } }, h("span", null, "3. 这张人物卡"), h("small", null, "交给卡片助手修改，再应用到当前游戏")),
-						h("button", { type: "button", onClick: function () { props.openStyleTab("dsh-tavern:presets"); } }, h("span", null, "4. 导入预设"), h("small", null, "已有喜欢的预设？前往预设库"))
 					)
+
 				)
 			);
 		}
