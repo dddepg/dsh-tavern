@@ -429,7 +429,7 @@ test('人物卡 Helper 脚本使用独立不透明 iframe，并获得脚本、�
   const modules = JSON.parse(loader.match(/const scripts=(\[.*\]);/)[1])
   const source = modules[0].content
   assert.equal(source, "import 'https://example.test/动态世界书.js'")
-  assert.match(loader, /await window\.__dshTavernInitializationTiming\.wait\("companion-module",loadModule\(script\.content,script\.id,false\),script\.id\)/)
+  assert.match(loader, /await window\.__dshTavernInitializationTiming\.wait\("companion-module",loadModule\(script\.content,script\.id,false,installComposer\),script\.id\)/)
   assert.match(loader, /__dshTavernHelperSetCurrentScript\(script\.id\)/)
   assert.match(loader, /__dshTavernHelperSubscriptionsReady\(script\.id\)/)
   assert.match(document, /getScriptId/)
