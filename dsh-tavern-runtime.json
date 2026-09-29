@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "5590146a0640db22de50502d2e2c425dafe288dc",
-  "releaseSequence": 426,
+  "revision": "8ff76403d90bac97839263d3589b4916cee3c344",
+  "releaseSequence": 427,
   "version": "2.4.0",
   "files": [
     {
@@ -371,13 +371,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "07f4c451c080de70d6dc23f2b9d1c9a05a58a946ced0778d1f466a4c7bda6a58",
-      "size": 161893
+      "sha256": "f11dbf15f7e10b90919788748192258b250166a179d71b909dd40dada8105afe",
+      "size": 165475
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "483901bb91633b18b11d453ce9be9b19505236b3e7035a7057eec9e6679fbd5d",
-      "size": 1271948
+      "sha256": "f4f60a08fc371b58c50a62ee4a1d14cf6f7de3f4bdb424c073c88ea15fbf2227",
+      "size": 1287910
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -641,8 +641,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-initialization.js",
-      "sha256": "82519ddefc7eed858dedfa2f3466f6b99cbd2babc4a87d707adddd9eff1dffaf",
-      "size": 19812
+      "sha256": "4538d29f9774b8f7b44c900efb446ec97686dca4af377c76155f66c300a7c33b",
+      "size": 20166
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-migration.js",
@@ -768,6 +768,11 @@
       "path": "tavern-plugin/lib/domain/gameplay-settled-turn.js",
       "sha256": "4b9c818fa5056ad851b3e3cee8bf8037aa6b64b0096fb11382ff3343f98228ac",
       "size": 865
+    },
+    {
+      "path": "tavern-plugin/lib/domain/guide-library.js",
+      "sha256": "a1baa7b7034642070eddaab341563b469d03c9f6691bff663d5fb1696051981d",
+      "size": 2604
     },
     {
       "path": "tavern-plugin/lib/domain/helper-generation.js",
@@ -1616,8 +1621,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-settings.js",
-      "sha256": "c9d4be4612cbb261ad2c2c73119041d351039730e12a6a58d1b72cf4e5ba0697",
-      "size": 7253
+      "sha256": "80145514482d29fba61f4eaa4b97e89391aa9f28e70bf849bf6f37971e06b0ac",
+      "size": 8845
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-skill-provider.js",
@@ -1681,8 +1686,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/user-preference-profile.js",
-      "sha256": "3e694ecc22d41ad39939153a80ddc2a73e5b35b56a0094d04add74dfbfe2c3bc",
-      "size": 12574
+      "sha256": "4940f2827fe7f039a46e9a9c6de199d8cf28a5d98ca2fda7d565b43bfa43a033",
+      "size": 13213
     },
     {
       "path": "tavern-plugin/lib/domain/workspace-instruction-presentation.js",
@@ -1786,8 +1791,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "f3b5fc3f1a6cf7c8219159dfc10f738afb0332fb93cbcdfd7c42edd468288f9f",
-      "size": 332755
+      "sha256": "9a767a261c77fa654628298605cca888ab89058cfb84292d3bc3d6d5733dee89",
+      "size": 333925
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -3551,8 +3556,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/client.js",
-      "sha256": "807447a06e2b2fe284c97aeb4ecbdc7fe504bfb79c0d52e83391305242d606b0",
-      "size": 269725
+      "sha256": "7df3c874264079b15634afc0316f85cba852514da340c8d025feeaa9d5d240e3",
+      "size": 268977
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/index.js",
@@ -4226,8 +4231,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "7c606125637c68ac395224aa177b43f44373db380c36601eabf6270b8331e2e2",
-      "size": 857026
+      "sha256": "e53ac04112d85f5eca1dff7f247f668588b9ae4ea3bd827755e8a65744386d0f",
+      "size": 869278
     },
     {
       "path": "tavern-plugin/src/client/modules/assistant-visibility.js",
@@ -4316,8 +4321,8 @@
     },
     {
       "path": "tavern-plugin/src/client/modules/sidebar-start.js",
-      "sha256": "369b5a70c7b9ec8e64217ac23fcc5381c7410e5cad8906611618307e9dacae70",
-      "size": 5022
+      "sha256": "47f36314339c364609fe612b91ebc161aa526aab50a6b3b00961305888c0db9c",
+      "size": 5108
     },
     {
       "path": "tavern-plugin/src/client/modules/story-ledger.js",
