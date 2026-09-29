@@ -3428,7 +3428,7 @@ window.__ModuleLoader__.load({
 			return scope;
 		}
 
-		function loadTavernHelperModule(source, scriptId, previewScope) {
+		function loadTavernHelperModule(source, scriptId, previewScope, beforeMount) {
 			// Card pages may declare a lexical `$` that shadows window.jQuery.
 			// Bind the managed MVU module to its runtime dependency, not page globals.
 			if (scriptId === "__dsh_official_mvu__") source = "const $ = window.jQuery;\n" + source;
@@ -3495,7 +3495,10 @@ window.__ModuleLoader__.load({
 						mountTimer = window.setTimeout(mount, 10);
 						return;
 					}
-					try { document.body.appendChild(element); } catch (error) { finish(error); }
+					try {
+                        if (beforeMount) beforeMount();
+                        document.body.appendChild(element);
+                    } catch (error) { finish(error); }
 				}
 				mount();
 			});
@@ -3749,13 +3752,13 @@ window.__ModuleLoader__.load({
 				+ 'const token=' + JSON.stringify(metadata.token) + ';\n'
 				+ 'try{'
 				+ (input && input.trustedCardMode ? 'const ensureHostJQuery=' + ensureTavernHostJQuery.toString() + ';await ensureHostJQuery(window.parent);const ensureHostJQueryUi=' + ensureTavernHostJQueryUi.toString() + ';await ensureHostJQueryUi(window.parent);const artifacts=window.frameElement&&window.frameElement.__dshTavernHostArtifacts;window.$=window.jQuery=artifacts?artifacts.bindJQuery(window.parent.jQuery):window.parent.jQuery;const installHostFacade=' + installTavernTrustedHostFacade.toString() + ';const releaseHostFacade=installHostFacade(window.parent,window);window.addEventListener("pagehide",releaseHostFacade,{once:true});window.addEventListener("unload",releaseHostFacade,{once:true});\n' : '')
-				+ 'await (' + installLegacyTavernComposer.toString() + ')();\n'
+				+ 'const installComposer=' + installLegacyTavernComposer.toString() + ';await installComposer();\n'
                 + 'window.__dshTavernComposerWindow=(' + createTavernComposerWindow.toString() + ')(window);if(window.jQuery){window.$=window.jQuery=window.__dshTavernComposerWindow.jQuery;}\n'
 				+ 'for(const script of scripts){window.__dshTavernHelperSetCurrentScript(script.id);try{'
-				+ 'if(script.system==="official-mvu"&&script.assetUrl){const loader=createMvuLoader({fetch:window.fetch.bind(window),evaluate:source=>loadModule(source,script.id),onDiagnostic(diagnostic){parent.postMessage({type:"dsh-tavern-mvu-load-diagnostic",token,diagnostic},"*");},onState(state){parent.postMessage({type:"dsh-tavern-mvu-load-state",token,state},"*");}});'
+				+ 'if(script.system==="official-mvu"&&script.assetUrl){const loader=createMvuLoader({fetch:window.fetch.bind(window),evaluate:source=>loadModule(source,script.id,false,installComposer),onDiagnostic(diagnostic){parent.postMessage({type:"dsh-tavern-mvu-load-diagnostic",token,diagnostic},"*");},onState(state){parent.postMessage({type:"dsh-tavern-mvu-load-state",token,state},"*");}});'
 				+ 'const retry=event=>{if(event.source===parent&&event.data?.token===token&&event.data.type==="dsh-tavern-mvu-reload")loader.retry();};'
 				+ 'window.addEventListener("message",retry);window.addEventListener("pagehide",()=>loader.dispose(),{once:true});'
-				+ 'try{await loader.load(new URL(script.assetUrl,document.baseURI).href);}finally{window.removeEventListener("message",retry);}}else await window.__dshTavernInitializationTiming.wait("companion-module",loadModule(script.content,script.id,' + (input && input.previewScope === true ? 'true' : 'false') + '),script.id);'
+				+ 'try{await loader.load(new URL(script.assetUrl,document.baseURI).href);}finally{window.removeEventListener("message",retry);}}else await window.__dshTavernInitializationTiming.wait("companion-module",loadModule(script.content,script.id,' + (input && input.previewScope === true ? 'true' : 'false') + ',installComposer),script.id);'
 				+ 'if(script.system==="official-mvu")await window.waitGlobalInitialized("Mvu");window.__dshTavernHelperSubscriptionsReady(script.id);'
 				+ '}catch(error){window.__dshTavernHelperSubscriptionsFailed(script.id,error);if(script.system==="official-mvu")break;}}}catch(error){for(const script of scripts)window.__dshTavernHelperSubscriptionsFailed(script.id,error);}finally{window.__dshTavernResolveCompanionScriptsReady();}';
 			// Start now: document.open() can remove deferred module tags before they run.

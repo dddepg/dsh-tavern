@@ -31,7 +31,7 @@ test('开局页面替换 document 后仍启动宿主模块并保留其 API', asy
   assert.equal(await page.evaluate(()=>window.openingRuntimeStarts),1)
 })
 
-test('远程开局重写到 head 阶段时，MVU 等待 body 后只启动一次且能保存角色', async t => {
+for (const afterComposer of [false, true]) test('远程开局重写到 head 阶段时，MVU 和输入层恢复且能保存角色：afterComposer=' + afterComposer, async t => {
   let descriptor
   vm.runInNewContext(await readFile(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8'),{window:{__ModuleLoader__:{load:d=>descriptor=d}},console})
   const client=descriptor.factory(()=>({}))
@@ -39,7 +39,7 @@ test('远程开局重写到 head 阶段时，MVU 等待 body 后只启动一次�
   const replacementStarted=new Promise(resolve=>{unblockBundle=resolve})
   const context={messages:[{message_id:0,role:'assistant',message:'opening',variables:{stat_data:{}}}]}
   const html=client.buildTavernFrameDocument({token:'replacement',trustedCardMode:true,
-    content:`<script>fetch('/wizard').then(r=>r.text()).then(html=>{document.open();document.write(html);document.close()})</script>`,
+    content:`<script>(async()=>{${afterComposer ? 'while(!document.getElementById("send_textarea"))await new Promise(r=>setTimeout(r,5));' : ''}const html=await fetch('/wizard').then(r=>r.text());document.open();document.write(html);document.close()})()</script>`,
     openingPreview:{swipes:['opening'],openingIds:['primary'],selectedIndex:0,preparationId:'test',runtime:{context,scripts:[
       {id:'__dsh_official_mvu__',system:'official-mvu',assetUrl:'/mvu.js'}
     ]}}})
