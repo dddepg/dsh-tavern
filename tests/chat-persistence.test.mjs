@@ -9,6 +9,9 @@ import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persiste
 import { createChatJournalStore } from '../tavern-plugin/lib/domain/chat-journal-store.js'
 import { createTavernScriptHostAdapter } from '../tavern-plugin/lib/domain/tavern-script-host-adapter.js'
 import { applyMvuSettlementEffect } from '../tavern-plugin/lib/domain/mvu-settlement-effect.js'
+import { createTurnOrchestrator } from '../tavern-plugin/lib/domain/turn-orchestration.js'
+import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
+import { createForegroundFrameBuilder } from '../tavern-plugin/lib/domain/agent-input-frame.js'
 
 function harness(initial) {
   let value = initial === undefined ? undefined : structuredClone(initial)
@@ -34,6 +37,53 @@ function message() {
   return { role: 'assistant', turn: 1, text: '正文', sourceText: '正文', swipes: ['正文'], swipeId: 0,
     variables: [{ stat_data: { hp: 10 }, schema: {} }], displayRuntime: { frames: [{ capturedAt: 1, dom: 'old' }] } }
 }
+
+for (const stale of [false, true]) test('正文提交消费最新模板输入且拒绝剧情版本变化：stale=' + stale, async () => {
+  const app = harness({id:'chat-1',sessionId:'s',mode:'story',cardPath:'card.json',messages:[],_storageRevision:1,
+    mvu:{enabled:true,owner:'official'}})
+  let renderDuringCommit = false
+  const turns = createTurnOrchestrator({
+    store: {
+      async chatForSession() {
+        const snapshot = await app.persistence.read('chat-1')
+        if (renderDuringCommit) {
+          renderDuringCommit = false
+          await app.persistence.update('chat-1', current => {
+            current.promptTemplateInput.message.tavernPluginData.template_rendered = {hash:'rendered-input',swipe:0}
+            if (stale) current.timeline.revision++
+            return current
+          }, {source:'prompt-template.state'})
+        }
+        return snapshot
+      },
+      readCard: async () => ({name:'Card'}),
+      writeChat: app.persistence.write, updateChat: app.persistence.update
+    },
+    timeline:createStoryTimeline(), frameBuilder:createForegroundFrameBuilder(),
+    planner:{plan:async()=>({text:'context'})},
+    projectReply:text=>({sourceText:text,projectionText:text,sessionText:text,displayText:text}),
+    projectUserTemplate:async ({text})=>({message:{role:'user',text,variables:[{stat_data:{hp:10}}],tavernPluginData:{}},scopes:{local:{},initial:{}}})
+  })
+  await turns.prepare({sessionId:'s',turn:1,userText:'continue'})
+  renderDuringCommit = true
+  const input = {sessionId:'s',turn:1,userText:'continue',assistantText:'reply'}
+  if (stale) {
+    await assert.rejects(turns.finalize(input), /剧情状态已变化/)
+    assert.equal(app.stored().messages.length, 0)
+    assert.ok(app.stored().promptTemplateInput)
+    return
+  }
+  const results = await Promise.all([turns.finalize(input), turns.finalize(input)])
+  const result = results.find(item => !item.duplicate)
+  assert.equal(results.filter(item => item.duplicate).length, 1)
+  assert.equal(result.saved,true)
+  const saved = app.stored()
+  assert.equal(saved.messages.length,2)
+  assert.equal(saved.promptTemplateInput,undefined)
+  assert.deepEqual(saved.messages[0].tavernPluginData.template_rendered,{hash:'rendered-input',swipe:0})
+  assert.equal(saved.messages[1].variables[0].stat_data.hp,10)
+  assert.equal(saved.timeline.checkpoints.length,1)
+})
 
 for (const mutations of [false, true]) test('真实 MVU 草稿结算与显示捕获并发保存：' + (mutations ? '变量更新' : '空操作'), async () => {
   const app = harness({ id: 'chat-1', sessionId: 's', mvu: { enabled: true }, messages: [message()], _storageRevision: 1 })
