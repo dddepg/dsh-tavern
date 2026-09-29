@@ -10345,11 +10345,13 @@ window.__ModuleLoader__.load({
 				} catch (err) { setGuideError(String(err && err.message || err)); }
 				finally { setGuideBusy(false); }
 			}
-            async function saveGuidePreference(guide) {
+            async function saveGuidePreference() {
                 if (guideBusy) return;
+                const content = (view.guides || []).map(guide => String(guide.text || "").trim()).filter(Boolean).join("\n\n");
+                if (!content) return;
                 setGuideBusy(true); setGuideError("");
                 try {
-                    await rpc("manageUserPreferenceProfile", { action: "create", name: "指导 · " + guide.text.trim().slice(0, 24), content: guide.text }, props.sessionId);
+                    await rpc("manageUserPreferenceProfile", { action: "create", name: "本局指导 · " + content.slice(0, 24), content: content }, props.sessionId);
                     notifyTavernDataChanged(["user-profile"], "user-profile");
                     props.openStyleTab("dsh-tavern:user-profile");
                 } catch (err) { setGuideError(String(err && err.message || err)); }
@@ -10460,19 +10462,18 @@ window.__ModuleLoader__.load({
 					h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "临时指导"),
                         h("div", { className: "dsh-tavern-guide-destinations" },
-                            h("div", null, "需要跨游戏使用的指导，可以保存为长期偏好。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
+                            h("div", null, "将本局全部临时指导合并保存为一份新的长期偏好。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
                             h("div", null, "故事专属设定写入人物卡。", h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"))),
 						h("div", { className: "dsh-tavern-guide-list" },
 							(view.guides || []).length ? (view.guides || []).map(function (guide, index) {
 								return h("div", { key: guide.id || index, className: "dsh-tavern-guide-item" },
 									h("div", { className: "dsh-tavern-guide-text" }, guide.text),
-									h("div", { className: "dsh-tavern-guide-actions" },
-                                    h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy, onClick: function () { saveGuidePreference(guide); } }, "保存为长期偏好"),
-                                    h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(index); } }, "删除"))
+									h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(index); } }, "删除")
 								);
 							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无临时指导。添加后用于后续剧情和候选项生成，不再需要时请删除。")
 						),
-						h("div", { className: "dsh-tavern-guide-add" },
+						h("div", { className: "dsh-tavern-guide-actions" }, h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy || !(view.guides || []).length, onClick: saveGuidePreference }, "保存本局指导为长期偏好")),
+                        h("div", { className: "dsh-tavern-guide-add" },
 							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
 							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加指导")
 						),
