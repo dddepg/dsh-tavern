@@ -56,7 +56,8 @@ test('远程开局重写到 head 阶段时，MVU 等待 body 后只启动一次�
   })
   await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();return new Promise(r=>server.close(r))})
   const browser=await chromium.launch();t.after(()=>browser.close())
-  const page=await browser.newPage(),dialogs=[]
+  const page=await browser.newPage(),dialogs=[],errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
   page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss()})
   await page.goto('http://127.0.0.1:'+server.address().port)
   const frame=page.frames().find(f=>f.url().endsWith('/frame'))
@@ -65,6 +66,9 @@ test('远程开局重写到 head 阶段时，MVU 等待 body 后只启动一次�
   await frame.getByRole('button',{name:'已保存'}).waitFor()
   assert.equal(await frame.evaluate(()=>window.savedCharacter),'开局角色')
   assert.equal(await frame.evaluate(()=>window.openingRuntimeStarts),1)
+  assert.equal(await frame.locator('#send_textarea').count(),1)
+  assert.equal(await frame.locator('#send_but').count(),1)
+  assert.deepEqual(errors,[])
   assert.deepEqual(dialogs,[])
 })
 

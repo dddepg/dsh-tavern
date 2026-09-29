@@ -3741,6 +3741,18 @@ window.__ModuleLoader__.load({
 		// Legacy card pages submit through these SillyTavern DOM IDs. Keep the
 		// adapter inside its owning frame so it cannot target another conversation.
 		function installLegacyTavernComposer() {
+		  // A remote opening may be parsing only its head after document.open().
+		  // The loader must wait here as well as when mounting the later MVU module.
+		  if (!document.body) return new Promise(function (resolve, reject) {
+		    const deadline = Date.now() + 30000;
+		    function mount() {
+		      if (document.body) {
+		        try { resolve(installLegacyTavernComposer()); } catch (error) { reject(error); }
+		      } else if (Date.now() >= deadline) reject(new Error('开局文档尚未生成 body，输入兼容层无法启动'));
+		      else window.setTimeout(mount, 10);
+		    }
+		    mount();
+		  });
 		  if (document.getElementById('send_textarea') || document.getElementById('send_but')) return;
 		  const controls = document.createElement('div');
 		  controls.hidden = true;
@@ -6664,7 +6676,7 @@ window.__ModuleLoader__.load({
 				+ 'const token=' + JSON.stringify(metadata.token) + ';\n'
 				+ 'try{'
 				+ (input && input.trustedCardMode ? 'const ensureHostJQuery=' + ensureTavernHostJQuery.toString() + ';await ensureHostJQuery(window.parent);const ensureHostJQueryUi=' + ensureTavernHostJQueryUi.toString() + ';await ensureHostJQueryUi(window.parent);const artifacts=window.frameElement&&window.frameElement.__dshTavernHostArtifacts;window.$=window.jQuery=artifacts?artifacts.bindJQuery(window.parent.jQuery):window.parent.jQuery;const installHostFacade=' + installTavernTrustedHostFacade.toString() + ';const releaseHostFacade=installHostFacade(window.parent,window);window.addEventListener("pagehide",releaseHostFacade,{once:true});window.addEventListener("unload",releaseHostFacade,{once:true});\n' : '')
-				+ '(' + installLegacyTavernComposer.toString() + ')();\n'
+				+ 'await (' + installLegacyTavernComposer.toString() + ')();\n'
                 + 'window.__dshTavernComposerWindow=(' + createTavernComposerWindow.toString() + ')(window);if(window.jQuery){window.$=window.jQuery=window.__dshTavernComposerWindow.jQuery;}\n'
 				+ 'for(const script of scripts){window.__dshTavernHelperSetCurrentScript(script.id);try{'
 				+ 'if(script.system==="official-mvu"&&script.assetUrl){const loader=createMvuLoader({fetch:window.fetch.bind(window),evaluate:source=>loadModule(source,script.id),onDiagnostic(diagnostic){parent.postMessage({type:"dsh-tavern-mvu-load-diagnostic",token,diagnostic},"*");},onState(state){parent.postMessage({type:"dsh-tavern-mvu-load-state",token,state},"*");}});'

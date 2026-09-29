@@ -1,6 +1,18 @@
 // Legacy card pages submit through these SillyTavern DOM IDs. Keep the
 // adapter inside its owning frame so it cannot target another conversation.
 function installLegacyTavernComposer() {
+  // A remote opening may be parsing only its head after document.open().
+  // The loader must wait here as well as when mounting the later MVU module.
+  if (!document.body) return new Promise(function (resolve, reject) {
+    const deadline = Date.now() + 30000;
+    function mount() {
+      if (document.body) {
+        try { resolve(installLegacyTavernComposer()); } catch (error) { reject(error); }
+      } else if (Date.now() >= deadline) reject(new Error('开局文档尚未生成 body，输入兼容层无法启动'));
+      else window.setTimeout(mount, 10);
+    }
+    mount();
+  });
   if (document.getElementById('send_textarea') || document.getElementById('send_but')) return;
   const controls = document.createElement('div');
   controls.hidden = true;
