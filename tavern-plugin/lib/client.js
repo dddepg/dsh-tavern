@@ -4527,7 +4527,7 @@ window.__ModuleLoader__.load({
 					const groups = [
 						['本局', ['dsh-tavern:status', 'dsh-tavern:conversation-settings']],
 						['资料库', ['dsh-tavern:cards', 'dsh-tavern:worldbooks', 'dsh-tavern:presets', 'dsh-tavern:resources', 'dsh-tavern:skills', 'dsh-tavern:system-prompts']],
-						['偏好', ['dsh-tavern:user-profile', 'dsh-tavern:card-memory']],
+						['偏好', ['dsh-tavern:user-profile', 'dsh-tavern:guide-library', 'dsh-tavern:card-memory']],
 						['其他', []]
 					];
 					const paths = {
@@ -4538,6 +4538,7 @@ window.__ModuleLoader__.load({
 						presets: 'M10 4a2 2 0 1 0 4 0a2 2 0 1 0-4 0M3 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 6l-3 8M16 6l3 8M9 19h6',
 						resources: 'M3 8V5h7l3 3h8v12H3zM3 11h18',
 						skills: 'M13 21H5V3h14v9M8 7h8M8 11h5M18 14l1.5 3.5L23 19l-3.5 1.5L18 24l-1.5-3.5L13 19l3.5-1.5z',
+						'guide-library': 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',
 						'system-prompts': 'M10 3L6 21M18 3l-4 18M3 9h18M2 15h18',
 						'user-profile': 'M3 6h10m4 0h4M3 12h4m4 0h10M3 18h10m4 0h4M13 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M13 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
 						'card-memory': 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',
@@ -11760,6 +11761,41 @@ window.__ModuleLoader__.load({
 		}
 		const userPreferenceProfileFeature = createUserPreferenceProfileFeatureModule();
 
+        function GuideLibraryTab(props) {
+            const h = React.createElement;
+            const sessionId = props.scope?.sessionId;
+            const [items, setItems] = React.useState(null);
+            const [busy, setBusy] = React.useState(false);
+            const [notice, setNotice] = React.useState("");
+            const [error, setError] = React.useState("");
+            async function refresh() {
+                setError("");
+                try { setItems((await rpc("listGuideLibrary", {}, sessionId)).items); }
+                catch (err) { setError(String(err.message || err)); }
+            }
+            React.useEffect(() => { refresh(); }, [sessionId]);
+            async function load(id) {
+                setBusy(true); setError(""); setNotice("");
+                try {
+                    await rpc("loadGuideLibrary", { id }, sessionId);
+                    liveTavernView.invalidate(sessionId);
+                    setNotice("已加载到本局，保留已有指导并跳过重复内容。");
+                } catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            return h("div", { className: "dsh-tavern-user-profile" },
+                h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "Guide 库"), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: refresh }, "刷新")),
+                h("div", { className: "dsh-tavern-user-profile-body" },
+                    h("p", { className: "dsh-tavern-settings-desc" }, "在酒馆状态中保存本局 Guide，在这里选择方案加载。加载会追加到本局，不替换已有指导。"),
+                    error ? h("p", { role: "alert" }, error) : null,
+                    notice ? h("p", { role: "status" }, notice) : null,
+                    items === null ? h("p", null, "正在读取Guide 库…") : !items.length ? h("p", { className: "dsh-tavern-status-empty" }, "暂无方案。可在酒馆状态的指导区域保存本局 Guide。") : items.map(item =>
+                        h("section", { key: item.id, className: "dsh-tavern-guide-library" },
+                            h("h3", null, item.name),
+                            h("details", null, h("summary", null, "查看指导（" + item.guides.length + " 条）"), item.guides.map((text, index) => h("p", { key: index, className: "dsh-tavern-guide-text" }, text))),
+                            h("button", { className: "dsh-tavern-btn", disabled: busy || !sessionId, onClick: () => load(item.id) }, "加载到本局")))));
+        }
+
 		function SystemPromptSidebarTab() {
             const askConfirm = useTavernConfirm();
 			const h = React.createElement;
@@ -14288,13 +14324,13 @@ window.__ModuleLoader__.load({
             }
             async function saveGuideLibrary() {
                 if (guideBusy || !(view.guides || []).length) return;
-                const name = await askTavernText({ title: "临时指导方案名称", initialValue: "本局指导", maxLength: 80 });
+                const name = await askTavernText({ title: "Guide 方案名称", initialValue: "本局 Guide", maxLength: 80 });
                 if (!name) return;
                 setGuideBusy(true); setGuideError(""); setGuideNotice("");
                 try {
                     const result = await rpc("saveGuideLibrary", { name }, props.sessionId);
                     await refreshGuideLibrary(); setGuideSelection(result.item.id);
-                    setGuideNotice("已保存到临时指导库，本局指导保持不变。");
+                    setGuideNotice("已保存到Guide 库，本局 Guide保持不变。");
                 } catch (err) { setGuideError(String(err.message || err)); }
                 finally { setGuideBusy(false); }
             }
@@ -14411,9 +14447,9 @@ window.__ModuleLoader__.load({
                         busy: running || view.activity?.busy || view.regenInProgress
                     }) : null,
 					h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, "临时指导"),
+						h("div", { className: "dsh-tavern-status-label" }, "Guide"),
                         h("div", { className: "dsh-tavern-guide-destinations" },
-                            h("div", null, "将本局指导保存到临时指导库，其他游戏也可选择加载。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
+                            h("div", null, "将本局 Guide保存到Guide 库，其他游戏也可选择加载。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
                             h("div", null, "故事专属设定写入人物卡。", h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"))),
 						h("div", { className: "dsh-tavern-guide-list" },
 							(view.guides || []).length ? (view.guides || []).map(function (guide, index) {
@@ -14421,13 +14457,13 @@ window.__ModuleLoader__.load({
 									h("div", { className: "dsh-tavern-guide-text" }, guide.text),
 									h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(index); } }, "删除")
 								);
-							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无临时指导。添加后用于后续剧情和候选项生成，不再需要时请删除。")
+							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无 Guide。添加后用于后续剧情和候选项生成，不再需要时请删除。")
 						),
-						h("div", { className: "dsh-tavern-guide-actions" }, h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy || !(view.guides || []).length, onClick: saveGuideLibrary }, "保存本局指导到库")),
+						h("div", { className: "dsh-tavern-guide-actions" }, h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy || !(view.guides || []).length, onClick: saveGuideLibrary }, "保存本局 Guide到库")),
                         h("details", { className: "dsh-tavern-guide-library", onToggle: event => { if (event.currentTarget.open) refreshGuideLibrary(); } },
-                            h("summary", null, "临时指导库"),
+                            h("summary", null, "Guide 库"),
                             h("p", { className: "dsh-tavern-settings-desc" }, "选择方案后追加到本局；保留已有指导，跳过相同内容。"),
-                            h("select", { className: "dsh-tavern-settings-select", "aria-label": "选择临时指导方案", value: guideSelection, onChange: event => setGuideSelection(event.target.value) },
+                            h("select", { className: "dsh-tavern-settings-select", "aria-label": "选择Guide 方案", value: guideSelection, onChange: event => setGuideSelection(event.target.value) },
                                 h("option", { value: "" }, guideLibrary.length ? "请选择方案" : "暂无保存的方案"),
                                 guideLibrary.map(item => h("option", { key: item.id, value: item.id }, item.name + "（" + item.guides.length + " 条）"))),
                             guideLibrary.find(item => item.id === guideSelection)?.guides.map((text, index) => h("p", { key: index, className: "dsh-tavern-guide-text" }, text)),
@@ -14435,7 +14471,7 @@ window.__ModuleLoader__.load({
                         guideNotice ? h("p", { role: "status", className: "dsh-tavern-settings-desc" }, guideNotice) : null,
                         h("div", { className: "dsh-tavern-guide-add" },
 							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
-							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加指导")
+							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加 Guide")
 						),
 						guideError ? h("div", { className: "dsh-card-error" }, guideError) : null
 					),
@@ -15754,6 +15790,7 @@ window.__ModuleLoader__.load({
 			userPreferenceProfileFeature.register({ ctx: ctx });
 			presetLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			resourcesLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
+            ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:guide-library", title: "Guide 库", order: 9, single: true, component: GuideLibraryTab }), "dsh-tavern: guide library");
 			ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:skills", title: "Skill 库", order: 8, single: true, component: props => React.createElement(TavernSkillsTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: Skill library");
             ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:card-memory", title: "改卡记忆", order: 9, single: true, component: props => React.createElement(TavernCardMemoryTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: card memory");
 			worldBookLibraryFeature.register({ ctx: ctx, appendMention: appendMention });

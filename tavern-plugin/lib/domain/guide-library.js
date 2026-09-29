@@ -19,7 +19,7 @@ export function createGuideLibrary({ store, now = Date.now }) {
   }
   async function get(id) {
     const item = (await list()).find(item => item.id === id)
-    if (!item) throw new Error('临时指导方案不存在，请刷新指导库')
+    if (!item) throw new Error('指导方案不存在，请刷新指导库')
     return item
   }
   return { list, save, get }
