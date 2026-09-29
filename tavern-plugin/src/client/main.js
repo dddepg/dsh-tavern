@@ -10240,11 +10240,36 @@ window.__ModuleLoader__.load({
 			}, [liveState.error, missingCard]);
             const [resourceLinkBusy, setResourceLinkBusy] = React.useState(false);
             const [resourceLinkError, setResourceLinkError] = React.useState("");
+            const [resourceBinding, setResourceBinding] = React.useState(null);
+            React.useEffect(function () {
+                const cardPath = view?.card?.path;
+                let active = true, revision = 0;
+                setResourceBinding(null); setResourceLinkError("");
+                async function refreshBinding() {
+                    if (!cardPath) return;
+                    const request = ++revision;
+                    try {
+                        const result = await rpc("getWorldBookBinding", { cardPath }, props.sessionId);
+                        if (active && request === revision) setResourceBinding({ cardPath, binding: result.binding });
+                    } catch (_) {
+                        if (active && request === revision) setResourceBinding({ cardPath, failed: true });
+                    }
+                }
+                function onData(event) { if (tavernDataChangeAffects(event, ["worldbooks", "cards"])) refreshBinding(); }
+                refreshBinding();
+                window.addEventListener("dsh-tavern-data-changed", onData);
+                return () => { active = false; window.removeEventListener("dsh-tavern-data-changed", onData); };
+            }, [props.sessionId, view?.card?.path]);
+            const currentResourceBinding = resourceBinding?.cardPath === view?.card?.path ? resourceBinding : null;
+            const primaryWorldBook = currentResourceBinding?.binding?.books?.[0] || currentResourceBinding?.binding;
+            const noWorldBook = currentResourceBinding && !currentResourceBinding.failed && !primaryWorldBook?.source;
+            const unavailableWorldBook = primaryWorldBook?.source && !primaryWorldBook.available;
             async function openWorldBookDetail() {
                 setResourceLinkBusy(true); setResourceLinkError("");
                 try {
                     const result = await rpc("getWorldBookBinding", { cardPath: view.card.path }, props.sessionId);
-                    const binding = result.binding;
+                    const binding = result.binding?.books?.[0] || result.binding;
+                    setResourceBinding({ cardPath: view.card.path, binding: result.binding });
                     if (!binding?.source) { setResourceLinkError("本局人物卡尚未绑定世界书。"); return; }
                     if (!binding.available) { setResourceLinkError("绑定的世界书已不可用，请在人物卡详情中检查绑定。"); return; }
                     props.openStyleTab("dsh-tavern:worldbooks", { worldBookSource: binding.source });
@@ -10328,8 +10353,8 @@ window.__ModuleLoader__.load({
 				h("div", { className: "dsh-tavern-status-head" },
 					h("div", { className: "dsh-tavern-status-role" }, view.card.name),
                     h("nav", { className: "dsh-tavern-status-resource-links", "aria-label": "本局资料" },
-                        h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "人物卡详情 ↗"),
-                        h("button", { type: "button", disabled: !view.card.path || resourceLinkBusy, title: "打开本局人物卡绑定的世界书；多本绑定时打开主世界书", onClick: openWorldBookDetail }, resourceLinkBusy ? "正在打开…" : "世界书详情 ↗")),
+                        h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"),
+                        h("button", { type: "button", disabled: !view.card.path || resourceLinkBusy || !currentResourceBinding || noWorldBook || unavailableWorldBook, title: "打开本局人物卡绑定的世界书；多本绑定时打开主世界书", onClick: openWorldBookDetail }, resourceLinkBusy ? "正在打开…" : !currentResourceBinding ? "正在读取世界书…" : noWorldBook ? "未绑定世界书" : unavailableWorldBook ? "世界书不可用" : "打开世界书 ↗")),
                     resourceLinkError ? h("div", { className: "dsh-card-error", role: "status" }, resourceLinkError) : null,
 					(view.card.tags || []).length ? h("div", { className: "dsh-tavern-status-tags" }, (view.card.tags || []).slice(0, 8).map(function (tag) { return h("span", { key: tag, className: "dsh-tavern-status-tag" }, tag); })) : null,
 					h("div", { className: "dsh-tavern-status-settle" }, h("span", { className: "dsh-tavern-status-dot " + (view.settleStatus || "idle") }), statusText)
