@@ -89,3 +89,13 @@ test('保留手动关键词和启用设置；手动正文冲突时档案与世�
   assert.match(result.error, /已被手动修改/)
   assert.deepEqual(run.get(), before)
 })
+
+test('原世界书姓名或别名命中阻止重复建档，零散正文提及仍允许创建', async () => {
+  const run = fixture({ name: '已有世界书', entries: { 0: { uid: 0, key: ['林霜', '阿霜'], comment: '守卫设定', content: JSON.stringify(design), disable: false } } })
+  assert.equal((await run.save()).ok, false)
+  assert.equal((await run.save({ ...design, name: '阿霜', aliases: [] })).ok, false)
+  assert.equal(run.get().characterDesignDocument, undefined)
+  const mention = fixture({ name: '传闻', entries: { 0: { uid: 0, key: ['市集'], comment: '市集', content: '市集曾出现过林霜。', disable: false } } })
+  assert.equal((await mention.save()).ok, true)
+  assert.equal(mention.entries().length, 2)
+})

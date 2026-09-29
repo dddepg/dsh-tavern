@@ -1,5 +1,5 @@
 import { CHARACTER_DESIGN_SAVE_TOOL_NAME, createCharacterDesignDocumentSession } from './character-design-document.js'
-import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot } from './character-design-worldbook.js'
+import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot, characterWorldbookEntries } from './character-design-worldbook.js'
 
 /** One explicit request, with drafts committed only after the agent succeeds. */
 export function createManualCharacterDesign({ store, runAgent, selection, beginTask, ensureSession = async () => {}, onError = error => console.error('人物设计保存状态失败', error) }) {
@@ -44,6 +44,7 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
       const worldbookDraft = { openingWorldbookSnapshot: snapshot }
       const savedCharacters = new Map()
       const draft = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument,
+        worldbook: () => worldbookDraft.openingWorldbookSnapshot.document,
         onSave: character => {
           const applied = applyCharacterDesignWorldbook(worldbookDraft, character)
           savedCharacters.set(character.name, character)
@@ -58,7 +59,7 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
         rewindTo: taskRun.participantRequest.rewindTo,
         onPersistentSessionReady: id => taskRun.bindSession(id), sessionId, chatId: chat.id, selection: model,
         backgroundTasks: { variables: false, posture: false, characterDesign: true },
-        system: '本次执行用户手动发起的人物设计。设计意见留空时，根据当前剧情和已有档案，自行选择需要建立或补充设计的重要人物；有意见时优先遵循意见。先调用 skill 加载 character-design，读取已有档案，按要求创建或修订，再调用 character_design_save 保存。不得执行变量或姿势结算，不得改写正文。',
+        system: '本次执行用户手动发起的人物设计。设计意见留空时，根据当前剧情和已有档案，自行选择需要建立或补充设计的重要人物；有意见时优先遵循意见。先调用 skill 加载 character-design，再用 character_design_read 按姓名或别名检查本局世界书与已有档案。世界书已有该人物设定时调用 character_design_reuse 复用即可完成，不另建档案；只有缺少设定的新人物或已有设计档案的修订才调用 character_design_save。不得执行变量或姿势结算，不得改写正文。',
         messages: [{ role: 'user', content: [{ type: 'text', text: JSON.stringify({ guidance, card: { name: card.name, description: card.description, personality: card.personality, scenario: card.scenario }, recent }) }] }],
         tools: draft.tools, onToolCall: async call => {
           const output = await draft.execute(call)
@@ -69,13 +70,17 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
           return output
         }
       })
-      if (!draft.changed()) throw new Error(saveError
+      if (!draft.changed() && !draft.reused().length) throw new Error(saveError
         ? '人物档案保存失败：' + saveError + '。模型未完成修正，请重试。'
         : '模型未调用人物档案保存工具，本次未保存设计档案。请重试；若持续出现，请检查后台模型是否支持工具调用。')
-      const completed = await taskRun.commit({ participant: taskRun.participant(result), stateChanged: true, apply: current => {
+      const completed = await taskRun.commit({ participant: taskRun.participant(result), stateChanged: draft.changed(), apply: current => {
+        for (const reuse of draft.reused()) {
+          const entries = characterWorldbookEntries(current.openingWorldbookSnapshot?.version === 1 ? current.openingWorldbookSnapshot.document : snapshot.document, [reuse.name])
+          if (reuse.entries.some(old => !entries.some(entry => entry.ref === old.ref && entry.content === old.content))) throw new Error('复用的人物世界书已变化，请重新设计')
+        }
         for (const character of savedCharacters.values()) applyCharacterDesignWorldbook(current, character, snapshot)
-        current.characterDesignDocument = draft.document()
-        current.characterDesignTask = { status: 'done', guidance, error: '' }
+        if (draft.changed()) current.characterDesignDocument = draft.document()
+        current.characterDesignTask = { status: 'done', guidance, error: '', reused: draft.reused().map(({ name }) => name) }
         return current
       } })
       if (completed.status === 'stale') throw new Error('剧情已变化，本次设计未保存，请重试。')

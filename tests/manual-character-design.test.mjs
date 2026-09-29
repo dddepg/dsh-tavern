@@ -171,3 +171,45 @@ test('提交时保留同时新增的世界书条目，发生手动正文冲突�
   assert.equal(run.get().openingWorldbookSnapshot.document.entries[0].content, '并发手动修改的人物')
   assert.deepEqual(run.get().characterDesignDocument, before)
 })
+
+const existingWorldbook = { version: 1, libraryDigest: 'original', source: null, document: { name: '本局设定', entries: {
+  7: { uid: 7, key: ['张三', '三哥'], comment: '张三', content: '张三，别名三哥，是成年守灯人。性格沉稳，穿灰袍，说话简短。负责夜间引路。', disable: false, constant: false }
+} } }
+test('世界书已有完整人物时按别名读取并复用，完成且不建立档案', async () => {
+  const run = fixture(async input => {
+    const read = JSON.parse(await input.onToolCall({ name: 'character_design_read', arguments: { name: '三哥' } }))
+    assert.equal(read.found, true)
+    assert.equal(read.character, null)
+    assert.match(read.worldbook[0].content, /守灯人/)
+    const reused = JSON.parse(await input.onToolCall({ name: 'character_design_reuse', arguments: { name: '三哥', refs: ['entry:7'] } }))
+    assert.equal(reused.ok, true)
+  }, { openingWorldbookSnapshot: structuredClone(existingWorldbook) })
+  await run.api.start({ sessionId: 'session', guidance: '设计三哥' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'done')
+  assert.deepEqual(run.get().characterDesignTask.reused, ['三哥'])
+  assert.equal(run.get().characterDesignDocument, undefined)
+  assert.deepEqual(run.get().openingWorldbookSnapshot, existingWorldbook)
+})
+test('未读取不能宣称复用；世界书已有同名人物时保存被拒绝', async () => {
+  const run = fixture(async input => {
+    const reuse = JSON.parse(await input.onToolCall({ name: 'character_design_reuse', arguments: { name: '张三', refs: ['entry:7'] } }))
+    assert.equal(reuse.ok, false)
+    const save = JSON.parse(await input.onToolCall({ name: 'character_design_save', arguments: design }))
+    assert.equal(save.ok, false)
+    assert.match(save.error, /已有该人物条目/)
+  }, { openingWorldbookSnapshot: structuredClone(existingWorldbook) })
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'failed')
+  assert.equal(run.get().characterDesignDocument, undefined)
+  assert.deepEqual(run.get().openingWorldbookSnapshot, existingWorldbook)
+})
+test('复用后世界书并发变化时拒绝提交过期判断', async () => {
+  const run = fixture(async input => {
+    await input.onToolCall({ name: 'character_design_read', arguments: { name: '张三' } })
+    await input.onToolCall({ name: 'character_design_reuse', arguments: { name: '张三', refs: ['entry:7'] } })
+    run.edit(chat => { chat.openingWorldbookSnapshot.document.entries[7].content = '新设定' })
+  }, { openingWorldbookSnapshot: structuredClone(existingWorldbook) })
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'failed')
+  assert.match(run.get().characterDesignTask.error, /世界书已变化/)
+})
