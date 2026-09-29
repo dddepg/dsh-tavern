@@ -10397,7 +10397,7 @@ window.__ModuleLoader__.load({
                         busy: running || view.activity?.busy || view.regenInProgress
                     }) : null,
 					h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, "Guide（注入上下文）"),
+						h("div", { className: "dsh-tavern-status-label" }, "临时指导"),
                         h("div", { className: "dsh-tavern-guide-destinations" },
                             h("div", null, "长期偏好写入用户画像。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开用户画像 ↗")),
                             h("div", null, "故事专属设定写入人物卡。", h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"))),
@@ -10407,11 +10407,11 @@ window.__ModuleLoader__.load({
 									h("div", { className: "dsh-tavern-guide-text" }, guide.text),
 									h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(index); } }, "删除")
 								);
-							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无 Guide。添加后会自动注入正文和候选项生成。")
+							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无临时指导。添加后用于后续剧情和候选项生成，不再需要时请删除。")
 						),
 						h("div", { className: "dsh-tavern-guide-add" },
-							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, value: guideDraft, placeholder: "例如：多用短句，多写心理活动，对话不要超过三句", onChange: function (e) { setGuideDraft(e.target.value); } }),
-							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加 Guide")
+							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
+							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加指导")
 						),
 						guideError ? h("div", { className: "dsh-card-error" }, guideError) : null
 					),
