@@ -1860,3 +1860,8 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
   .dsh-tavern-global-defaults .dsh-local-section { padding: 16px; }
   .dsh-tavern-global-defaults .dsh-tavern-background-task { gap: 16px; }
 }
+
+.dsh-tavern-guide-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.dsh-tavern-guide-heading h3 { margin: 0; min-width: 0; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.dsh-tavern-guide-heading > button { flex: none; padding: 5px 9px; font-size: 12px; background: transparent; }
+.dsh-tavern-guide-heading > button:hover { background: var(--dsw-alias-interactive-bg-hover); }

@@ -8303,18 +8303,18 @@ window.__ModuleLoader__.load({
                     notice ? h("p", { role: "status" }, notice) : null,
                     items === null ? h("p", null, "正在读取Guide 库…") : !items.length ? h("p", { className: "dsh-tavern-status-empty" }, "暂无方案。可在酒馆状态的指导区域保存本局 Guide。") : items.map(item =>
                         h("section", { key: item.id, className: "dsh-tavern-guide-library" },
-                            h("h3", null, item.name),
-                            h("details", null, h("summary", null, "查看指导（" + item.guides.length + " 条）"), item.guides.map((text, index) => h("p", { key: index, className: "dsh-tavern-guide-text" }, text))),
+                            h("div", { className: "dsh-tavern-guide-heading" }, h("h3", null, item.name), h("button", { className: "dsh-tavern-btn", disabled: busy || !!editing, onClick: () => rename(item) }, "重命名")),
+                            editing?.id === item.id ? null : h("details", null, h("summary", null, "查看指导（" + item.guides.length + " 条）"), item.guides.map((text, index) => h("p", { key: index, className: "dsh-tavern-guide-text" }, text))),
                             editing?.id === item.id ? h("div", { className: "dsh-tavern-guide-editor" },
+                                h("p", { className: "dsh-tavern-settings-desc" }, "可增加、删除或修改 Guide，点击保存修改后生效。"),
                                 drafts.map((text, index) => h("div", { key: index },
                                     h("label", null, "Guide " + (index + 1), h("textarea", { className: "dsh-tavern-regen-input", rows: 3, value: text, maxLength: 2000, disabled: busy, onChange: event => setDrafts(drafts.map((value, n) => n === index ? event.target.value : value)) })),
-                                    h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => setDrafts(drafts.filter((_, n) => n !== index)) }, "移除"))),
+                                    h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => setDrafts(drafts.filter((_, n) => n !== index)) }, "删除这条 Guide"))),
                                 h("div", { className: "dsh-tavern-guide-actions" },
                                     h("button", { className: "dsh-tavern-btn", disabled: busy || drafts.length >= 20, onClick: () => setDrafts([...drafts, ""]) }, "添加 Guide"),
                                     h("button", { className: "dsh-tavern-btn", disabled: busy || !drafts.length || drafts.some(text => !text.trim()), onClick: () => update(editing, { guides: drafts }) }, "保存修改"),
                                     h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => setEditing(null) }, "取消"))) : h("div", { className: "dsh-tavern-guide-actions" },
                                 h("button", { className: "dsh-tavern-btn", disabled: busy || !!editing || !sessionId, onClick: () => load(item.id) }, "加载到本局"),
-                                h("button", { className: "dsh-tavern-btn", disabled: busy || !!editing, onClick: () => rename(item) }, "重命名"),
                                 h("button", { className: "dsh-tavern-btn", disabled: busy || !!editing, onClick: () => { setEditing(item); setDrafts([...item.guides]); setError(""); setNotice(""); } }, "修改"))))));
         }
 
