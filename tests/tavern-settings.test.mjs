@@ -91,7 +91,7 @@ test('实验分支始终公开兼容模式，旧关闭信任值不影响运行',
 })
 
 test('设置界面不重复提供已并入外观的分色，不恢复旧兼容样式选项', () => {
-  const context = { CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
+  const context = { DisplayPreferencesSettings: function DisplayPreferencesSettings() {}, CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
     useState: initial => [initial, () => {}],
     useEffect() {},
     createElement: (type, props, ...children) => ({ type, props, children })
@@ -146,6 +146,7 @@ test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词
 test('系统正文提示词默认使用内置内容，并可保存自定义覆盖', function () {
   const defaults = { story: '内置正文提示词' }
   assert.deepEqual(presentTavernSettings({}, defaults), {
+    hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
@@ -166,6 +167,7 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
   assert.equal(saved.unknown, 1)
   assert.equal(resolveSystemPrompt(saved, 'story', function () { return '默认' }), '用户正文提示词')
   assert.deepEqual(presentTavernSettings(saved, defaults), {
+    hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
@@ -185,6 +187,7 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
 
 test('恢复默认只删除正文覆盖并保留其他设置', function () {
   const saved = applyTavernSettingsPatch({
+    hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
@@ -192,6 +195,7 @@ test('恢复默认只删除正文覆盖并保留其他设置', function () {
   }, { storyPrompt: null })
 
   assert.deepEqual(saved, {
+    hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
     compatibilityMode: true,
@@ -298,4 +302,15 @@ test('候选项默认填入后隐藏，保存后持久化且不覆盖其他设�
   assert.equal((await h.read()).systemAppendEnabled, true)
   await assert.rejects(h.update({ candidateDismissMode: 'invalid' }), /无效的候选项/)
   assert.equal((await h.read()).candidateDismissMode, 'after-fill')
+})
+
+test('全局隐藏注入与思考设置可持久化和恢复，不改动其他配置', async t => {
+  const h = await settingsHarness(t)
+  assert.equal((await h.read()).hideContextAndReasoning, false)
+  await h.update({ hideContextAndReasoning: true, candidateDismissMode: 'after-send' })
+  assert.equal((await h.read()).hideContextAndReasoning, true)
+  await h.update({ hideContextAndReasoning: false })
+  assert.equal((await h.read()).hideContextAndReasoning, false)
+  assert.equal((await h.read()).candidateDismissMode, 'after-send')
+  await assert.rejects(h.update({ hideContextAndReasoning: 'true' }), /无效的对话显示设置/)
 })

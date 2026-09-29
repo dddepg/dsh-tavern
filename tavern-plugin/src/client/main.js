@@ -7915,6 +7915,55 @@ window.__ModuleLoader__.load({
                 error ? h("p", { className: "dsh-tavern-settings-error", role: "alert" }, error) : null);
         }
 
+        const displayPreferences = (() => {
+            let value = null, revision = 0;
+            const listeners = new Set();
+            const key = "dsh-tavern:display-preferences-changed";
+            function apply(hidden) {
+                value = hidden === true;
+                document.documentElement.classList.toggle("dsh-tavern-hide-process", value);
+                listeners.forEach(listener => listener());
+            }
+            async function refresh() {
+                const request = ++revision;
+                try { const result = await rpc("getDisplayPreferences"); if (request === revision) apply(result.hideContextAndReasoning); } catch (_) {}
+            }
+            return {
+                subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+                snapshot: () => value,
+                async save(hidden) {
+                    ++revision;
+                    const result = await rpc("updateTavernSettings", { patch: { hideContextAndReasoning: hidden } });
+                    ++revision; apply(result.settings.hideContextAndReasoning);
+                    try { window.localStorage.setItem(key, String(Date.now())); } catch (_) {}
+                },
+                start() {
+                    refresh();
+                    const onStorage = event => { if (event.key === key) refresh(); };
+                    window.addEventListener("focus", refresh);
+                    window.addEventListener("storage", onStorage);
+                    return () => { ++revision; window.removeEventListener("focus", refresh); window.removeEventListener("storage", onStorage); document.documentElement.classList.remove("dsh-tavern-hide-process"); };
+                }
+            };
+        })();
+        function DisplayPreferencesSettings() {
+            const hidden = React.useSyncExternalStore(displayPreferences.subscribe, displayPreferences.snapshot, displayPreferences.snapshot);
+            const [busy, setBusy] = React.useState(false), [notice, setNotice] = React.useState("");
+            async function save(value) {
+                setBusy(true); setNotice("");
+                try { await displayPreferences.save(value); setNotice("已保存，对所有对话立即生效"); }
+                catch (error) { setNotice("保存失败：" + String(error.message || error)); }
+                finally { setBusy(false); }
+            }
+            const h = React.createElement;
+            return h("section", { className: "dsh-tavern-settings-group" },
+                h("label", { className: "dsh-tavern-settings-row" },
+                    h("span", { className: "dsh-tavern-settings-copy" }, h("strong", null, "隐藏上下文注入和思考过程"),
+                        h("p", { className: "dsh-tavern-settings-desc" }, "隐藏对话中的上下文注入、已思考和思考过程。仅影响显示，正文、模型请求和存档内容不变。")),
+                    h("input", { type: "checkbox", role: "switch", "aria-label": "隐藏上下文注入和思考过程", checked: hidden === true, disabled: hidden === null || busy, onChange: event => save(event.target.checked) })),
+                notice ? h("p", { className: "dsh-tavern-settings-desc", role: "status" }, notice) : null);
+        }
+
         function useCandidatePreferences() {
             const [mode, setMode] = React.useState("after-fill");
             React.useEffect(function () {
@@ -7983,6 +8032,7 @@ window.__ModuleLoader__.load({
                 React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) }),
                 state.notice ? React.createElement("p", { role: "status" }, state.notice) : null,
                 React.createElement(TavernConversationWritingSkills, { globalDefaults: true }),
+                React.createElement(DisplayPreferencesSettings),
                 React.createElement(CandidatePreferencesSettings),
                 React.createElement(PromptTemplateSettingsEntry),
                 React.createElement(ContextCompactionSettings),
@@ -11518,6 +11568,7 @@ window.__ModuleLoader__.load({
 		const inject = ["slots", "sessions", "workspaces", "layout", "connection", "conversation", "betterSidebar", "remote", "remote.commands", "tavernSessionSignals"];
 
 		function apply(ctx) {
+			ctx.effect(() => displayPreferences.start(), "dsh-tavern: global display preferences");
 			ctx.effect(() => tavernInteractionDiagnostics.start(), "dsh-tavern: interaction diagnostics");
 			ctx.effect(() => syncTavernSubagentCatalogs(ctx.sessions), "dsh-tavern: subagent catalog synchronization");
 			const slots = ctx.slots;

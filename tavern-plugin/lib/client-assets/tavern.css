@@ -1810,3 +1810,9 @@ body.dsh-tavern-shell-active > :is([role="tree"], [role="menu"], [role="listbox"
 .dsh-tavern-more-actions > .dsh-tavern-more-menu button.danger:not(:disabled) { color: var(--dsw-alias-state-error-primary, #c45f5f); }
 .dsh-tavern-menu-unavailable { display: grid; gap: 2px; white-space: normal !important; }
 .dsh-tavern-menu-unavailable small { font-size: 11px; font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Presentation only: keep request/history data and actionable tool rows intact. */
+html.dsh-tavern-hide-process [data-chat-flow-kind="context"],
+html.dsh-tavern-hide-process [data-chat-flow-kind="system-prompt"],
+html.dsh-tavern-hide-process .dsh-tavern-assistant-reasoning,
+html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn-process-tool-calls="0"][data-turn-process-subagents="0"]) { display: none !important; }
