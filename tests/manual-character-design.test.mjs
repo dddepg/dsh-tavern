@@ -9,7 +9,7 @@ const design = { name: '张三', ...Object.fromEntries(fields.map(key => [key, '
 function coordinator(read, write) {
   return createBackgroundTaskCoordinator({ timeline: createStoryTimeline(), store: {
     readChat: async () => structuredClone(read()), writeChat: async chat => write(chat),
-    updateChat: async (_id, fn) => { const chat = fn(structuredClone(read())); write(chat); return chat }
+    updateChat: async (_id, fn) => { const chat = await fn(structuredClone(read())); write(chat); return chat }
   } })
 }
 function fixture(runAgent, initial = {}) {

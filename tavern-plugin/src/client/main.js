@@ -10229,6 +10229,9 @@ window.__ModuleLoader__.load({
 			const liveState = useLiveTavernView(props.sessionId, stateKey);
 			const view = liveState.view;
 			const loadState = liveState.phase;
+            React.useEffect(function () {
+                if (view?.characterDesignTask?.status === "done" && view.characterDesignTask.published?.length) notifyTavernDataChanged(["worldbooks", "cards"], "character-design");
+            }, [props.sessionId, JSON.stringify(view?.characterDesignTask?.published || [])]);
 			const missingCard = isMissingTavernCardError(liveState.error);
 			const debugTurns = view && Array.isArray(view.debugTurns) ? view.debugTurns : [];
 			const latestDebugTurn = Number(debugTurns[0] && debugTurns[0].turn) || 0;
@@ -10372,6 +10375,7 @@ window.__ModuleLoader__.load({
                             h("div", { className: "dsh-tavern-status-label" }, "人物设计档案（" + ((view.characterDesigns && view.characterDesigns.characters || []).length) + "）"),
                             h("button", { className: "dsh-tavern-btn", disabled: running || view.activity?.busy || view.characterDesignTask?.status === "running", onClick: () => designCharacter(view.characterDesignTask?.status === "failed" ? view.characterDesignTask.guidance : "") }, view.characterDesignTask?.status === "running" ? "设计中…" : view.characterDesignTask?.status === "failed" ? "重试设计" : "设计人物")),
                         view.characterDesignTask?.status === "failed" ? h("div", { className: "dsh-card-error", role: "alert" }, view.characterDesignTask.error) : null,
+                        view.characterDesignTask?.status === "done" && view.characterDesignTask.published?.length ? h("div", { className: "dsh-tavern-status-empty", role: "status" }, "已写入世界书并同步到本局：" + view.characterDesignTask.published.join("、")) : null,
                         view.characterDesignTask?.status === "done" && view.characterDesignTask.reused?.length ? h("div", { className: "dsh-tavern-status-empty", role: "status" }, "已复用本局世界书：" + view.characterDesignTask.reused.join("、") + "，未重复建立档案。") : null,
 						h("div", { className: "dsh-tavern-character-designs" },
 							(view.characterDesigns && view.characterDesigns.characters || []).length ? view.characterDesigns.characters.map(function (character, index) {

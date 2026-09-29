@@ -291,3 +291,44 @@ test('删除独立世界书接受来源对象，拒绝跨类型路径及不存�
   await run.library.remove({ kind: 'standalone', path: 'worldbooks/王都.json' })
   assert.equal(run.files.has('worldbooks/王都.json'), false)
 })
+
+// Character design must be visible through the same library used by the editor.
+import { applyCharacterDesignWorldbook, createCharacterDesignPublisher } from '../tavern-plugin/lib/domain/character-design-worldbook.js'
+import { worldbookContentDigest } from '../tavern-plugin/lib/domain/worldbook-version.js'
+import { cardContentDigest } from '../tavern-plugin/lib/domain/play-card-snapshots.js'
+const designedCharacter = { name: '季闻笙', aliases: ['听潮人'], design: { identity: '成年修船师', personality: '爽朗', appearance: '灰色工装', speechStyle: '简短', narrativeRole: '可能修好渡船' } }
+async function publishFixture(run, cardPath) {
+  const card = clone(run.cards.get(cardPath)), record = await run.library.bound(cardPath, card)
+  const chat = { cardPath, cardDefinitionSnapshot: card, cardContentDigest: cardContentDigest(card), worldbookLibraryDigest: worldbookContentDigest(record), characterDesignTask: {}, openingWorldbookSnapshot: { version: 1, source: record?.source ?? null, libraryDigest: worldbookContentDigest(record), document: clone(record?.document ?? null) } }
+  applyCharacterDesignWorldbook(chat, designedCharacter)
+  return { chat, publish: createCharacterDesignPublisher({ worldBooks: run.library, readCard: async path => clone(run.cards.get(path)) }) }
+}
+for (const kind of ['embedded', 'standalone', 'none', 'multiple']) test('人物设计写入库并自动同步：' + kind, async () => {
+  const run = harness(), path = kind === 'none' ? 'cards/空白.json' : 'cards/命运.json'
+  if (kind === 'standalone') await run.library.setBindings(path, [{ kind: 'standalone', path: 'worldbooks/王都.json' }])
+  if (kind === 'multiple') await run.library.setBindings(path, [{ kind: 'standalone', path: 'worldbooks/王都.json' }, { kind: 'card', cardPath: path }])
+  const { chat, publish } = await publishFixture(run, path)
+  const original = clone(chat.openingWorldbookSnapshot.document)
+  await publish(chat, [designedCharacter])
+  const source = (await run.library.binding(path)).source
+  const entry = (await run.library.get(source)).view.entries.find(e => e.primaryKeys.includes('季闻笙'))
+  assert.ok(entry, '世界书编辑器能读取新增人物')
+  assert.equal(entry.constant, false)
+  assert.deepEqual(chat.openingWorldbookSnapshot.document, original, '不整本替换本局世界书')
+  assert.equal(chat.worldbookLibraryDigest, worldbookContentDigest(await run.library.bound(path)))
+  assert.equal(chat.cardContentDigest, cardContentDigest(run.cards.get(path)))
+  await publish(chat, [designedCharacter])
+  assert.equal((await run.library.get(source)).view.entries.filter(e => e.primaryKeys.includes('季闻笙')).length, 1)
+})
+test('世界书未接受的外部修改保持待同步，手动人物正文冲突不覆盖', async () => {
+  const run = harness(), path = 'cards/命运.json', { chat, publish } = await publishFixture(run, path)
+  const digest = chat.worldbookLibraryDigest
+  run.cards.get(path).character_book.entries[0].content = '用户修改的钟楼'
+  await publish(chat, [designedCharacter])
+  assert.equal(chat.worldbookLibraryDigest, digest)
+  assert.equal(run.cards.get(path).character_book.entries[0].content, '用户修改的钟楼')
+  const entry = run.cards.get(path).character_book.entries.find(e => e.keys.includes('季闻笙'))
+  entry.content = '用户自己修改的人物'
+  await assert.rejects(publish(chat, [designedCharacter]), /已被手动修改/)
+  assert.equal(entry.content, '用户自己修改的人物')
+})

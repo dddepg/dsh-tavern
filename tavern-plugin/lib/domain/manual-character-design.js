@@ -2,7 +2,7 @@ import { CHARACTER_DESIGN_SAVE_TOOL_NAME, createCharacterDesignDocumentSession }
 import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot, characterWorldbookEntries } from './character-design-worldbook.js'
 
 /** One explicit request, with drafts committed only after the agent succeeds. */
-export function createManualCharacterDesign({ store, runAgent, selection, beginTask, ensureSession = async () => {}, onError = error => console.error('人物设计保存状态失败', error) }) {
+export function createManualCharacterDesign({ store, runAgent, selection, beginTask, ensureSession = async () => {}, publishWorldbook, onError = error => console.error('人物设计保存状态失败', error) }) {
   const jobs = new Map()
   function project(chat) {
     const state = chat.characterDesignTask || { status: 'idle' }
@@ -73,7 +73,7 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
       if (!draft.changed() && !draft.reused().length) throw new Error(saveError
         ? '人物档案保存失败：' + saveError + '。模型未完成修正，请重试。'
         : '模型未调用人物档案保存工具，本次未保存设计档案。请重试；若持续出现，请检查后台模型是否支持工具调用。')
-      const completed = await taskRun.commit({ participant: taskRun.participant(result), stateChanged: draft.changed(), apply: current => {
+      const completed = await taskRun.commit({ participant: taskRun.participant(result), stateChanged: draft.changed(), beforePersist: publishWorldbook ? current => publishWorldbook(current, [...savedCharacters.values()]) : undefined, apply: current => {
         for (const reuse of draft.reused()) {
           const entries = characterWorldbookEntries(current.openingWorldbookSnapshot?.version === 1 ? current.openingWorldbookSnapshot.document : snapshot.document, [reuse.name])
           if (reuse.entries.some(old => !entries.some(entry => entry.ref === old.ref && entry.content === old.content))) throw new Error('复用的人物世界书已变化，请重新设计')
@@ -83,7 +83,7 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
         current.characterDesignTask = { status: 'done', guidance, error: '', reused: draft.reused().map(({ name }) => name) }
         return current
       } })
-      if (completed.status === 'stale') throw new Error('剧情已变化，本次设计未保存，请重试。')
+      if (completed.status !== 'committed') throw new Error('剧情已变化，本次设计未保存，请重试。')
     } catch (error) {
       await taskRun.fail(result)
       await store.updateChat(chat.id, current => {

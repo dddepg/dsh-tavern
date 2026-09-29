@@ -1,5 +1,6 @@
 import { inspectWorldBookDocument, updateWorldBookDocument } from './worldbook-resource.js'
 import { worldbookContentDigest } from './worldbook-version.js'
+import { cardContentDigest } from './play-card-snapshots.js'
 
 const MARKER = 'characterDesign'
 const SECTIONS = [['identity', '身份'], ['personality', '性格'], ['appearance', '外貌'], ['speechStyle', '说话方式'], ['narrativeRole', '剧情作用与可能的发展（不是已发生的事实）']]
@@ -22,7 +23,7 @@ export function characterDesignWorldbookSnapshot(chat, record) {
     source: structuredClone(record?.source ?? null), document: structuredClone(record?.document ?? null) }
 }
 
-/** Apply only a generated character entry, leaving library resources and user edits alone. */
+/** Apply only a generated character entry, preserving unrelated entries and user edits. */
 export function applyCharacterDesignWorldbook(chat, character, fallbackSnapshot) {
   const snapshot = structuredClone(chat.openingWorldbookSnapshot?.version === 1
     ? chat.openingWorldbookSnapshot : fallbackSnapshot || characterDesignWorldbookSnapshot(chat, null))
@@ -51,5 +52,49 @@ export function applyCharacterDesignWorldbook(chat, character, fallbackSnapshot)
   }
   snapshot.document = updateWorldBookDocument(document, { operations: [operation] }).document
   chat.openingWorldbookSnapshot = snapshot
-  return { worldbook: { scope: 'current-chat', name: character.name, created: !existing } }
+  return { worldbook: { scope: 'worldbook-and-current-chat', name: character.name, created: !existing }, operation }
+}
+
+
+/** Publish the generated entries only, then acknowledge that delta in this game. */
+export function createCharacterDesignPublisher({ worldBooks, readCard }) {
+  return async function publish(chat, characters) {
+    if (!characters.length) return
+    const card = await readCard(chat.cardPath)
+    const before = await worldBooks.bound(chat.cardPath, card)
+    const binding = await worldBooks.binding(chat.cardPath)
+    const source = binding.source || { kind: 'card', cardPath: chat.cardPath }
+    const previousSource = chat.openingWorldbookSnapshot?.source
+    const identity = value => value?.kind === 'card' ? value.cardPath : value?.path
+    if (previousSource && identity(previousSource) !== identity(source)) throw new Error('世界书绑定已变化，请先同步后重新设计人物')
+    // Validate against all bound books, including supplementary books.
+    const all = { openingWorldbookSnapshot: { version: 1, document: structuredClone(before?.document ?? null) } }
+    for (const character of characters) applyCharacterDesignWorldbook(all, character)
+    const target = await worldBooks.get(source)
+    const draft = { openingWorldbookSnapshot: { version: 1, document: target.view.raw } }
+    const operations = []
+    for (const character of characters) {
+      // A generated entry in a supplementary book must not be duplicated in the primary book.
+      const elsewhere = characterWorldbookEntries(before?.document, [character.name]).some(entry => entry.generated && entry.identityMatch)
+      const here = characterWorldbookEntries(draft.openingWorldbookSnapshot.document, [character.name]).some(entry => entry.generated && entry.identityMatch)
+      if (elsewhere && !here) throw new Error('人物设计条目位于附加世界书，请先将该世界书设为主书后再修订')
+      operations.push(applyCharacterDesignWorldbook(draft, character).operation)
+    }
+    const acknowledged = chat.worldbookLibraryDigest ?? chat.openingWorldbookSnapshot?.libraryDigest
+    await worldBooks.update(source, { operations })
+    if (!binding.source) await worldBooks.bind(chat.cardPath, source)
+    const latestCard = await readCard(chat.cardPath)
+    const after = await worldBooks.bound(chat.cardPath, latestCard)
+    chat.openingWorldbookSnapshot.source = structuredClone(after.source)
+    // Do not acknowledge unrelated resource edits that the player has not accepted.
+    if (acknowledged === worldbookContentDigest(before)) {
+      chat.worldbookLibraryDigest = worldbookContentDigest(after)
+      chat.openingWorldbookSnapshot.libraryDigest = chat.worldbookLibraryDigest
+    }
+    if (chat.cardContentDigest === cardContentDigest(card)) {
+      chat.cardContentDigest = cardContentDigest(latestCard)
+      if (chat.cardDefinitionSnapshot) chat.cardDefinitionSnapshot.character_book = structuredClone(latestCard.character_book)
+    }
+    (chat.characterDesignTask ||= {}).published = characters.map(character => character.name)
+  }
 }

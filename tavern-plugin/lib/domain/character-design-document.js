@@ -191,7 +191,7 @@ export function createCharacterDesignDocumentSession(options = {}) {
       characters, revision: Math.max(0, Number(current.revision) || 0) + 1, updatedAt: timestamp
     })
     dirty = true
-    return { ok: true, created, name: character.name, revision: current.revision, ...applied }
+    return { ok: true, created, name: character.name, revision: current.revision, ...(applied ? { worldbook: applied.worldbook } : {}) }
   }
 
   async function execute(call) {
@@ -252,6 +252,7 @@ export function createCharacterDesignDocumentTools(options = {}) {
         const result = JSON.parse(output)
         if (result.ok !== true || !session.changed()) return undefined
         chat.characterDesignDocument = session.document()
+        if (options.publishWorldbook) await options.publishWorldbook(chat, [chat.characterDesignDocument.characters.find(character => character.name === result.name)])
         return chat
       }, { source: 'character-design.save' })
       return output

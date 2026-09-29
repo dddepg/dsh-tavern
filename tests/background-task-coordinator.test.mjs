@@ -569,3 +569,15 @@ test('native candidate begin combines mailbox claim and reused binding without f
  assert.equal(restored.timeline.operations[task.operationId].startedSessionId,'existing')
  assert.deepEqual(restored.messages,original.messages)
 })
+
+test('人物设计发布在校验之后执行，发布失败不提交档案，过期任务不发布', async () => {
+  const run = coordinatorHarness()
+  const task = await run.coordinator.begin(run.current(), 'character-design')
+  await assert.rejects(task.commit({ apply: chat => { chat.characterDesignDocument = { characters: [] } }, beforePersist: async () => { throw new Error('世界书写入失败') } }), /世界书写入失败/)
+  assert.equal(run.current().characterDesignDocument, undefined)
+  await task.fail()
+  let published = false
+  const result = await task.commit({ beforePersist: async () => { published = true } })
+  assert.equal(result.status, 'stale')
+  assert.equal(published, false)
+})

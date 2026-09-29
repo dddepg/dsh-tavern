@@ -41,6 +41,7 @@ import { createScriptNavigation } from './domain/script-navigation.js'
 import { createSessionInventory } from './domain/session-inventory.js'
 import { createSessionViewSync } from './domain/session-view-sync.js'
 import { setFailedErrorVisibility, setAllFailedErrorVisibility } from './domain/failed-error-visibility.js'
+import { createCharacterDesignPublisher } from './domain/character-design-worldbook.js'
 import { createManualCharacterDesign } from './domain/manual-character-design.js'
 import { prepareTemplateHistory, synchronizeTemplateHistory } from './domain/template-history.js'
 import { createServerTemplateSync } from './domain/server-template-sync.js'
@@ -2037,12 +2038,15 @@ export async function apply(ctx) {
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
     beginTask: chat => backgroundTasks.begin(chat, 'worldbook-filter')
   })
+  const publishCharacterDesign = createCharacterDesignPublisher({ worldBooks, readCard })
   const characterDesignDocuments = createCharacterDesignDocumentTools({
+    publishWorldbook: publishCharacterDesign,
     store: { readChat, updateChat },
     readWorldBook: async chat => worldBooks.bound(chat.cardPath, await readChatCard(chat), chat),
     now: Date.now
   })
   const manualCharacterDesign = createManualCharacterDesign({
+    publishWorldbook: publishCharacterDesign,
     store: { chatForSession, updateChat, readCard: readChatCard,
       readWorldBook: (chat, card) => worldBooks.bound(chat.cardPath, card, chat) },
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,

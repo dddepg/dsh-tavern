@@ -310,6 +310,7 @@ export function createBackgroundTaskCoordinator(options = {}) {
               apply: input.apply
             })
             status = completed.value.status
+            if (status === 'committed' && input.beforePersist) return Promise.resolve(input.beforePersist(completed.chat)).then(() => completed.chat)
             return completed.chat
           }, metadata)
           return saved === undefined ? { chat: null, status: 'missing' } : { chat: saved, status }
