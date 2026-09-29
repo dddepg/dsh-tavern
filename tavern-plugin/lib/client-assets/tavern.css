@@ -1826,7 +1826,11 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-tavern-default-skills > summary:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 4px; border-radius: 3px; }
 .dsh-tavern-default-skills > .dsh-local-help { margin: 16px 0; }
 
-.dsh-tavern-guide-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.dsh-tavern-guide-actions { display: flex; gap: 10px; margin: 16px 0; }
+.dsh-tavern-guide-actions > button { flex: 1; min-width: 0; min-height: 36px; padding: 8px 12px; }
+.dsh-tavern-guide-section .dsh-tavern-guide-list { margin-top: 14px; gap: 10px; }
+.dsh-tavern-guide-section .dsh-tavern-guide-item { padding: 12px; gap: 12px; }
+.dsh-tavern-guide-section .dsh-tavern-guide-add { margin-top: 16px; gap: 10px; }
 @media (max-width: 480px) { .dsh-tavern-guide-item { flex-wrap: wrap; } .dsh-tavern-guide-item .dsh-tavern-guide-text { flex-basis: 100%; } }
 .dsh-tavern-guide-library { margin-top: 12px; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .dsh-tavern-guide-library > summary { cursor: pointer; font-weight: 600; }
