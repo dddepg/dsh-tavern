@@ -22,5 +22,26 @@ export function createGuideLibrary({ store, now = Date.now }) {
     if (!item) throw new Error('指导方案不存在，请刷新指导库')
     return item
   }
-  return { list, save, get }
+  async function update(input) {
+    let updated
+    await store.updateJson(PATH, value => {
+      const item = value?.items?.find(item => item.id === input.id)
+      if (!item) throw new Error('Guide 方案不存在，请刷新后重试')
+      if (JSON.stringify(item) !== JSON.stringify(input.expected)) throw new Error('方案已被修改，请刷新后重试')
+      if (Object.hasOwn(input, 'name')) {
+        const name = String(input.name || '').trim()
+        if (!name || name.length > 80) throw new Error('请输入 1 至 80 字的方案名称')
+        item.name = name
+      }
+      if (Object.hasOwn(input, 'guides')) {
+        if (!Array.isArray(input.guides) || !input.guides.length || input.guides.length > 20 || input.guides.some(text => typeof text !== 'string' || !text.trim() || text.length > 2000)) throw new Error('方案须包含 1 至 20 条非空指导，每条最多 2000 字')
+        item.guides = input.guides.map(text => text.trim())
+      }
+      item.updatedAt = now()
+      updated = item
+      return value
+    })
+    return updated
+  }
+  return { list, save, get, update }
 }

@@ -3730,6 +3730,7 @@ export async function apply(ctx) {
         return { document: cardPreparation.present({ card: workspace, as: 'sillytavern-v3', characterBook }) }
       }
       case 'editLedger': { await ledgerEditor(args || {}); return { view: await sessionView(args.sessionId) } }
+      case 'updateGuideLibrary': return { item: await guideLibrary.update(args) }
       case 'listGuideLibrary': return { items: await guideLibrary.list() }
       case 'saveGuideLibrary': {
         const chat = await chatForSession(args?.sessionId)
