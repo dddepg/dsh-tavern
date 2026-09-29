@@ -64,8 +64,31 @@ test('重复触发被拒绝，未保存档案时报错，服务重启后不会�
   await run.api.start({ sessionId: 'session', guidance: '设计张三' })
   await assert.rejects(run.api.start({ sessionId: 'session', guidance: '设计张三' }), /正在进行/)
   release(); await run.api.wait('chat')
-  assert.match(run.get().characterDesignTask.error, /未保存/)
+  assert.match(run.get().characterDesignTask.error, /模型未调用人物档案保存工具/)
   assert.equal(run.api.project({ id: 'old', characterDesignTask: { status: 'running' } }).status, 'failed')
+})
+
+test('保存被拒绝时显示最后一次校验原因，读取不会覆盖原因', async () => {
+  const run = fixture(async input => {
+    await input.onToolCall({ name: 'character_design_save', arguments: { ...design, identity: '' } })
+    await input.onToolCall({ name: 'character_design_save', arguments: { ...design, appearance: '外貌待定' } })
+    await input.onToolCall({ name: 'character_design_read', arguments: {} })
+  })
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'failed')
+  assert.match(run.get().characterDesignTask.error, /人物档案保存失败：人物设计字段 appearance 仍含未知占位值：待定/)
+  assert.equal(run.get().characterDesignDocument, undefined)
+})
+
+test('校验失败后模型修正并保存成功，不残留失败提示', async () => {
+  const run = fixture(async input => {
+    await input.onToolCall({ name: 'character_design_save', arguments: { ...design, identity: '' } })
+    await input.onToolCall({ name: 'character_design_save', arguments: design })
+  })
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'done')
+  assert.equal(run.get().characterDesignTask.error, '')
+  assert.equal(run.get().characterDesignDocument.characters.length, 1)
 })
 
 test('设计意见选填，空白输入也能启动并保存人物档案', async () => {
