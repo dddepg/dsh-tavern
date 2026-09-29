@@ -152,3 +152,19 @@ test('single profile content is saved identically for display and injection', as
   await assert.rejects(profile.save({ content: 'x'.repeat(3001) }), /3000/)
   assert.equal((await profile.read()).confirmed.summary, content)
 })
+
+test('create from guide saves a complete independent preference without changing the default', async () => {
+  const profile = createUserPreferenceProfile({ store: memoryStore(), now: () => 100 })
+  await profile.save({ content: '原有偏好' })
+  await profile.setDefaultEnabled(true)
+  const before = await profile.read()
+  const saved = await profile.manage({ action: 'create', name: '指导', content: '多用短句\n保留人物心理描写' })
+  assert.notEqual(saved.profileId, before.profileId)
+  assert.equal(saved.hasConfirmed, true)
+  assert.equal(saved.confirmed.injectionText, '多用短句\n保留人物心理描写')
+  assert.equal(saved.defaultProfileId, before.defaultProfileId)
+  assert.equal((await profile.read(before.profileId)).confirmed.injectionText, '原有偏好')
+  const count = saved.profiles.length
+  await assert.rejects(profile.manage({ action: 'create', name: '无效指导', content: 'x'.repeat(3001) }), /3000/)
+  assert.equal((await profile.read()).profiles.length, count)
+})

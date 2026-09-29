@@ -225,7 +225,7 @@ export function createUserPreferenceProfile({ store, now = Date.now }) {
       if (!Object.hasOwn(next, 'defaultProfileId')) next.defaultProfileId = next.profiles.find(item => item.id === next.selectedId)?.data.defaultEnabled ? next.selectedId : ''
       return next
     }
-    return { spec: SPEC, version: 3, selectedId: 'default', defaultProfileId: value?.defaultEnabled === true ? 'default' : '', profiles: [{ id: 'default', name: '默认画像', data: document(value) }] }
+    return { spec: SPEC, version: 3, selectedId: 'default', defaultProfileId: value?.defaultEnabled === true ? 'default' : '', profiles: [{ id: 'default', name: '默认长期偏好', data: document(value) }] }
   }
   function entry(value, id) {
     const item = value.profiles.find(item => item.id === (id || value.selectedId))
@@ -268,7 +268,15 @@ export function createUserPreferenceProfile({ store, now = Date.now }) {
         const name = str(input.name, 100)
         if (!name) throw new Error('请输入画像名称')
         const id = randomUUID()
-        value.profiles.push({ id, name, data: document(null) })
+        let data = document(null)
+        if (Object.hasOwn(input, 'content')) {
+          if (typeof input.content !== 'string' || !input.content.trim() || input.content.length > 3000) throw new Error('长期偏好正文须为 1 至 3000 字')
+          const revision = Math.max(...value.profiles.map(item => integer(item.data.revision))) + 1
+          const timestamp = now()
+          const content = input.content.trim()
+          data = { ...data, revision, confirmed: { ...normalizeDraft({ summary: content, injectionText: content }, revision, timestamp), profileRevision: revision, confirmedAt: timestamp }, updatedAt: timestamp }
+        }
+        value.profiles.push({ id, name, data })
         value.selectedId = id
       } else if (input.action === 'select') {
         value.selectedId = entry(value, input.profileId).id
