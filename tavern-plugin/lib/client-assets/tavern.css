@@ -1800,3 +1800,13 @@ body.dsh-tavern-shell-active > :is([role="tree"], [role="menu"], [role="listbox"
 .dsh-tavern-guide-destinations button { border: 0; padding: 0; background: transparent; color: var(--dsh-tavern-accent); font: inherit; cursor: pointer; text-underline-offset: 3px; }
 .dsh-tavern-guide-destinations button:hover { text-decoration: underline; }
 .dsh-tavern-guide-destinations button:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 2px; }
+
+/* Gameplay actions share the active theme and keep unavailable actions secondary. */
+.dsh-tavern-more-actions > .dsh-tavern-more-menu { box-sizing: border-box; width: 208px; min-width: 0; max-width: calc(100vw - 24px); gap: 3px; padding: 6px; border-color: var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-2, var(--dsw-specific-sidebar-fill)); color: var(--dsw-alias-label-primary); font-family: inherit; font-size: 13px; line-height: 1.5; box-shadow: 0 6px 20px color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent); }
+.dsh-tavern-more-actions > .dsh-tavern-more-menu button { box-sizing: border-box; min-height: 36px; padding: 8px 10px; border-radius: 7px; font-family: inherit; font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--dsw-alias-label-primary); }
+.dsh-tavern-more-actions > .dsh-tavern-more-menu button:hover:not(:disabled) { color: var(--dsh-tavern-accent); background: color-mix(in srgb, var(--dsh-tavern-accent) 12%, transparent); }
+.dsh-tavern-more-actions > .dsh-tavern-more-menu button:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: -2px; }
+.dsh-tavern-more-actions > .dsh-tavern-more-menu button:disabled { opacity: 1; color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary)); background: transparent; }
+.dsh-tavern-more-actions > .dsh-tavern-more-menu button.danger:not(:disabled) { color: var(--dsw-alias-state-error-primary, #c45f5f); }
+.dsh-tavern-menu-unavailable { display: grid; gap: 2px; white-space: normal !important; }
+.dsh-tavern-menu-unavailable small { font-size: 11px; font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }

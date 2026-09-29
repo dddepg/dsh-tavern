@@ -10723,7 +10723,9 @@ window.__ModuleLoader__.load({
 			}
 			if (!canRollback) {
                 const reason = rollbackViewState.view && rollbackViewState.view.rollbackUnavailableReason;
-                return reason ? React.createElement("span", { role: "status", className: "dsh-tavern-muted" }, reason) : null;
+                return reason ? React.createElement("button", { type: "button", role: "menuitem", disabled: true, className: "dsh-tavern-menu-unavailable", title: reason },
+                    React.createElement("span", null, "回退本轮"),
+                    React.createElement("small", null, reason.includes("没有可回退") ? "暂无可回退轮次" : reason)) : null;
             }
 			return React.createElement("button", { className: "danger", role: "menuitem", disabled: blocked, title: blocked ? "请等待当前生成或后台处理完成后再回退" : clearIncomplete ? "清除未完成回复，保留已完成剧情" : "删除最近一次用户输入和这段 LLM 输出", onClick: rollback }, rolling ? "处理中…" : clearIncomplete ? "清除未完成回复" : targetLabel);
 		}
