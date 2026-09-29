@@ -1678,7 +1678,11 @@ window.__ModuleLoader__.load({
             const model = '本局后台模型';
             const nativeFetch = window.fetch && window.fetch.bind(window);
             if (nativeFetch) window.fetch = async function (input, init) {
-                const url = new URL(typeof input === 'string' ? input : input?.url || String(input), window.location.href);
+                let url;
+                try {
+                    // srcdoc inherits a usable document base, but its location is about:srcdoc.
+                    url = new URL(typeof input === 'string' ? input : input?.url || String(input), window.document?.baseURI || window.location.href);
+                } catch (_) { return nativeFetch(input, init); }
                 const completion = /\/chat\/completions\/?$/.test(url.pathname);
                 const models = url.origin === 'https://dsh-background.invalid' && /\/models\/?$/.test(url.pathname);
                 if (!completion && !models) return nativeFetch(input, init);

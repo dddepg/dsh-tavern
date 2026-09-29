@@ -78,3 +78,14 @@ test('MVU settings expose the usable host proxy without persisting its adapter c
     assert.equal(restored.额外模型解析配置.温度,0.7)
   } finally {w.close()}
 })
+
+test('srcdoc 开场中的缓存相对地址按文档基础地址解析，不抛 Invalid URL', async () => {
+  const calls = [], input = '/api/dsh-tavern/remote-assets/card/build.html?host=1';
+  const window = { location: { href: 'about:srcdoc' }, document: { baseURI: 'http://127.0.0.1:3081/' },
+    fetch: async (...args) => { calls.push(args); return 'asset' } }
+  install({ window, request: async () => { throw new Error('不应调用模型') } })
+  assert.equal(await window.fetch(input), 'asset')
+  assert.equal(calls[0][0], input)
+  window.document.baseURI = 'about:srcdoc'
+  assert.equal(await window.fetch(input), 'asset', '无法解析的普通请求交回原生 fetch')
+})
