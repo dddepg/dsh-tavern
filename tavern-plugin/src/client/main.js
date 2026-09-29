@@ -10238,6 +10238,19 @@ window.__ModuleLoader__.load({
 			React.useEffect(function () {
 				setError(missingCard ? "" : (liveState.error || ""));
 			}, [liveState.error, missingCard]);
+            const [resourceLinkBusy, setResourceLinkBusy] = React.useState(false);
+            const [resourceLinkError, setResourceLinkError] = React.useState("");
+            async function openWorldBookDetail() {
+                setResourceLinkBusy(true); setResourceLinkError("");
+                try {
+                    const result = await rpc("getWorldBookBinding", { cardPath: view.card.path }, props.sessionId);
+                    const binding = result.binding;
+                    if (!binding?.source) { setResourceLinkError("本局人物卡尚未绑定世界书。"); return; }
+                    if (!binding.available) { setResourceLinkError("绑定的世界书已不可用，请在人物卡详情中检查绑定。"); return; }
+                    props.openStyleTab("dsh-tavern:worldbooks", { worldBookSource: binding.source });
+                } catch (err) { setResourceLinkError(String(err && err.message || err)); }
+                finally { setResourceLinkBusy(false); }
+            }
 			async function openDebugger() {
 				if (!latestDebugTurn || debugBusy) return;
 				setDebugBusy(true);
@@ -10314,6 +10327,10 @@ window.__ModuleLoader__.load({
 			return h("aside", { className: "dsh-tavern-status" },
 				h("div", { className: "dsh-tavern-status-head" },
 					h("div", { className: "dsh-tavern-status-role" }, view.card.name),
+                    h("nav", { className: "dsh-tavern-status-resource-links", "aria-label": "本局资料" },
+                        h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "人物卡详情 ↗"),
+                        h("button", { type: "button", disabled: !view.card.path || resourceLinkBusy, title: "打开本局人物卡绑定的世界书；多本绑定时打开主世界书", onClick: openWorldBookDetail }, resourceLinkBusy ? "正在打开…" : "世界书详情 ↗")),
+                    resourceLinkError ? h("div", { className: "dsh-card-error", role: "status" }, resourceLinkError) : null,
 					(view.card.tags || []).length ? h("div", { className: "dsh-tavern-status-tags" }, (view.card.tags || []).slice(0, 8).map(function (tag) { return h("span", { key: tag, className: "dsh-tavern-status-tag" }, tag); })) : null,
 					h("div", { className: "dsh-tavern-status-settle" }, h("span", { className: "dsh-tavern-status-dot " + (view.settleStatus || "idle") }), statusText)
 				),
@@ -11281,7 +11298,7 @@ window.__ModuleLoader__.load({
 				order: 7,
 				single: true,
 				component: function (props) {
-					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type) { openTavernSidebarTab(ctx, { type: type }, { sessionId: props.scope.sessionId }); } });
+					return React.createElement(TavernStatusTab, { sessions: ctx.sessions, uiConversation: uiConversation, sessionId: props.scope.sessionId, executeSlash: executeSlash, openStyleTab: function (type, meta) { openTavernSidebarTab(ctx, { type: type, meta: meta }, { sessionId: props.scope.sessionId }); } });
 				}
 			}), "dsh-tavern: Better Sidebar status tab");
 			ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(

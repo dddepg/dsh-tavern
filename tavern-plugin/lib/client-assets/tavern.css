@@ -1802,3 +1802,9 @@ body.dsh-tavern-shell-active > :is([role="tree"], [role="menu"], [role="listbox"
 .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { max-height: 100dvh; padding-block: 8px; }
 .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) .dsh-tavern-card-picker-head { flex-wrap: wrap; }
 .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) .dsh-tavern-picker-foot { position: static; margin: 0; padding: 8px 0 0; }
+
+.dsh-tavern-status-resource-links { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; }
+.dsh-tavern-status-resource-links button { padding: 2px 0; border: 0; background: transparent; color: var(--dsh-tavern-accent); font: inherit; font-size: 12px; cursor: pointer; text-underline-offset: 3px; }
+.dsh-tavern-status-resource-links button:hover { text-decoration: underline; }
+.dsh-tavern-status-resource-links button:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 3px; border-radius: 2px; }
+.dsh-tavern-status-resource-links button:disabled { opacity: .5; cursor: default; }
