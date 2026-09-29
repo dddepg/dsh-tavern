@@ -1849,4 +1849,14 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-tavern-guide-editor > div:not(.dsh-tavern-guide-actions) { padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .dsh-tavern-guide-editor .dsh-tavern-guide-actions { flex-wrap: wrap; margin: 0; }
 .dsh-tavern-guide-library .dsh-tavern-guide-actions > button { flex-basis: 90px; }
-.dsh-tavern-default-section-title { margin: 0; padding: 18px 20px 0; font-size: 15px; }
+/* Global defaults share the surrounding configuration cards and row insets. */
+.dsh-tavern-global-defaults .dsh-local-section { margin: 0; padding: 20px; gap: 16px; border-radius: 14px; background: var(--dsw-specific-sidebar-fill); }
+.dsh-tavern-global-defaults .dsh-tavern-background-task { padding: 12px 0; gap: 20px; }
+.dsh-tavern-global-defaults .dsh-tavern-background-task:last-child { border-bottom: 0; padding-bottom: 0; }
+.dsh-tavern-global-defaults .dsh-tavern-settings-title { font-size: 13px; font-weight: 500; line-height: 1.5; }
+.dsh-tavern-global-defaults .dsh-tavern-settings-desc { margin-top: 5px; }
+.dsh-tavern-global-defaults .dsh-tavern-settings-copy { overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .dsh-tavern-global-defaults .dsh-local-section { padding: 16px; }
+  .dsh-tavern-global-defaults .dsh-tavern-background-task { gap: 16px; }
+}

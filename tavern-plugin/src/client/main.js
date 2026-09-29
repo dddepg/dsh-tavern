@@ -8028,16 +8028,16 @@ window.__ModuleLoader__.load({
                     h("span", { className: "dsh-tavern-settings-copy" }, h("strong", { className: "dsh-tavern-settings-title" }, title), h("span", { className: "dsh-tavern-settings-desc" }, help)),
                     h("input", { type: "checkbox", role: "switch", "aria-label": title, disabled, checked: task ? data?.backgroundTasks[key] === true : data?.[key] === true, onChange: event => save(task ? { backgroundTasks: { [key]: event.target.checked } } : { [key]: event.target.checked }) }));
             }
-            return h("div", { className: "dsh-tavern-settings-section dsh-local-settings" },
+            return h("div", { className: "dsh-tavern-settings-section dsh-local-settings dsh-tavern-global-defaults" },
                 h("p", { className: "dsh-tavern-settings-intro" }, "以下为新游戏默认设置，开局后可在本局设置中单独修改。"),
                 h("section", { className: "dsh-local-section" }, h("h3", null, "基本信息"),
                     h("label", { className: "dsh-local-field" }, "默认玩家称呼", h("input", { key: data?.playerName, defaultValue: data?.playerName || "", disabled, maxLength: 80, onBlur: event => { if (event.target.value !== data.playerName) save({ playerName: event.target.value }); } })),
                     h("label", { className: "dsh-local-field" }, "默认状态栏位置", h("select", { disabled, value: data?.statusBarPlacement || "sidebar", onChange: event => save({ statusBarPlacement: event.target.value }) }, h("option", { value: "sidebar" }, "侧边栏"), h("option", { value: "body" }, "正文下方"))),
                     h("label", { className: "dsh-local-field" }, "默认预设", h("select", { disabled, value: data?.preset || "", onChange: event => save(null, "selectPreset", { path: event.target.value }) }, h("option", { value: "" }, "不使用外部预设"), (data?.presets || []).filter(item => item.valid && item.recognized).map(item => h("option", { key: item.path, value: item.path }, item.title)))),
                     h("label", { className: "dsh-local-field" }, "默认长期偏好", h("select", { disabled, value: data?.profile.defaultProfileId || "", onChange: event => save(null, "manageUserPreferenceProfile", { action: "default", profileId: event.target.value }) }, h("option", { value: "" }, "不启用"), (data?.profile.profiles || []).filter(item => item.hasConfirmed).map(item => h("option", { key: item.id, value: item.id }, item.name))))),
-                h("section", { className: "dsh-tavern-settings-group" }, h("h3", { className: "dsh-tavern-default-section-title" }, "后台结算"),
+                h("section", { className: "dsh-local-section" }, h("h3", null, "后台结算"),
                     toggle("variables", "变量结算", "MVU 卡建议开启；普通卡不执行此任务。", true), toggle("posture", "人物姿势结算", "总结本轮结束时人物的位置、动作和姿势。", true)),
-                h("section", { className: "dsh-tavern-settings-group" }, h("h3", { className: "dsh-tavern-default-section-title" }, "扩展功能"),
+                h("section", { className: "dsh-local-section" }, h("h3", null, "扩展功能"),
                     toggle("webSearchEnabled", "联网搜索", "允许新游戏的前台和后台按需搜索。"), toggle("sceneImagesEnabled", "开启场景生图", "允许手动为剧情配图；API 在下方统一配置。")),
                 message ? h("p", { role: "status" }, message) : null);
         }
