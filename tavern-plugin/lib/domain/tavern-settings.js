@@ -15,9 +15,26 @@ export function normalizeBackgroundTasks(value) {
   return { posture: tasks.posture !== false, characterDesign: false, variables: tasks.variables !== false, ledger: false }
 }
 
+export function normalizePlayDefaults(value) {
+  const input = object(value)
+  return { playerName: typeof input.playerName === 'string' ? input.playerName.trim().slice(0, 80) || '你' : '你',
+    statusBarPlacement: input.statusBarPlacement === 'body' ? 'body' : 'sidebar',
+    backgroundTasks: normalizeBackgroundTasks(input.backgroundTasks),
+    webSearchEnabled: input.webSearchEnabled === true, sceneImagesEnabled: input.sceneImagesEnabled === true }
+}
+
 export function applyTavernSettingsPatch(current, patch) {
   const next = Object.assign({}, object(current))
   const input = object(patch)
+  if (Object.hasOwn(input, 'defaultPlaySettings')) {
+    const patch = object(input.defaultPlaySettings)
+    for (const key of ['webSearchEnabled', 'sceneImagesEnabled']) if (Object.hasOwn(patch, key) && typeof patch[key] !== 'boolean') throw new Error('默认开关必须为布尔值')
+    if (Object.hasOwn(patch, 'playerName') && (typeof patch.playerName !== 'string' || patch.playerName.length > 80)) throw new Error('玩家称呼最多 80 字')
+    if (Object.hasOwn(patch, 'statusBarPlacement') && !['body', 'sidebar'].includes(patch.statusBarPlacement)) throw new Error('状态栏位置无效')
+    for (const key of ['variables', 'posture']) if (Object.hasOwn(object(patch.backgroundTasks), key) && typeof patch.backgroundTasks[key] !== 'boolean') throw new Error('默认结算开关必须为布尔值')
+    const current = normalizePlayDefaults(next.defaultPlaySettings)
+    next.defaultPlaySettings = normalizePlayDefaults({ ...current, ...patch, backgroundTasks: { ...current.backgroundTasks, ...object(patch.backgroundTasks) } })
+  }
   if (Object.hasOwn(input, 'defaultWritingSkill')) {
     const { name, enabled } = object(input.defaultWritingSkill)
     if (typeof name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || typeof enabled !== 'boolean') throw new Error('无效的写作 Skill 配置')
@@ -97,6 +114,7 @@ export function presentTavernSettings(document, defaults) {
   })
   const story = prompts.find(function (item) { return item.name === 'story' }) || { text: '', customized: false }
   return {
+    defaultPlaySettings: normalizePlayDefaults(object(document).defaultPlaySettings),
     defaultDisabledWritingSkills: Array.isArray(object(document).defaultDisabledWritingSkills) ? object(document).defaultDisabledWritingSkills.filter(name => typeof name === 'string') : [],
     defaultForegroundModel: normalizeBackgroundModel(object(document).defaultForegroundModel),
     defaultBackgroundModel: normalizeBackgroundModel(object(document).defaultBackgroundModel),

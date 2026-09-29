@@ -3211,7 +3211,7 @@ export async function apply(ctx) {
         return { prepared: true }
       }
       case 'getUserPreferenceProfile': {
-        const chat = await chatHeaderForSession(args && args.sessionId, ['userProfileEnabled','userProfileContextSnapshot','userProfileId','userProfileRevision'])
+        const chat = args?.sessionId && args.globalDefaults !== true ? await chatHeaderForSession(args.sessionId, ['userProfileEnabled','userProfileContextSnapshot','userProfileId','userProfileRevision']) : null
         return {
           userProfile: presentUserPreferenceProfile(await userPreferenceProfile.read()),
           currentConversation: chat && groupOfMode(chat.mode) === 'play' ? {

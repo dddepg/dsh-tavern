@@ -511,3 +511,22 @@ test('wizard draft greeting becomes native opening without changing source card'
   assert.equal(h.card.first_mes,original)
   assert.ok(messages(h.session()).some(event=>JSON.stringify(event).includes('**Ready**')))
 })
+
+test('new games inherit global basic and feature defaults while existing games retain overrides', async () => {
+  const h = initializationFixture()
+  h.state.settings.defaultPlaySettings = { playerName: '旅行者', statusBarPlacement: 'body', backgroundTasks: { variables: false, posture: false }, webSearchEnabled: true, sceneImagesEnabled: true }
+  const first = await h.make().start({ ...h.input, userName: undefined })
+  assert.equal(first.macroState.userName, '旅行者')
+  assert.equal(first.statusBarPlacement, 'body')
+  assert.equal(first.backgroundTasks.variables, false)
+  assert.equal(first.backgroundTasks.posture, false)
+  assert.equal(first.webSearchEnabled, true)
+  assert.equal(first.sceneImagesEnabled, true)
+  h.state.settings.defaultPlaySettings = { playerName: '新默认', webSearchEnabled: false }
+  const reopened = await h.make().start({ ...h.input, userName: undefined })
+  assert.equal(reopened.macroState.userName, '旅行者')
+  assert.equal(reopened.webSearchEnabled, true)
+  const second = await h.make().start({ ...h.input, sessionId: 'another', userName: '本局称呼' })
+  assert.equal(second.macroState.userName, '本局称呼')
+  assert.equal(second.webSearchEnabled, false)
+})

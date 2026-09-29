@@ -91,7 +91,7 @@ test('实验分支始终公开兼容模式，旧关闭信任值不影响运行',
 })
 
 test('设置界面不重复提供已并入外观的分色，不恢复旧兼容样式选项', () => {
-  const context = { DisplayPreferencesSettings: function DisplayPreferencesSettings() {}, CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
+  const context = { GlobalPlayDefaults: function GlobalPlayDefaults() {}, DisplayPreferencesSettings: function DisplayPreferencesSettings() {}, CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
     useState: initial => [initial, () => {}],
     useEffect() {},
     createElement: (type, props, ...children) => ({ type, props, children })
@@ -146,6 +146,7 @@ test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词
 test('系统正文提示词默认使用内置内容，并可保存自定义覆盖', function () {
   const defaults = { story: '内置正文提示词' }
   assert.deepEqual(presentTavernSettings({}, defaults), {
+    defaultPlaySettings: { playerName: '你', statusBarPlacement: 'sidebar', backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, webSearchEnabled: false, sceneImagesEnabled: false },
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
@@ -167,6 +168,7 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
   assert.equal(saved.unknown, 1)
   assert.equal(resolveSystemPrompt(saved, 'story', function () { return '默认' }), '用户正文提示词')
   assert.deepEqual(presentTavernSettings(saved, defaults), {
+    defaultPlaySettings: { playerName: '你', statusBarPlacement: 'sidebar', backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, webSearchEnabled: false, sceneImagesEnabled: false },
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
@@ -187,6 +189,7 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
 
 test('恢复默认只删除正文覆盖并保留其他设置', function () {
   const saved = applyTavernSettingsPatch({
+    defaultPlaySettings: { playerName: '你', statusBarPlacement: 'sidebar', backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, webSearchEnabled: false, sceneImagesEnabled: false },
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
@@ -195,6 +198,7 @@ test('恢复默认只删除正文覆盖并保留其他设置', function () {
   }, { storyPrompt: null })
 
   assert.deepEqual(saved, {
+    defaultPlaySettings: { playerName: '你', statusBarPlacement: 'sidebar', backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, webSearchEnabled: false, sceneImagesEnabled: false },
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
@@ -313,4 +317,17 @@ test('全局隐藏注入与思考设置可持久化和恢复，不改动其他�
   assert.equal((await h.read()).hideContextAndReasoning, false)
   assert.equal((await h.read()).candidateDismissMode, 'after-send')
   await assert.rejects(h.update({ hideContextAndReasoning: 'true' }), /无效的对话显示设置/)
+})
+
+test('global play defaults merge individual switches without losing other defaults', () => {
+  let saved = applyTavernSettingsPatch({}, { defaultPlaySettings: { playerName: '玩家', statusBarPlacement: 'body', backgroundTasks: { variables: false }, webSearchEnabled: true } })
+  saved = applyTavernSettingsPatch(saved, { defaultPlaySettings: { backgroundTasks: { posture: false }, sceneImagesEnabled: true } })
+  const defaults = presentTavernSettings(saved, {}).defaultPlaySettings
+  assert.equal(defaults.playerName, '玩家')
+  assert.equal(defaults.statusBarPlacement, 'body')
+  assert.equal(defaults.backgroundTasks.variables, false)
+  assert.equal(defaults.backgroundTasks.posture, false)
+  assert.equal(defaults.webSearchEnabled, true)
+  assert.equal(defaults.sceneImagesEnabled, true)
+  assert.throws(() => applyTavernSettingsPatch(saved, { defaultPlaySettings: { webSearchEnabled: 'false' } }))
 })

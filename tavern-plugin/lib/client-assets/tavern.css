@@ -1849,3 +1849,4 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-tavern-guide-editor > div:not(.dsh-tavern-guide-actions) { padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
 .dsh-tavern-guide-editor .dsh-tavern-guide-actions { flex-wrap: wrap; margin: 0; }
 .dsh-tavern-guide-library .dsh-tavern-guide-actions > button { flex-basis: 90px; }
+.dsh-tavern-default-section-title { margin: 0; padding: 18px 20px 0; font-size: 15px; }

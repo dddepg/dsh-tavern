@@ -6,7 +6,7 @@ import { OFFICIAL_MVU_VERSION } from './official-mvu-assets.js'
 import { createScriptContinuity } from './script-continuity.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
 import { normalizeBackgroundModel } from './background-model-selection.js'
-import { normalizeBackgroundTasks } from './tavern-settings.js'
+import { normalizeBackgroundTasks, normalizePlayDefaults } from './tavern-settings.js'
 import { ensureSessionSeedTrajectory } from './session-seed-trajectory.js'
 
 function str(value) { return value === undefined || value === null ? '' : String(value) }
@@ -82,6 +82,7 @@ export function createConversationInitialization(options) {
 
   async function initialize({ cardPath, sessionId, mode, openingId, userName, requestMode, preparation, cardTask, importDraft = false }) {
     const currentSettings = await settings()
+    const defaults = normalizePlayDefaults(currentSettings.defaultPlaySettings)
     const effectiveRequestMode = requestMode === 'sillytavern' ? 'sillytavern' : 'dsh'
     const requestedMode = mode === 'card' || mode === 'revision' || mode === 'extract' ? 'card' : (mode === 'script' ? 'script' : (mode === 'story' ? 'story' : null))
     const card = str(cardPath) === '' && requestedMode === 'card' ? null : await cards.read(cardPath)
@@ -102,7 +103,7 @@ export function createConversationInitialization(options) {
         return await present(current, card)
       }
     }
-    const macroState = { userName: str(userName).trim().slice(0, 80) || '你', local: {}, global: {} }
+    const macroState = { userName: str(userName).trim().slice(0, 80) || defaults.playerName, local: {}, global: {} }
     const runtimePresetSnapshot = groupOfMode(chatMode) === 'play' ? await playPresetSnapshot() : null
     const cardEditExperiment = chatMode === 'card' && cardTask === 'edit' && card !== null
     let openingSourceText = chatMode === 'card' ? (cardEditExperiment ? '' : cardGreeting()) : resolveCardOpening(card, openingId)
@@ -156,13 +157,14 @@ export function createConversationInitialization(options) {
     }
     chat.userProfileId = profile?.profileId || 'default'
     chat.userProfileEnabled = (groupOfMode(chat.mode) === 'play' || chat.cardEditContext?.version === 1) && profile?.hasConfirmed === true && profile.defaultEnabled === true
-    chat.webSearchEnabled = false
-    chat.sceneImagesEnabled = false
+    chat.webSearchEnabled = groupOfMode(chat.mode) === 'play' && defaults.webSearchEnabled
+    chat.sceneImagesEnabled = groupOfMode(chat.mode) === 'play' && defaults.sceneImagesEnabled
+    chat.statusBarPlacement = defaults.statusBarPlacement
     chat.conversationFeaturesVersion = 1
     chat.backgroundModelSelection = groupOfMode(chat.mode) === 'play' ? normalizeBackgroundModel(currentSettings.defaultBackgroundModel) : null
     chat.disabledWritingSkills = groupOfMode(chat.mode) === 'play' ? [...(currentSettings.defaultDisabledWritingSkills || [])] : []
     chat.backgroundConfigVersion = 1
-    chat.backgroundTasks = normalizeBackgroundTasks({})
+    chat.backgroundTasks = normalizeBackgroundTasks(groupOfMode(chat.mode) === 'play' ? defaults.backgroundTasks : {})
     chat.mvu = usesMvu ? {
       enabled: true,
       owner: 'official',
