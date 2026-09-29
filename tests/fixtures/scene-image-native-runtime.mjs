@@ -17,7 +17,7 @@ import { createSceneImageDiagnostics } from '../../tavern-plugin/lib/domain/scen
 import { createMvuDiagnosticStore, createMvuDiagnosticExport } from '../../tavern-plugin/lib/domain/mvu-diagnostics.js'
 import { assertImageToolSchema } from './assert-image-tool-schema.mjs'
 
-export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = false, systemAppend, resolveModelSelection, beforeModelRequest, residentOptions = {} } = {}) {
+export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = false, systemAppend, resolveModelSelection, beforeModelRequest, residentOptions = {}, setupHost } = {}) {
   const bootUrl = pathToFileURL(bootPath)
   const { boot } = await import(bootUrl.href)
   const { LlmAdapter } = await import(new URL('../../dsh-llm/lib/index.js', bootUrl))
@@ -27,6 +27,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
   await writeFile(config, packages.map(name => '- id: ' + name + '\n  name: ' + new URL('../../' + name + '/lib/index.js', bootUrl).href + (name === 'dsh-attachment-local' ? '\n  config:\n    dshHome: ' + root : name === 'dsh-session-persistence-jsonl' ? '\n  config:\n    root: ' + join(root, 'sessions') + '\n    compression: none' : '') + '\n').join(''))
   const ctx = await boot('scene-image-native-test', config)
   ctx.baseUrl = bootUrl.href
+  const disposeHost = await setupHost?.(ctx)
   const requests = [], imageRequests = []
   let referenceQuery = ''
   let characterQuery = ''
@@ -210,6 +211,6 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
       return ref
     },
     async restart() { await service.dispose(); await runner.dispose(); runner = createBackgroundAgentRunner(runnerOptions); service = createSceneIllustrations(deps) },
-    async dispose() { stopRetirementFilter(); await service.dispose(); await runner.dispose(); await parent.dispose(); await ctx.fiber.dispose(); await new Promise(resolve => imageServer.close(resolve)); await rm(root, { recursive: true, force: true }) }
+    async dispose() { stopRetirementFilter(); await service.dispose(); await runner.dispose(); await parent.dispose(); await ctx.fiber.dispose(); await disposeHost?.(); await new Promise(resolve => imageServer.close(resolve)); await rm(root, { recursive: true, force: true }) }
   }
 }
