@@ -181,24 +181,11 @@ window.__ModuleLoader__.load({
 		 * value" from "the user changed this". Never pushed to the host file.
 		 */
 		const FACTORY_SNAPSHOT_KEY = "dsh-dream-skin:factory-seeded";
-		/** Default material preset: frosted (毛玻璃) ships as the out-of-box look. */
-		const DEFAULT_MATERIAL_PRESET = "frosted";
-		/**
-		 * Glass material presets (round-5): STYLE-ONLY choices. Each carries the
-		 * material's glass CHARACTER as a backdrop filter tail (saturate/brighten)
-		 * — no slider numbers anymore, so clicking a chip can never move any
-		 * slider value (user decision). Exactly TWO materials:
-		 *  - frosted (毛玻璃, the DEFAULT): milky frost — stronger saturation lift
-		 *    + a slight brightness lift, the classic "frosted glass" read;
-		 *  - liquid (液态玻璃): clearer and more glassy — higher saturation for
-		 *    vivid refraction, no brightness lift so it stays truer to the
-		 *    wallpaper behind.
-		 * There is deliberately NO third "default/none" material: frosted IS the
-		 * default. Legacy stored "default" ids from earlier builds read back as
-		 * frosted. Popup (弹窗) opacity is intentionally untouched — it governs
-		 * menu readability, not the glass material.
-		 */
+		/** No backdrop compositing by default; explicit glass choices remain available. */
+		const DEFAULT_MATERIAL_PRESET = "none";
 		const MATERIAL_PRESETS = [
+            { id: "none", tone: "none", tint: "var(--dsh-dream-skin-composer-base, var(--dsw-alias-bg-base))", fillScale: 1, blurScale: 0,
+              swatch: { blur: 0, filter: "none", fill: "var(--dsw-alias-bg-base)", rim: "var(--dsw-alias-border-l2)", sheen: false } },
 			{
 				id: "frosted", tone: "saturate(1.6) brightness(1.08)",
 				// Tinted frost: fills with the skin base color (existing look).
@@ -676,12 +663,14 @@ window.__ModuleLoader__.load({
 			"background.sidebarLink": "侧边栏跟随壁纸透明度（关闭后可分别调节）",
 			"background.sidebarOpacityHint": "拖动本滑块会自动关闭上面的「跟随壁纸」，改为单独调节侧边栏",
 			"glass.title": "玻璃效果",
-			"glass.help": "透明度滑杆：越往右越透明、越能透出壁纸；越往左越实、文字越清晰。模糊滑杆同时驱动壁纸与玻璃表面的模糊。材质（毛玻璃/液态玻璃）只切换玻璃的质感风格，不会改动任何滑杆数值。",
-			"material.frosted": "毛玻璃",
+			"glass.help": "透明度滑杆：越往右越透明、越能透出壁纸；越往左越实、文字越清晰。启用玻璃效果时，模糊滑杆同时驱动壁纸与玻璃表面的模糊。选择无玻璃效果可关闭背景玻璃模糊，减少渲染开销；壁纸模糊仍由滑杆单独控制。",
+			"material.none": "无玻璃效果（默认）",
+            "material.none.desc": "关闭背景玻璃模糊，减少渲染开销，适合手机使用",
+            "material.frosted": "毛玻璃",
 			"material.liquid": "液态玻璃",
 			"material.frosted.desc": "经典毛玻璃：奶霜质感，文字更清晰",
 			"material.liquid.desc": "通透润泽，折射感更强，更显壁纸",
-			"material.hint": "材质只切换玻璃质感（毛玻璃=奶霜清透，液态玻璃=润泽折射），不会改动任何滑杆数值；透明度与模糊始终以你手动设置的为准。",
+			"material.hint": "默认不使用玻璃效果。毛玻璃与液态玻璃可手动启用；切换不会改动已保存的透明度和壁纸模糊数值。",
 			"composer.opacity": "输入框透明度",
 			"composer.hint": "越往右拉输入框越透明、越能透出壁纸；越往左越实、文字越清晰。",
 			"background.hint": "图片显示在主内容区与侧边栏的半透明底上，消息等内层表面保持不透明以保证可读性",
@@ -745,7 +734,9 @@ window.__ModuleLoader__.load({
 			"background.sidebarOpacityHint": "Dragging this slider turns the wallpaper link off and controls the sidebar on its own",
 			"glass.title": "Glass effect",
 			"glass.help": "Transparency sliders: right = more see-through, left = more solid (crisper text). The blur slider drives both the wallpaper and every glass surface. Materials (frosted / liquid) only switch the glass character — they never move any slider value.",
-			"material.frosted": "Frosted glass",
+			"material.none": "No glass (default)",
+            "material.none.desc": "Disable backdrop effects for lighter rendering, especially on mobile",
+            "material.frosted": "Frosted glass",
 			"material.liquid": "Liquid glass",
 			"material.frosted.desc": "Classic frost: milky texture, crisper text",
 			"material.liquid.desc": "Clearer and glossier, with stronger refraction",
@@ -1708,7 +1699,7 @@ window.__ModuleLoader__.load({
 			const rawStr = readStorage(WALLPAPER_BLUR_KEY);
 			const raw = rawStr == null || rawStr === "" ? NaN : Number(rawStr);
 			const blur = Number.isFinite(raw) ? Math.min(60, Math.max(0, raw)) : DEFAULT_GLASS_BLUR;
-			// Tone = the ACTIVE material's character tail; frosted when unset.
+			// Tone follows the active material; no glass when unset.
 			const preset = MATERIAL_PRESETS.find((p) => p.id === readMaterialPreset()) || MATERIAL_PRESETS[0];
 			// Round-10: per-material BLUR scale — liquid is THIN glass (×0.25):
 			// heavy blur is what made it read as white frosted glass; refraction
@@ -1734,20 +1725,7 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		/**
-		 * Read the chosen glass material preset id (frosted when unset/unknown;
-		 * legacy "default" ids from earlier builds map onto frosted, which now
-		 * IS the default material).
-		 *
-		 * Deliberately NO value migration at boot (blue-team D5, revised): the
-		 * chip now means MATERIAL IDENTITY, not exact numbers — sliders are
-		 * fine-tunes within the material, so a user's stored values "drifting"
-		 * from the preset combo is by design, and overwriting them (the first
-		 * migration attempt) clobbered real user preferences and broke the
-		 * wallpaper-wash defaults. The glass blur cannot go dark on a fresh
-		 * install regardless: applyMaterialBlur() always derives it from the
-		 * active preset, never from the stored wallpaper blur.
-		 */
+		/** Preserve explicit material choices; unset and legacy defaults disable glass. */
 		function readMaterialPreset() {
 			const raw = readStorage(MATERIAL_PRESET_KEY);
 			return MATERIAL_PRESETS.some((preset) => preset.id === raw) ? raw : DEFAULT_MATERIAL_PRESET;
@@ -2319,6 +2297,7 @@ window.__ModuleLoader__.load({
 				"  --dsw-specific-sidebar-fill: inherit !important;",
 				"}"
 			];
+            parts.push('html[data-dsh-material="none"], html[data-dsh-material="none"] *, html[data-dsh-material="none"] *::before, html[data-dsh-material="none"] *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }');
 			const el = document.createElement("style");
 			el.id = MATERIAL_CSS_SOURCE;
 			el.textContent = parts.join("\n");
@@ -3121,8 +3100,8 @@ window.__ModuleLoader__.load({
 				id: p.id,
 				tone: p.tone,
 				swatch: p.swatch,
-				label: t(p.id === "frosted" ? "material.frosted" : "material.liquid"),
-				desc: t(p.id === "frosted" ? "material.frosted.desc" : "material.liquid.desc")
+				label: t("material." + p.id),
+				desc: t("material." + p.id + ".desc")
 			}));
 			return (0, react_jsx_runtime.jsxs)("div", {
 				style: styles.group,
@@ -3218,8 +3197,8 @@ window.__ModuleLoader__.load({
 												borderRadius: "5px",
 												overflow: "hidden",
 												// The GLASS LENS: a real backdrop-filter pane.
-												WebkitBackdropFilter: `blur(${preset.swatch.blur}px) ${preset.swatch.filter}`,
-												backdropFilter: `blur(${preset.swatch.blur}px) ${preset.swatch.filter}`,
+												WebkitBackdropFilter: preset.id === "none" ? "none" : `blur(${preset.swatch.blur}px) ${preset.swatch.filter}`,
+												backdropFilter: preset.id === "none" ? "none" : `blur(${preset.swatch.blur}px) ${preset.swatch.filter}`,
 												background: preset.swatch.fill,
 												boxShadow: `inset 0 0 0 1px ${preset.swatch.rim}`
 											},
@@ -4500,7 +4479,7 @@ window.__ModuleLoader__.load({
 			[WALLPAPER_FOLLOWS_SKIN_KEY]: "0",
 			[COMPOSER_OPACITY_KEY]: String(DEFAULT_COMPOSER_OPACITY),
 			[MODAL_OPACITY_KEY]: String(DEFAULT_MODAL_OPACITY),
-			[MATERIAL_PRESET_KEY]: "frosted",
+			[MATERIAL_PRESET_KEY]: DEFAULT_MATERIAL_PRESET,
 			// Factory refresh OFF (blue-team B7): polling a third-party API on the
 			// user's behalf (even hourly) must be an explicit opt-in, never a
 			// default. The URL field stays pre-filled; the user enables the
