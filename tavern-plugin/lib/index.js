@@ -1,3 +1,4 @@
+import { createGuideLibrary, appendLibraryGuides } from './domain/guide-library.js'
 import { copyJsonTree } from './domain/copy-json-tree.js'
 import { createCandidateContextReader } from './domain/candidate-context-reader.js'
 import { createCandidateWorldbookPreparation } from './domain/candidate-worldbook-preparation.js'
@@ -298,6 +299,7 @@ export async function apply(ctx) {
   ctx.effect(() => () => fullTemplateRuntime.dispose())
   const cardOrganization = createCardOrganization(profileData)
   const worldbookRecallLog = createWorldbookRecallLog({ store: profileData })
+  const guideLibrary = createGuideLibrary({ store: profileData })
   const userPreferenceProfile = createUserPreferenceProfile({ store: profileData })
   const sceneWorldbooks = TAVERN_RELEASE_CAPABILITIES.sceneImages ? createSceneWorldbooks({ store: profileData }) : null
   const imageHostDiagnostic = createSceneImageHostLogger(ctx.logger)
@@ -3728,6 +3730,23 @@ export async function apply(ctx) {
         return { document: cardPreparation.present({ card: workspace, as: 'sillytavern-v3', characterBook }) }
       }
       case 'editLedger': { await ledgerEditor(args || {}); return { view: await sessionView(args.sessionId) } }
+      case 'listGuideLibrary': return { items: await guideLibrary.list() }
+      case 'saveGuideLibrary': {
+        const chat = await chatForSession(args?.sessionId)
+        if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
+        return { item: await guideLibrary.save(args.name, chat.guides) }
+      }
+      case 'loadGuideLibrary': {
+        const chat = await chatForSession(args?.sessionId)
+        if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
+        const item = await guideLibrary.get(args.id)
+        const saved = await updateChat(chat.id, current => {
+          current.guides = appendLibraryGuides(current.guides, item.guides)
+          current.updatedAt = Date.now()
+          return current
+        }, { source: 'guide.library.load' })
+        return { guides: saved.guides }
+      }
       case 'addGuide': return { guides: await addGuide(args && args.sessionId, args && args.text) }
       case 'deleteGuide': return { guides: await deleteGuide(args && args.sessionId, args && args.index) }
       case 'getBodyEdit': return { edit: await bodyEditor.read(args && args.sessionId) }

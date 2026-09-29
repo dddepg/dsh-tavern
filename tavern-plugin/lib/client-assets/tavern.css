@@ -1828,3 +1828,7 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 
 .dsh-tavern-guide-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 @media (max-width: 480px) { .dsh-tavern-guide-item { flex-wrap: wrap; } .dsh-tavern-guide-item .dsh-tavern-guide-text { flex-basis: 100%; } }
+.dsh-tavern-guide-library { margin-top: 12px; padding: 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
+.dsh-tavern-guide-library > summary { cursor: pointer; font-weight: 600; }
+.dsh-tavern-guide-library > select { width: 100%; max-width: 100%; margin: 10px 0; }
+.dsh-tavern-guide-library > .dsh-tavern-guide-text { overflow-wrap: anywhere; }
