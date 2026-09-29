@@ -3,6 +3,7 @@ import { createConversationPageStore } from '../../tavern-plugin/lib/domain/conv
 import { createConversationState } from '../../tavern-plugin/lib/domain/conversation-state.js'
 import { settlementPerformanceChecks, settlementPerformanceInitialVariables } from './settlement-performance.mjs'
 import {setupRealVariables,realVariableLookupChecks} from './real-variable-lookup.mjs'
+import { setupRealCharacterDesign, realCharacterDesignChecks } from './real-character-design.mjs'
 import { incrementalMvuChecks } from './mvu-incremental.mjs'
 import {openingUpdateChecks} from './opening-update.mjs'
 import { backgroundLifecycleChecks } from './background-lifecycle.mjs'
@@ -166,6 +167,7 @@ try {
     } }))
   })
   if(process.argv.includes('--real-variables')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealVariables({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
+  if(process.argv.includes('--real-character-design')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealCharacterDesign({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
   await step('启动真实 DSH 与酒馆', async () => {
     async function launchServer() {
       const logOffset = log.length
@@ -281,6 +283,8 @@ try {
       }
       assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
     })
+  } else if (process.argv.includes('--real-character-design')) {
+    await realCharacterDesignChecks({page,step,savedChat,root,data,output,report})
   } else if (process.argv.includes('--real-variables')) {
     await realVariableLookupChecks({page,step,savedChat,root,output,report})
   } else if (process.argv.includes('--opening-update')) {
