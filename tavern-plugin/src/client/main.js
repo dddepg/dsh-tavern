@@ -7956,9 +7956,9 @@ window.__ModuleLoader__.load({
                 finally { setBusy(false); }
             }
             const h = React.createElement;
-            return h("section", { className: "dsh-tavern-settings-group" },
-                h("label", { className: "dsh-tavern-settings-row" },
-                    h("span", { className: "dsh-tavern-settings-copy" }, h("strong", null, "隐藏上下文注入和思考过程"),
+            return h("section", { className: "dsh-tavern-settings-group dsh-tavern-display-preferences" },
+                h("label", { className: "dsh-tavern-settings-row dsh-tavern-background-task" },
+                    h("div", { className: "dsh-tavern-settings-copy" }, h("strong", { className: "dsh-tavern-settings-title" }, "隐藏上下文注入和思考过程"),
                         h("p", { className: "dsh-tavern-settings-desc" }, "隐藏对话中的上下文注入、已思考和思考过程。仅影响显示，正文、模型请求和存档内容不变。")),
                     h("input", { type: "checkbox", role: "switch", "aria-label": "隐藏上下文注入和思考过程", checked: hidden === true, disabled: hidden === null || busy, onChange: event => save(event.target.checked) })),
                 notice ? h("p", { className: "dsh-tavern-settings-desc", role: "status" }, notice) : null);

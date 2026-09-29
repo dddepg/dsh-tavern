@@ -1816,3 +1816,6 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="context"],
 html.dsh-tavern-hide-process [data-chat-flow-kind="system-prompt"],
 html.dsh-tavern-hide-process .dsh-tavern-assistant-reasoning,
 html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn-process-tool-calls="0"][data-turn-process-subagents="0"]) { display: none !important; }
+
+.dsh-tavern-display-preferences .dsh-tavern-settings-desc { margin: 6px 0 0; }
+.dsh-tavern-display-preferences > [role="status"] { margin: 0; padding: 0 20px 18px; }
