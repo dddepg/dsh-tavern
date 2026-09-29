@@ -1,3 +1,4 @@
+import { backgroundFailureChecks } from './background-failure.mjs'
 import { createConversationPageStore } from '../../tavern-plugin/lib/domain/conversation-page-store.js'
 import { createConversationState } from '../../tavern-plugin/lib/domain/conversation-state.js'
 import { settlementPerformanceChecks, settlementPerformanceInitialVariables } from './settlement-performance.mjs'
@@ -177,7 +178,7 @@ try {
           TAVERN_E2E_PERFORMANCE_DIR: process.argv.includes('--settlement-performance') ? output : '',
           TAVERN_PERF_HISTORY_READY: process.env.TAVERN_PERF_HISTORY_READY || '',
           TAVERN_PERF_BODY_REPEATS: process.env.TAVERN_PERF_BODY_REPEATS || '',
-          TAVERN_E2E_BACKGROUND_DIR: process.argv.includes('--background-lifecycle') ? output : '',
+          TAVERN_E2E_BACKGROUND_DIR: (process.argv.includes('--background-lifecycle') || process.argv.includes('--background-failure')) ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
           TAVERN_E2E_MEMORY_AUDIT: process.argv.includes('--card-memory') ? join(output, 'memory-requests.jsonl') : '',
           TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
@@ -284,6 +285,8 @@ try {
     await realVariableLookupChecks({page,step,savedChat,root,output,report})
   } else if (process.argv.includes('--opening-update')) {
     await openingUpdateChecks({page,step,savedChat,data,output,report,root})
+  } else if (process.argv.includes('--background-failure')) {
+    await backgroundFailureChecks({page,step,savedChat,output,report})
   } else if (recoveryScenario) {
     await surfaceRecoveryChecks({ page, step, savedChat, output, report, root, restartServer })
   } else {

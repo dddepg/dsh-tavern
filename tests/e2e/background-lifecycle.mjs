@@ -5,6 +5,11 @@ export async function backgroundLifecycleChecks({page,step,savedChat,data,output
   const control=value=>writeFile(join(output,'background-control.json'),JSON.stringify(value))
   async function wait(check) {for(let i=0;i<200;i++){if(await check())return;await new Promise(r=>setTimeout(r,100))}throw Error('background lifecycle condition timed out')}
   const audit = async file => (await readFile(join(output,file),'utf8').catch(()=>'' )).trim().split('\n').filter(Boolean).map(JSON.parse)
+  async function retry() {
+    await page.getByRole('button',{name:'重试变量结算',exact:true}).click()
+    await page.getByPlaceholder('例如：这轮还没有交付物品，不要扣除库存。').fill('E2E 修正金币为四十')
+    await page.getByRole('button',{name:'重新结算',exact:true}).click()
+  }
   async function stopAttempt(attempt) {
     await wait(async()=> (await audit('background-attempts.jsonl')).some(row=>row.attempt===attempt))
     const id=(await savedChat()).timeline.participants.background.sessionId
@@ -13,7 +18,7 @@ export async function backgroundLifecycleChecks({page,step,savedChat,data,output
     await control({mode:'pass'})
     await wait(async()=>!!JSON.parse(await readFile(join(data,'background-session-retirement.json'),'utf8').catch(()=>'{}'))[id])
     await wait(async()=> (await audit('background-late.jsonl')).some(row=>row.attempt===attempt && row.tool==='mvu_submit_update'))
-    await page.getByRole('button',{name:'重试后台结算',exact:true}).waitFor()
+    await page.getByRole('button',{name:'重试变量结算',exact:true}).waitFor()
     assert.equal((await savedChat()).messages.at(-1).variables[0].stat_data.gold,10)
     return id
   }
@@ -30,16 +35,17 @@ export async function backgroundLifecycleChecks({page,step,savedChat,data,output
   })
   await step('连续重试并再次取消，不复用已退休会话',async()=>{
     await control({mode:'hold',attempt:2})
-    await page.getByRole('button',{name:'重试后台结算',exact:true}).click()
+    await retry()
     report.secondRetiredSession=await stopAttempt(2)
     assert.notEqual(report.secondRetiredSession,report.retiredSession)
   })
   await step('不刷新页面重试结算，换新会话并真实落盘',async()=>{
-    await page.getByRole('button',{name:'重试后台结算',exact:true}).click()
+    await retry()
     await wait(async()=> (await savedChat()).messages.at(-1).variables[0].stat_data.gold===40)
     const chat=await savedChat();report.currentBackground=chat.timeline.participants.background.sessionId
     assert.notEqual(report.currentBackground,report.retiredSession)
     assert.notEqual(report.currentBackground,report.secondRetiredSession)
+    await page.getByText('酒馆状态',{exact:true}).filter({visible:true}).first().click()
     await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({hasText:/^金币：40$/}).waitFor()
     await page.screenshot({path:join(output,'background-retried.png'),fullPage:true})
     await writeFile(join(output,'background-ui-retried.txt'),await page.locator('body').innerText())
