@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "3d96a0a4ef660186aa556df68b52deb0f59c8c9e",
-  "releaseSequence": 424,
+  "revision": "a4ddc341e7835b20f9b31bfaece21dc5c55463b8",
+  "releaseSequence": 425,
   "version": "2.4.0",
   "files": [
     {
@@ -3551,8 +3551,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/client.js",
-      "sha256": "004226f75b3962e289cdec0598f4d357d8d4416f8d25877841a684b19acc96d4",
-      "size": 269910
+      "sha256": "807447a06e2b2fe284c97aeb4ecbdc7fe504bfb79c0d52e83391305242d606b0",
+      "size": 269725
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/index.js",
