@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createServer } from 'node:http'
+import { EventEmitter } from 'node:events'
 import test, { beforeEach, afterEach, mock } from 'node:test'
 
 import { createApplicationUpdater as createUpdater, sanitizeUpdateError } from '../tavern-plugin/lib/application-updater.js'
@@ -30,6 +31,8 @@ afterEach(() => {
 
 function createApplicationUpdater(options) {
   return createUpdater({
+    // Most fixtures model a direct child; Windows broker fixtures opt in below.
+    platform: 'linux',
     // CDN fallback is explicit in each fixture; never fetch live metadata.
     fetchCdnMetadata: async () => { throw new Error('CDN unavailable in GitHub fixture') },
     ...options,
@@ -669,7 +672,7 @@ test('更新任务正在运行时拒绝重复启动', async () => {
   }
 })
 
-test('超过十五分钟的更新自动标记为中断并持久化', async () => {
+test('未登记进程且超过十五分钟的更新标记中断并允许修复', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-updater-'))
   try {
     const dataRoot = path.join(root, 'profile-data/tavern/data')
@@ -685,10 +688,10 @@ test('超过十五分钟的更新自动标记为中断并持久化', async () =>
     })
 
     assert.deepEqual(await updater.status(), {
-      phase: 'failed', host: 'desktop', failedAt: 901000, error: '上次更新已中断', currentVersion: 'unknown', currentCommit: '',
+      phase: 'failed', repairRequired: true, host: 'desktop', failedAt: 901000, error: '上次更新已中断', currentVersion: 'unknown', currentCommit: '',
     })
     assert.deepEqual(JSON.parse(await readFile(statusFile, 'utf8')), {
-      phase: 'failed', host: 'desktop', failedAt: 901000, error: '上次更新已中断',
+      phase: 'failed', repairRequired: true, host: 'desktop', failedAt: 901000, error: '上次更新已中断',
     })
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -712,7 +715,7 @@ test('更新进程已经退出时立即恢复按钮', async () => {
     })
 
     assert.deepEqual(await updater.status(), {
-      phase: 'failed', host: 'desktop', failedAt: 2000, error: '上次更新已中断', currentVersion: 'unknown', currentCommit: '',
+      phase: 'failed', repairRequired: true, host: 'desktop', failedAt: 2000, error: '上次更新已中断', currentVersion: 'unknown', currentCommit: '',
     })
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -804,11 +807,11 @@ test('旧版未确认完成的 Desktop 更新恢复为可重试失败状态', as
   }
 })
 
-test('Windows UI 更新通过短生命周期 helper 与服务进程树脱钩', async () => {
+test('Windows UI 更新等待独立启动 helper 成功退出', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-updater-'))
   try {
     const calls = []
-    const child = { pid: 4321, once(event, listener) { if (event === 'spawn') queueMicrotask(listener); return this }, unref() {} }
+    const child = { pid: 4321, once(event, listener) { if (event === 'close') queueMicrotask(() => listener(0)); return this }, unref() {} }
     const updater = createApplicationUpdater({
       ...verifiedUpdate,
       dataRoot: path.join(root, 'profile-data/tavern/data'),
@@ -923,4 +926,66 @@ test('CDN 命中旧清单时仍以 GitHub 新提交判断更新', async t => {
   assert.equal(result.latestCommit, 'b'.repeat(40))
   assert.equal(result.checkSource, 'github')
   assert.equal(cdnCalls, 0)
+})
+
+
+test('存活的更新超过十五分钟仍禁止再次启动', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-alive-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'running', host: 'cli', startedAt: 1000, pid: 4321 }))
+  const updater = createApplicationUpdater({ ...verifiedUpdate, dataRoot: root, sourceRoot: root, dshHome: root,
+    now: () => 1000 + 23 * 60 * 1000, isProcessAlive: () => true,
+    spawnProcess() { assert.fail('仍在更新时不能启动第二个安装器') },
+  })
+  assert.equal((await updater.status()).phase, 'running')
+  await assert.rejects(updater.check, /更新正在进行/)
+  await assert.rejects(updater.start, /更新正在进行/)
+})
+
+
+test('Windows helper 启动失败立即持久化错误，不伪报已开始更新', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-helper-error-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const updater = createApplicationUpdater({ ...verifiedUpdate, dataRoot: root, sourceRoot: root, dshHome: root, platform: 'win32',
+    spawnProcess() {
+      const child = new EventEmitter()
+      child.stderr = new EventEmitter()
+      child.unref = () => {}
+      queueMicrotask(() => { child.emit('spawn'); child.stderr.emit('data', Buffer.from('Windows 更新器启动失败：WMI 访问被拒绝')); child.emit('close', 1) })
+      return child
+    },
+  })
+  await assert.rejects(updater.start, /WMI 访问被拒绝/)
+  const saved = JSON.parse(await readFile(path.join(root, 'update-status.json'), 'utf8'))
+  assert.equal(saved.phase, 'failed')
+  assert.match(saved.error, /WMI 访问被拒绝/)
+})
+
+
+test('同时点击更新只启动一个安装器', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-concurrent-'))
+  t.after(() => rm(root, {recursive:true, force:true}))
+  let spawned = 0
+  const updater = createApplicationUpdater({...verifiedUpdate, dataRoot:root, sourceRoot:root, dshHome:root,
+    spawnProcess() { spawned++; return {unref(){}} },
+  })
+  const results = await Promise.allSettled([updater.start(), updater.start()])
+  assert.equal(spawned, 1)
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1)
+  assert.match(results.find(r => r.status === 'rejected').reason.message, /更新正在进行/)
+})
+
+test('安装进程中断后即使源码已是目标提交也必须允许修复安装', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-interrupted-repair-'))
+  t.after(() => rm(root, {recursive:true, force:true}))
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({phase:'running', host:'cli', startedAt:1000, pid:4321}))
+  let spawned = 0
+  const updater = createApplicationUpdater({...verifiedUpdate, dataRoot:root, sourceRoot:root, dshHome:root,
+    fetchLatestCommit:async () => knownIdentity.currentCommit,
+    compareCommits:async () => 'identical', isProcessAlive:() => false,
+    spawnProcess() { spawned++; return {unref(){}} },
+  })
+  assert.equal((await updater.status()).repairRequired, true)
+  assert.equal((await updater.start()).phase, 'running')
+  assert.equal(spawned, 1)
 })

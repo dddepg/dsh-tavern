@@ -343,6 +343,8 @@ const [manifest,base,destination,installed]=process.argv.slice(2);
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const status=message=>console.log('DSH_STATUS '+message);
 const controller=new AbortController();
+const budget=AbortSignal.timeout(300000);
+const signal=AbortSignal.any([controller.signal,budget]);
 (async()=>{
  const metadata=JSON.parse(await fs.readFile(manifest,'utf8'));
  const files=metadata.files;
@@ -353,29 +355,31 @@ const controller=new AbortController();
  const report=()=>status(`下载代码（${source}）：${done}/${files.length} 文件，复用 ${reused}，已下载 ${(bytes/1048576).toFixed(1)} MB`);
  report();
  await Promise.all(Array.from({length:Math.min(6,files.length)},async()=>{
-  while(next<files.length&&!controller.signal.aborted){
+  while(next<files.length){
+   signal.throwIfAborted();
    const file=files[next++],target=path.join(destination,...file.path.split('/'));
    let content;
    try {const local=await fs.readFile(path.join(installed,...file.path.split('/')));if(hash(local)===file.sha256.toLowerCase()){content=local;reused++;}}catch{}
    if(!content)for(let attempt=1;attempt<=2;attempt++){
     try {
-     const response=await fetch(`${base}@${metadata.revision}/${file.path.split('/').map(encodeURIComponent).join('/')}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)])});
+     const response=await fetch(`${base}@${metadata.revision}/${file.path.split('/').map(encodeURIComponent).join('/')}`,{signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
      if(!response.ok)throw Error(`HTTP ${response.status}`);
      content=Buffer.from(await response.arrayBuffer());
      if(hash(content)!==file.sha256.toLowerCase())throw Error('文件校验不符');
      bytes+=content.length;break;
     }catch(error){
-     if(controller.signal.aborted)throw error;
+     if(signal.aborted)throw error;
      const reason=error.name==='TimeoutError'?'请求超过 30 秒未完成':String(error.cause?.code||error.message);
      status(`下载失败（${source}）：${file.path}，${reason}；尝试 ${attempt}/2${attempt<2?'，正在重试':'，将切换备用方案'}。`);
      if(attempt===2){controller.abort();throw Error(`下载失败：${file.path}（${reason}）`);}
     }
    }
-   if(controller.signal.aborted)return;
+   signal.throwIfAborted();
    await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,content);done++;report();
   }
  }));
-})().catch(error=>{controller.abort();console.error(error.message);process.exitCode=1});
+ signal.throwIfAborted();
+})().catch(error=>{controller.abort();console.error(budget.aborted?'备用源下载超过 5 分钟，将切换备用方案':error.message);process.exitCode=1});
 '@, (New-Object Text.UTF8Encoding($false)))
       Invoke-InstallCommand 'source.files' 'node' @($CdnDownloader, $DownloadManifest, $CdnRootUrl, $CdnSource, $AppDir)
       [IO.File]::WriteAllText((Join-Path $CdnSource 'dsh-tavern-runtime.json'), (($Metadata | ConvertTo-Json -Depth 10) + [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))

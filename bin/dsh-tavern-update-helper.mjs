@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
+import { launchWindowsUpdater } from './windows-update-launch.mjs'
+import { redactUpdateDiagnostic } from './update-diagnostics.mjs'
 
 const [command, ...args] = process.argv.slice(2)
 if (!command) {
@@ -8,10 +10,15 @@ if (!command) {
   process.exit(2)
 }
 
-const child = spawn(command, args, {
-  detached: true,
-  windowsHide: true,
-  stdio: 'ignore',
-  env: process.env,
-})
-child.unref()
+try {
+  if (process.platform === 'win32') {
+    launchWindowsUpdater(command, args)
+  } else {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore', env: process.env })
+    await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject) })
+    child.unref()
+  }
+} catch (error) {
+  process.stderr.write(redactUpdateDiagnostic(error.message) + '\n')
+  process.exitCode = 1
+}

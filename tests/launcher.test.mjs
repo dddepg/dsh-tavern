@@ -15,7 +15,6 @@ const launcherSource = await readFile(new URL('../bin/dsh-tavern.mjs', import.me
 const serviceSource = await readFile(new URL('../bin/service-lifecycle.mjs', import.meta.url), 'utf8')
 const installationSource = await readFile(new URL('../bin/profile-installation.mjs', import.meta.url), 'utf8')
 const updateSource = await readFile(new URL('../bin/application-update.mjs', import.meta.url), 'utf8')
-const updateHelperSource = await readFile(new URL('../bin/dsh-tavern-update-helper.mjs', import.meta.url), 'utf8')
 const profilePatch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 const managedProfilePatch = await readFile(new URL('../tavern-plugin/cordis.patch.yml', import.meta.url), 'utf8')
 const profileConfigurationSource = await readFile(new URL('../bin/profile-configuration.mjs', import.meta.url), 'utf8')
@@ -183,8 +182,6 @@ test('代码已覆盖但安装器失败时仍保留失败状态', async () => {
 test('Windows UI 更新隐藏 PowerShell 窗口并保持 UTF-8 输出', () => {
   assert.match(updateSource, /System\.Text\.UTF8Encoding/)
   assert.match(updateSource, /spawnSync\(command, args, \{[\s\S]*?windowsHide: true,/)
-  assert.match(updateHelperSource, /detached: true/)
-  assert.match(updateHelperSource, /windowsHide: true/)
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {

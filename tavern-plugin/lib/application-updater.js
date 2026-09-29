@@ -367,10 +367,14 @@ export function createApplicationUpdater(options) {
       }
       const checkedAt = now()
       const updatePid = Number(current.pid)
-      const stopped = Number.isInteger(updatePid) && updatePid > 0 && !isProcessAlive(updatePid)
-      if (current.phase === 'running' && (stopped || checkedAt - Number(current.startedAt || 0) >= RUNNING_TIMEOUT_MS)) {
+      const hasPid = Number.isInteger(updatePid) && updatePid > 0
+      const stopped = hasPid && !isProcessAlive(updatePid)
+      // Elapsed time cannot prove that a live installer has stopped. Otherwise
+      // a slow download unlocks a second installer against the same files.
+      const abandonedLaunch = !hasPid && checkedAt - Number(current.startedAt || 0) >= RUNNING_TIMEOUT_MS
+      if (current.phase === 'running' && (stopped || abandonedLaunch)) {
         const interrupted = {
-          phase: 'failed',
+          phase: 'failed', repairRequired: true,
           host: installHostOf({ dshTavern: { host: current.host } }),
           failedAt: checkedAt,
           error: '上次更新已中断',
@@ -414,7 +418,7 @@ export function createApplicationUpdater(options) {
     const identity = await localIdentity(true)
     record('identity', identity)
     const current = await statusWithIdentity(identity)
-    if (current.phase === 'running' && now() - Number(current.startedAt || 0) < RUNNING_TIMEOUT_MS) {
+    if (current.phase === 'running') {
       throw new Error('更新正在进行，暂时无法重新检查')
     }
     const installHost = await host()
@@ -469,7 +473,7 @@ export function createApplicationUpdater(options) {
     const identity = await localIdentity(true)
     record('identity', identity)
     const current = await statusWithIdentity(identity)
-    if (current.phase === 'running' && now() - Number(current.startedAt || 0) < RUNNING_TIMEOUT_MS) {
+    if (current.phase === 'running') {
       throw new Error('更新正在进行，请勿重复启动')
     }
     const installHost = await host()
@@ -517,7 +521,7 @@ export function createApplicationUpdater(options) {
         cwd: sourceRoot,
         detached: true,
         windowsHide: true,
-        stdio: 'ignore',
+        stdio: platform === 'win32' ? ['ignore', 'ignore', 'pipe'] : 'ignore',
         env: process.versions.electron
           ? {
               ...process.env,
@@ -531,13 +535,17 @@ export function createApplicationUpdater(options) {
       })
       if (typeof child.once === 'function') {
         await new Promise(function (resolve, reject) {
-          child.once('spawn', resolve)
+          if (platform === 'win32') {
+            let launchError = ''
+            child.stderr?.on('data', chunk => { launchError = (launchError + chunk.toString('utf8')).slice(-6000) })
+            child.once('close', code => code === 0 ? resolve() : reject(new Error(sanitizeUpdateError(launchError.trim() || `Windows 更新器启动失败（退出码 ${code}）`))))
+          } else child.once('spawn', resolve)
           child.once('error', reject)
         })
       }
       child.unref()
       const childPid = Number(child.pid)
-      // On Windows this PID belongs to the short-lived double-detach helper.
+      // On Windows this PID belongs to the short-lived WMI launch helper.
       // The real updater writes its own PID before beginning the delayed update.
       if (platform !== 'win32' && Number.isInteger(childPid) && childPid > 0) {
         running.pid = childPid
@@ -551,11 +559,20 @@ export function createApplicationUpdater(options) {
     return running
   }
 
+  // Reserve the operation before its first await. Two simultaneous clicks can
+  // otherwise both read idle before either persists its running status.
+  let actionInFlight = false
   function traced(action, operation) {
-    return () => diagnosticContext.run(randomUUID(), () => stage(action, async () => {
-      record('environment', { platform, arch: process.arch, nodeVersion: process.version, host: await host() })
-      return operation()
-    }))
+    return async () => {
+      if (actionInFlight) throw new Error('检查或更新正在进行，请稍后重试')
+      actionInFlight = true
+      try {
+        return await diagnosticContext.run(randomUUID(), () => stage(action, async () => {
+          record('environment', { platform, arch: process.arch, nodeVersion: process.version, host: await host() })
+          return operation()
+        }))
+      } finally { actionInFlight = false }
+    }
   }
   return { check: traced('check', check), start: traced('start', start), status, diagnostics: () => readUpdateDiagnostics(dataRoot) }
 }
