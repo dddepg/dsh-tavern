@@ -90,7 +90,7 @@ window.__ModuleLoader__.load({
 		/** Sentinel meaning "no custom skin — follow the built-in appearance". */
 		const DEFAULT_SKIN = "system";
 		/** Default wash opacity (0..1) applied to the translucent surfaces. */
-		const DEFAULT_WALLPAPER_OPACITY = 0.8;
+		const DEFAULT_WALLPAPER_OPACITY = 1;
 		/** Default wallpaper blur radius in px. */
 		const DEFAULT_WALLPAPER_BLUR = 0;
 		/** localStorage key holding the sidebar wash opacity (0..1). */
@@ -110,13 +110,10 @@ window.__ModuleLoader__.load({
 		 * rendered differently depending on which reader answered. A single
 		 * table cannot drift.
 		 *
-		 * opacity 0.28 with the link OFF is the author's shipped look, and it is
-		 * deliberately also the upgrade fallback: with the link ON the sidebar
-		 * transparency slider is a no-op (`shadeTokens2()` follows the canvas
-		 * alpha and ignores SIDEBAR_OPACITY_KEY), which is exactly the "有反馈、
-		 * 无效果" report in issue #55 — absence must never resolve to it.
+		 * All transparency controls default to 0% (fill opacity 1).
+		 * Keep the sidebar link OFF so its slider remains independently usable.
 		 */
-		const SIDEBAR_DEFAULTS = { opacity: 0.28, link: false };
+		const SIDEBAR_DEFAULTS = { opacity: 1, link: false };
 		/** Default sidebar wash opacity (0..1). */
 		const DEFAULT_SIDEBAR_OPACITY = SIDEBAR_DEFAULTS.opacity;
 		/** Default link flag (1 = follow the canvas wash, 0 = own slider). */
@@ -124,13 +121,13 @@ window.__ModuleLoader__.load({
 		/** localStorage key holding the popup / option-card fill opacity (0..1). */
 		const MODAL_OPACITY_KEY = "dsh-dream-skin:modal-opacity";
 		/** Default fill opacity for popups & the user-options card (kept readable). */
-		const DEFAULT_MODAL_OPACITY = 0.94;
+		const DEFAULT_MODAL_OPACITY = 1;
 		/** CSS variable carrying the current popup fill weight (a percentage). */
 		const MODAL_FILL_VAR = "--dsh-dream-skin-modal-fill";
 		/** localStorage key holding the composer (chat input) fill opacity (0..1). */
 		const COMPOSER_OPACITY_KEY = "dsh-dream-skin:composer-opacity";
-		/** Default composer fill opacity — readable, yet visibly glassy. */
-		const DEFAULT_COMPOSER_OPACITY = 0.85;
+		/** Default composer fill opacity — 0% transparency. */
+		const DEFAULT_COMPOSER_OPACITY = 1;
 		/** CSS variable carrying the composer fill weight (a percentage). */
 		const COMPOSER_FILL_VAR = "--dsh-dream-skin-composer-fill";
 		/**
@@ -4493,7 +4490,7 @@ window.__ModuleLoader__.load({
 			[WALLPAPER_KEY]: null,
 			[WALLPAPER_URL_KEY]: null,
 			[WALLPAPER_GRADIENT_KEY]: null,
-			[WALLPAPER_OPACITY_KEY]: "0.19",
+			[WALLPAPER_OPACITY_KEY]: String(DEFAULT_WALLPAPER_OPACITY),
 			[WALLPAPER_BLUR_KEY]: "3",
 			// Read from SIDEBAR_DEFAULTS, never restated: the reader fallbacks
 			// and this seed share one table (issue #55 review).
@@ -4501,8 +4498,8 @@ window.__ModuleLoader__.load({
 			[SIDEBAR_LINK_KEY]: SIDEBAR_DEFAULTS.link ? "1" : "0",
 			[WALLPAPER_AUTODIM_KEY]: "1",
 			[WALLPAPER_FOLLOWS_SKIN_KEY]: "0",
-			[COMPOSER_OPACITY_KEY]: "0.4",
-			[MODAL_OPACITY_KEY]: "0.6",
+			[COMPOSER_OPACITY_KEY]: String(DEFAULT_COMPOSER_OPACITY),
+			[MODAL_OPACITY_KEY]: String(DEFAULT_MODAL_OPACITY),
 			[MATERIAL_PRESET_KEY]: "frosted",
 			// Factory refresh OFF (blue-team B7): polling a third-party API on the
 			// user's behalf (even hourly) must be an explicit opt-in, never a
