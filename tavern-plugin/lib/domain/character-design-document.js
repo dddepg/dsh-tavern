@@ -1,3 +1,5 @@
+import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot } from './character-design-worldbook.js'
+
 export const CHARACTER_DESIGN_READ_TOOL_NAME = 'character_design_read'
 export const CHARACTER_DESIGN_SAVE_TOOL_NAME = 'character_design_save'
 
@@ -106,7 +108,7 @@ export const CHARACTER_DESIGN_READ_TOOL = Object.freeze({
 
 export const CHARACTER_DESIGN_SAVE_TOOL = Object.freeze({
   name: CHARACTER_DESIGN_SAVE_TOOL_NAME,
-  description: '保存当前对话的重要人物完整方案。人物设计独立于人物卡变量；若当前卡另有状态变量，由对应结算工具单独更新。',
+  description: '保存当前对话的重要人物完整方案，并自动写入本局世界书。新人物以姓名和别名触发非常驻条目，后续保存更新对应条目；不修改原始卡库或世界书库，不覆盖手动修改的正文。人物卡状态变量由对应结算工具单独更新。',
   parameters: Object.freeze({
     type: 'object', additionalProperties: false,
     properties: {
@@ -165,6 +167,7 @@ export function createCharacterDesignDocumentSession(options = {}) {
       createdAt: created ? timestamp : Math.max(0, Number(existing.createdAt) || timestamp),
       updatedAt: timestamp
     })
+    const applied = options.onSave?.(clone(character))
     const characters = current.characters.slice()
     if (created) characters.push(character)
     else characters[characters.indexOf(existing)] = character
@@ -172,7 +175,7 @@ export function createCharacterDesignDocumentSession(options = {}) {
       characters, revision: Math.max(0, Number(current.revision) || 0) + 1, updatedAt: timestamp
     })
     dirty = true
-    return { ok: true, created, name: character.name, revision: current.revision }
+    return { ok: true, created, name: character.name, revision: current.revision, ...applied }
   }
 
   async function execute(call) {
@@ -212,7 +215,10 @@ export function createCharacterDesignDocumentTools(options = {}) {
       let output = JSON.stringify({ ok: false, retryable: true, error: '人物设计所属聊天不存在' })
       await store.updateChat(chatId, async function (chat) {
         if (!chat) return undefined
-        const session = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now })
+        const snapshot = characterDesignWorldbookSnapshot(chat, chat.openingWorldbookSnapshot?.version === 1
+          ? null : await options.readWorldBook?.(chat))
+        const session = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now,
+          onSave: character => applyCharacterDesignWorldbook(chat, character, snapshot) })
         output = await session.execute(call)
         const result = JSON.parse(output)
         if (result.ok !== true || !session.changed()) return undefined

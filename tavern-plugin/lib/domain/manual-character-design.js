@@ -1,4 +1,5 @@
 import { CHARACTER_DESIGN_SAVE_TOOL_NAME, createCharacterDesignDocumentSession } from './character-design-document.js'
+import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot } from './character-design-worldbook.js'
 
 /** One explicit request, with drafts committed only after the agent succeeds. */
 export function createManualCharacterDesign({ store, runAgent, selection, beginTask, ensureSession = async () => {}, onError = error => console.error('人物设计保存状态失败', error) }) {
@@ -37,9 +38,18 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
     let result
     try {
       await ensureSession(sessionId)
-      const draft = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument })
-      let saveError = ''
       const card = await store.readCard(chat)
+      const snapshot = characterDesignWorldbookSnapshot(chat, chat.openingWorldbookSnapshot?.version === 1
+        ? null : await store.readWorldBook?.(chat, card))
+      const worldbookDraft = { openingWorldbookSnapshot: snapshot }
+      const savedCharacters = new Map()
+      const draft = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument,
+        onSave: character => {
+          const applied = applyCharacterDesignWorldbook(worldbookDraft, character)
+          savedCharacters.set(character.name, character)
+          return applied
+        } })
+      let saveError = ''
       const recent = (chat.messages || []).filter(message => message.role === 'user' || message.role === 'assistant').slice(-12)
         .map(message => ({ role: message.role, text: message.sourceText || message.text || '' }))
       result = await runAgent({
@@ -63,6 +73,7 @@ export function createManualCharacterDesign({ store, runAgent, selection, beginT
         ? '人物档案保存失败：' + saveError + '。模型未完成修正，请重试。'
         : '模型未调用人物档案保存工具，本次未保存设计档案。请重试；若持续出现，请检查后台模型是否支持工具调用。')
       const completed = await taskRun.commit({ participant: taskRun.participant(result), stateChanged: true, apply: current => {
+        for (const character of savedCharacters.values()) applyCharacterDesignWorldbook(current, character, snapshot)
         current.characterDesignDocument = draft.document()
         current.characterDesignTask = { status: 'done', guidance, error: '' }
         return current

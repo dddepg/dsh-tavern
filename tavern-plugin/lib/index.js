@@ -2038,10 +2038,12 @@ export async function apply(ctx) {
   })
   const characterDesignDocuments = createCharacterDesignDocumentTools({
     store: { readChat, updateChat },
+    readWorldBook: async chat => worldBooks.bound(chat.cardPath, await readChatCard(chat), chat),
     now: Date.now
   })
   const manualCharacterDesign = createManualCharacterDesign({
-    store: { chatForSession, updateChat, readCard: readChatCard },
+    store: { chatForSession, updateChat, readCard: readChatCard,
+      readWorldBook: (chat, card) => worldBooks.bound(chat.cardPath, card, chat) },
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
     beginTask: async (chat, sessionId) => {
       if (agentRegistry.get(sessionId)?.phase?.kind === 'running' || chat.regenInProgress) throw new Error('前台正在生成，请完成后再设计人物。')

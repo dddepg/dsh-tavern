@@ -12,8 +12,8 @@ function coordinator(read, write) {
     updateChat: async (_id, fn) => { const chat = fn(structuredClone(read())); write(chat); return chat }
   } })
 }
-function fixture(runAgent) {
-  let chat = { id: 'chat', sessionId: 'session', messages: [{ role: 'assistant', text: '正文保持原样', variables: [{ hp: 10 }] }] }
+function fixture(runAgent, initial = {}) {
+  let chat = { id: 'chat', sessionId: 'session', messages: [{ role: 'assistant', text: '正文保持原样', variables: [{ hp: 10 }] }], ...initial }
   const tasks = coordinator(() => chat, value => { chat = value })
   const api = createManualCharacterDesign({
     beginTask: value => tasks.begin(value, 'character-design'),
@@ -21,7 +21,7 @@ function fixture(runAgent) {
       updateChat: async (_id, update) => { chat = update(structuredClone(chat)); return chat } },
     runAgent, selection: () => ({ provider: 'fixture', model: 'fixture' })
   })
-  return { api, tasks, get: () => structuredClone(chat) }
+  return { api, tasks, get: () => structuredClone(chat), edit: fn => fn(chat) }
 }
 test('手动设计执行一次，成功后保存档案且不改正文变量', async () => {
   let calls = 0
@@ -34,6 +34,7 @@ test('手动设计执行一次，成功后保存档案且不改正文变量', as
     assert.match(input.messages[0].content[0].text, /设计张三/)
     assert.equal(JSON.parse(await input.onToolCall({ name: 'character_design_save', arguments: design })).ok, true)
     assert.equal(run.get().characterDesignDocument, undefined, '完成前不写入正式档案')
+    assert.equal(run.get().openingWorldbookSnapshot, undefined, '完成前不写入本局世界书')
   })
   const before = run.get().messages
   await run.api.start({ sessionId: 'session', guidance: '设计张三' })
@@ -41,6 +42,7 @@ test('手动设计执行一次，成功后保存档案且不改正文变量', as
   assert.equal(calls, 1)
   assert.equal(run.get().characterDesignTask.status, 'done')
   assert.equal(run.get().characterDesignDocument.characters[0].name, '张三')
+  assert.match(run.get().openingWorldbookSnapshot.document.entries[0].content, /张三/)
   assert.deepEqual(run.get().messages, before)
 })
 test('模型保存草稿后失败不提交，要求保留且可重试', async () => {
@@ -51,6 +53,7 @@ test('模型保存草稿后失败不提交，要求保留且可重试', async ()
   })
   await run.api.start({ sessionId: 'session', guidance: '设计张三' }); await run.api.wait('chat')
   assert.equal(run.get().characterDesignDocument, undefined)
+  assert.equal(run.get().openingWorldbookSnapshot, undefined)
   assert.equal(run.api.project(run.get()).status, 'failed')
   assert.equal(run.get().characterDesignTask.guidance, '设计张三')
   fail = false
@@ -147,4 +150,24 @@ test('后台任务运行时不能启动人物设计，也不调用模型', async
   await assert.rejects(run.api.start({ sessionId: 'session' }), /后台 Agent 正在执行/)
   assert.equal(calls, 0)
   assert.equal(run.get().characterDesignTask, undefined)
+})
+
+test('提交时保留同时新增的世界书条目，发生手动正文冲突则拒绝整次提交', async () => {
+  let concurrentEdit = () => {}
+  const run = fixture(async input => {
+    assert.equal(JSON.parse(await input.onToolCall({ name: 'character_design_save', arguments: design })).ok, true)
+    run.edit(concurrentEdit)
+  })
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  concurrentEdit = chat => { chat.openingWorldbookSnapshot.document.entries[50] = { uid: 50, key: ['城镇'], content: '手动添加的城镇', disable: false } }
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'done')
+  assert.equal(run.get().openingWorldbookSnapshot.document.entries[50].content, '手动添加的城镇')
+  const before = run.get().characterDesignDocument
+  concurrentEdit = chat => { chat.openingWorldbookSnapshot.document.entries[0].content = '并发手动修改的人物' }
+  await run.api.start({ sessionId: 'session' }); await run.api.wait('chat')
+  assert.equal(run.get().characterDesignTask.status, 'failed')
+  assert.match(run.get().characterDesignTask.error, /已被手动修改/)
+  assert.equal(run.get().openingWorldbookSnapshot.document.entries[0].content, '并发手动修改的人物')
+  assert.deepEqual(run.get().characterDesignDocument, before)
 })
