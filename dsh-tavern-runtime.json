@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "a4ddc341e7835b20f9b31bfaece21dc5c55463b8",
-  "releaseSequence": 425,
+  "revision": "5590146a0640db22de50502d2e2c425dafe288dc",
+  "releaseSequence": 426,
   "version": "2.4.0",
   "files": [
     {
@@ -371,13 +371,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "a12dfcfdc63b39d6a595aa9d0afbcf1374b84c147c1620c718e01773eb3e07a9",
-      "size": 160825
+      "sha256": "07f4c451c080de70d6dc23f2b9d1c9a05a58a946ced0778d1f466a4c7bda6a58",
+      "size": 161893
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "7cf66d54748a237396fa0a56bff2f2869179f47e7fb26b736c37e1ed2652215a",
-      "size": 1267169
+      "sha256": "483901bb91633b18b11d453ce9be9b19505236b3e7035a7057eec9e6679fbd5d",
+      "size": 1271948
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -1616,8 +1616,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-settings.js",
-      "sha256": "eb2b4ccb64c77f5c658d6ceddd40aa1f6a0ea6b963d8103824e9e31e53499b9b",
-      "size": 6940
+      "sha256": "c9d4be4612cbb261ad2c2c73119041d351039730e12a6a58d1b72cf4e5ba0697",
+      "size": 7253
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-skill-provider.js",
@@ -1786,8 +1786,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "583bec542b75128b9a8e92dee3766dfae9952f9774e9adee2108e372fb9cfc51",
-      "size": 332630
+      "sha256": "f3b5fc3f1a6cf7c8219159dfc10f738afb0332fb93cbcdfd7c42edd468288f9f",
+      "size": 332755
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -4226,8 +4226,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "a09b868a18fea0e995cf972a27d40d0f423c93678fc2ecb3d41f77b897d08822",
-      "size": 853342
+      "sha256": "7c606125637c68ac395224aa177b43f44373db380c36601eabf6270b8331e2e2",
+      "size": 857026
     },
     {
       "path": "tavern-plugin/src/client/modules/assistant-visibility.js",
