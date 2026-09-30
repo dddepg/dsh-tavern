@@ -3,6 +3,7 @@ import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } fro
 // No paid requests, credentials, or user chats are accessed.
 import { sessionEvents } from '../../tavern-plugin/lib/domain/session-events.js'
 import { createServer } from 'node:http'
+import { EventEmitter, once } from 'node:events'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +30,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
   ctx.baseUrl = bootUrl.href
   const disposeHost = await setupHost?.(ctx)
   const requests = [], imageRequests = []
+  const imageEvents = new EventEmitter()
   let referenceQuery = ''
   let characterQuery = ''
   let useVisualState = false
@@ -141,6 +143,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
       } else {
         let body = ''; for await (const chunk of req) body += chunk
         imageRequests.push(JSON.parse(body))
+        imageEvents.emit('request')
         const attachment = await ctx.attachments.saveImage({ data: png, mediaType: 'image/png', name: 'plugin-fixture' })
         res.end(JSON.stringify({ provider: 'openai', model: 'fixture-plugin-image', attachment }))
       }
@@ -154,6 +157,7 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
     if (req.method === 'GET' && req.url === '/picture') { res.setHeader('Content-Type', 'image/png'); res.end(png); return }
     let body = ''; for await (const chunk of req) body += chunk
     imageRequests.push(JSON.parse(body))
+    imageEvents.emit('request')
     if (holdNext) { holdNext = false; return }
     if (failNext) { const failure = failNext; failNext = false; res.writeHead(failure.status).end(JSON.stringify({error: {message: failure.message, param: 'size', code: 'invalid_parameter'}})); return }
     if (url.pathname.endsWith('/prompt')) {
@@ -195,6 +199,9 @@ export async function createSceneImageNativeRuntime(bootPath, { unifiedPlugin = 
     failNext(status = 503, message = 'test failure') { failNext = { status, message } },
     failNextSave() { failSave = true },
     holdNextImage() { holdNext = true },
+    async waitForImageRequest({ timeout = 30000 } = {}) {
+      if (!imageRequests.length) await once(imageEvents, 'request', { signal: AbortSignal.timeout(timeout) })
+    },
     lookupReferences(query) { referenceQuery = query },
     lookupCharacterDesigns(name) { characterQuery = name },
     useVisualState() { useVisualState = true },

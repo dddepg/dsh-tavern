@@ -49,7 +49,7 @@ test('人物设计是现有后台 Agent 按需加载的内置 Skill', async () =
   assert.match(skill.content, /不设固定数量上限/)
   assert.doesNotMatch(skill.content, /仅在卡片已有人物库/)
   assert.match(skill.content, /本次任务不提交姿势、变量或候选项/)
-  assert.match(skill.content, /不[^\n]*前台正文 Agent/)
+  assert.match(skill.content, /不向前台追加设计说明/)
 })
 
 test('通用状态模板重新读取变量并刷新 DOM，支持新增与恢复且跳过内部字段', async () => {

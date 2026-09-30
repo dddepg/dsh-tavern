@@ -1,3 +1,4 @@
+import { createSettlementProgressGuard } from '../tavern-plugin/lib/domain/settlement-progress-guard.js'
 import { readSettlementInput } from '../tavern-plugin/lib/domain/settlement-input.js'
 import {applyJsonChanges} from '../tavern-plugin/lib/domain/json-mutation.js'
 import { createSettlementJobs } from '../tavern-plugin/lib/domain/settlement-jobs.js'
@@ -46,7 +47,7 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
   }).chat
   const running = beginRunning ? await tasks.begin(current, 'settlement') : null
   const sandbox = vm.createContext({
-    readSettlementInput, chatPersistence: { readWindow: async () => null }, readOpeningWindow: async () => null,
+    createSettlementProgressGuard, readSettlementInput, chatPersistence: { readWindow: async () => null }, readOpeningWindow: async () => null,
     taskStateReader: { forSession: async () => projectChatSessionState(await store.readChat()) },
     collectMvuHelperContext, normalizeBackgroundTasks, pendingMvuSettlementState, structuredClone, Date, AbortController, console: { log() {}, error() {} },
     str: value => value == null ? '' : String(value),

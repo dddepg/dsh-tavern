@@ -50,7 +50,8 @@ test('saving opening defaults preserves sibling values without reloading catalog
   const toggle = page.getByRole('switch', { name: '联网搜索', exact: true })
   await page.waitForFunction(() => document.querySelector('[aria-label="联网搜索"]')?.disabled === false)
   const reads = Object.fromEntries(["getTavernSettings", "listPresets", "getUserPreferenceProfile"].map(method => [method, calls.filter(c => c.method === method).length]))
-  await toggle.check()
+  // The controlled switch adopts its value only after the asynchronous save succeeds.
+  await toggle.click()
   await page.getByText('已保存，新游戏继承此设置，已有游戏保持不变。', { exact: true }).waitFor()
   assert.equal(await toggle.isChecked(), true)
   assert.equal(await page.getByRole('switch', { name: '变量结算', exact: true }).isChecked(), true)
