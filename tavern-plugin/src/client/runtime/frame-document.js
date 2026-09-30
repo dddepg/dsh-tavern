@@ -239,6 +239,7 @@
 		// @include modules/frame-lifecycle.js
 		// @include legacy-composer.js
 		// @include landing-styles.js
+		// @include brand.js
 		// @include subagent-catalog-sync.js
 
 		// @include text-colors.js
