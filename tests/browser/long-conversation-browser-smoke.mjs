@@ -15,7 +15,7 @@ try {
     .native_body {min-height:0;flex:1;display:flex;flex-direction:column}
     [data-conversation-scroll] {overflow:auto;flex:1}
     [role=textbox] {position:fixed;bottom:0;background:white;width:600px;min-height:40px}
-  </style><body class="dsh-tavern-shell-active"><div id="root"><div data-slot="conversation"><div id="conversation" data-phase="hero"><div class="native_body"><div data-conversation-scroll><div id="preset-row"><span>workspace</span><div data-slot="conversation.hero.agentPreset">preset</div></div><div data-composer-seat><div role="textbox" aria-label="输入" contenteditable="true"><p><br></p></div></div></div></div></div></div></div></body>`)
+  </style><body class="dsh-tavern-shell-active"><div id="root"><div data-slot="main.conversation"><div id="conversation" data-phase="hero"><div class="native_body"><div data-conversation-scroll><div id="preset-row"><span>workspace</span><div data-slot="conversation.hero.agentPreset">preset</div></div><div data-composer-seat><div role="textbox" aria-label="输入" contenteditable="true"><p><br></p></div></div></div></div></div></div></div></body>`)
   await page.addScriptTag({ content: process.env.TAVERN_PERF_SKIP_INSTALLER ? 'function installTavernLandingStyles(){return ()=>{}}' : installer })
   await page.evaluate(() => { window.disposeLanding = installTavernLandingStyles(document) })
   const flush = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
