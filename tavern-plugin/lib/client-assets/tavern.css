@@ -147,7 +147,8 @@ body.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important;
 body.dsh-tavern-shell-active .dsh-tavern-landing::before { content: "DSH Tavern"; color: var(--dsh-tavern-accent-active); font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: calc(clamp(72px, 12vw, 112px) + 20px) 24px 24px; text-align: center; background: var(--dsh-tavern-logo) center top / clamp(72px, 12vw, 112px) no-repeat; }
 body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dsh-tavern-side-head { height: 48px; display: flex; align-items: center; gap: 8px; flex: none; }
-.dsh-tavern-side-brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; color: var(--dsh-tavern-accent-active); white-space: nowrap; overflow: hidden; }
+.dsh-tavern-side-brand { flex: 1; min-width: 0; height: 36px; background: var(--dsh-tavern-lockup) left center / contain no-repeat; }
+[data-ds-dark-theme] .dsh-tavern-side-brand { background-image: var(--dsh-tavern-lockup-dark); }
 .dsh-tavern-logo { flex: none; display: inline-block; width: 22px; height: 22px; background: var(--dsh-tavern-logo) center / contain no-repeat; vertical-align: middle; }
 .dsh-tavern-side-icon { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
 .dsh-tavern-side-icon:hover { background: var(--dsw-alias-interactive-bg-hover); }
