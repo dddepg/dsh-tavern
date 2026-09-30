@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "e5799d01a6b5ae526f0dbb42cec7941d6b126340",
-  "releaseSequence": 444,
+  "revision": "f78a2dd1b900e9d253bcbaffade3c530673e0f01",
+  "releaseSequence": 445,
   "version": "2.4.0",
   "files": [
     {
@@ -386,13 +386,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "39b5b702a77ae56cfd4545d0d0342b0ebbe47fec07911d1735b9a0aeef974039",
-      "size": 232111
+      "sha256": "8dc67137a6511c71103703b7a89521390082090c0781015e1eacede607df9300",
+      "size": 234116
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "d34154221a111a01660faf281f2549e1a876ac71baf811a006a0413b67e58a28",
-      "size": 1420745
+      "sha256": "0301d76239919717b0b5e69a05baa9062417b0f66fc4f9e6001dfc75af562c89",
+      "size": 1425193
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -4381,8 +4381,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/worldbook-library.js",
-      "sha256": "3e7eacede95f1d1e321378e8d1eb1a8285d0d64fa0674858d5d0b6766ad8c52a",
-      "size": 35043
+      "sha256": "a413a71d7a4226e7e3e09833c2e838c6f6a083ade836bbf0dbbbce7c3e6932cb",
+      "size": 37470
     },
     {
       "path": "tavern-plugin/src/client/full-template-executor.js",
