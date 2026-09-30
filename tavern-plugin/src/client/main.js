@@ -1001,7 +1001,8 @@ window.__ModuleLoader__.load({
 
 				input.addEventListener("input", function () { if (!busy) confirmButton.disabled = !opts.allowEmpty && input.value.trim() === ""; });
 				input.addEventListener("keydown", function (event) {
-					if (event.key !== "Enter" || event.isComposing === true) return;
+					// 部分 WebKit 在确认选字时先结束 composition；229 仍表示本次按键属于输入法。
+					if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
 					event.preventDefault();
 					void submit();
 				});
@@ -5541,44 +5542,153 @@ window.__ModuleLoader__.load({
         const tavernRetainedFrames = createRetainedTavernFrames({ window: window, retention: tavernSessionRetention,
             panels: tavernPanelRegistry, createLifecycle: function (props) { return createTavernMessageFrameLifecycle(props); } });
 
+        function composerOffsetPx(layoutHeight, visualOffsetTop, rectTop) {
+            // DOMRect 和 fixed 的定位都基于布局视口；offsetTop 已包含在 rectTop 中，不能再次相加。
+            return Math.max(0, Math.round(Number(layoutHeight) - Number(rectTop)));
+        }
+        function sheetMaxPx(visualHeight, rectTop, chromePx) {
+            const available = Math.round(Number(rectTop) - (Number(chromePx) || 0) - 6);
+            const cap = Math.round(Number(visualHeight) * 0.6);
+            return Math.max(0, Math.min(cap, available));
+        }
+        // @include modules/mobile-layout.js
+        function nativeFullscreenElement(doc) {
+            return doc.fullscreenElement || doc.webkitFullscreenElement || null;
+        }
+        function requestDocumentFullscreen(doc) {
+            const root = doc.documentElement;
+            const req = root && (root.requestFullscreen || root.webkitRequestFullscreen);
+            if (typeof req !== "function") return Promise.resolve(false);
+            function attempt(options) {
+                try { return Promise.resolve(options ? req.call(root, options) : req.call(root)); }
+                catch (error) { return Promise.reject(error); }
+            }
+            return attempt({ navigationUI: "hide" }).catch(function () { return attempt(); }).then(function () { return true; }).catch(function () { return false; });
+        }
+        function exitDocumentFullscreen(doc) {
+            const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
+            if (typeof exit !== "function" || !nativeFullscreenElement(doc)) return Promise.resolve();
+            return Promise.resolve(exit.call(doc)).catch(function () {});
+        }
         function installTavernImmersiveMode(button) {
             const header = button?.closest("header");
-            if (!header) return { enter() {}, dispose() {} };
-            const restore = header.ownerDocument.createElement("button");
-            restore.type = "button";
-            restore.className = "dsh-tavern-restore-header";
-            restore.textContent = "⌄ 显示顶部栏";
-            restore.setAttribute("aria-label", "退出沉浸模式，显示顶部栏");
-            restore.hidden = true;
-            header.before(restore);
-            function leave() {
-                header.classList.remove("dsh-tavern-immersive-header");
-                restore.hidden = true;
-                button.focus();
+            if (!header) return { enter() {}, leave() {}, dispose() {} };
+            const doc = header.ownerDocument;
+            const view = doc.defaultView || (typeof window !== "undefined" ? window : null);
+            const htmlClass = doc.documentElement && doc.documentElement.classList;
+            let disposed = false, intent = 0;
+            function isOn() {
+                return !!nativeFullscreenElement(doc) || !!(htmlClass && htmlClass.contains("dsh-tavern-play-fullscreen"));
             }
-            restore.addEventListener("click", leave);
+            function setOn(on) {
+                if (htmlClass) htmlClass.toggle("dsh-tavern-play-fullscreen", on);
+            }
+            function enter() {
+                if (disposed) return;
+                const generation = ++intent;
+                setOn(true);
+                if (button && typeof button.focus === "function") button.focus();
+                requestDocumentFullscreen(doc).then(function () {
+                    // 浏览器可延迟完成全屏请求；退出或卸载后不能被旧请求重新打开。
+                    if (disposed || generation !== intent) {
+                        if (nativeFullscreenElement(doc) === doc.documentElement) exitDocumentFullscreen(doc);
+                        return;
+                    }
+                    setOn(true);
+                });
+            }
+            function leave() {
+                const generation = ++intent;
+                setOn(false);
+                if (button && typeof button.focus === "function") button.focus();
+                exitDocumentFullscreen(doc).then(function () { if (!disposed && generation === intent) setOn(false); });
+            }
+            function onFsChange() {
+                setOn(!!nativeFullscreenElement(doc));
+            }
+            function onChromeEvent(event) {
+                const action = event && event.detail;
+                if (action === "leave" || (action === "toggle" && isOn())) leave();
+                else enter();
+            }
+            if (typeof doc.addEventListener === "function") {
+                doc.addEventListener("fullscreenchange", onFsChange);
+                doc.addEventListener("webkitfullscreenchange", onFsChange);
+            }
+            if (view && typeof view.addEventListener === "function") view.addEventListener("dsh-tavern-play-chrome", onChromeEvent);
             return {
-                enter() {
-                    header.classList.add("dsh-tavern-immersive-header");
-                    restore.hidden = false;
-                    restore.focus();
-                },
+                enter: enter,
+                leave: leave,
                 dispose() {
-                    header.classList.remove("dsh-tavern-immersive-header");
-                    restore.removeEventListener("click", leave);
-                    restore.remove();
+                    disposed = true;
+                    ++intent;
+                    setOn(false);
+                    if (typeof doc.removeEventListener === "function") {
+                        doc.removeEventListener("fullscreenchange", onFsChange);
+                        doc.removeEventListener("webkitfullscreenchange", onFsChange);
+                    }
+                    if (view && typeof view.removeEventListener === "function") view.removeEventListener("dsh-tavern-play-chrome", onChromeEvent);
                 }
             };
         }
+        function FullscreenIcon(props) {
+            const on = props.on;
+            const d = on
+                ? "M2.5 5.5h3v-3 M13.5 5.5h-3v-3 M2.5 10.5h3v3 M13.5 10.5h-3v3"
+                : "M2.5 6V2.5H6 M13.5 6V2.5H10 M2.5 10v3.5H6 M13.5 10v3.5H10";
+            return React.createElement("svg", {
+                width: 15,
+                height: 15,
+                viewBox: "0 0 16 16",
+                fill: "none",
+                stroke: "currentColor",
+                strokeWidth: 1.75,
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                "aria-hidden": "true",
+                className: "dsh-tavern-icon-fullscreen"
+            }, React.createElement("path", { d: d }));
+        }
         function TavernImmersiveAction() {
             const button = React.useRef(null), controller = React.useRef(null);
+            const [on, setOn] = React.useState(false);
             React.useEffect(() => {
                 controller.current = installTavernImmersiveMode(button.current);
-                return () => { controller.current.dispose(); controller.current = null; };
+                function sync() {
+                    const doc = button.current && button.current.ownerDocument;
+                    setOn(!!(doc && (nativeFullscreenElement(doc) || (doc.documentElement && doc.documentElement.classList.contains("dsh-tavern-play-fullscreen")))));
+                }
+                const view = typeof window !== "undefined" ? window : null;
+                if (view) {
+                    view.addEventListener("fullscreenchange", sync);
+                    view.addEventListener("webkitfullscreenchange", sync);
+                    view.addEventListener("dsh-tavern-play-chrome", sync);
+                }
+                return () => {
+                    if (view) {
+                        view.removeEventListener("fullscreenchange", sync);
+                        view.removeEventListener("webkitfullscreenchange", sync);
+                        view.removeEventListener("dsh-tavern-play-chrome", sync);
+                    }
+                    controller.current.dispose();
+                    controller.current = null;
+                };
             }, []);
-            return React.createElement("button", { ref: button, type: "button", className: "dsh-tavern-btn dsh-tavern-header-btn", title: "隐藏顶部标题和标签栏，可随时恢复", onClick: () => controller.current?.enter() }, "沉浸模式");
+            return React.createElement("button", {
+                ref: button,
+                type: "button",
+                className: "dsh-tavern-btn dsh-tavern-play-fullscreen" + (on ? " active" : ""),
+                "aria-label": on ? "退出全屏" : "全屏",
+                "aria-pressed": on,
+                title: on ? "退出全屏，显示浏览器顶栏和会话标题" : "进入全屏（隐藏浏览器顶栏）",
+                onClick: function () {
+                    if (on) controller.current?.leave();
+                    else controller.current?.enter();
+                    const doc = button.current && button.current.ownerDocument;
+                    setOn(!!(doc && (nativeFullscreenElement(doc) || (doc.documentElement && doc.documentElement.classList.contains("dsh-tavern-play-fullscreen")))));
+                }
+            }, React.createElement(FullscreenIcon, { on: on }));
         }
-
 		async function expandTavernFrame(root) {
             const frame = root?.querySelector('iframe:not([aria-hidden="true"])');
             try {
@@ -7538,7 +7648,12 @@ window.__ModuleLoader__.load({
 			ctx.effect(function () {
 				document.body.classList.add("dsh-tavern-shell-active");
 				const releaseLandingStyles = installTavernLandingStyles(document);
-				return function () { releaseLandingStyles(); document.body.classList.remove("dsh-tavern-shell-active"); };
+				const releaseViewport = installVisualViewportPin(document);
+				return function () {
+					releaseViewport();
+					releaseLandingStyles();
+					document.body.classList.remove("dsh-tavern-shell-active");
+				};
 			}, "dsh-tavern: shell marker");
 			ctx.effect(() => slots.inject("sidebar.workspaces", () => slots.register(
 				{ name: "sidebar.workspaces", priority: -1 },
@@ -10080,8 +10195,10 @@ window.__ModuleLoader__.load({
 					} catch (err) { tavernErrorHub.report("导出日志", err); }
 					finally { setBusy(false); }
 				}
-				return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
-                    React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } }, busy ? "导出中…" : "导出 ▾"),
+                return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
+                    React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-label": busy ? "导出中" : "导出", title: "导出", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } },
+                        React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, React.createElement("path", { d: "M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" })),
+                        React.createElement("span", { className: "dsh-tavern-header-action-label" }, busy ? "导出中…" : "导出")),
                     React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", "aria-label": "导出", hidden: !open, onClick: function (event) { if (event.target.closest("button:not(:disabled)")) setOpen(false); } },
                         React.createElement("button", { type: "button", role: "menuitem", "data-tavern-log-export": "", disabled: busy, "aria-label": "日志", title: "下载 Session、MVU、生图与更新日志；含私人剧情，分享前请检查隐私", onClick: exportLogs }, "日志"),
                         React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "导出只包含玩家与角色正文的 TXT", onClick: exportText }, "纯对话 TXT")
@@ -10833,7 +10950,7 @@ window.__ModuleLoader__.load({
                 finally { setBusy(false); }
             }
             return React.createElement("div", { className: "dsh-local-field" },
-                React.createElement("label", null, "玩家称呼", React.createElement("input", { key: name, defaultValue: name || "", placeholder: "你", maxLength: 80, disabled: name === null || busy, onBlur: event => save(event.target.value), onKeyDown: event => { if (event.key === "Enter" && !event.nativeEvent?.isComposing) event.currentTarget.blur(); } })),
+                React.createElement("label", null, "玩家称呼", React.createElement("input", { key: name, defaultValue: name || "", placeholder: "你", maxLength: 80, disabled: name === null || busy, onBlur: event => save(event.target.value), onKeyDown: event => { if (event.key === "Enter" && !event.nativeEvent?.isComposing && event.nativeEvent?.keyCode !== 229) event.currentTarget.blur(); } })),
                 React.createElement("p", { className: "dsh-local-help" }, "离开输入框后保存，仅用于后续内容。"), React.createElement("span", { role: "status", className: "dsh-local-feedback" }, status));
         }
 
@@ -10878,7 +10995,11 @@ window.__ModuleLoader__.load({
             const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
             const mode = useTavernSessionMode(owner);
             if (!isPlayMode(mode)) return null;
-            return React.createElement("button", { type: "button", className: "dsh-tavern-btn dsh-tavern-header-btn", "aria-label": "酒馆状态", title: "查看本局酒馆状态", onClick: () => props.open(owner) }, "酒馆状态");
+            return React.createElement("button", { type: "button", className: "dsh-tavern-btn dsh-tavern-header-settings", "aria-label": "酒馆状态", title: "查看本局酒馆状态", onClick: () => props.open(owner) },
+                React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", "aria-hidden": "true" },
+                    React.createElement("path", { d: "M4 7h3m4 0h9M4 17h9m4 0h3" }),
+                    React.createElement("circle", { cx: 9, cy: 7, r: 2 }), React.createElement("circle", { cx: 15, cy: 17, r: 2 })),
+                React.createElement("span", { className: "dsh-tavern-header-action-label" }, "酒馆状态"));
         }
 
         function TavernConversationBackgroundModel(props) {
@@ -11085,6 +11206,8 @@ window.__ModuleLoader__.load({
 			return null;
 		}
 		function CandidateQuestion(props) {
+            // 宿主输入器可由 textarea 升级为 contenteditable，两种入口共享聚焦与收起逻辑。
+            const inputSelector = "[data-composer-card] :is(textarea, [contenteditable='true'])";
             const dismissMode = useCandidatePreferences();
 			const panel = useCandidatePanel();
             const draft = props.useInput(snapshot => snapshot.draft);
@@ -11100,8 +11223,18 @@ window.__ModuleLoader__.load({
             }
             React.useEffect(() => { if (running && panel?.expanded) setExpanded(false); }, [running, panel]);
 			React.useEffect(function () {
+				if (typeof document === "undefined" || !panel?.expanded) return;
+				function onComposerFocus(event) {
+					// 手机开始手动输入就收起候选，给键盘上方的正文留出空间；面板编辑器不受影响。
+					if (window.matchMedia(TAVERN_MOBILE_QUERY + ", (pointer: coarse)").matches && event.target?.matches(inputSelector)) setExpanded(false);
+				}
+				document.addEventListener("focusin", onComposerFocus);
+				return function () { document.removeEventListener("focusin", onComposerFocus); };
+			}, [panel]);
+			React.useEffect(function () {
 				setSelected(sessionMode === "script" && panel && Array.isArray(panel.choices) && panel.choices.length === 1 ? 0 : -1);
 			}, [panel, sessionMode]);
+
 			if (panel && panel.sessionId === props.sessionId && panel.phase === "error") {
 				return React.createElement("div", { className: "dsh-tavern-choice-error dsh-tavern-candidate-error-banner" },
 					"候选项生成失败：" + (panel.error || "未知错误") + "。请点上方“生成候选项”重试。"
@@ -11116,7 +11249,7 @@ window.__ModuleLoader__.load({
 			const heading = "接下来的行动";
 			const summary = panel.phase === "loading" ? "正在生成…" : (panel.error ? "生成失败" : (isScript ? "1 个候选 · 跟随剧本，只有一个推荐候选项" : count + " 个候选项"));
 			return h("div", { className: "dsh-tavern-question dsh-tavern-candidate-question" + (expanded ? "" : " collapsed") },
-				h("div", { className: "dsh-tavern-question-head", onClick: function () { setExpanded(!expanded); } }, h("span", null, heading), h("span", { className: "dsh-tavern-question-sub" }, summary), h("button", { className: "dsh-tavern-question-close", title: expanded ? "收起" : "展开", onClick: function (event) { event.stopPropagation(); setExpanded(!expanded); } }, expanded ? "⌃" : "⌄")),
+				h("div", { className: "dsh-tavern-question-head", role: "button", tabIndex: 0, "aria-expanded": expanded ? "true" : "false", onClick: function () { setExpanded(!expanded); }, onKeyDown: function (event) { if (event.target === event.currentTarget && !event.isComposing && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setExpanded(!expanded); } } }, h("span", null, heading), h("span", { className: "dsh-tavern-question-sub" }, summary), h("button", { type: "button", className: "dsh-tavern-question-close", title: expanded ? "收起行动列表" : "展开行动列表", "aria-label": expanded ? "收起行动列表" : "展开行动列表", onClick: function (event) { event.stopPropagation(); setExpanded(!expanded); } }, expanded ? "收起" : "展开")),
 				expanded && panel.phase === "loading" ? h("div", { className: "dsh-tavern-question-sub" }, "正在生成候选项…") : null,
 				expanded && panel.error ? h("div", { className: "dsh-tavern-choice-error" }, "候选项生成失败，请点回复下方的“生成候选项”重试") : null,
 				expanded ? h("div", { className: "dsh-tavern-question-body" }, (panel.choices || []).map(function (choice, index) {
@@ -11130,22 +11263,24 @@ window.__ModuleLoader__.load({
 						)
 					);
 				})) : null,
-				expanded && panel.phase === "ready" ? h("button", { className: "dsh-tavern-question-free", onClick: function () {
-					window.requestAnimationFrame(function () {
-						const input = document.querySelector("[data-composer-card] textarea");
-						if (input) input.focus();
-					});
-				} }, "✎ 自由行动（直接在下方输入）") : null,
-				expanded && panel.phase === "ready" && panel.traceSessionId ? h("button", { className: "dsh-tavern-question-free", title: panel.traceMode === "continuable" ? "打开持续存在的后台 Agent" : "打开后台候选任务的推理与工具调用记录", onClick: async function () {
-					try {
-						await props.sessions.refreshSubagents(panel.sessionId);
-						props.sessions.openSubagent({ parentSessionId: panel.sessionId, childSessionId: panel.traceSessionId, mode: panel.traceMode });
-					} catch (err) {
-						tavernErrorHub.report("后台 Agent 轨迹", "无法打开后台 Agent 轨迹：" + String(err && err.message || err));
-					}
-				} }, panel.traceMode === "continuable" ? "查看后台 Agent" : "查看后台候选任务轨迹") : null,
-				expanded && panel.phase === "ready" && panel.choices && panel.choices.length ? h("div", { className: "dsh-tavern-question-foot" },
-					h("button", { className: "dsh-tavern-question-primary", disabled: selected < 0, onClick: function () {
+				expanded && panel.phase === "ready" ? h("div", { className: "dsh-tavern-question-foot" },
+					h("div", { className: "dsh-tavern-question-aux" },
+						h("button", { className: "dsh-tavern-question-free", onClick: function () {
+							// iOS 只在当前点击调用栈内唤起键盘；异步 focus 会丢失用户手势。
+							const input = document.querySelector(inputSelector);
+							if (input) input.focus({ preventScroll: true });
+							setExpanded(false);
+						} }, "✎ 自由行动（直接在下方输入）"),
+						panel.traceSessionId ? h("button", { className: "dsh-tavern-question-free", title: panel.traceMode === "continuable" ? "打开持续存在的后台 Agent" : "打开后台候选任务的推理与工具调用记录", onClick: async function () {
+							try {
+								await props.sessions.refreshSubagents(panel.sessionId);
+								props.sessions.openSubagent({ parentSessionId: panel.sessionId, childSessionId: panel.traceSessionId, mode: panel.traceMode });
+							} catch (err) {
+								tavernErrorHub.report("后台 Agent 轨迹", "无法打开后台 Agent 轨迹：" + String(err && err.message || err));
+							}
+						} }, panel.traceMode === "continuable" ? "查看后台 Agent" : "查看后台候选任务轨迹") : null
+					),
+					panel.choices && panel.choices.length ? h("button", { className: "dsh-tavern-question-primary", disabled: selected < 0, onClick: function () {
 						if (selected < 0) return;
 						const item = panel.choices[selected];
 						const choice = item !== null && typeof item === "object" ? item : { type: "action", text: String(item) };
@@ -11156,7 +11291,8 @@ window.__ModuleLoader__.load({
                         props.inputActions.setDraft(next);
                         if (dismissMode !== "after-send") setCandidatePanel(null);
                         setSelected(-1);
-					} }, "追加到输入框")
+
+					} }, "追加到输入框") : null
 				) : null
 			);
 		}
@@ -11273,8 +11409,8 @@ window.__ModuleLoader__.load({
                 { name: "conversation.session.header.utilities", id: "session-log-download", order: 0, priority: -1 },
                 () => null
             )), "dsh-tavern: hide host session-log-download");
-            ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
-                { name: "conversation.session.header.utilities", id: "dsh-tavern-immersive", order: 85 },
+            ctx.effect(() => slots.inject("conversation.session.header.actions", () => slots.register(
+                { name: "conversation.session.header.actions", id: "dsh-tavern-immersive", order: 9 },
                 () => React.createElement(TavernImmersiveAction)
             )), "dsh-tavern: immersive header action");
             ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
