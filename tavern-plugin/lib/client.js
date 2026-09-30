@@ -11768,8 +11768,6 @@ window.__ModuleLoader__.load({
 			const [editing, setEditing] = React.useState(false);
 			const [injectionText, setInjectionText] = React.useState("");
 			const [busy, setBusy] = React.useState(false);
-			const [dimensionsOpen, setDimensionsOpen] = React.useState(false);
-			const [answersOpen, setAnswersOpen] = React.useState(false);
 			const editingRef = React.useRef(editing);
 			editingRef.current = editing;
 			const refreshRef = React.useRef(null);
@@ -11874,8 +11872,6 @@ window.__ModuleLoader__.load({
 					h("div", { className: "dsh-tavern-user-profile-actions" }, h("button", { className: "dsh-tavern-script-primary", onClick: openAgentTask }, record.hasDraft ? "继续核对长期偏好" : "开始建立长期偏好"))
 			));
 			const confirmed = record.confirmed || {};
-			const dimensions = Array.isArray(confirmed.dimensions) ? confirmed.dimensions : [];
-			const rawAnswers = Array.isArray(confirmed.rawAnswers) ? confirmed.rawAnswers : [];
 			return h("div", { className: "dsh-tavern-user-profile" }, header, controls,
 				h("div", { className: "dsh-tavern-user-profile-body" },
 					error ? h("div", { className: "dsh-card-error" }, error) : null,
@@ -11891,25 +11887,6 @@ window.__ModuleLoader__.load({
 					) : h(React.Fragment, null,
 						h("div", { className: "dsh-tavern-status-label", style: { marginTop: "14px" } }, "长期偏好内容"),
 						h("div", { className: "dsh-tavern-user-profile-text" }, String(confirmed.injectionText || "")),
-						dimensions.length ? h("details", { open: dimensionsOpen, onToggle: function (event) { setDimensionsOpen(event.currentTarget.open); } },
-							h("summary", null, "偏好维度 · " + dimensions.length),
-							dimensionsOpen ? dimensions.map(function (item, index) {
-								return h("div", { key: item.id || index, className: "dsh-tavern-user-profile-dimension" },
-									h("b", null, String(item.name || item.label || item.id || "偏好")),
-									h("p", null, String(item.conclusion || "")),
-									h("div", { className: "dsh-tavern-user-profile-meta" }, "置信度：" + String(item.confidence || "uncertain") + (item.evidence ? " · 依据：" + String(item.evidence) : ""))
-								);
-							}) : null
-						) : null,
-						rawAnswers.length ? h("details", { open: answersOpen, onToggle: function (event) { setAnswersOpen(event.currentTarget.open); } },
-							h("summary", null, "原始回答 · " + rawAnswers.length),
-							answersOpen ? rawAnswers.map(function (item, index) {
-								return h("div", { key: index, className: "dsh-tavern-user-profile-dimension" },
-									h("b", null, String(item.question || "问题")),
-									h("p", null, String(item.answer || ""))
-								);
-							}) : null
-						) : null,
 						h("div", { className: "dsh-tavern-user-profile-actions" },
 							h("button", { className: "dsh-tavern-script-primary", onClick: beginEdit }, "直接修改"),
 							h("button", { className: "dsh-tavern-btn", onClick: openAgentTask }, "交给卡片 Agent 调查/修改")
@@ -12289,9 +12266,9 @@ window.__ModuleLoader__.load({
                 return h("label", { className: "dsh-tavern-memory-field" }, label, h("textarea", { value: draft[key] || "", maxLength: key === "title" ? 160 : 2000, rows: key === "title" ? 1 : 3, onChange: event => setDraft(Object.assign({}, draft, { [key]: event.target.value })) }));
             }
             return h("div", { className: "dsh-tavern-card-memory" },
-                h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "改卡记忆"), h("div", { className: "dsh-tavern-question-sub" }, "记录改卡偏好和错误修复经验，仅卡片模式使用。")),
+                h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "改卡记忆"), h("div", { className: "dsh-tavern-question-sub" }, "记录改卡偏好和错误修复经验，卡片 Agent 改卡时会自动参考。")),
                 error ? h("p", { role: "alert" }, error) : null,
-                !memory ? h("p", null, "正在读取…") : !memory.enabled ? h("div", { className: "dsh-tavern-empty-state" }, h("div", { className: "dsh-tavern-empty-icon", "aria-hidden": "true" }, "✎"), h("strong", null, "暂无可用的改卡记忆"), h("p", null, "请先打开一个卡片模式对话。游玩模式不读取或记录这些记忆。")) : h(React.Fragment, null,
+                !memory ? h("p", null, "正在读取…") : !memory.enabled ? h("div", { className: "dsh-tavern-empty-state" }, h("div", { className: "dsh-tavern-empty-icon", "aria-hidden": "true" }, "✎"), h("strong", null, "还没有打开对话"), h("p", null, "打开任意对话后即可查看和管理改卡记忆。")) : h(React.Fragment, null,
                     h("div", { className: "dsh-tavern-memory-actions" },
                         h("input", { "aria-label": "检索改卡记忆", placeholder: "输入错误或关键词", value: query, onChange: event => setQuery(event.target.value), onKeyDown: event => { if (event.key === "Enter") run(refresh); } }),
                         h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(refresh) }, "检索 / 刷新")),

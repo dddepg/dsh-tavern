@@ -33,9 +33,9 @@ function TavernCardMemoryTab(props) {
         return h("label", { className: "dsh-tavern-memory-field" }, label, h("textarea", { value: draft[key] || "", maxLength: key === "title" ? 160 : 2000, rows: key === "title" ? 1 : 3, onChange: event => setDraft(Object.assign({}, draft, { [key]: event.target.value })) }));
     }
     return h("div", { className: "dsh-tavern-card-memory" },
-        h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "改卡记忆"), h("div", { className: "dsh-tavern-question-sub" }, "记录改卡偏好和错误修复经验，仅卡片模式使用。")),
+        h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "改卡记忆"), h("div", { className: "dsh-tavern-question-sub" }, "记录改卡偏好和错误修复经验，卡片 Agent 改卡时会自动参考。")),
         error ? h("p", { role: "alert" }, error) : null,
-        !memory ? h("p", null, "正在读取…") : !memory.enabled ? h("div", { className: "dsh-tavern-empty-state" }, h("div", { className: "dsh-tavern-empty-icon", "aria-hidden": "true" }, "✎"), h("strong", null, "暂无可用的改卡记忆"), h("p", null, "请先打开一个卡片模式对话。游玩模式不读取或记录这些记忆。")) : h(React.Fragment, null,
+        !memory ? h("p", null, "正在读取…") : !memory.enabled ? h("div", { className: "dsh-tavern-empty-state" }, h("div", { className: "dsh-tavern-empty-icon", "aria-hidden": "true" }, "✎"), h("strong", null, "还没有打开对话"), h("p", null, "打开任意对话后即可查看和管理改卡记忆。")) : h(React.Fragment, null,
             h("div", { className: "dsh-tavern-memory-actions" },
                 h("input", { "aria-label": "检索改卡记忆", placeholder: "输入错误或关键词", value: query, onChange: event => setQuery(event.target.value), onKeyDown: event => { if (event.key === "Enter") run(refresh); } }),
                 h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: () => run(refresh) }, "检索 / 刷新")),

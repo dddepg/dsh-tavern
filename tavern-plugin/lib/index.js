@@ -3235,11 +3235,11 @@ export async function apply(ctx) {
       }
       case 'getCardMemory': {
         const chat = await chatForSession(args?.sessionId)
-        if (chat?.mode !== 'card') return { enabled: false }
-        return { enabled: true, ...await cardMemory.search(chat, args?.query) }
+        if (!chat) return { enabled: false }
+        return { enabled: true, ...await cardMemory.search(chat, args?.query, { manual: true }) }
       }
-      case 'changeCardMemoryPreference': return await cardMemory.preference(await chatForSession(args?.sessionId), args || {})
-      case 'changeCardMemoryExperience': return await cardMemory.experience(await chatForSession(args?.sessionId), args || {})
+      case 'changeCardMemoryPreference': return await cardMemory.preference(await chatForSession(args?.sessionId), args || {}, { manual: true })
+      case 'changeCardMemoryExperience': return await cardMemory.experience(await chatForSession(args?.sessionId), args || {}, { manual: true })
       case 'getResourceWorkspace': return { path: dataRoot + '/resources' }
       case 'listResources': return await listTavernResources()
       case 'getResource': {
