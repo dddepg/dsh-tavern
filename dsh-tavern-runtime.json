@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "a4ea7710d7c386c06c1925ef1cdc9c0b6159dd16",
-  "releaseSequence": 440,
+  "revision": "54f5f5dd235f48e96f6badae36ad49325c509568",
+  "releaseSequence": 441,
   "version": "2.4.0",
   "files": [
     {
@@ -291,8 +291,8 @@
     },
     {
       "path": "presets/tavern/skills/debug-card/references/evidence.md",
-      "sha256": "f36d0338a756e022766d626a6dc29b8e2b4d039719e3f85adc588773cde63d67",
-      "size": 6713
+      "sha256": "d446a5013eba802d412999b41b7b1265dd4ea94dc43c166e7e72fc96a7aab5e1",
+      "size": 7489
     },
     {
       "path": "presets/tavern/skills/debug-card/references/frame-sizing.md",
@@ -306,8 +306,8 @@
     },
     {
       "path": "presets/tavern/skills/debug-card/SKILL.md",
-      "sha256": "1e9ed1182b2f354b0b947587a96be8011dcf2d71463aacdd87a00ec2908b31fa",
-      "size": 4347
+      "sha256": "c7101f493897b81bea9dd9f12485b4bcca4f96a66375f7db14587abbbf909222",
+      "size": 4522
     },
     {
       "path": "presets/tavern/skills/edit-card/references/mvu-variables.md",
@@ -1121,8 +1121,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/play-chat-debug.js",
-      "sha256": "a20da658ade1238fac6354fffb5b46d637d8bfb977af5d23eda4e1e4f4237a22",
-      "size": 10956
+      "sha256": "4e23bc842eac14e185ba76b7bacf130fd496e83308b688223d9aa8573fe7a0f8",
+      "size": 12061
     },
     {
       "path": "tavern-plugin/lib/domain/player-input-content.js",
@@ -1891,8 +1891,8 @@
     },
     {
       "path": "tavern-plugin/lib/tools/play-chat.js",
-      "sha256": "42de2b793eaaaa1cea424a8141afd373728f2830d3f3a3807a5d5a35b35565af",
-      "size": 5545
+      "sha256": "f54620ade09c634d2dc0c8201355dd5880bfc4d434c29ffc286fd9114e319284",
+      "size": 5821
     },
     {
       "path": "tavern-plugin/lib/tools/preset.js",
