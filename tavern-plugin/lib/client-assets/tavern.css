@@ -28,13 +28,7 @@ body.dsh-tavern-shell-active,
   font-family: var(--dsh-tavern-font-sans);
   -webkit-font-smoothing: antialiased;
 }
-body.dsh-tavern-shell-active .dsh-tavern-landing::before {
-  font-family: var(--dsh-tavern-font-display) !important;
-  font-weight: 400 !important;
-  letter-spacing: -0.5px;
-}
 .dsh-tavern-status-title,
-.dsh-tavern-side-brand,
 .dsh-tavern-mobile-import-title,
 .dsh-tavern-group-manager-head h3 {
   font-family: var(--dsh-tavern-font-display);
@@ -144,11 +138,16 @@ body.dsh-tavern-shell-active .dsh-tavern-hero-preset-row { display: none !import
 /* A blank session is also a hero. Only the session-less landing page loses its composer. */
 body.dsh-tavern-shell-active .dsh-tavern-landing { display: grid !important; place-items: center; }
 body.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important; }
-body.dsh-tavern-shell-active .dsh-tavern-landing::before { content: "DSH Tavern"; color: var(--dsh-tavern-accent-active); font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: calc(clamp(72px, 12vw, 112px) + 20px) 24px 24px; text-align: center; background: var(--dsh-tavern-logo) center top / clamp(72px, 12vw, 112px) no-repeat; }
+body.dsh-tavern-shell-active .dsh-tavern-landing::before { content: ""; width: min(460px, 80vw); aspect-ratio: 715 / 200; background: var(--dsh-tavern-lockup) center / contain no-repeat; }
+[data-ds-dark-theme] body.dsh-tavern-shell-active .dsh-tavern-landing::before, body[data-ds-dark-theme].dsh-tavern-shell-active .dsh-tavern-landing::before { background-image: var(--dsh-tavern-lockup-dark); }
 body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.dsh-tavern-side-head { height: 48px; display: flex; align-items: center; gap: 8px; flex: none; }
-.dsh-tavern-side-brand { flex: 1; min-width: 0; height: 36px; background: var(--dsh-tavern-lockup) left center / contain no-repeat; }
-[data-ds-dark-theme] .dsh-tavern-side-brand { background-image: var(--dsh-tavern-lockup-dark); }
+.dsh-tavern-side-head { height: 72px; display: flex; align-items: center; gap: 8px; flex: none; }
+.dsh-tavern-lockup { background: var(--dsh-tavern-lockup) left center / contain no-repeat; }
+[data-ds-dark-theme] .dsh-tavern-lockup, .dsh-tavern-lockup[data-ds-dark-theme] { background-image: var(--dsh-tavern-lockup-dark); }
+.dsh-tavern-side-brand { flex: 1; min-width: 0; height: 64px; }
+.dsh-tavern-hero-lockup { display: block; width: min(400px, 76vw); aspect-ratio: 715 / 200; background-position: center; }
+/* 酒馆标志已包含名称，隐藏宿主的标题与预览标记。 */
+body.dsh-tavern-shell-active span:has(.dsh-tavern-hero-lockup) + span { display: none !important; }
 .dsh-tavern-logo { flex: none; display: inline-block; width: 22px; height: 22px; background: var(--dsh-tavern-logo) center / contain no-repeat; vertical-align: middle; }
 .dsh-tavern-side-icon { width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
 .dsh-tavern-side-icon:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -2413,7 +2412,8 @@ button.dsh-tavern-play-fullscreen {
   /* 文件入口已在移动抽屉中提供，顶栏保留会话标题和常用操作。 */
   body.dsh-tavern-shell-active :is([data-phase] > header, [data-slot="conversation.session.header"] > header) svg { display: block; flex-shrink: 0; }
   .dsh-tavern-sidebar { padding-top: 2px; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
-  .dsh-tavern-side-head { height: 40px; }
+  .dsh-tavern-side-head { height: 56px; }
+  .dsh-tavern-side-brand { height: 46px; }
 
   /* 输入区保持宿主的滚动与草稿生命周期，不再用 bottom 额外上推一个键盘高度。 */
   html.dsh-tavern-coarse-play [data-composer-seat] {
