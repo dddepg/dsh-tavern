@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "40c054782ecb03bcffce8b43cd57ee92311e0416",
-  "releaseSequence": 432,
+  "revision": "c44f6ecfd49268eea9b149fe4bf318680d9cd4d1",
+  "releaseSequence": 433,
   "version": "2.4.0",
   "files": [
     {
@@ -3706,8 +3706,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/lib/client.js.map",
-      "sha256": "2656b1dc3b2f24d67ad0a0b1d771840c27a9c7accf28a3f25b4ea62c51f14072",
-      "size": 407899
+      "sha256": "f92316bb06adc0aca1c1404602c0505ecbe28e74a6364efbc0c69f236ac6ba1d",
+      "size": 407165
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/lib/index.js",
@@ -3961,8 +3961,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/tsconfig.json",
-      "sha256": "f72c32e105a5be61c6d411b3ce52d69e0ae2af37d4ed72ebc31488636ed266b0",
-      "size": 647
+      "sha256": "d33cd94fc45613675dce3a6f324c38970319dae3da2e5f459565a5e733c10c7d",
+      "size": 668
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/tsdown.config.ts",
