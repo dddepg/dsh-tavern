@@ -581,3 +581,43 @@ test('人物设计发布在校验之后执行，发布失败不提交档案，�
   assert.equal(result.status, 'stale')
   assert.equal(published, false)
 })
+
+// PR #113's retry protection, retaining request idempotency and timeline guards.
+import { createSettlementProgressGuard } from '../tavern-plugin/lib/domain/settlement-progress-guard.js'
+test('three stale commits without progress interrupt the task and allow an explicit retry', async () => {
+  const h = coordinatorHarness(), notices = []
+  const task = await h.coordinator.begin(h.current(), 'settlement')
+  const retry = createSettlementProgressGuard({ backgroundTasks: h.coordinator, onStopped: value => notices.push(value) })
+  assert.equal(await retry(h.current()), true)
+  assert.equal(await retry(h.current(), new Error('stale failure')), true)
+  assert.equal(await retry(h.current()), false)
+  assert.equal(h.coordinator.activity(h.current()).phase, 'failed')
+  assert.equal(notices.length, 1)
+  assert.equal((await task.commit({ apply(chat) { chat.posture = 'late' } })).status, 'stale')
+  assert.equal(h.current().posture, '')
+  const next = await h.coordinator.begin(h.current(), 'settlement')
+  assert.notEqual(next.operationId, task.operationId)
+})
+test('new story revisions reset the stale retry budget', async () => {
+  const h = coordinatorHarness()
+  await h.coordinator.begin(h.current(), 'settlement')
+  const retry = createSettlementProgressGuard({ backgroundTasks: h.coordinator })
+  for (let revision = 0; revision < 6; revision++) {
+    h.current().timeline.revision = revision
+    assert.equal(await retry(h.current()), true)
+  }
+  assert.equal(h.coordinator.activity(h.current()).phase, 'running')
+})
+test('late circuit interruption cannot stop a changed branch or completed task', async () => {
+  for (const change of ['branch', 'complete']) {
+    const h = coordinatorHarness()
+    const task = await h.coordinator.begin(h.current(), 'settlement')
+    const expectedState = { branchId: h.current().timeline.branchId, revision: h.current().timeline.revision, lifecycleRevision: 0, phase: 'running' }
+    if (change === 'branch') h.current().timeline.branchId = 'new-branch'
+    else await task.commit({ stateChanged: false })
+    const before = h.writes.length
+    const result = await h.coordinator.recover(h.current(), { operationId: task.operationId, expectedState })
+    assert.equal(result.status, 'stale')
+    assert.equal(h.writes.length, before)
+  }
+})

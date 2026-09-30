@@ -24,6 +24,7 @@ import { openingPreviewPayload, openingInitializationPayload } from './domain/op
 import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader, createSessionSliceReader } from './domain/session-view-reader.js'
 import { createSessionStateView, settlementTurn, pendingMvuSettlementState, projectDisplayRuntimeState } from './domain/chat-session-state.js'
+import { createSettlementProgressGuard } from './domain/settlement-progress-guard.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
@@ -2493,6 +2494,9 @@ export async function apply(ctx) {
     return latest
   }
   async function runSettlement(chatId, signal) {
+    const retryStale = createSettlementProgressGuard({ backgroundTasks, onStopped: ({ operationId, error }) => {
+      console.error('dsh-tavern: 结算连续三次未能提交且剧情状态未前进，已停止，可重新结算', chatId, operationId, str(error?.message || error || '提交已过期'))
+    } })
     while (true) {
       signal?.throwIfAborted()
       let snapshot = await readSettlementInput(chatId, {readWindow:chatPersistence.readWindow,readChat})
@@ -2717,8 +2721,8 @@ export async function apply(ctx) {
         const completed = await taskRun.commit(completion)
         if (completed.status === 'missing') return
         if (completed.status === 'stale') {
-          const activity = backgroundTasks.activity(completed.chat)
-          if (activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) continue
+          signal?.throwIfAborted()
+          if (await retryStale(completed.chat)) continue
           return
         }
         console.log('dsh-tavern: 结算完成', chatId, '姿势', stat.postureUpdated ? '已更新' : '未更新')
@@ -2739,8 +2743,9 @@ export async function apply(ctx) {
         })
         if (failed.status === 'missing') return
         if (failed.status === 'stale') {
-          const activity = backgroundTasks.activity(failed.chat)
-          if (activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) continue
+          signal?.throwIfAborted()
+          console.warn('dsh-tavern: 结算失败结果已过期', chatId, str(err?.message || err))
+          if (await retryStale(failed.chat, err)) continue
           return
         }
         const latest = await readChat(chatId)

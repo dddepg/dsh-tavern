@@ -346,6 +346,13 @@ export function createBackgroundTaskCoordinator(options = {}) {
       }
       const latest = await store.readChat(chatId)
       const source = latest === undefined ? chat : latest
+      const expected = options.expectedState
+      if (expected && (source.timeline?.branchId !== expected.branchId
+        || source.timeline?.revision !== expected.revision
+        || Number(source.tavernHelperLifecycleRevision || 0) !== expected.lifecycleRevision
+        || activity(source).phase !== expected.phase)) {
+        return { chat: source, status: 'stale', activity: activity(source) }
+      }
       if (options.operationId && activity(source).operationId !== options.operationId) {
         return { chat: source, status: 'stale', activity: activity(source) }
       }

@@ -8,6 +8,7 @@ window.__ModuleLoader__.load({
 			let React = require("react");
 			let DshUi = require("@deepseek-ai/dsh-client-ui-primitives");
 
+		// @include crypto-digest.js
 		// @include stylesheet.js
 		if (typeof document !== "undefined") installTavernStylesheet(document, __TAVERN_BUNDLED_CSS__);
 
@@ -1815,6 +1816,7 @@ window.__ModuleLoader__.load({
             const sizingStyle = !sizing ? "" : '<style data-dsh-tavern-sizing>html[data-dsh-tavern-sizing-scroll]{overflow-y:auto!important}html[data-dsh-tavern-sizing-scroll] body{overflow-y:visible!important}' + (sizing.mode === "content" ? '' : 'html:root,html:root body{height:100%!important;min-height:0!important;overflow:auto!important}html:root body{white-space:normal}') + '</style>';
 			const cleanRuntimeReporter = runtimeReporter.replace('addEventListener("load",schedule);schedule();', 'addEventListener("load",schedule);addEventListener("resize",schedule);schedule();').replace("capturedAt:Date.now(),", "capturedAt:Date.now(),layout:window.__dshTavernFrameLayout?window.__dshTavernFrameLayout():null,").replace('dom=copy.innerHTML;', '(' + restoreTavernFrameFontStyles.toString() + ')(copy);Array.from(copy.querySelectorAll("script[data-dsh-tavern-font-runtime],script[data-dsh-tavern-text-colors],script[data-dsh-tavern-touch]")).forEach(function(node){node.remove();});dom=copy.innerHTML;');
 			return '<!doctype html><html><head><meta charset="utf-8">'
+                + '<script data-dsh-tavern-crypto>(' + installTavernCryptoSubtlePolyfill.toString() + ')(window);<\/script>'
 				+ '<meta name="viewport" content="width=device-width,initial-scale=1">'
 				+ '<meta name="referrer" content="no-referrer">'
 				+ '<meta http-equiv="Content-Security-Policy" content="default-src https: http: data: blob:; img-src https: http: data: blob:; media-src https: http: data: blob:; font-src https: http: data:; style-src \'unsafe-inline\' https: http:; script-src \'unsafe-inline\' \'unsafe-eval\' https: http: data: blob:; connect-src https: http: wss: data: blob:; frame-src https: http: data: blob:; object-src \'none\'; base-uri \'none\'; form-action \'none\'">'
@@ -3755,7 +3757,8 @@ window.__ModuleLoader__.load({
 			// Start now: document.open() can remove deferred module tags before they run.
 			const safeLoader = JSON.stringify(loaderSource).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 			return {
-				head: tavernIconDependencies()
+				head: '<script data-dsh-tavern-crypto>(' + installTavernCryptoSubtlePolyfill.toString() + ')(window);<\/script>'
+                + tavernIconDependencies()
 				+ tavernStaticAssetShim()
 				+ tavernHelperScriptDependencies()
 				+ '<script data-dsh-tavern-helper-script>' + bootstrap + '<\/script>',
