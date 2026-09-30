@@ -7739,7 +7739,7 @@ window.__ModuleLoader__.load({
 				return React.createElement("label", { key: field }, labels[field] || field, control);
 			}
 			return React.createElement("div", { className: "dsh-tavern-settings-group" },
-				React.createElement("h3", { style: { padding: "16px", margin: 0 } }, "生图 API 配置（全局共用）"),
+				React.createElement("h3", { className: "dsh-tavern-image-settings-title" }, "生图 API 配置（全局共用）"),
 				React.createElement("div", { className: "dsh-tavern-image-settings" },
 					React.createElement("p", { className: "dsh-tavern-settings-intro" }, "保存 API 配置后，在本局设置中开启场景生图，再点输入框上方的「生图」。连接测试不生成图片；实际生图可能产生费用。"),
 					form ? React.createElement("label", null, "提供商", React.createElement("select", { value: form.provider, disabled: busy, onChange: function (e) { return chooseChannel(e.target.value); } }, (form.channels || []).map(function (item) { return React.createElement("option", { key: item.id, value: item.id }, item.label); }))) : null,
@@ -7878,13 +7878,15 @@ window.__ModuleLoader__.load({
             }, [key]);
             const efforts = reasoning.key === key ? reasoning.value?.efforts || [] : [];
             const known = !selection || props.catalog.some(group => group.provider === selection.provider && group.models.some(model => model.id === selection.model));
-            return h("section", { className: "dsh-local-section" },
-                h("label", null, props.label, h("select", { className: "dsh-tavern-settings-select", "aria-label": props.label, value: key, disabled: props.disabled,
+            return h("div", { className: "dsh-tavern-model-row" },
+                h("span", { className: "dsh-tavern-model-row-label" }, props.title || props.label),
+                h("div", { className: "dsh-tavern-model-row-controls" },
+                h("select", { className: "dsh-tavern-settings-select", "aria-label": props.label, value: key, disabled: props.disabled,
                     onChange: event => props.onChange(event.target.value ? JSON.parse(event.target.value) : null) },
                     h("option", { value: "" }, props.fallback),
                     !known ? h("option", { value: key }, backgroundModelLabel(selection, props.catalog) + "（当前不可用）") : null,
-                    props.catalog.map(group => h("optgroup", { key: group.provider, label: group.providerName || group.provider }, group.models.map(model => h("option", { key: model.id, value: JSON.stringify({ provider: group.provider, model: model.id }) }, model.name || model.id)))))),
-                h("label", null, "推理强度", h("select", { className: "dsh-tavern-settings-select", "aria-label": props.label + "推理强度", value: selection?.reasoningEffort || "", disabled: props.disabled || !key || !efforts.length,
+                    props.catalog.map(group => h("optgroup", { key: group.provider, label: group.providerName || group.provider }, group.models.map(model => h("option", { key: model.id, value: JSON.stringify({ provider: group.provider, model: model.id }) }, model.name || model.id))))),
+                h("select", { className: "dsh-tavern-settings-select", "aria-label": props.label + "推理强度", value: selection?.reasoningEffort || "", disabled: props.disabled || !key || !efforts.length,
                     onChange: event => { const next = { ...selection }; if (event.target.value) next.reasoningEffort = event.target.value; else delete next.reasoningEffort; return props.onChange(next); } },
                     h("option", { value: "" }, key ? "模型默认" : props.fallback), efforts.map(item => h("option", { key: item.id, value: item.id }, item.name || item.id)))),
                 key && reasoning.key === key && reasoning.error ? h("p", { role: "alert" }, reasoning.error) : null);

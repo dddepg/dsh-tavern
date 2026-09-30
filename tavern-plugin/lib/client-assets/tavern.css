@@ -1937,3 +1937,91 @@ details.dsh-tavern-mvu-receipt:not([open]):not(:hover) > .dsh-tavern-mvu-receipt
 .dsh-tavern-status-dashboard .dsh-tavern-status-runtime { border: 0; border-radius: 0; background: transparent; }
 .dsh-tavern-status-dashboard .dsh-tavern-card-reload .dsh-tavern-btn.quiet { border: 0; padding: 2px 0; color: var(--dsw-alias-label-tertiary); }
 .dsh-tavern-status-dashboard .dsh-tavern-card-reload .dsh-tavern-btn.quiet:hover:not(:disabled) { background: transparent; color: var(--dsh-tavern-accent); text-decoration: underline; text-underline-offset: 3px; }
+.dsh-tavern-mvu-receipt-body { gap: 10px; padding: 12px 14px 14px; }
+.dsh-tavern-mvu-receipt-reason { margin-top: 0; }
+.dsh-tavern-mvu-retry { justify-self: center; padding: 6px 16px; font-size: 12px; }
+.dsh-tavern-mvu-retry:hover:not(:disabled) { border-color: var(--dsh-tavern-accent-border); color: var(--dsh-tavern-accent); }
+
+/* Global settings: grouped cards with label-left / control-right rows, matching DSH general settings. */
+.dsh-tavern-global-settings { gap: 32px; padding-bottom: 8px; container-type: inline-size; }
+.dsh-tavern-gs-group { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dsh-tavern-gs-head { padding: 0 2px; }
+.dsh-tavern-gs-head h2 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.4; color: var(--dsw-alias-label-primary); }
+.dsh-tavern-gs-head p { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-gs-notice { margin: 0; padding: 0 2px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-global-settings .dsh-tavern-global-defaults { gap: 12px; }
+.dsh-tavern-global-settings .dsh-tavern-global-defaults > p[role="status"] { margin: 0; padding: 0 2px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+
+/* One card style for every block. */
+.dsh-tavern-global-settings :is(.dsh-tavern-gs-card, .dsh-local-section, .dsh-tavern-settings-group) {
+  display: flex; flex-direction: column; gap: 0; margin: 0; padding: 4px 18px; overflow: visible;
+  border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major);
+}
+.dsh-tavern-gs-group > :is(.dsh-tavern-settings-group, .dsh-local-section) + :is(.dsh-tavern-settings-group, .dsh-local-section) { margin-top: 0; }
+.dsh-tavern-global-settings .dsh-local-section > h3,
+.dsh-tavern-global-settings .dsh-tavern-settings-group > h3 { margin: 0; padding: 14px 0 6px; font-size: 13px; font-weight: 650; color: var(--dsw-alias-label-primary); }
+
+/* Rows. */
+.dsh-tavern-global-settings :is(.dsh-tavern-model-row, .dsh-local-field, .dsh-tavern-settings-row, .dsh-tavern-background-task, .dsh-tavern-compaction-field) {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px;
+  min-height: 36px; margin: 0; padding: 12px 0; font-size: 13px; line-height: 1.5; color: var(--dsw-alias-label-primary); cursor: default;
+}
+.dsh-tavern-global-settings :is(.dsh-tavern-model-row, .dsh-local-field, .dsh-tavern-settings-row, .dsh-tavern-background-task, .dsh-tavern-compaction-field) + :is(.dsh-tavern-model-row, .dsh-local-field, .dsh-tavern-settings-row, .dsh-tavern-background-task, .dsh-tavern-compaction-field) { border-top: 1px solid var(--dsw-alias-border-l2); }
+.dsh-tavern-global-settings .dsh-local-section > h3 + :is(.dsh-local-field, .dsh-tavern-background-task) { border-top: 0; }
+.dsh-tavern-global-settings .dsh-tavern-background-task { border-bottom: 0; }
+.dsh-tavern-global-settings .dsh-tavern-settings-copy { flex: 1 1 200px; }
+.dsh-tavern-global-settings .dsh-tavern-settings-title,
+.dsh-tavern-global-settings .dsh-tavern-settings-copy > strong { display: block; font-size: 13px; font-weight: 500; }
+.dsh-tavern-global-settings .dsh-tavern-settings-desc { display: block; margin: 3px 0 0; font-size: 12px; line-height: 1.55; color: var(--dsw-alias-label-tertiary); }
+
+/* Controls: fixed width on the right. */
+.dsh-tavern-global-settings :is(.dsh-local-field, .dsh-tavern-compaction-field) > :is(select, input),
+.dsh-tavern-global-settings .dsh-tavern-settings-row > select {
+  flex: 0 0 240px; width: 240px; max-width: 100%; height: 34px; box-sizing: border-box; padding: 0 10px;
+  font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+}
+.dsh-tavern-model-row-label { flex: 1 1 80px; }
+.dsh-tavern-model-row-controls { display: flex; gap: 8px; flex: 0 1 auto; }
+.dsh-tavern-model-row-controls > select { width: 190px; max-width: none; height: 34px; padding: 0 10px; font: inherit; font-size: 13px; border-radius: 8px; background: var(--dsw-alias-bg-base); }
+.dsh-tavern-model-row-controls > select + select { width: 110px; }
+.dsh-tavern-model-row > p[role="alert"] { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--dsh-tavern-accent-error); }
+
+/* Secondary buttons: compact outline, right-aligned where they end a card. */
+.dsh-tavern-global-settings .dsh-tavern-btn { height: 32px; padding: 0 14px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-size: 12px; }
+.dsh-tavern-global-settings .dsh-tavern-btn:hover:not(:disabled) { border-color: var(--dsh-tavern-accent-border); background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent); }
+.dsh-tavern-global-settings .dsh-tavern-compaction-settings > .dsh-tavern-btn { align-self: flex-end; margin: 4px 0 14px; }
+.dsh-tavern-global-settings .dsh-tavern-compaction-settings > .dsh-tavern-settings-desc { margin: 0 0 10px; }
+.dsh-tavern-global-settings .dsh-tavern-compaction-settings > .dsh-tavern-settings-title { padding: 14px 0 0; font-weight: 650; }
+
+/* Default writing skills: collapsible card. */
+.dsh-tavern-global-settings details.dsh-tavern-default-skills { padding: 0 18px; }
+.dsh-tavern-global-settings details.dsh-tavern-default-skills > summary { padding: 14px 0; font-size: 13px; font-weight: 650; list-style-position: inside; }
+.dsh-tavern-global-settings details.dsh-tavern-default-skills > .dsh-local-help { margin: 0 0 6px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-global-settings .dsh-tavern-writing-skill { flex-direction: column; align-items: stretch; gap: 2px; }
+.dsh-tavern-global-settings .dsh-tavern-writing-skill-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 500; }
+
+/* Scene image API card. */
+.dsh-tavern-global-settings .dsh-tavern-image-settings { gap: 12px; padding: 4px 0 16px; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings label { font-size: 13px; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings :is(input, select, textarea) { height: 34px; border-radius: 8px; background: var(--dsw-alias-bg-base); font-size: 13px; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings textarea { height: auto; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings .dsh-tavern-btn { align-self: flex-start; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings > .dsh-tavern-settings-intro { font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-tertiary); }
+
+@container (max-width: 520px) {
+  .dsh-tavern-model-row-controls { flex: 1 1 100%; }
+  .dsh-tavern-model-row-controls > select { flex: 1; width: auto; min-width: 0; }
+  .dsh-tavern-global-settings :is(.dsh-local-field, .dsh-tavern-compaction-field) > :is(select, input),
+  .dsh-tavern-global-settings .dsh-tavern-settings-row > select { flex: 1 1 100%; width: 100%; }
+}
+@media (max-width: 640px) {
+  .dsh-tavern-model-row-controls { flex: 1 1 100%; }
+  .dsh-tavern-model-row-controls > select { flex: 1; width: auto; min-width: 0; }
+  .dsh-tavern-global-settings :is(.dsh-local-field, .dsh-tavern-compaction-field) > :is(select, input),
+  .dsh-tavern-global-settings .dsh-tavern-settings-row > select { flex: 1 1 100%; width: 100%; }
+}
+.dsh-tavern-image-settings-title { margin: 0; padding: 16px 20px 0; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings-title { padding: 14px 0 0; font-size: 13px; font-weight: 650; }
+.dsh-tavern-global-settings .dsh-tavern-image-settings > p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-global-settings .dsh-tavern-image-settings > details > summary { font-size: 13px; cursor: pointer; }
+.dsh-tavern-global-settings :is(.dsh-tavern-gs-card, .dsh-local-section, .dsh-tavern-settings-group) { padding-bottom: 6px; }

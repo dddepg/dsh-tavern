@@ -30,7 +30,6 @@ function createGlobalSettingsModule({ React, rpc, notifySettingsChanged, TavernD
                 h("input", { type: "checkbox", role: "switch", "aria-label": title, disabled, checked: task ? data?.backgroundTasks[key] === true : data?.[key] === true, onChange: event => save(task ? { backgroundTasks: { [key]: event.target.checked } } : { [key]: event.target.checked }) }));
         }
         return h("div", { className: "dsh-tavern-settings-section dsh-local-settings dsh-tavern-global-defaults" },
-            h("p", { className: "dsh-tavern-settings-intro" }, "以下为新游戏默认设置，开局后可在本局设置中单独修改。"),
             h("section", { className: "dsh-local-section" }, h("h3", null, "基本信息"),
                 h("label", { className: "dsh-local-field" }, "默认玩家称呼", h("input", { key: data?.playerName, defaultValue: data?.playerName || "", disabled, maxLength: 80, onBlur: event => { if (event.target.value !== data.playerName) save({ playerName: event.target.value }); } })),
                 h("label", { className: "dsh-local-field" }, "默认状态栏位置", h("select", { disabled, value: data?.statusBarPlacement || "sidebar", onChange: event => save({ statusBarPlacement: event.target.value }) }, h("option", { value: "sidebar" }, "侧边栏"), h("option", { value: "body" }, "正文下方"))),
@@ -63,19 +62,28 @@ function createGlobalSettingsModule({ React, rpc, notifySettingsChanged, TavernD
                 setState(current => ({ ...current, [name]: result.settings[name], busy: false, notice: "已保存，下次新游戏生效" }));
             } catch (err) { setState(current => ({ ...current, busy: false, error: String(err.message || err) })); }
         }
-        return React.createElement("div", { className: "dsh-tavern-settings-section" },
-            React.createElement("p", { className: "dsh-tavern-settings-intro" }, "默认模型用于新游戏；已有游戏保持当前配置，可在本局单独调整。"),
-            React.createElement("p", { className: "dsh-tavern-settings-intro" }, "建议前台和后台使用 High 推理强度，优先保证正文输出和后台任务的质量。不推荐 Max，以免过度思考、增加等待。若更在意响应速度，可按需降低。"),
-            React.createElement(TavernDefaultModelSetting, { label: "默认前台模型", fallback: "使用 DSH 默认模型", selection: state.defaultForegroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultForegroundModel", selection) }),
-            React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) }),
-            state.notice ? React.createElement("p", { role: "status" }, state.notice) : null,
-            state.settings ? React.createElement(GlobalPlayDefaults, { settings: state.settings }) : null,
-            React.createElement(TavernConversationWritingSkills, { globalDefaults: true }),
-            React.createElement(DisplayPreferencesSettings),
-            React.createElement(CandidatePreferencesSettings),
-            React.createElement(PromptTemplateSettingsEntry),
-            React.createElement(ContextCompactionSettings),
-            state.sceneImages ? React.createElement(SceneImageSettings, null) : null,
+        const h = React.createElement;
+        function group(title, desc, ...children) {
+            return h("section", { className: "dsh-tavern-gs-group", "aria-label": title },
+                h("header", { className: "dsh-tavern-gs-head" }, h("h2", null, title), desc ? h("p", null, desc) : null),
+                ...children);
+        }
+        return h("div", { className: "dsh-tavern-settings-section dsh-tavern-global-settings" },
+            group("默认模型", "用于新游戏，已有游戏保持当前配置。建议使用 High 推理强度；Max 容易过度思考、增加等待。",
+            h("div", { className: "dsh-tavern-gs-card" },
+            React.createElement(TavernDefaultModelSetting, { label: "默认前台模型", title: "前台模型", fallback: "使用 DSH 默认模型", selection: state.defaultForegroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultForegroundModel", selection) }),
+            React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", title: "后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) })),
+            state.notice ? h("p", { className: "dsh-tavern-gs-notice", role: "status" }, state.notice) : null),
+            group("新游戏默认", "开局时继承，开局后可在本局设置中单独修改。",
+                state.settings ? h(GlobalPlayDefaults, { settings: state.settings }) : null,
+                h(TavernConversationWritingSkills, { globalDefaults: true })),
+            group("显示与交互", "",
+                h(DisplayPreferencesSettings),
+                h(CandidatePreferencesSettings)),
+            group("高级", "",
+                h(PromptTemplateSettingsEntry),
+                h(ContextCompactionSettings),
+                state.sceneImages ? h(SceneImageSettings, null) : null),
             state.error ? React.createElement("div", { className: "dsh-tavern-settings-error", role: "alert" }, "保存失败：" + state.error) : null
         );
     }
