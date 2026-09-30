@@ -130,7 +130,7 @@ test('实验分支无论历史设置为何都公开兼容能力', async t => {
   assert.equal((await harness.read()).compatibilityMode, true)
   assert.equal((await harness.saved()).compatibilityMode, false)
   assert.equal(presentTavernSettings(await harness.saved(), {}).compatibilityMode, true)
-  assert.doesNotMatch(clientSource, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "兼容（实验性）"/)
+  assert.match(clientSource, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "silly 模式"/)
 })
 
 test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词列表', () => {

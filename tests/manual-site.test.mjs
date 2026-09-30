@@ -68,7 +68,7 @@ test('文档只采用独立样例截图，不复用旧图片或加载远程脚�
   assert.match(frames[0], /title="[^"]+"/)
   assert.doesNotMatch(html, /<script[^>]+src="https?:/)
   assert.ok(!/预设库（实验性）|保证永不失忆/.test(html))
-  assert.match(pages.find(p => p.id === 'd11').body, /已停用/)
+  assert.match(pages.find(p => p.id === 'd11').body, /silly 模式/)
   assert.doesNotMatch(html, /截图将在内容定稿后补充|暂不使用旧版截图/)
   assert.match(html, /界面截图均使用公开样例/)
 })
