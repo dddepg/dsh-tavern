@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/dsh-tavern-lockup-dark.svg">
-    <img src="docs/assets/brand/dsh-tavern-lockup.svg" width="360" alt="DSH 酒馆">
-  </picture>
+  <img src="docs/assets/brand/dsh-tavern-lockup-auto.svg" width="360" alt="DSH 酒馆">
 </p>
 
 # dsh-tavern
