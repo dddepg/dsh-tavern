@@ -137,7 +137,11 @@ body.dsh-tavern-shell-active [data-turn-tail] [data-slot="conversation.chat.assi
 body.dsh-tavern-shell-active .dsh-tavern-hero-preset-row { display: none !important; }
 /* 会话列表首次加载前不画首页，避免刷新时先闪首页再跳回上次的对话。 */
 body.dsh-tavern-sessions-pending [data-phase="hero"] > *, body.dsh-tavern-sessions-pending [data-phase="hero"]::before { visibility: hidden !important; }
-body.dsh-tavern-sessions-pending [data-phase="hero"]::after { content: "正在载入…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--dsw-alias-label-tertiary); font-size: 13px; pointer-events: none; }
+/* 加载期间显示与空白首页同尺寸、同位置的标志，加载完成落到首页时画面不跳。 */
+body.dsh-tavern-sessions-pending [data-phase="hero"]::after { content: ""; position: absolute; inset: 0; margin: auto; width: min(460px, 80vw); aspect-ratio: 715 / 200; background: var(--dsh-tavern-lockup) center / contain no-repeat; pointer-events: none; animation: dsh-tavern-logo-breathe 1.8s ease-in-out infinite; }
+[data-ds-dark-theme] body.dsh-tavern-sessions-pending [data-phase="hero"]::after, body[data-ds-dark-theme].dsh-tavern-sessions-pending [data-phase="hero"]::after { background-image: var(--dsh-tavern-lockup-dark); }
+@keyframes dsh-tavern-logo-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { body.dsh-tavern-sessions-pending [data-phase="hero"]::after { animation: none; } }
 /* A blank session is also a hero. Only the session-less landing page loses its composer. */
 body.dsh-tavern-shell-active .dsh-tavern-landing { display: grid !important; place-items: center; }
 body.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important; }
