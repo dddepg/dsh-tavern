@@ -1535,6 +1535,7 @@ test('managed MVU keeps jQuery when a card declares its own lexical dollar helpe
     createElement: () => ({ remove() {} }),
     body: { appendChild(element) { vm.runInContext('(function(){' + element.textContent + '\n})()', context) } }
   } }
+  sandbox.createTavernFrameLifecycle = client.createTavernFrameLifecycle
   const context = vm.createContext(sandbox)
   vm.runInContext('const $ = id => document.getElementById(id);', context)
   const load = vm.runInContext('(' + source + ')', context)
@@ -1928,6 +1929,7 @@ test('module loader preserves card self-checks and message text', async () => {
   const result = []
   const window = {__dshTavernManagedMvu:true,addEventListener(){},removeEventListener(){},clearTimeout(){}}
   const sandbox = {window,result,document:{createElement:()=>({remove(){}}),body:{appendChild(element){vm.runInNewContext(element.textContent,sandbox)}}}}
+  sandbox.createTavernFrameLifecycle = client.createTavernFrameLifecycle
   const load = vm.runInNewContext('('+client.loadTavernHelperModule.toString()+')',sandbox)
   await load('function _yqDiagCheckExtraModel(){return false;} result.push(_yqDiagCheckExtraModel(), "正在生成专属开场白...");','arbitrary-card',false)
   assert.deepEqual(result,[false,'正在生成专属开场白...'])

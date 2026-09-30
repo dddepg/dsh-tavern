@@ -26,7 +26,7 @@ test('脚本宿主的固定运行时依赖全部使用随包本地资源', () =>
 })
 
 function harness(scripts, onAppend, ready = Promise.resolve()) {
-  const listeners = new Set(), events = [], elements = []
+  const listeners = new Set(), lifecycleListeners = new Map(), events = [], elements = []
   let context
   const window = {
     __dshTavernHelperReady: ready,
@@ -37,8 +37,14 @@ function harness(scripts, onAppend, ready = Promise.resolve()) {
     __dshTavernHelperSubscriptionsFailed(id, error) { events.push(['failed', id, error.message, ...(error.dshTavernModuleFailure ? [error.dshTavernModuleFailure] : [])]) },
     __dshTavernResolveCompanionScriptsReady() { events.push(['done']) },
     waitGlobalInitialized: async name => { events.push(['global', name]) },
-    addEventListener(name, handler) { assert.equal(name, 'error'); listeners.add(handler) },
-    removeEventListener(name, handler) { listeners.delete(handler) }
+    addEventListener(name, handler) {
+      if (name === 'error') listeners.add(handler)
+      else { assert.equal(name, 'pagehide'); lifecycleListeners.set(name, handler) }
+    },
+    removeEventListener(name, handler) {
+      if (name === 'error') listeners.delete(handler)
+      else lifecycleListeners.delete(name)
+    }
   }
   const document = {
     // Composer controls are preinstalled; this harness exercises module loading.
@@ -58,7 +64,7 @@ function harness(scripts, onAppend, ready = Promise.resolve()) {
     } }
   }
   context = vm.createContext({ window, document, console, URL })
-  return { window, events, elements, listeners,
+  return { window, events, elements, listeners, lifecycleListeners,
     run: () => vm.runInContext('(async()=>{' + loader(scripts) + '})()', context) }
 }
 
@@ -79,6 +85,9 @@ const text = "import '/api/dsh-tavern/remote-assets/not-code.js'";
   assert.equal(run.listeners.size, 0)
   assert(run.elements.every(element => element.removed))
   assert(!Object.keys(run.window).some(key => key.startsWith('__dshTavernModuleComplete_')))
+  assert.ok(run.window.__dshTavernComposerRuntime)
+  run.lifecycleListeners.get('pagehide')()
+  assert.equal(run.window.__dshTavernComposerRuntime, undefined)
 })
 
 test('模块等待 bootstrap 与前一个脚本完成，官方核心就绪后才开始配套脚本', async () => {

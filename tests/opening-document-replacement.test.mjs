@@ -29,6 +29,27 @@ test('开局页面替换 document 后仍启动宿主模块并保留其 API', asy
   await page.waitForFunction(()=>typeof window.Mvu?.getMvuData==='function',null,{timeout:3000})
   assert.equal(await page.evaluate(()=>window.Mvu.getMvuData().stat_data.name),'测试')
   assert.equal(await page.evaluate(()=>window.openingRuntimeStarts),1)
+  // Replace the document after every companion module has finished. The input
+  // adapter must remount without replaying any card script.
+  await page.evaluate(() => {
+    window.sendAttempts = [];
+    window.submitTavernInput = async text => {
+      window.sendAttempts.push(text);
+      if (window.sendAttempts.length === 1) throw new Error('可重试失败');
+    };
+    document.open(); document.write('<body><p>第二份开局文档</p></body>'); document.close();
+  });
+  await page.waitForFunction(() => Boolean(document.getElementById('send_but')));
+  await page.evaluate(() => {
+    document.getElementById('send_textarea').value = '原样保留 | /trigger';
+    document.getElementById('send_but').click(); document.getElementById('send_but').click();
+  });
+  await page.getByRole('alert').filter({ hasText: '可重试失败' }).waitFor();
+  assert.equal(await page.locator('#send_textarea').inputValue(), '原样保留 | /trigger');
+  await page.evaluate(() => document.getElementById('send_but').click());
+  await page.waitForFunction(() => document.getElementById('send_textarea').value === '');
+  assert.deepEqual(await page.evaluate(() => window.sendAttempts), ['原样保留 | /trigger', '原样保留 | /trigger']);
+  assert.equal(await page.evaluate(() => window.openingRuntimeStarts), 1);
 })
 
 for (const afterComposer of [false, true]) test('远程开局重写到 head 阶段时，MVU 和输入层恢复且能保存角色：afterComposer=' + afterComposer, async t => {

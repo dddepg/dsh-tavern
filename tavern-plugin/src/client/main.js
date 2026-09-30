@@ -1764,6 +1764,7 @@ window.__ModuleLoader__.load({
 		}
 
 		// @include opening-preview.js
+		// @include modules/frame-lifecycle.js
 		// @include legacy-composer.js
 		// @include landing-styles.js
 		// @include subagent-catalog-sync.js
@@ -1826,7 +1827,7 @@ window.__ModuleLoader__.load({
 				// Viewers without the execution lease still receive live variables. Legacy
 				// status panels read parent.Mvu; expose their Helper API below the executor.
 				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
-				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
+				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
         function startTavernHelperLoader(source) {
@@ -3458,11 +3459,11 @@ window.__ModuleLoader__.load({
 				const element = document.createElement("script");
 				const completionKey = "__dshTavernModuleComplete_" + Math.random().toString(36).slice(2);
 				let settled = false;
-				let mountTimer = null;
+				let cancelMount = function () {};
 				function finish(error) {
 					if (settled) return;
 					settled = true;
-					if (mountTimer !== null) window.clearTimeout(mountTimer);
+					cancelMount();
 					window.removeEventListener("error", onError);
 					delete window[completionKey];
 					element.remove();
@@ -3485,22 +3486,11 @@ window.__ModuleLoader__.load({
 				// bindings/re-exports and dynamic imports can resolve local cache URLs.
 				// A completion footer waits for top-level await (a load event does not).
 				element.textContent = String(source) + "\n;window[" + JSON.stringify(completionKey) + "]?.();\n//# sourceURL=" + sourceUrl + "\n";
-				// document.open/write can temporarily leave only a parsing <head>.
-				// Wait before attaching; never replay a module that has started.
-				const mountDeadline = Date.now() + 30000;
-				function mount() {
-					if (settled) return;
-					if (!document.body) {
-						if (Date.now() >= mountDeadline) { finish(new Error("开局文档尚未生成 body，脚本无法启动")); return; }
-						mountTimer = window.setTimeout(mount, 10);
-						return;
-					}
-					try {
-                        if (beforeMount) beforeMount();
-                        document.body.appendChild(element);
-                    } catch (error) { finish(error); }
-				}
-				mount();
+                cancelMount = createTavernFrameLifecycle(window, document).mount(function () {
+                    if (settled) return;
+                    if (beforeMount) beforeMount();
+                    document.body.appendChild(element);
+                }, finish);
 			});
 		}
 
@@ -3745,6 +3735,7 @@ window.__ModuleLoader__.load({
 				return { id: String(script && script.id || ""), system: String(script && script.system || ""), assetUrl: String(script && script.assetUrl || ""), content: String(script && script.content || "") };
 			});
 			const loaderSource = 'await window.__dshTavernHelperReady;\n'
+                + 'const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';\n'
 				+ 'const createTavernPreviewWindow=' + createTavernPreviewWindow.toString() + ';\n'
 				+ 'const loadModule=' + loadTavernHelperModule.toString() + ';\n'
 				+ 'const createMvuLoader=' + createMvuBundleLoader.toString() + ';\n'
@@ -5306,10 +5297,13 @@ window.__ModuleLoader__.load({
 			}
             function submitOpening(document, text) {
                 if (!listener || document !== visible || document.key !== desired.key || typeof props.onSubmitOpening !== "function") return Promise.reject(new Error("开场预览已失效，请重新打开"));
-                if (!document.openingSubmit) document.openingSubmit = Promise.resolve().then(function () {
-                    return props.onSubmitOpening(String(text || ""));
-                }).catch(function (error) { document.openingSubmit = null; throw error; });
-                return document.openingSubmit;
+                if (!document.openingSender) document.openingSender = createTavernFrameLifecycle(hostWindow).sender({
+                    once: true,
+                    valid: () => Boolean(listener) && document === visible && document.key === desired.key && typeof props.onSubmitOpening === "function",
+                    stale: "开场预览已失效，请重新打开",
+                    submit: text => props.onSubmitOpening(text)
+                });
+                return document.openingSender.send(text);
             }
 			function receive(event) {
 				const data = event && event.data;
@@ -11745,6 +11739,7 @@ window.__ModuleLoader__.load({
 		exports.groupTavernHistory = groupTavernHistory;
 		exports.createPlayWorkspaceResolver = createPlayWorkspaceResolver;
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
+		exports.createTavernFrameLifecycle = createTavernFrameLifecycle;
 		exports.installOpeningHostComposer = installOpeningHostComposer;
         exports.installFrameHostComposer = installFrameHostComposer;
         exports.createTavernComposerWindow = createTavernComposerWindow;

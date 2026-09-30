@@ -3742,64 +3742,122 @@ window.__ModuleLoader__.load({
 		    host.removeEventListener("focus", renew);
 		  };
 		}
-		// Legacy card pages submit through these SillyTavern DOM IDs. Keep the
-		// adapter inside its owning frame so it cannot target another conversation.
-		function installLegacyTavernComposer() {
-		  // A remote opening may be parsing only its head after document.open().
-		  // The loader must wait here as well as when mounting the later MVU module.
-		  if (!document.body) return new Promise(function (resolve, reject) {
-		    const deadline = Date.now() + 30000;
-		    function mount() {
-		      if (document.body) {
-		        try { resolve(installLegacyTavernComposer()); } catch (error) { reject(error); }
-		      } else if (Date.now() >= deadline) reject(new Error('开局文档尚未生成 body，输入兼容层无法启动'));
-		      else window.setTimeout(mount, 10);
+		// Shared lifetime rules for frame scripts and every opening input adapter.
+		// Self-contained because the same module runs in serialized card documents.
+		function createTavernFrameLifecycle(win, doc = win.document) {
+		    let disposed = false;
+		    const releases = new Set();
+		    function sender({ submit, valid = () => true, once = false, busy = () => {}, stale = '卡片已关闭，请重新打开' }) {
+		        let active = true, pending = null, completed = null;
+		        function dispose() { active = false; releases.delete(dispose); }
+		        releases.add(dispose);
+		        return {
+		            send(value) {
+		                if (disposed || !active || !valid()) return Promise.reject(new Error(stale));
+		                if (pending || completed) return pending || completed;
+		                const text = String(value || '').trim();
+		                if (!text) return Promise.resolve();
+		                busy(true);
+		                pending = Promise.resolve().then(() => {
+		                    // Closing or switching a frame can happen in the same task as a click.
+		                    if (disposed || !active || !valid()) throw new Error(stale);
+		                    return submit(text);
+		                }).then(result => {
+		                    if (once) completed = Promise.resolve(result);
+		                    return result;
+		                }).finally(() => { pending = null; busy(Boolean(completed)); });
+		                return pending;
+		            },
+		            dispose
+		        };
 		    }
-		    mount();
-		  });
-		  if (document.getElementById('send_textarea') || document.getElementById('send_but')) return;
-		  const controls = document.createElement('div');
-		  controls.hidden = true;
-		  const area = document.createElement('textarea');
-		  area.id = 'send_textarea';
-		  const button = document.createElement('button');
-		  button.id = 'send_but';
-		  button.type = 'button';
-		  controls.append(area, button);
-		  document.body.append(controls);
-		  area.addEventListener('input', function () {
-		    if (typeof window.submitTavernInput === 'function') return;
-		    Promise.resolve().then(function () {
-		      if (typeof window.triggerSlash !== 'function') throw new Error('当前对话输入框尚未就绪');
-		      return window.triggerSlash('/setinput ' + String(area.value || ''));
-		    }).catch(function (error) {
-		      const notice = document.createElement('div');
-		      notice.setAttribute('role', 'alert');
-		      notice.textContent = '开场文字填入失败：' + String(error && error.message || error);
-		      document.body.append(notice);
+		    function mount(mountBody, fail, timeoutMs = 30000) {
+		        let timer, cancelled = false;
+		        const deadline = Date.now() + timeoutMs;
+		        function cancel() {
+		            cancelled = true;
+		            if (timer !== undefined) win.clearTimeout(timer);
+		            releases.delete(cancel);
+		        }
+		        function attempt() {
+		            if (cancelled || disposed) return;
+		            if (!doc.body) {
+		                if (Date.now() >= deadline) { cancel(); fail(new Error('开局文档尚未生成 body，无法启动')); }
+		                else timer = win.setTimeout(attempt, 10);
+		                return;
+		            }
+		            cancel();
+		            try { mountBody(doc.body); } catch (error) { fail(error); }
+		        }
+		        releases.add(cancel);
+		        attempt();
+		        return cancel;
+		    }
+		    function maintain(mountBody, fail) {
+		        let cancel = () => {};
+		        function refresh() { cancel(); cancel = mount(mountBody, fail); }
+		        const observer = win.MutationObserver ? new win.MutationObserver(refresh) : null;
+		        observer?.observe(doc, { childList: true, subtree: true });
+		        function release() { cancel(); observer?.disconnect(); releases.delete(release); }
+		        releases.add(release);
+		        refresh();
+		        return { refresh, dispose: release };
+		    }
+		    return {
+		        sender, mount, maintain,
+		        dispose() { disposed = true; for (const release of [...releases]) release(); }
+		    };
+		}
+		// Legacy DOM IDs are adapters onto the shared frame lifetime and sender.
+		function installLegacyTavernComposer() {
+		  const existing = window.__dshTavernComposerRuntime;
+		  if (existing) { existing.refresh(); return existing.ready; }
+		  const lifetime = createTavernFrameLifecycle(window, document);
+		  let releaseSender = () => {}, controls, resolveReady, rejectReady;
+		  const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+		  function report(prefix, error) {
+		    if (!document.body) return;
+		    const notice = document.createElement('div');
+		    notice.setAttribute('role', 'alert');
+		    notice.textContent = prefix + String(error && error.message || error);
+		    document.body.append(notice);
+		  }
+		  const mounted = lifetime.maintain(function () {
+		    if (document.getElementById('send_textarea') || document.getElementById('send_but')) { resolveReady(); return; }
+		    releaseSender();
+		    controls = document.createElement('div'); controls.hidden = true;
+		    const area = document.createElement('textarea'), button = document.createElement('button');
+		    area.id = 'send_textarea'; button.id = 'send_but'; button.type = 'button';
+		    controls.append(area, button); document.body.append(controls);
+		    const owner = controls;
+		    const sender = lifetime.sender({
+		      valid: () => owner.isConnected !== false,
+		      busy: value => { button.disabled = value; },
+		      submit: text => {
+		        if (typeof window.submitTavernInput === 'function') return window.submitTavernInput(text);
+		        if (typeof window.triggerSlash === 'function') return window.triggerSlash('/send ' + text + '|/trigger');
+		        throw new Error('当前对话发送入口尚未就绪');
+		      }
 		    });
-		  });
-		  let pending = false;
-		  button.addEventListener('click', function () {
-		    const text = String(area.value || '').trim();
-		    if (pending || !text) return;
-		    if (typeof window.submitTavernInput !== 'function' && typeof window.triggerSlash !== 'function') throw new Error('当前对话发送入口尚未就绪');
-		    pending = true;
-		    button.disabled = true;
-		    Promise.resolve().then(function () {
-		      return typeof window.submitTavernInput === 'function' ? window.submitTavernInput(text) : window.triggerSlash('/send ' + text + '|/trigger');
-		    }).then(function () {
-		      if (area.value.trim() === text) area.value = '';
-		    }, function (error) {
-		      // A DOM click cannot return an asynchronous rejection to legacy callers.
-		      // Surface it in the card itself, retaining the payload for a retry.
-		      const notice = document.createElement('div');
-		      notice.setAttribute('role', 'alert');
-		      notice.textContent = '开局消息发送失败：' + String(error && error.message || error);
-		      document.body.append(notice);
-		      console.error('[DSH Tavern] 开局消息发送失败', error);
-		    }).finally(function () { pending = false; button.disabled = false; });
-		  });
+		    releaseSender = sender.dispose;
+		    area.addEventListener('input', function () {
+		      if (typeof window.submitTavernInput === 'function') return;
+		      Promise.resolve().then(() => {
+		        if (owner.isConnected === false) return;
+		        if (typeof window.triggerSlash !== 'function') throw new Error('当前对话输入框尚未就绪');
+		        return window.triggerSlash('/setinput ' + String(area.value || ''));
+		      }).catch(error => report('开场文字填入失败：', error));
+		    });
+		    button.addEventListener('click', function () {
+		      const text = String(area.value || '').trim();
+		      if (!text || button.disabled) return;
+		      sender.send(text).then(() => { if (area.value.trim() === text) area.value = ''; }, error => report('开局消息发送失败：', error));
+		    });
+		    resolveReady();
+		  }, rejectReady);
+		  window.__dshTavernComposerRuntime = { ready, refresh: mounted.refresh };
+		  window.addEventListener?.('pagehide', () => { lifetime.dispose(); delete window.__dshTavernComposerRuntime; }, { once: true });
+		  return ready;
 		}
 
 		// Preparation pages address the parent DOM. Own these controls only while that
@@ -3814,16 +3872,15 @@ window.__ModuleLoader__.load({
 		  button.id = 'send_but'; button.type = 'button';
 		  controls.append(area, button);
 		  hostDocument.body.append(controls);
-		  let active = true, pending = false, completed = false;
-		  button.addEventListener('click', function () {
-		    const text = String(area.value || '').trim();
-		    if (!active || pending || completed || !text) return;
-		    pending = true; button.disabled = true;
-		    Promise.resolve().then(function () { return submit(text); }).then(function () {
-		      completed = true; area.value = '';
-		    }, report).finally(function () { pending = false; button.disabled = completed; });
+		  const sender = createTavernFrameLifecycle(hostDocument.defaultView || {}, hostDocument).sender({
+		    once: true, submit, busy: value => { button.disabled = value; }
 		  });
-		  return function () { active = false; controls.remove(); };
+		  let active = true;
+		  button.addEventListener('click', function () {
+		    if (!active || button.disabled || !String(area.value || '').trim()) return;
+		    sender.send(area.value).then(() => { area.value = ''; }, report);
+		  });
+		  return function () { active = false; sender.dispose(); controls.remove(); };
 		}
 
 		// Parent DOM IDs are shared, but the focused iframe identifies the sender even
@@ -3844,18 +3901,15 @@ window.__ModuleLoader__.load({
 		      const owners = Array.from(state.owners).filter(function (owner) { return owner.ownsFrame(doc.activeElement); });
 		      if (owners.length !== 1) throw new Error('无法确定开局消息所属的卡片，请重新点击卡片内的开始按钮');
 		      const owner = owners[0], text = String(area.value || '').trim();
-		      if (owner.pending || !text) return;
-		      owner.pending = true;
-		      Promise.resolve().then(function () {
-		        if (!state.owners.has(owner)) throw new Error('卡片已关闭，请重新打开');
-		        return owner.submit(text);
-		      }).then(function () { if (area.value === text) area.value = ''; }, owner.report)
-		        .finally(function () { owner.pending = false; });
+		      if (!text) return;
+		      owner.sender.send(text).then(function () { if (area.value === text) area.value = ''; }, owner.report);
 		    });
 		  }
-		  const owner = { ownsFrame, submit, report, pending: false };
+		  const owner = { ownsFrame, report };
+		  owner.sender = createTavernFrameLifecycle(doc.defaultView || {}, doc).sender({ submit, valid: () => state.owners.has(owner) });
 		  state.owners.add(owner);
 		  return function () {
+		    owner.sender.dispose();
 		    state.owners.delete(owner);
 		    if (!state.owners.size) { state.controls.remove(); tavernHostComposers.delete(doc); }
 		  };
@@ -4610,7 +4664,7 @@ window.__ModuleLoader__.load({
 				// Viewers without the execution lease still receive live variables. Legacy
 				// status panels read parent.Mvu; expose their Helper API below the executor.
 				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
-				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
+				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
         function startTavernHelperLoader(source) {
@@ -6390,11 +6444,11 @@ window.__ModuleLoader__.load({
 				const element = document.createElement("script");
 				const completionKey = "__dshTavernModuleComplete_" + Math.random().toString(36).slice(2);
 				let settled = false;
-				let mountTimer = null;
+				let cancelMount = function () {};
 				function finish(error) {
 					if (settled) return;
 					settled = true;
-					if (mountTimer !== null) window.clearTimeout(mountTimer);
+					cancelMount();
 					window.removeEventListener("error", onError);
 					delete window[completionKey];
 					element.remove();
@@ -6417,22 +6471,11 @@ window.__ModuleLoader__.load({
 				// bindings/re-exports and dynamic imports can resolve local cache URLs.
 				// A completion footer waits for top-level await (a load event does not).
 				element.textContent = String(source) + "\n;window[" + JSON.stringify(completionKey) + "]?.();\n//# sourceURL=" + sourceUrl + "\n";
-				// document.open/write can temporarily leave only a parsing <head>.
-				// Wait before attaching; never replay a module that has started.
-				const mountDeadline = Date.now() + 30000;
-				function mount() {
-					if (settled) return;
-					if (!document.body) {
-						if (Date.now() >= mountDeadline) { finish(new Error("开局文档尚未生成 body，脚本无法启动")); return; }
-						mountTimer = window.setTimeout(mount, 10);
-						return;
-					}
-					try {
-                        if (beforeMount) beforeMount();
-                        document.body.appendChild(element);
-                    } catch (error) { finish(error); }
-				}
-				mount();
+                cancelMount = createTavernFrameLifecycle(window, document).mount(function () {
+                    if (settled) return;
+                    if (beforeMount) beforeMount();
+                    document.body.appendChild(element);
+                }, finish);
 			});
 		}
 
@@ -6677,6 +6720,7 @@ window.__ModuleLoader__.load({
 				return { id: String(script && script.id || ""), system: String(script && script.system || ""), assetUrl: String(script && script.assetUrl || ""), content: String(script && script.content || "") };
 			});
 			const loaderSource = 'await window.__dshTavernHelperReady;\n'
+                + 'const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';\n'
 				+ 'const createTavernPreviewWindow=' + createTavernPreviewWindow.toString() + ';\n'
 				+ 'const loadModule=' + loadTavernHelperModule.toString() + ';\n'
 				+ 'const createMvuLoader=' + createMvuBundleLoader.toString() + ';\n'
@@ -8419,10 +8463,13 @@ window.__ModuleLoader__.load({
 			}
             function submitOpening(document, text) {
                 if (!listener || document !== visible || document.key !== desired.key || typeof props.onSubmitOpening !== "function") return Promise.reject(new Error("开场预览已失效，请重新打开"));
-                if (!document.openingSubmit) document.openingSubmit = Promise.resolve().then(function () {
-                    return props.onSubmitOpening(String(text || ""));
-                }).catch(function (error) { document.openingSubmit = null; throw error; });
-                return document.openingSubmit;
+                if (!document.openingSender) document.openingSender = createTavernFrameLifecycle(hostWindow).sender({
+                    once: true,
+                    valid: () => Boolean(listener) && document === visible && document.key === desired.key && typeof props.onSubmitOpening === "function",
+                    stale: "开场预览已失效，请重新打开",
+                    submit: text => props.onSubmitOpening(text)
+                });
+                return document.openingSender.send(text);
             }
 			function receive(event) {
 				const data = event && event.data;
@@ -15711,6 +15758,7 @@ window.__ModuleLoader__.load({
 		exports.groupTavernHistory = groupTavernHistory;
 		exports.createPlayWorkspaceResolver = createPlayWorkspaceResolver;
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
+		exports.createTavernFrameLifecycle = createTavernFrameLifecycle;
 		exports.installOpeningHostComposer = installOpeningHostComposer;
         exports.installFrameHostComposer = installFrameHostComposer;
         exports.createTavernComposerWindow = createTavernComposerWindow;
