@@ -184,3 +184,28 @@ test('浏览器原生 HTML 悬浮窗切换后不可见，切回可点击且不�
   await page.evaluate(()=>artifacts.dispose())
   assert.equal(await page.locator('#pet,#late').count(),0)
 })
+
+test('外部 import 模块同样使用所属会话的宿主 DOM，不绕过浮窗隔离', async t => {
+  const {chromium}=await import('playwright')
+  const {projectTavernHostScript}=await import('../tavern-plugin/lib/domain/tavern-host-script-projection.js')
+  const browser=await chromium.launch();t.after(()=>browser.close())
+  const page=await browser.newPage()
+  await page.setContent('<body><iframe></iframe></body>')
+  const composer=readFileSync(new URL('../tavern-plugin/src/client/legacy-composer.js',import.meta.url),'utf8')
+  const remote=projectTavernHostScript(`const p=window.parent||window; p.document.body.insertAdjacentHTML('beforeend','<button id="external-pet">外部悬浮窗</button>'); p.document.getElementById('external-pet').onclick=()=>p.document.getElementById('external-pet').dataset.clicked='yes';`)
+  await page.evaluate(async({scopeSource,composer,remote})=>{
+    window.eval(scopeSource+';window.makeScope=createTavernHostArtifactScope')
+    window.eval(composer+';window.makeWindow=createTavernComposerWindow')
+    const frame=document.querySelector('iframe')
+    window.artifacts=makeScope({document});frame.__dshTavernHostArtifacts=artifacts
+    frame.contentWindow.__dshTavernComposerWindow=makeWindow(frame.contentWindow,window)
+    const url=URL.createObjectURL(new Blob([remote],{type:'text/javascript'}))
+    try {await frame.contentWindow.eval('import('+JSON.stringify(url)+')')} finally {URL.revokeObjectURL(url)}
+  },{scopeSource,composer,remote})
+  await page.getByRole('button',{name:'外部悬浮窗'}).click()
+  await page.evaluate(()=>artifacts.setVisible(false))
+  assert.equal(await page.locator('#external-pet').count(),0)
+  await page.evaluate(()=>artifacts.setVisible(true))
+  assert.equal(await page.locator('#external-pet').getAttribute('data-clicked'),'yes')
+  await page.getByRole('button',{name:'外部悬浮窗'}).click()
+})

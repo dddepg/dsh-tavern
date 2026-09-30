@@ -40,7 +40,7 @@ function fallbackMediaType(url) {
 }
 
 function localResourceUrl(url) {
-  return '/api/dsh-tavern/static-assets?url=' + encodeURIComponent(url)
+  return '/api/dsh-tavern/static-assets?url=' + encodeURIComponent(url) + (/\.[cm]?js(?:[?#]|$)/i.test(url) ? '&host=2' : '')
 }
 
 function absoluteCacheUrl(specifier, baseUrl) {

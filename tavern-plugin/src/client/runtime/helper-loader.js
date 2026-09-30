@@ -166,6 +166,9 @@
 		}
 
 		function loadTavernHelperModule(source, scriptId, previewScope, beforeMount) {
+            // Saved card snapshots can retain the previous projected asset URL.
+            // Change only the projection version, not the pinned source hash.
+            source = String(source).replace(/(\/api\/dsh-tavern\/remote-assets\/[^\s"'`<>?]+)\?host=1\b/g, "$1?host=2");
 			// Card pages may declare a lexical `$` that shadows window.jQuery.
 			// Bind the managed MVU module to its runtime dependency, not page globals.
 			if (scriptId === "__dsh_official_mvu__") source = "const $ = window.jQuery;\n" + source;
