@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -79,5 +80,6 @@ if ($Child.ExitCode -ne 0) { throw ('Updater helper failed inside Job: ' + $Fail
   for(let attempt=0; attempt<100; attempt++) {
     try { result=JSON.parse(await readFile(resultFile, 'utf8')); break } catch { await delay(50) }
   }
-  assert.deepEqual(result, {args, home:root, sentinel:'中文 sentinel', cwd:root})
+  // Windows may report the same directory by its 8.3 short name or its long name.
+  assert.deepEqual({...result, cwd:realpathSync.native(result.cwd)}, {args, home:root, sentinel:'中文 sentinel', cwd:realpathSync.native(root)})
 })

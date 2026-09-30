@@ -49,7 +49,7 @@ test('Windows CDN downloader reuses verified files, overlaps requests, retries f
 test('Windows CDN total budget stops slow successful batches before accepting an incomplete source', async t => {
  const root = await mkdtemp(path.join(tmpdir(), 'tavern-cdn-budget-'))
  t.after(() => rm(root, {recursive:true, force:true}))
- const ps = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')
+ const ps = (await readFile(new URL('../install.ps1', import.meta.url), 'utf8')).replaceAll('\r\n', '\n')
  const helper = ps.match(/WriteAllText\(\$CdnDownloader, @'\n([\s\S]*?)\n'@/)[1]
  await writeFile(path.join(root, 'download.cjs'), helper)
  // Accelerate only the whole-stage clock; each HTTP request succeeds well within its limit.
