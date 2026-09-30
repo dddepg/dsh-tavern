@@ -11350,7 +11350,6 @@ window.__ModuleLoader__.load({
 			const h = React.createElement;
 			const collapsedSidebar = collapsed ? h(React.Fragment, null,
 				h("div", { className: "dsh-tavern-sidebar collapsed" },
-					h("button", { className: "dsh-tavern-side-icon", title: "展开侧栏", onClick: props.toggleSidebar }, h("span", { className: "dsh-tavern-logo", "aria-hidden": "true" })),
 					h("button", { className: "dsh-tavern-side-icon", title: "新建对话（跟随当前模式）", onClick: function () { props.toggleSidebar(); window.setTimeout(function () { openPicker("cards"); }, 180); } }, "＋")
 				)
 			) : null;
@@ -11627,6 +11626,10 @@ window.__ModuleLoader__.load({
 				{ name: "conversation.hero.brand.mark" },
 				function () { return React.createElement("span", { className: "dsh-tavern-hero-lockup dsh-tavern-lockup", role: "img", "aria-label": "DSH Tavern" }); }
 			)), "dsh-tavern: hero brand");
+			ctx.effect(() => slots.inject("sidebar.brand.mark", () => slots.register(
+				{ name: "sidebar.brand.mark", priority: -1 },
+				function (props) { const size = (props && props.size) || 24; return React.createElement("span", { className: "dsh-tavern-logo", "aria-hidden": "true", style: { width: size + 4, height: size + 4 } }); }
+			)), "dsh-tavern: sidebar brand mark");
 			ctx.effect(() => slots.inject("sidebar.workspaces", () => slots.register(
 				{ name: "sidebar.workspaces", priority: -1 },
 				function (props) { return React.createElement(TavernSidebar, Object.assign({}, props, {
