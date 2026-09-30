@@ -135,6 +135,9 @@ body.dsh-tavern-shell-active button[aria-label="新建会话"], body.dsh-tavern-
 body.dsh-tavern-shell-active [data-turn-tail] > [data-slot="conversation.chat.turnTail"] + div > button { display: none !important; }
 body.dsh-tavern-shell-active [data-turn-tail] [data-slot="conversation.chat.assistant-actions"] > :not(.dsh-tavern-message-fork) { display: none !important; }
 body.dsh-tavern-shell-active .dsh-tavern-hero-preset-row { display: none !important; }
+/* 会话列表首次加载前不画首页，避免刷新时先闪首页再跳回上次的对话。 */
+body.dsh-tavern-sessions-pending [data-phase="hero"] > *, body.dsh-tavern-sessions-pending [data-phase="hero"]::before { visibility: hidden !important; }
+body.dsh-tavern-sessions-pending [data-phase="hero"]::after { content: "正在载入…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--dsw-alias-label-tertiary); font-size: 13px; pointer-events: none; }
 /* A blank session is also a hero. Only the session-less landing page loses its composer. */
 body.dsh-tavern-shell-active .dsh-tavern-landing { display: grid !important; place-items: center; }
 body.dsh-tavern-shell-active .dsh-tavern-landing > * { display: none !important; }

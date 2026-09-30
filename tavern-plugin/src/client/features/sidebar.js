@@ -1041,6 +1041,17 @@
 					document.body.classList.remove("dsh-tavern-shell-active");
 				};
 			}, "dsh-tavern: shell marker");
+			// Until the session list first loads, the host cannot tell whether it will
+			// restore the last conversation, so it paints the hero and then jumps away.
+			// Keep the hero blank while the list is pending.
+			ctx.effect(function () {
+				const list = ctx.sessions && ctx.sessions.list;
+				if (!list) return function () {};
+				function sync() { document.body.classList.toggle("dsh-tavern-sessions-pending", list.getSnapshot().phase === "pending"); }
+				const unsubscribe = list.subscribe(sync);
+				sync();
+				return function () { unsubscribe(); document.body.classList.remove("dsh-tavern-sessions-pending"); };
+			}, "dsh-tavern: hide hero until sessions load");
 			// The host hero shows its own mark and headline; the tavern lockup replaces both.
 			ctx.effect(() => slots.inject("conversation.hero.brand.mark", () => slots.register(
 				{ name: "conversation.hero.brand.mark" },
