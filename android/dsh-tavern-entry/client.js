@@ -84,9 +84,11 @@ window.__ModuleLoader__.load({
 		let react = require("react");
 
 		const CSS = `
-.dsh-tavern-embed { position:fixed; inset:0; z-index:2147483000; background:#14110d; display:flex; flex-direction:column; }
-.dsh-tavern-embed-bar { display:flex; gap:12px; padding:8px; background:#eee; color:#222; }
-.dsh-tavern-embed iframe { flex:1; width:100%; border:0; background:white; }
+.dsh-tavern-embed { position:fixed; inset:0; z-index:2147483000; background:#14110d; display:flex; flex-direction:column; box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); }
+.dsh-tavern-embed-bar { display:flex; flex:none; align-items:center; gap:6px; padding:2px max(6px,env(safe-area-inset-right,0px)) 2px max(6px,env(safe-area-inset-left,0px)); background:var(--dsw-alias-bg-base,#eee); color:var(--dsw-alias-label-primary,#222); }
+.dsh-tavern-embed-bar > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.dsh-tavern-embed-bar button { flex:none; min-height:40px; padding:4px 8px; border:0; border-radius:6px; font:inherit; font-size:13px; color:inherit; background:transparent; touch-action:manipulation; }
+.dsh-tavern-embed iframe { flex:1; min-height:0; width:100%; border:0; background:white; }
 .dsh-tavern-entry-btn {
   display: flex; align-items: center; gap: 7px; width: 100%;
   box-sizing: border-box; margin: 4px 0;
@@ -113,6 +115,33 @@ window.__ModuleLoader__.load({
 			tag.dataset.pluginCss = tagId;
 			tag.textContent = CSS;
 			document.head.appendChild(tag);
+		}
+
+		function installEmbeddedViewport(root) {
+			if (!root) return function () {};
+			const view = root.ownerDocument.defaultView;
+			const viewport = view.visualViewport;
+			let pending = 0;
+			function sync() {
+				pending = 0;
+				if (viewport && Math.abs(viewport.scale - 1) > 0.02) return;
+				// 内嵌 iframe 看不到顶层软键盘的遮挡，必须先缩小外壳，再由内部酒馆自然重排。
+				root.style.top = (viewport ? viewport.offsetTop : 0) + "px";
+				root.style.height = (viewport ? viewport.height : view.innerHeight) + "px";
+				root.style.bottom = "auto";
+			}
+			function schedule() { if (!pending) pending = view.requestAnimationFrame(sync); }
+			viewport?.addEventListener("resize", schedule);
+			viewport?.addEventListener("scroll", schedule);
+			view.addEventListener("resize", schedule);
+			sync();
+			return function () {
+				if (pending) view.cancelAnimationFrame(pending);
+				viewport?.removeEventListener("resize", schedule);
+				viewport?.removeEventListener("scroll", schedule);
+				view.removeEventListener("resize", schedule);
+				root.style.removeProperty("top"); root.style.removeProperty("height"); root.style.removeProperty("bottom");
+			};
 		}
 
 		function checkTavern() {
@@ -146,6 +175,8 @@ window.__ModuleLoader__.load({
 					const [error, setError] = react.useState("");
 					const [frame, setFrame] = react.useState("");
 					const [frameKey, setFrameKey] = react.useState(0);
+					const frameRoot = react.useRef(null);
+					react.useEffect(function () { return installEmbeddedViewport(frameRoot.current); }, [frame]);
 					async function openEmbedded() {
 					  try { const result = await request("/api/dsh-tavern-android/embed", "POST"); setFrame(result.url); setError(""); }
 					  catch (err) { setError(String(err.message || err)); }
@@ -181,7 +212,7 @@ window.__ModuleLoader__.load({
 								? (state.update.error || "更新失败，请重试。")
 								: state.online === false ? "酒馆未启动，可点击更新/修复。" : "";
 					return react.createElement("div", null,
-						frame ? react.createElement("div", { className: "dsh-tavern-embed" },
+						frame ? react.createElement("div", { className: "dsh-tavern-embed", ref: frameRoot },
 						  react.createElement("div", { className: "dsh-tavern-embed-bar" },
 							react.createElement("span", null, "酒馆工作台"),
 							react.createElement("button", { onClick: function () { setFrameKey(frameKey + 1); } }, "刷新"),

@@ -187,7 +187,8 @@
 
 				input.addEventListener("input", function () { if (!busy) confirmButton.disabled = !opts.allowEmpty && input.value.trim() === ""; });
 				input.addEventListener("keydown", function (event) {
-					if (event.key !== "Enter" || event.isComposing === true) return;
+					// 部分 WebKit 在确认选字时先结束 composition；229 仍表示本次按键属于输入法。
+					if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
 					event.preventDefault();
 					void submit();
 				});

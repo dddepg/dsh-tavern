@@ -1032,7 +1032,12 @@
 			ctx.effect(function () {
 				document.body.classList.add("dsh-tavern-shell-active");
 				const releaseLandingStyles = installTavernLandingStyles(document);
-				return function () { releaseLandingStyles(); document.body.classList.remove("dsh-tavern-shell-active"); };
+				const releaseViewport = installVisualViewportPin(document);
+				return function () {
+					releaseViewport();
+					releaseLandingStyles();
+					document.body.classList.remove("dsh-tavern-shell-active");
+				};
 			}, "dsh-tavern: shell marker");
 			ctx.effect(() => slots.inject("sidebar.workspaces", () => slots.register(
 				{ name: "sidebar.workspaces", priority: -1 },

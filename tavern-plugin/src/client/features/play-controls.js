@@ -48,8 +48,10 @@
 					} catch (err) { tavernErrorHub.report("导出日志", err); }
 					finally { setBusy(false); }
 				}
-				return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
-                    React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } }, busy ? "导出中…" : "导出 ▾"),
+                return React.createElement("div", { className: "dsh-tavern-more-actions dsh-tavern-export-menu", ref: root },
+                    React.createElement("button", { type: "button", className: "dsh-tavern-export-action", "aria-label": busy ? "导出中" : "导出", title: "导出", "aria-haspopup": "menu", "aria-expanded": open, "aria-busy": busy, onClick: function () { setOpen(value => !value); } },
+                        React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, React.createElement("path", { d: "M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" })),
+                        React.createElement("span", { className: "dsh-tavern-header-action-label" }, busy ? "导出中…" : "导出")),
                     React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", "aria-label": "导出", hidden: !open, onClick: function (event) { if (event.target.closest("button:not(:disabled)")) setOpen(false); } },
                         React.createElement("button", { type: "button", role: "menuitem", "data-tavern-log-export": "", disabled: busy, "aria-label": "日志", title: "下载 Session、MVU、生图与更新日志；含私人剧情，分享前请检查隐私", onClick: exportLogs }, "日志"),
                         React.createElement("button", { type: "button", role: "menuitem", disabled: busy, title: "导出只包含玩家与角色正文的 TXT", onClick: exportText }, "纯对话 TXT")
@@ -801,7 +803,7 @@
                 finally { setBusy(false); }
             }
             return React.createElement("div", { className: "dsh-local-field" },
-                React.createElement("label", null, "玩家称呼", React.createElement("input", { key: name, defaultValue: name || "", placeholder: "你", maxLength: 80, disabled: name === null || busy, onBlur: event => save(event.target.value), onKeyDown: event => { if (event.key === "Enter" && !event.nativeEvent?.isComposing) event.currentTarget.blur(); } })),
+                React.createElement("label", null, "玩家称呼", React.createElement("input", { key: name, defaultValue: name || "", placeholder: "你", maxLength: 80, disabled: name === null || busy, onBlur: event => save(event.target.value), onKeyDown: event => { if (event.key === "Enter" && !event.nativeEvent?.isComposing && event.nativeEvent?.keyCode !== 229) event.currentTarget.blur(); } })),
                 React.createElement("p", { className: "dsh-local-help" }, "离开输入框后保存，仅用于后续内容。"), React.createElement("span", { role: "status", className: "dsh-local-feedback" }, status));
         }
 
@@ -846,7 +848,11 @@
             const owner = props.sessions.subagentAddress(props.sessionId)?.parentSessionId || props.sessionId;
             const mode = useTavernSessionMode(owner);
             if (!isPlayMode(mode)) return null;
-            return React.createElement("button", { type: "button", className: "dsh-tavern-btn dsh-tavern-header-btn", "aria-label": "酒馆状态", title: "查看本局酒馆状态", onClick: () => props.open(owner) }, "酒馆状态");
+            return React.createElement("button", { type: "button", className: "dsh-tavern-btn dsh-tavern-header-settings", "aria-label": "酒馆状态", title: "查看本局酒馆状态", onClick: () => props.open(owner) },
+                React.createElement("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", "aria-hidden": "true" },
+                    React.createElement("path", { d: "M4 7h3m4 0h9M4 17h9m4 0h3" }),
+                    React.createElement("circle", { cx: 9, cy: 7, r: 2 }), React.createElement("circle", { cx: 15, cy: 17, r: 2 })),
+                React.createElement("span", { className: "dsh-tavern-header-action-label" }, "酒馆状态"));
         }
 
         function TavernConversationBackgroundModel(props) {
@@ -1053,6 +1059,8 @@
 			return null;
 		}
 		function CandidateQuestion(props) {
+            // 宿主输入器可由 textarea 升级为 contenteditable，两种入口共享聚焦与收起逻辑。
+            const inputSelector = "[data-composer-card] :is(textarea, [contenteditable='true'])";
             const dismissMode = useCandidatePreferences();
 			const panel = useCandidatePanel();
             const draft = props.useInput(snapshot => snapshot.draft);
@@ -1068,8 +1076,18 @@
             }
             React.useEffect(() => { if (running && panel?.expanded) setExpanded(false); }, [running, panel]);
 			React.useEffect(function () {
+				if (typeof document === "undefined" || !panel?.expanded) return;
+				function onComposerFocus(event) {
+					// 手机开始手动输入就收起候选，给键盘上方的正文留出空间；面板编辑器不受影响。
+					if (window.matchMedia(TAVERN_MOBILE_QUERY + ", (pointer: coarse)").matches && event.target?.matches(inputSelector)) setExpanded(false);
+				}
+				document.addEventListener("focusin", onComposerFocus);
+				return function () { document.removeEventListener("focusin", onComposerFocus); };
+			}, [panel]);
+			React.useEffect(function () {
 				setSelected(sessionMode === "script" && panel && Array.isArray(panel.choices) && panel.choices.length === 1 ? 0 : -1);
 			}, [panel, sessionMode]);
+
 			if (panel && panel.sessionId === props.sessionId && panel.phase === "error") {
 				return React.createElement("div", { className: "dsh-tavern-choice-error dsh-tavern-candidate-error-banner" },
 					"候选项生成失败：" + (panel.error || "未知错误") + "。请点上方“生成候选项”重试。"
@@ -1084,7 +1102,7 @@
 			const heading = "接下来的行动";
 			const summary = panel.phase === "loading" ? "正在生成…" : (panel.error ? "生成失败" : (isScript ? "1 个候选 · 跟随剧本，只有一个推荐候选项" : count + " 个候选项"));
 			return h("div", { className: "dsh-tavern-question dsh-tavern-candidate-question" + (expanded ? "" : " collapsed") },
-				h("div", { className: "dsh-tavern-question-head", onClick: function () { setExpanded(!expanded); } }, h("span", null, heading), h("span", { className: "dsh-tavern-question-sub" }, summary), h("button", { className: "dsh-tavern-question-close", title: expanded ? "收起" : "展开", onClick: function (event) { event.stopPropagation(); setExpanded(!expanded); } }, expanded ? "⌃" : "⌄")),
+				h("div", { className: "dsh-tavern-question-head", role: "button", tabIndex: 0, "aria-expanded": expanded ? "true" : "false", onClick: function () { setExpanded(!expanded); }, onKeyDown: function (event) { if (event.target === event.currentTarget && !event.isComposing && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setExpanded(!expanded); } } }, h("span", null, heading), h("span", { className: "dsh-tavern-question-sub" }, summary), h("button", { type: "button", className: "dsh-tavern-question-close", title: expanded ? "收起行动列表" : "展开行动列表", "aria-label": expanded ? "收起行动列表" : "展开行动列表", onClick: function (event) { event.stopPropagation(); setExpanded(!expanded); } }, expanded ? "收起" : "展开")),
 				expanded && panel.phase === "loading" ? h("div", { className: "dsh-tavern-question-sub" }, "正在生成候选项…") : null,
 				expanded && panel.error ? h("div", { className: "dsh-tavern-choice-error" }, "候选项生成失败，请点回复下方的“生成候选项”重试") : null,
 				expanded ? h("div", { className: "dsh-tavern-question-body" }, (panel.choices || []).map(function (choice, index) {
@@ -1098,14 +1116,17 @@
 						)
 					);
 				})) : null,
-				expanded && panel.phase === "ready" ? h("button", { className: "dsh-tavern-question-free", onClick: function () {
-					window.requestAnimationFrame(function () {
-						const input = document.querySelector("[data-composer-card] textarea");
-						if (input) input.focus();
-					});
-				} }, "✎ 自由行动（直接在下方输入）") : null,
-				expanded && panel.phase === "ready" && panel.choices && panel.choices.length ? h("div", { className: "dsh-tavern-question-foot" },
-					h("button", { className: "dsh-tavern-question-primary", disabled: selected < 0, onClick: function () {
+				expanded && panel.phase === "ready" ? h("div", { className: "dsh-tavern-question-foot" },
+					h("div", { className: "dsh-tavern-question-aux" },
+						h("button", { className: "dsh-tavern-question-free", onClick: function () {
+							// iOS 只在当前点击调用栈内唤起键盘；异步 focus 会丢失用户手势。
+							const input = document.querySelector(inputSelector);
+							if (input) input.focus({ preventScroll: true });
+							setExpanded(false);
+						} }, "✎ 自由行动（直接在下方输入）")
+
+					),
+					panel.choices && panel.choices.length ? h("button", { className: "dsh-tavern-question-primary", disabled: selected < 0, onClick: function () {
 						if (selected < 0) return;
 						const item = panel.choices[selected];
 						const choice = item !== null && typeof item === "object" ? item : { type: "action", text: String(item) };
@@ -1116,7 +1137,8 @@
                         props.inputActions.setDraft(next);
                         if (dismissMode !== "after-send") setCandidatePanel(null);
                         setSelected(-1);
-					} }, "追加到输入框")
+
+					} }, "追加到输入框") : null
 				) : null
 			);
 		}
@@ -1237,8 +1259,8 @@
                 { name: "conversation.session.header.utilities", id: "session-log-download", order: 0, priority: -1 },
                 () => null
             )), "dsh-tavern: hide host session-log-download");
-            ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
-                { name: "conversation.session.header.utilities", id: "dsh-tavern-immersive", order: 85 },
+            ctx.effect(() => slots.inject("conversation.session.header.actions", () => slots.register(
+                { name: "conversation.session.header.actions", id: "dsh-tavern-immersive", order: 9 },
                 () => React.createElement(TavernImmersiveAction)
             )), "dsh-tavern: immersive header action");
             ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
