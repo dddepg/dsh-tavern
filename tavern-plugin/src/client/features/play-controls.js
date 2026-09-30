@@ -926,7 +926,24 @@
 
 		function TavernMoreActions(props) {
 			const [open, setOpen] = React.useState(false);
+			const [placement, setPlacement] = React.useState(null);
 			const root = React.useRef(null);
+			const trigger = React.useRef(null);
+			// The mobile composer seat scrolls (overflow-y: auto), which clipped an absolutely
+			// positioned menu to a thin strip. Anchor it to the viewport above the trigger instead.
+			React.useLayoutEffect(function () {
+				if (!open) { setPlacement(null); return; }
+				function place() {
+					const rect = trigger.current && trigger.current.getBoundingClientRect();
+					if (!rect) return;
+					const width = document.documentElement.clientWidth || window.innerWidth;
+					setPlacement({ position: "fixed", top: "auto", left: "auto", right: Math.max(8, width - rect.right) + "px", bottom: (window.innerHeight - rect.top + 6) + "px", maxHeight: Math.max(120, rect.top - 12) + "px", overflowY: "auto" });
+				}
+				place();
+				window.addEventListener("resize", place);
+				if (window.visualViewport) window.visualViewport.addEventListener("resize", place);
+				return function () { window.removeEventListener("resize", place); if (window.visualViewport) window.visualViewport.removeEventListener("resize", place); };
+			}, [open]);
 			React.useEffect(function () {
 				if (!open) return;
 				function closeOutside(event) { if (!root.current || !root.current.contains(event.target)) setOpen(false); }
@@ -936,8 +953,8 @@
 				return function () { document.removeEventListener("pointerdown", closeOutside, true); document.removeEventListener("keydown", closeOnEscape); };
 			}, [open]);
 			return React.createElement("div", { className: "dsh-tavern-more-actions", ref: root },
-				React.createElement("button", { type: "button", className: "dsh-tavern-choice-trigger", "aria-haspopup": "menu", "aria-expanded": open, onClick: function () { setOpen(function (value) { return !value; }); } }, "更多 ▾"),
-				React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", hidden: !open, onClick: function (event) { if (event.target && event.target.closest && event.target.closest("button:not(:disabled)")) setOpen(false); } },
+				React.createElement("button", { ref: trigger, type: "button", className: "dsh-tavern-choice-trigger", "aria-haspopup": "menu", "aria-expanded": open, onClick: function () { setOpen(function (value) { return !value; }); } }, "更多 ▾"),
+				React.createElement("div", { className: "dsh-tavern-more-menu", role: "menu", hidden: !open, style: placement || undefined, onClick: function (event) { if (event.target && event.target.closest && event.target.closest("button:not(:disabled)")) setOpen(false); } },
                     React.createElement(TavernStopBackgroundAction, Object.assign({}, props, { inMenu: true })),
 					React.createElement(TavernEditBodyAction, props),
 					React.createElement(TavernRollbackAction, props),

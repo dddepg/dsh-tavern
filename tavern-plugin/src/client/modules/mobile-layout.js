@@ -32,13 +32,15 @@ function installVisualViewportPin(doc) {
         observer?.disconnect();
         seat = nextSeat; header = nextHeader;
         for (const element of [seat, header]) if (element) observer?.observe(element);
+        // A capped seat keeps its own box size while content grows, so watch its children too.
+        if (seat) for (const child of seat.children) observer?.observe(child);
     }
     function sync() {
         frame = 0;
         if (disposed) return;
         html.classList.toggle("dsh-tavern-coarse-play", narrow.matches);
         if (!narrow.matches && !touch.matches) {
-            html.classList.remove("dsh-tavern-viewport-pinned", "dsh-tavern-short-viewport");
+            html.classList.remove("dsh-tavern-viewport-pinned", "dsh-tavern-short-viewport", "dsh-tavern-seat-scroll");
             restore();
             return;
         }
@@ -72,6 +74,9 @@ function installVisualViewportPin(doc) {
             html.style.removeProperty("--dsh-composer-left");
             html.style.removeProperty("--dsh-composer-width");
         }
+        // Only scroll the seat when its content really exceeds the cap: a scrolling seat clips
+        // every menu that opens upward from the composer (更多, access mode, model picker).
+        html.classList.toggle("dsh-tavern-seat-scroll", Boolean(seat && seat.scrollHeight > seat.clientHeight + 1));
     }
 
     function schedule() {
@@ -106,7 +111,7 @@ function installVisualViewportPin(doc) {
         vv?.removeEventListener("scroll", schedule);
         narrow.removeEventListener("change", schedule);
         touch.removeEventListener("change", schedule);
-        html.classList.remove("dsh-tavern-coarse-play", "dsh-tavern-viewport-pinned", "dsh-tavern-short-viewport");
+        html.classList.remove("dsh-tavern-coarse-play", "dsh-tavern-viewport-pinned", "dsh-tavern-short-viewport", "dsh-tavern-seat-scroll");
         restore();
     };
 }
