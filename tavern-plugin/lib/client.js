@@ -10099,7 +10099,7 @@ window.__ModuleLoader__.load({
 			const [error, setError] = usePersistentError("左侧栏操作");
 			const [uiMode, setUiMode] = React.useState("play");
 			const [requestMode, setRequestMode] = React.useState("dsh");
-			const compatibilityAvailable = true;
+			const [compatibilityAvailable, setCompatibilityAvailable] = React.useState(false);
 			const [trustedCardMode, setTrustedCardMode] = React.useState(true);
 			const [cardEntry, setCardEntry] = React.useState("");
 			const [openingPicker, setOpeningPicker] = React.useState(null);
@@ -10226,9 +10226,9 @@ window.__ModuleLoader__.load({
 					}, function (err) { tavernErrorHub.report("左侧栏人物卡", err); }),
 					(!kinds || kinds.indexOf("sessions") >= 0) && call("listSessions").then(function (result) {
 						const sessions = result.sessions || [];
-						setHistory(sessions); setTrustedCardMode(!result.capabilities || result.capabilities.trustedCardMode !== false); publishSessionModes(sessions);
+						setHistory(sessions); setCompatibilityAvailable(result.capabilities?.compatibilityMode === true); setTrustedCardMode(!result.capabilities || result.capabilities.trustedCardMode !== false); publishSessionModes(sessions);
 						if (!sessions.some(function (entry) { return entry.sessionId === current && isPlayMode(entry.mode); })) {
-							setRequestMode(window.localStorage.getItem("dsh-tavern-request-mode") === "sillytavern" ? "sillytavern" : "dsh");
+							setRequestMode(result.capabilities?.compatibilityMode === true && window.localStorage.getItem("dsh-tavern-request-mode") === "sillytavern" ? "sillytavern" : "dsh");
 						}
 						tavernErrorHub.resolve("左侧栏历史");
 					}, function (err) { tavernErrorHub.report("左侧栏历史", err); })
@@ -11048,10 +11048,10 @@ window.__ModuleLoader__.load({
 					h("button", { className: "dsh-tavern-update-button", disabled: checkingOrRunning || updateStatus.phase === "restart-required" || updateStatus.phase === "installed-restart-required", onClick: checkUpdate }, updateStatus.phase === "checking" ? "正在检查…" : (updateStatus.phase === "running" ? "正在更新…" : (updateStatus.phase === "installed-restart-required" ? "请手动重启" : (updateStatus.phase === "restart-required" ? "重启 Desktop 后可用" : "检查更新")))));
 			return h(React.Fragment, null, h(TavernErrorCenter), collapsedSidebar, h("div", { className: "dsh-tavern-sidebar", style: { display: collapsed ? "none" : undefined, position: "relative", width: props.embedded ? "100%" : props.width + "px" } },
 				h("div", { className: "dsh-tavern-side-head" }, h("div", { className: "dsh-tavern-side-brand" }, "🍺 DSH Tavern"), props.embedded ? null : h("button", { className: "dsh-tavern-side-icon", title: "收起侧栏", onClick: props.toggleSidebar }, "◧")),
-				h("div", { className: "dsh-tavern-mode-switch compatibility-enabled" },
+				h("div", { className: "dsh-tavern-mode-switch" + (compatibilityAvailable ? " compatibility-enabled" : "") },
 					h("button", { className: uiMode === "play" && requestMode === "dsh" ? "active" : "", disabled: busy, onClick: function () { switchPlayRequestMode("dsh"); } }, "游玩"),
-					h("button", { className: uiMode === "play" && requestMode === "sillytavern" ? "active" : "", disabled: busy, onClick: function () { switchPlayRequestMode("sillytavern"); } }, "silly 模式"),
-					h("button", { className: uiMode === "card" ? "active" : "", disabled: busy, onClick: function () { switchMode("card"); } }, "卡片")
+					h("button", { className: uiMode === "card" ? "active" : "", disabled: busy, onClick: function () { switchMode("card"); } }, "卡片"),
+					compatibilityAvailable ? h("button", { className: uiMode === "play" && requestMode === "sillytavern" ? "active" : "", style: { fontSize: "11px" }, disabled: busy, onClick: function () { switchPlayRequestMode("sillytavern"); } }, "silly 模式") : null
 				),
 				h("button", { className: "dsh-tavern-side-new", disabled: busy, onClick: function () { openPicker(); } }, uiMode === "play" ? (openingPicker ? "继续开局 · " + openingPicker.card.name : requestMode === "sillytavern" ? "＋ 选择人物卡 · 新开silly 对话" : "＋ 选择人物卡 · 新开游玩") : "＋ 新建卡片工作台对话"),
 				uiMode === "play" && requestMode === "sillytavern" ? h("div", { className: "dsh-tavern-compatibility-notice" },
@@ -11589,11 +11589,11 @@ window.__ModuleLoader__.load({
         }
 
 		function TavernSettingsSection() {
-			const [state, setState] = React.useState({ loading: true, busy: false, defaultForegroundModel: null, defaultBackgroundModel: null, notice: "", webSearchEnabled: false, backgroundModel: null, backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, modelCatalog: [], sceneImages: false, error: "" });
+			const [state, setState] = React.useState({ loading: true, busy: false, defaultForegroundModel: null, defaultBackgroundModel: null, notice: "", sillyModeEnabled: false, webSearchEnabled: false, backgroundModel: null, backgroundTasks: { posture: true, characterDesign: false, variables: true, ledger: false }, modelCatalog: [], sceneImages: false, error: "" });
 			React.useEffect(function () {
 				let active = true;
 				rpc("getTavernSettings").then(function (result) {
-					if (active) setState({ loading: false, busy: false, defaultForegroundModel: result.settings?.defaultForegroundModel || null, defaultBackgroundModel: result.settings?.defaultBackgroundModel || null, notice: "", webSearchEnabled: Boolean(result.settings && result.settings.webSearchEnabled), backgroundModel: result.settings && result.settings.backgroundModel || null, backgroundTasks: result.settings && result.settings.backgroundTasks || { posture: true, characterDesign: false, variables: true, ledger: false }, modelCatalog: Array.isArray(result.modelCatalog) ? result.modelCatalog : [], sceneImages: Boolean(result.releaseCapabilities && result.releaseCapabilities.sceneImages), error: "" });
+					if (active) setState({ loading: false, busy: false, defaultForegroundModel: result.settings?.defaultForegroundModel || null, defaultBackgroundModel: result.settings?.defaultBackgroundModel || null, notice: "", sillyModeEnabled: result.settings?.sillyModeEnabled === true, webSearchEnabled: Boolean(result.settings && result.settings.webSearchEnabled), backgroundModel: result.settings && result.settings.backgroundModel || null, backgroundTasks: result.settings && result.settings.backgroundTasks || { posture: true, characterDesign: false, variables: true, ledger: false }, modelCatalog: Array.isArray(result.modelCatalog) ? result.modelCatalog : [], sceneImages: Boolean(result.releaseCapabilities && result.releaseCapabilities.sceneImages), error: "" });
 				}, function (error) {
 					if (active) setState(function (current) { return Object.assign({}, current, { loading: false, busy: false, error: String(error && error.message || error) }); });
 				});
@@ -11604,7 +11604,8 @@ window.__ModuleLoader__.load({
                 setState(current => ({ ...current, busy: true, error: "", notice: "" }));
                 try {
                     const result = await rpc("updateTavernSettings", { patch: { [name]: selection } });
-                    setState(current => ({ ...current, [name]: result.settings[name], busy: false, notice: "已保存，下次新游戏生效" }));
+                    window.dispatchEvent(new CustomEvent("dsh-tavern-settings-changed"));
+                    setState(current => ({ ...current, [name]: result.settings[name], busy: false, notice: name === "sillyModeEnabled" ? "已保存" : "已保存，下次新游戏生效" }));
                 } catch (err) { setState(current => ({ ...current, busy: false, error: String(err.message || err) })); }
             }
 			return React.createElement("div", { className: "dsh-tavern-settings-section" },
@@ -11613,6 +11614,11 @@ window.__ModuleLoader__.load({
                 React.createElement(TavernDefaultModelSetting, { label: "默认前台模型", fallback: "使用 DSH 默认模型", selection: state.defaultForegroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultForegroundModel", selection) }),
                 React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) }),
                 state.notice ? React.createElement("p", { role: "status" }, state.notice) : null,
+                React.createElement("label", { className: "dsh-tavern-settings-row dsh-tavern-background-task" },
+                    React.createElement("span", { className: "dsh-tavern-settings-copy" },
+                        React.createElement("strong", { className: "dsh-tavern-settings-title" }, "开放 silly 模式入口"),
+                        React.createElement("span", { className: "dsh-tavern-settings-desc" }, "尽量复刻sillytavern的请求格式，但失去agent能力")),
+                    React.createElement("input", { type: "checkbox", checked: state.sillyModeEnabled === true, disabled: state.loading || state.busy, onChange: event => saveDefault("sillyModeEnabled", event.target.checked) })),
                 React.createElement(GlobalPlayDefaults),
                 React.createElement(TavernConversationWritingSkills, { globalDefaults: true }),
                 React.createElement(DisplayPreferencesSettings),

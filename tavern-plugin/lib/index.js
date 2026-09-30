@@ -3486,7 +3486,7 @@ export async function apply(ctx) {
       }
       case 'listSessions': {
         const settings = await readTavernSettings()
-        return { sessions: await listTavernSessions(), capabilities: { compatibilityMode: true, trustedCardMode: settings.trustedCardMode } }
+        return { sessions: await listTavernSessions(), capabilities: { compatibilityMode: settings.sillyModeEnabled === true, trustedCardMode: settings.trustedCardMode } }
       }
       case 'renameConversation': {
         const chat = await chatForSession(args && args.sessionId)

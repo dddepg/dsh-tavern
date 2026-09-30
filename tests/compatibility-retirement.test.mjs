@@ -10,7 +10,7 @@ const chats = [{ id: 'compat', sessionId: 'compat-session', requestMode: 'sillyt
 
 test('实验分支公开兼容会话并声明兼容能力可用', async () => {
   const start = server.indexOf("case 'listSessions': {")
-  const context = { readTavernSettings: async () => ({ trustedCardMode: true }), listTavernSessions: async () => chats }
+  const context = { readTavernSettings: async () => ({ trustedCardMode: true, sillyModeEnabled: true }), listTavernSessions: async () => chats }
   vm.runInNewContext('this.list = async () => { switch ("listSessions") {' + server.slice(start, server.indexOf("case 'listMobileCardImports'", start)) + '} };', context)
   const result = await context.list()
   assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['compat', 'native'])

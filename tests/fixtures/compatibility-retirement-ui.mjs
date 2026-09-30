@@ -13,12 +13,12 @@ for (const [name, file] of [['react', 'react.production.js'], ['scheduler', 'sch
   script += `modules[${JSON.stringify(name)}]=(()=>{const module={exports:{}};const exports=module.exports;const require=name=>modules[name];\n${await readFile(join(dirname(require.resolve(name)), 'cjs', file), 'utf8')}\nreturn module.exports;})();\n`
 }
 const settings = source.slice(source.indexOf('function TavernSettingsSection()'), source.indexOf('function SystemPromptSidebarTab()'))
-const switchStart = source.indexOf('h("div", { className: "dsh-tavern-mode-switch compatibility-enabled" }')
+const switchStart = source.indexOf('h("div", { className: "dsh-tavern-mode-switch"')
 const modeSwitch = source.slice(switchStart, source.indexOf('h("button", { className: "dsh-tavern-side-new"', switchStart)).trim().replace(/,$/, '')
 script += `const React=modules.react;const h=React.createElement;
 async function rpc(method,args){const response=await fetch('/rpc',{method:'POST',body:JSON.stringify({method,args})});const value=await response.json();if(value.error)throw Error(value.error);return value;}
 ${settings}
-function ModeSwitch(){const [uiMode,setMode]=React.useState('play');const [requestMode,setRequestMode]=React.useState('dsh');const busy=false;const switchMode=setMode;const switchPlayRequestMode=mode=>{setMode('play');setRequestMode(mode);};return ${modeSwitch};}
+function ModeSwitch(){const [uiMode,setMode]=React.useState('play');const [requestMode,setRequestMode]=React.useState('dsh');const compatibilityAvailable=true;const busy=false;const switchMode=setMode;const switchPlayRequestMode=mode=>{setMode('play');setRequestMode(mode);};return ${modeSwitch};}
 modules['react-dom/client'].createRoot(document.querySelector('#app')).render(h(ModeSwitch));
 `
 const css = await readFile(new URL('../../tavern-plugin/lib/client-assets/tavern.css', import.meta.url), 'utf8')

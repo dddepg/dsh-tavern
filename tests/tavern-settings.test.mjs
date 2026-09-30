@@ -35,7 +35,7 @@ test('新旧设置均固定信任人物卡，不再应用手动样式，也不�
   } }]) {
     const before = JSON.stringify(document)
     const result = presentTavernSettings(document, {})
-    assert.equal(result.compatibilityMode, true)
+    assert.equal(result.compatibilityMode, false)
     assert.equal(result.trustedCardMode, true)
     assert.equal(Object.hasOwn(result, 'styleEnvironment'), false)
     assert.equal(JSON.stringify(document), before)
@@ -69,16 +69,16 @@ test('后台模型可以固定为独立 provider/model，也可以恢复为开�
   assert.throws(() => applyTavernSettingsPatch({}, { backgroundModel: { provider: '', model: 'x' } }), /配置无效/)
 })
 
-test('实验分支始终公开兼容模式，旧关闭信任值不影响运行', async t => {
+test('silly 入口默认关闭，旧关闭信任值不影响运行', async t => {
   const harness = await settingsHarness(t)
   await harness.profileData.writeJson(harness.settingsPath, {
     compatibilityMode: true, trustedCardMode: false, styleEnvironment: { customCss: 'body {}' }, unknown: '保留'
   })
   const result = await harness.update({ compatibilityMode: false })
-  assert.equal(result.compatibilityMode, true)
+  assert.equal(result.compatibilityMode, false)
   assert.equal(result.trustedCardMode, true)
   assert.equal(Object.hasOwn(result, 'styleEnvironment'), false)
-  assert.equal((await harness.read()).compatibilityMode, true)
+  assert.equal((await harness.read()).compatibilityMode, false)
   // Retain legacy data on disk without letting it control the current runtime.
   assert.equal((await harness.saved()).unknown, '保留')
   assert.equal((await harness.saved()).trustedCardMode, false)
@@ -109,7 +109,9 @@ test('设置界面不重复提供已并入外观的分色，不恢复旧兼容�
   visit(root)
   assert.equal(nodes.some(node => node.type === context.TavernTextColorSettings), false)
   const inputs = nodes.filter(node => node.type === 'input')
-  assert.deepEqual(inputs.map(input => input.props['aria-label']), [])
+  assert.equal(inputs.length, 1)
+  assert.equal(inputs[0].props.checked, false)
+  assert.match(JSON.stringify(root), /尽量复刻sillytavern的请求格式，但失去agent能力/)
   const select = nodes.find(node => node.type === 'select' && node.props['aria-label'] === '后台模型')
   assert.equal(select, undefined)
   assert.equal(nodes.some(node => node.type === 'textarea' || node.type === 'details'), false)
@@ -121,15 +123,15 @@ test('全局接口拒绝修改本局联网搜索开关', async t => {
   await assert.rejects(harness.update({ webSearchEnabled: true }), /本局设置/)
 })
 
-test('实验分支无论历史设置为何都公开兼容能力', async t => {
+test('旧兼容开关不自动开放 silly 入口', async t => {
   const harness = await settingsHarness(t)
   const legacy = { compatibilityMode: true, unknown: '保留' }
   await harness.profileData.writeJson(harness.settingsPath, legacy)
-  assert.equal((await harness.read()).compatibilityMode, true)
-  assert.equal((await harness.update({ compatibilityMode: false })).compatibilityMode, true)
-  assert.equal((await harness.read()).compatibilityMode, true)
+  assert.equal((await harness.read()).compatibilityMode, false)
+  assert.equal((await harness.update({ compatibilityMode: false })).compatibilityMode, false)
+  assert.equal((await harness.read()).compatibilityMode, false)
   assert.equal((await harness.saved()).compatibilityMode, false)
-  assert.equal(presentTavernSettings(await harness.saved(), {}).compatibilityMode, true)
+  assert.equal(presentTavernSettings(await harness.saved(), {}).compatibilityMode, false)
   assert.match(clientSource, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "silly 模式"/)
 })
 
@@ -150,7 +152,8 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
-    compatibilityMode: true,
+    compatibilityMode: false,
+    sillyModeEnabled: false,
     webSearchEnabled: false,
     systemAppendEnabled: true,
     defaultDisabledWritingSkills: [],
@@ -172,7 +175,8 @@ test('系统正文提示词默认使用内置内容，并可保存自定义覆�
     hideContextAndReasoning: false,
     candidateDismissMode: 'after-fill',
     contextCompaction: { mode: 'manual', rounds: 20, percent: 80, revision: 0 },
-    compatibilityMode: true,
+    compatibilityMode: false,
+    sillyModeEnabled: false,
     webSearchEnabled: false,
     systemAppendEnabled: true,
     defaultDisabledWritingSkills: [],
@@ -330,4 +334,13 @@ test('global play defaults merge individual switches without losing other defaul
   assert.equal(defaults.webSearchEnabled, true)
   assert.equal(defaults.sceneImagesEnabled, true)
   assert.throws(() => applyTavernSettingsPatch(saved, { defaultPlaySettings: { webSearchEnabled: 'false' } }))
+})
+
+test('silly 入口可显式开启并持久化，再关闭不影响其他设置', async t => {
+  const h = await settingsHarness(t)
+  assert.equal((await h.read()).sillyModeEnabled, false)
+  assert.equal((await h.update({ sillyModeEnabled: true })).compatibilityMode, true)
+  assert.equal((await h.read()).sillyModeEnabled, true)
+  assert.equal((await h.update({ sillyModeEnabled: false })).compatibilityMode, false)
+  assert.equal((await h.saved()).sillyModeEnabled, false)
 })
