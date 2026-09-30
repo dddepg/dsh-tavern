@@ -1908,3 +1908,32 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-tavern-status-runtime.single-panel > .dsh-tavern-panel-toolbar { position: absolute; top: 4px; right: 4px; z-index: 1; padding: 0; border: 0; background: transparent; }
 .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh { width: 28px; height: 28px; padding: 0; background: var(--dsw-specific-input-major); opacity: .75; }
 .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh:hover, .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh:focus-visible { opacity: 1; }
+
+/* Visual hierarchy: accent is reserved for primary actions and live state. */
+.dsh-tavern-header-btn { height: 32px; padding: 0 12px; border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-header-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dsh-tavern-choice-trigger { border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-choice-trigger:hover:not(:disabled) { border-color: var(--dsh-tavern-accent-border); background: var(--dsh-tavern-accent-soft); color: var(--dsh-tavern-accent); }
+.dsh-local-settings .dsh-local-warning { color: var(--dsw-alias-label-tertiary); }
+.dsh-local-settings .dsh-local-warning::before { content: "⚠ "; }
+
+/* Variable receipt reads as a quiet status line, not a content card. */
+.dsh-tavern-mvu-receipt { width: auto; max-width: min(100%, 760px); border-color: transparent; background: transparent; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-mvu-receipt-summary { padding: 2px 0; font-weight: 500; font-size: 12px; }
+.dsh-tavern-mvu-receipt[open], details.dsh-tavern-mvu-receipt:hover { border-color: var(--dsw-alias-border-l2); background: var(--dsw-specific-input-major); }
+details.dsh-tavern-mvu-receipt > .dsh-tavern-mvu-receipt-summary { padding: 4px 10px; }
+details.dsh-tavern-mvu-receipt:not([open]):not(:hover) > .dsh-tavern-mvu-receipt-summary { padding-left: 0; }
+.dsh-tavern-mvu-receipt:is([data-status="partial"], [data-status="error"], [data-status="interrupted"], [data-status="stale"]) { border-color: rgba(220,94,94,.48); background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-mvu-receipt:is([data-status="partial"], [data-status="error"], [data-status="interrupted"], [data-status="stale"]) > .dsh-tavern-mvu-receipt-summary { padding: 4px 10px; }
+
+/* Sidebar footer: one compact row; status appears only after a check. */
+.dsh-tavern-update-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.dsh-tavern-update-row > .dsh-tavern-update-identity { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-update-row > .dsh-tavern-update-actions { flex: none; margin-top: 0; }
+.dsh-tavern-update-row .dsh-tavern-update-button { width: auto; height: 26px; padding: 0 9px; }
+.dsh-tavern-update-row > details.dsh-tavern-update-actions { flex: 1 1 100%; }
+
+/* Status panel: no nested frame around the card's own status bar. */
+.dsh-tavern-status-dashboard .dsh-tavern-status-runtime { border: 0; border-radius: 0; background: transparent; }
+.dsh-tavern-status-dashboard .dsh-tavern-card-reload .dsh-tavern-btn.quiet { border: 0; padding: 2px 0; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-status-dashboard .dsh-tavern-card-reload .dsh-tavern-btn.quiet:hover:not(:disabled) { background: transparent; color: var(--dsh-tavern-accent); text-decoration: underline; text-underline-offset: 3px; }
