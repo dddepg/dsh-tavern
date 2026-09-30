@@ -3032,6 +3032,24 @@ window.__ModuleLoader__.load({
             }
             return Object.freeze({
                 trackNode: function (node) { created.add(node); return node; },
+                findElementById: function (id) {
+                    const node = hostDocument.getElementById(id);
+                    if (node && (!ownerOf(node) || ownerOf(node) === identity)) return node;
+                    if (!disposed && parking) for (const parked of parking.querySelectorAll('[id]')) {
+                        if (parked.id === id && ownerOf(parked) === identity) return parked;
+                    }
+                    return null;
+                },
+                mutateRoot: function (root, mutate) {
+                    const before = new Set(root.childNodes);
+                    try { return mutate(); }
+                    finally {
+                        for (const node of Array.from(root.childNodes)) if (!before.has(node)) {
+                            if (disposed) node.remove(); else remember(node, root);
+                        }
+                        park();
+                    }
+                },
                 // Scope the mounting operation, not the whole asynchronous import.
                 // Other conversations and the app can render while that import waits.
                 bindJQuery: function (jquery) {
@@ -4015,6 +4033,31 @@ window.__ModuleLoader__.load({
 		function createTavernComposerWindow(frame, host = frame.parent) {
 		  const ids = new Set(['send_textarea', 'send_but']);
 		  const documents = new WeakMap(), windows = new WeakMap();
+		  const roots = new WeakMap(), nativeRoots = new WeakMap();
+		  const unwrap = value => nativeRoots.get(value) || value;
+		  function rootView(root) {
+		    if (!root) return root;
+		    if (roots.has(root)) return roots.get(root);
+		    const mutations = new Set(['insertAdjacentHTML', 'append', 'prepend', 'appendChild', 'insertBefore', 'replaceChildren']);
+		    const proxy = new Proxy(root, {
+		      get(target, key) {
+		        const value = Reflect.get(target, key, target);
+		        if (typeof value !== 'function') return value;
+		        return function (...args) {
+		          const run = () => value.apply(target, args.map(unwrap));
+		          const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+		          return mutations.has(key) && artifacts ? artifacts.mutateRoot(target, run) : run();
+		        };
+		      },
+		      set(target, key, value) {
+		        const run = () => Reflect.set(target, key, value, target);
+		        const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+		        return key === 'innerHTML' && artifacts ? artifacts.mutateRoot(target, run) : run();
+		      }
+		    });
+		    roots.set(root, proxy); nativeRoots.set(proxy, root);
+		    return proxy;
+		  }
 		  const jq = frame.jQuery;
 		  const anchors = new Map();
 		  let observedViewport = null;
@@ -4071,12 +4114,15 @@ window.__ModuleLoader__.load({
 		    return anchors.get(id);
 		  }
 		  function lookup(doc, id) {
-		    return ids.has(id) ? frame.document.getElementById(id) : doc.getElementById(id) || layoutAnchor(id);
+		    if (ids.has(id)) return frame.document.getElementById(id);
+		    const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+		    return (artifacts ? artifacts.findElementById(id) : doc.getElementById(id)) || layoutAnchor(id);
 		  }
 
 		  function documentView(doc) {
 		    if (documents.has(doc)) return documents.get(doc);
 		    const proxy = new Proxy({}, { get(_, key) {
+		      if (key === 'body' || key === 'head') return rootView(doc[key]);
 		      if (key === 'createElement' || key === 'createElementNS') return function (...args) {
 		        const node = doc[key](...args);
 		        frame.frameElement?.__dshTavernHostArtifacts?.trackNode(node);
@@ -4089,7 +4135,7 @@ window.__ModuleLoader__.load({
 		          : /^#(?:send_textarea|send_but)$/.test(selector) ? frame.document[key](selector) : doc[key](selector);
 		      if (key === 'defaultView') return windowView(doc.defaultView);
 		      const value = doc[key];
-		      return typeof value === 'function' ? value.bind(doc) : value;
+		      return typeof value === 'function' ? (...args) => value.apply(doc, args.map(unwrap)) : value;
 		    }, set(_, key, value) { doc[key] = value; return true; } });
 		    documents.set(doc, proxy);
 		    return proxy;
@@ -4106,7 +4152,7 @@ window.__ModuleLoader__.load({
 		      };
 		      return result;
 		    }
-		    return jq(selector, context);
+		    return jq(unwrap(selector), unwrap(context));
 		  }
 		  function windowView(target) {
 		    if (windows.has(target)) return windows.get(target);
@@ -4116,7 +4162,7 @@ window.__ModuleLoader__.load({
 		      if (key === 'document') return target === frame ? frame.document : documentView(target.document);
 		      if ((key === '$' || key === 'jQuery') && jq) return new Proxy(jq, {apply(_, receiver, args) { return jquery(...args); }});
 		      const value = target[key];
-		      return typeof value === 'function' && !value.prototype ? value.bind(target) : value;
+		      return typeof value === 'function' && !value.prototype ? (...args) => value.apply(target, args.map(unwrap)) : value;
 		    }, set(_, key, value) { target[key] = value; return true; } });
 		    windows.set(target, proxy);
 		    return proxy;

@@ -170,6 +170,24 @@
             }
             return Object.freeze({
                 trackNode: function (node) { created.add(node); return node; },
+                findElementById: function (id) {
+                    const node = hostDocument.getElementById(id);
+                    if (node && (!ownerOf(node) || ownerOf(node) === identity)) return node;
+                    if (!disposed && parking) for (const parked of parking.querySelectorAll('[id]')) {
+                        if (parked.id === id && ownerOf(parked) === identity) return parked;
+                    }
+                    return null;
+                },
+                mutateRoot: function (root, mutate) {
+                    const before = new Set(root.childNodes);
+                    try { return mutate(); }
+                    finally {
+                        for (const node of Array.from(root.childNodes)) if (!before.has(node)) {
+                            if (disposed) node.remove(); else remember(node, root);
+                        }
+                        park();
+                    }
+                },
                 // Scope the mounting operation, not the whole asynchronous import.
                 // Other conversations and the app can render while that import waits.
                 bindJQuery: function (jquery) {
