@@ -13,7 +13,7 @@
 - 纯 Markdown 历史若与 Session 显示文本相同，沿用原生正文；显示正则改变文字、旧候选覆盖等情形仍产生 Markdown 投影。
 - 不改 `sourceText` / `sessionText`、正则处理顺序、iframe 权限及交互。整篇正文被正则包成 HTML 的场景不在本次移出 iframe 的范围内。
 
-验证入口：`tests/reply-presentation.test.mjs`、`tests/card-opening-previews.test.mjs`、`tests/fixtures/native-prose-browser-smoke.mjs`。后者使用真实 DSH MarkdownText 和正式消息 renderer；桌面 Chromium 的手机尺寸与触摸模拟不能代替 iOS / Android 真机验收。
+验证入口：`tests/reply-presentation.test.mjs`、`tests/card-opening-previews.test.mjs`、`tests/browser/native-prose-browser-smoke.mjs`。后者使用真实 DSH MarkdownText 和正式消息 renderer；桌面 Chromium 的手机尺寸与触摸模拟不能代替 iOS / Android 真机验收。
 
 ## 正文协议标签
 

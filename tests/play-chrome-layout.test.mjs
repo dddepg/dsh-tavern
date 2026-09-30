@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = await readFile(new URL('../tavern-plugin/src/client/ui/message-frame.js', import.meta.url), 'utf8')
 const start = source.indexOf('function composerOffsetPx(')
 const end = source.indexOf('// @include modules/mobile-layout.js')
 assert.notEqual(start, -1)

@@ -2,6 +2,7 @@
 
 ## 权威文档
 
+- [领域契约](../CONTEXT.md)：Story Timeline、前后台轮次和持久化边界的当前定义。
 - [产品设计原则](product-design.md)：项目使命、核心体验，以及 Agent、上下文、生态组合、候选和剧本等产品取舍。
 - [软件不是代码的集合](software-is-experience.md)：AI 加速实现之后，真实体验、反复测试与产品打磨仍由人完成。
 - [架构与领域语言](architecture.md)：统一术语、DSH seam、领域模块、适配器和关键规则。
@@ -16,3 +17,18 @@
 - [`research/`](research/)：外部项目、兼容机制、产品判断与故障研究。统一入口见[参考项目库](research/reference-projects.md)，已有专题包括[《灯火阑珊》MVU 兼容链路验收](research/lighthouse-mvu-compatibility-e2e-2026-08-28.md)、[人物卡自带 `phone-ctn` 小手机调研](research/card-native-phone-phone-ctn-audit-2026-09-05.md)、[强烈而旺盛的角色扮演游戏需求备忘](research/roleplaying-demand-memo.md)、[酒馆预设兼容边界备忘](research/preset-compatibility-boundary-memo.md)、[酒馆正则如何把 `【首页】` 变成可交互卡片](research/sillytavern-regex-rendering-memo.md)、[梨园架构研究与借鉴范围](research/liyuan-architecture-reference.md)、[dsh-visualize HTML 嵌入机制](research/dsh-visualize-html-embedding.md)以及[Windows 聊天落盘、候选失败与后台压缩排查报告](research/windows-chat-persistence-and-background-compaction-diagnosis-2026-08-27.md)。研究文档通常只提供证据；其中正则渲染备忘已由对应设计明确采纳为兼容基线。
 
 用户功能和演示见项目 [README](../README.md)；安装、更新、数据备份及排错见[安装说明](installation.md)。
+
+## 查找资料
+
+| 目录 | 用途 |
+| --- | --- |
+| [`manual/`](manual/) | 正式手册的页面源文件、构建和发布工具 |
+| [`design/references/`](design/references/) | Apple、Claude 的视觉参考，不作为项目架构规范 |
+| [`plans/`](plans/) | 分阶段实施计划；是否完成应结合验证记录判断 |
+| [`implementation/`](implementation/) | 特定功能的实施记录 |
+| [`verification/`](verification/) | 测试、性能与真实环境验收证据 |
+| [`testing/`](testing/) | 测试边界与方法；运行入口见 [测试目录说明](../tests/README.md) |
+| [`experiments/`](experiments/) | 实验方法和结果；可执行脚本放在 [`scripts/experiments/`](../scripts/experiments/) |
+| [`releases/`](releases/) | 历史版本发布记录 |
+
+历史方案和验证记录保留当时的结论，不自动代表当前实现；当前行为优先核对领域契约、正式实现及对应测试。本地研究副本和临时请求快照已清理，受跟踪的报告与证据仍保留。

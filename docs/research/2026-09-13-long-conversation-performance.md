@@ -36,7 +36,7 @@ Tavern 的首页与开场白预览样式使用了祖先 `:has(...)` 后接通配
 
 ```sh
 node bin/test-tavern.mjs
-node tests/fixtures/long-conversation-browser-smoke.mjs
+node tests/browser/long-conversation-browser-smoke.mjs
 node tests/fixtures/text-colors-mount-perf.mjs
 node tests/fixtures/long-conversation-native-perf.mjs STATE_JSON CONNECTION_JSON OUTPUT_DIR --navigation
 ```

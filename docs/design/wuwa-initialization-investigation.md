@@ -78,7 +78,7 @@
 复跑方法（从仓库根目录运行；CARD_PATH 指向本机卡片 JSON，别把私人卡片提交进仓库）：
 
 ```sh
-MVU_SMOKE_TRACE=1 MVU_SMOKE_JOURNAL=1 MVU_SMOKE_CARD_PATH="$CARD_PATH" node tests/fixtures/mvu-initialization-browser-smoke.mjs
+MVU_SMOKE_TRACE=1 MVU_SMOKE_JOURNAL=1 MVU_SMOKE_CARD_PATH="$CARD_PATH" node tests/browser/mvu-initialization-browser-smoke.mjs
 ```
 
 在真实浏览器打开输出 URL 的 `?mode=opening-card`，等待初始化。然后执行：

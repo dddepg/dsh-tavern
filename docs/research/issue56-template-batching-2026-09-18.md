@@ -27,8 +27,8 @@
 ## 重跑
 
 ```sh
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-sequential large-sequential 20
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-batch large 20
+node tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-sequential large-sequential 20
+node tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-batch large 20
 TAVERN_BROWSER_TESTS=1 node --test --test-concurrency=4 tests/*template*.test.mjs tests/*worldbook*.test.mjs tests/chat-history-import-service.test.mjs
 ```
 

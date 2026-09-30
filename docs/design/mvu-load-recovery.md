@@ -19,7 +19,7 @@
 
 回归入口：`tests/script-session-owner.test.mjs`；浏览器夹具增加 `navigation=1`，可在子代理页点击“验证结算”，检查只下载/初始化一次，返回前结算已完成，切换另一游戏后主执行器离线。
 
-验证入口：`tests/mvu-load-recovery.test.mjs`、`tests/mvu-asset-route.test.mjs`、`tests/card-runtime-lifecycle.test.mjs`、`tests/helper-module-loading.test.mjs`、现有结算恢复测试。真实浏览器夹具为 `tests/fixtures/mvu-initialization-browser-smoke.mjs`，参数 `mode=manual|auto|unsafe|json|server-error`，加 `sandbox=1` 验证隔离模式。
+验证入口：`tests/mvu-load-recovery.test.mjs`、`tests/mvu-asset-route.test.mjs`、`tests/card-runtime-lifecycle.test.mjs`、`tests/helper-module-loading.test.mjs`、现有结算恢复测试。真实浏览器夹具为 `tests/browser/mvu-initialization-browser-smoke.mjs`，参数 `mode=manual|auto|unsafe|json|server-error`，加 `sandbox=1` 验证隔离模式。
 
 ## 加载诊断
 

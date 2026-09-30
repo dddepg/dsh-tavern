@@ -46,7 +46,7 @@ macOS / Node 22.22.0，600 条合成消息，14,455,068 字节 Chat，每层带�
 
 ```sh
 node --test tests/variable-journal-patch.test.mjs tests/tavern-script-host-adapter.test.mjs tests/chat-persistence.test.mjs tests/chat-journal-store.test.mjs
-node tests/fixtures/variable-write-benchmark.mjs output/playwright/variable-writes/run
+node tests/performance/variable-write-benchmark.mjs output/playwright/variable-writes/run
 node bin/test-tavern.mjs
 ```
 
@@ -87,9 +87,9 @@ node bin/test-tavern.mjs
 这是连续普通变量调用的局部基准，**不含真实宿主摘要索引、通知后的页面刷新、模型生成或 MVU 整轮结算**，不能把这些数字当作实际一轮对话耗时。初次 iframe 调用还会受初始化影响，例如增量首轮首个预热样本为 206.3 ms。按新存储实例重读，三类变量均为 25，历史第一层 hp 仍为 10；ST chat 引用及受影响楼层变量同步正确。原始两轮数据、响应大小和落盘证明见 `variable-receipt-performance-2026-09-17.json`。
 
 ```sh
-node tests/fixtures/variable-write-benchmark.mjs output/playwright/variable-writes/full-receipt
-node tests/fixtures/variable-write-benchmark.mjs output/playwright/variable-writes/compact-receipt --compact
-node tests/fixtures/variable-receipt-browser-smoke.mjs
+node tests/performance/variable-write-benchmark.mjs output/playwright/variable-writes/full-receipt
+node tests/performance/variable-write-benchmark.mjs output/playwright/variable-writes/compact-receipt --compact
+node tests/browser/variable-receipt-browser-smoke.mjs
 # 在打印的本地地址访问 /?full 和 /，各运行一次；/proof 返回落盘与回执大小证明。
 node --test tests/helper-variable-receipts.test.mjs tests/helper-local-variables.test.mjs tests/helper-chat-data.test.mjs tests/variable-journal-patch.test.mjs tests/tavern-script-host-adapter.test.mjs
 node bin/build-tavern-client.mjs --check

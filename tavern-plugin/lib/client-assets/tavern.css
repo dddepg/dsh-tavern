@@ -302,7 +302,7 @@ body.dsh-tavern-shell-active [data-ref-chip="file"] { max-width: calc(100% - 4px
 .dsh-tavern-question-free { width: 100%; margin-top: 6px; padding: 8px 10px; border: 1px dashed var(--dsw-alias-border-l2); border-radius: 9px; background: transparent; color: var(--dsw-alias-label-secondary); text-align: left; cursor: pointer; }
 .dsh-tavern-question-free:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-tavern-question-foot { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }
-.dsh-tavern-question-primary { border: 0; border-radius: 8px; padding: 6px 12px; background: var(--dsw-alias-button-info-fill); color: #fff; cursor: pointer; }
+.dsh-tavern-question-primary { border: 0; border-radius: 8px; padding: 6px 12px; background: var(--dsh-tavern-accent); color: var(--dsw-alias-brand-text, #fff); cursor: pointer; }
 .dsh-tavern-question-primary:disabled { opacity: .45; cursor: default; }
 .dsh-tavern-regen-input { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; resize: vertical; }
 .dsh-tavern-status { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); background: var(--dsw-specific-sidebar-fill); }
@@ -1915,13 +1915,12 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-local-settings .dsh-local-warning::before { content: "⚠ "; }
 
 /* Variable receipt reads as a quiet status line, not a content card. */
-.dsh-tavern-mvu-receipt { width: auto; max-width: min(100%, 760px); border-color: transparent; background: transparent; color: var(--dsw-alias-label-tertiary); }
-.dsh-tavern-mvu-receipt-summary { padding: 2px 0; font-weight: 500; font-size: 12px; }
+.dsh-tavern-mvu-receipt { align-self: flex-start; width: fit-content; max-width: min(100%, 760px); box-sizing: border-box; margin: 2px 0; border-color: transparent; background: transparent; color: var(--dsw-alias-label-tertiary); }
+.dsh-tavern-mvu-receipt-summary { justify-content: flex-start; gap: 6px; padding: 3px 6px; text-align: left; overflow-wrap: anywhere; font-weight: 400; font-size: 11px; }
+.dsh-tavern-mvu-receipt-dot { flex-shrink: 0; width: 5px; height: 5px; }
+.dsh-tavern-mvu-receipt[data-status="updated"] { border-color: transparent; }
 .dsh-tavern-mvu-receipt[open], details.dsh-tavern-mvu-receipt:hover { border-color: var(--dsw-alias-border-l2); background: var(--dsw-specific-input-major); }
-details.dsh-tavern-mvu-receipt > .dsh-tavern-mvu-receipt-summary { padding: 4px 10px; }
-details.dsh-tavern-mvu-receipt:not([open]):not(:hover) > .dsh-tavern-mvu-receipt-summary { padding-left: 0; }
 .dsh-tavern-mvu-receipt:is([data-status="partial"], [data-status="error"], [data-status="interrupted"], [data-status="stale"]) { border-color: rgba(220,94,94,.48); background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); }
-.dsh-tavern-mvu-receipt:is([data-status="partial"], [data-status="error"], [data-status="interrupted"], [data-status="stale"]) > .dsh-tavern-mvu-receipt-summary { padding: 4px 10px; }
 
 /* Sidebar footer: one compact row; status appears only after a check. */
 .dsh-tavern-update-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }

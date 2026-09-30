@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
 // Execute the sidebar's real effect and dependencies under summary snapshot churn.
-const source = readFileSync(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 
 test('opening the card picker reloads cards created outside this browser', async () => {
   const start = source.indexOf('function openPicker()');

@@ -12,24 +12,24 @@ test('invalid JSON, card shape and MVU containers report safe locations', () => 
 })
 
 test('production tool reads disk through native DSH schema and rejects play-mode or escaped paths', { skip: !process.env.DSH_BOOT_MODULE }, async t => {
-  const { readFile, mkdtemp, writeFile, rm } = await import('node:fs/promises')
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const { pathToFileURL } = await import('node:url')
-  const { createFileResourceStore, normalizeResourcePath } = await import('../tavern-plugin/lib/domain/file-resources.js')
-  const { defineTool } = await import(new URL('../../dsh-tools/lib/index.js', pathToFileURL(process.env.DSH_BOOT_MODULE)))
+  const { createFileResourceStore } = await import('../tavern-plugin/lib/domain/file-resources.js')
+  const { registerCardReadingTools } = await import('../tavern-plugin/lib/tools/card-reading.js')
   const root = await mkdtemp(join(tmpdir(), 'tavern-validate-tool-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const files = createFileResourceStore({ dataRoot: root })
   await files.ensure()
   const path = 'cards/test.json'
   await writeFile(files.absolute(path), '<开局>')
-  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
-  const start = source.indexOf("    tools.register(defineTool({\n      name: 'tavern_validate_card'")
-  const end = source.indexOf('    tools.register(defineTool({', start + 1)
   let tool, mode = 'card'
-  new Function('tools', 'defineTool', 'chatForSession', 'str', 'normalizeResourcePath', 'validateCardFile', 'fileResources', source.slice(start, end))(
-    { register(value) { tool = value } }, defineTool, async () => ({ mode, cardPath: path }), value => String(value || ''), normalizeResourcePath, validateCardFile, files)
+  registerCardReadingTools({
+    tools: { register(value) { if (value.name === 'tavern_validate_card') tool = value } },
+    chatForSession: async () => ({ mode, cardPath: path }),
+    str: value => String(value || ''), fileResources: files,
+    cardMemory: { recordValidation: async () => {} }
+  })
   const exec = { agent: { session: { id: 'test' } } }
   const broken = await tool.execute({}, exec)
   assert.equal(broken.valid, false)

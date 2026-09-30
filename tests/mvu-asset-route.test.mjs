@@ -9,7 +9,7 @@ import { TAVERN_CLIENT_ASSET_PREFIX, readTavernClientAsset } from '../tavern-plu
 import { redactMvuLoadError } from '../tavern-plugin/lib/domain/mvu-diagnostics.js'
 
 // Execute the registered production handler, not a second implementation of its catch path.
-const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+const source = await readFile(new URL('../tavern-plugin/lib/http/routes.js', import.meta.url), 'utf8')
 const start = source.indexOf('handler: async (req, res) => {', source.indexOf("path: '/api/dsh-tavern'")) + 'handler: '.length
 const end = source.indexOf("\n    }), 'dsh-tavern: web route')", start)
 function route(overrides = {}) {

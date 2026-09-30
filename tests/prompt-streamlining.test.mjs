@@ -4,6 +4,9 @@ import test from 'node:test'
 
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 
+const cardToolsSource = await readFile(new URL('../tavern-plugin/lib/tools/card-editing.js', import.meta.url), 'utf8')
+const skillToolsSource = await readFile(new URL('../tavern-plugin/lib/tools/skills.js', import.meta.url), 'utf8')
+
 const orchestratorSource = await readFile(new URL('../tavern-plugin/lib/domain/turn-orchestration.js', import.meta.url), 'utf8')
 const orchestrationStrategiesSource = await readFile(new URL('../tavern-plugin/lib/domain/foreground-orchestration-strategies.js', import.meta.url), 'utf8')
 
@@ -22,13 +25,13 @@ function between(source, start, end) {
 }
 
 test('原版恢复工具只操作当前人物卡并要求固定确认文本', () => {
-  const restoreTool = between(serverSource, "name: 'tavern_restore_card'", "output:")
+  const restoreTool = between(cardToolsSource, "name: 'tavern_restore_card'", "output:")
 
   assert.match(restoreTool, /confirmation:/)
   assert.match(restoreTool, /enum: \['确认从原版恢复'\]/)
   assert.doesNotMatch(restoreTool, /path:/)
-  assert.match(serverSource, /restoreCurrentCard\(sessionId\)/)
-  assert.match(serverSource, /turnOrchestrator\.discard/)
+  assert.match(cardToolsSource, /restoreCurrentCard\(sessionId\)/)
+  assert.match(cardToolsSource, /turnOrchestrator\.discard/)
 })
 
 test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill 但不暴露文件编辑工具', () => {
@@ -59,6 +62,6 @@ test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill �
   assert.doesNotMatch(orchestratorSource, /if \(mode === 'script'\) return \[[^\]]*'bash'/)
 	assert.match(serverSource, /controlledToolNames = new Set\(\[[^\n]*'bash', 'pwsh', \.\.\.dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', \.\.\.cordisToolNames, 'tavern_user_profile_read'/)
 	assert.match(serverSource, /controlledToolNames = new Set\([^\n]*'tavern_test_response'/)
-  assert.match(serverSource, /name: 'tavern_save_skill'/)
+  assert.match(skillToolsSource, /name: 'tavern_save_skill'/)
   assert.doesNotMatch(serverSource, /name: 'tavern_bind_script'/)
 })

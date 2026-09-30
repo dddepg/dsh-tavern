@@ -28,7 +28,7 @@ test('到期回调重新检查刚开始的脚本任务，不用上次空闲快�
   assert.deepEqual(h.released,['A:scripts'])
 })
 
-const source = readFileSync(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const scopeSource = source.slice(source.indexOf('function createTavernHostArtifactScope(options)'), source.indexOf('const TAVERN_CARD_PHONE_HOST'))
 test('后台手机脚本延迟查询仍能绑定事件和设置样式，不操作前台同名按钮', async () => {
   const { JSDOM } = await import('jsdom')

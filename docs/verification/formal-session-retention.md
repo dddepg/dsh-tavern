@@ -13,7 +13,7 @@
 - `tests/session-resource-retention.test.mjs`：10 分钟边界、返回重计时、任务保护、到期重新检查任务、显式释放以及跨会话 DOM 清理隔离。
 - `tests/script-session-owner.test.mjs`：真实 owner 生命周期、后台结算和默认 10 分钟保留。
 - `tests/inline-message-renderer.test.mjs`：宿主代理随当前会话切换。
-- `tests/fixtures/session-frame-retention-browser-smoke.mjs`：实际构建客户端 + React + Chromium。通过 `document.open/write/close` 创建表单，填写并切换 A → B → A；断言相同 iframe、document、输入、勾选及脚本变量。再推进测试时钟，验证 599999ms 保留、600001ms 回收以及 B 不受影响。旧实现已复现 iframe 在切换时销毁。
+- `tests/browser/session-frame-retention-browser-smoke.mjs`：实际构建客户端 + React + Chromium。通过 `document.open/write/close` 创建表单，填写并切换 A → B → A；断言相同 iframe、document、输入、勾选及脚本变量。再推进测试时钟，验证 599999ms 保留、600001ms 回收以及 B 不受影响。旧实现已复现 iframe 在切换时销毁。
 
 运行浏览器夹具需指定 `DSH_BROWSER_ROOT` 为安装的 DSH 包目录，打开输出地址后调用 `window.verifySessionRetention()`。不使用真实会话、模型或用户数据。
 

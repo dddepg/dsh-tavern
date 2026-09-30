@@ -15,7 +15,7 @@
 
 ## 测量
 
-沿用 `tests/fixtures/worldbook-template-benchmark.mjs`，真实 Chromium 145、上游模板引擎、宿主 Adapter 与磁盘存储。20 个控制器、2 次投影；卡片 770,053 B，世界书 972,839 B。每组预热一次，再测三轮，取整轮耗时中位数。
+沿用 `tests/performance/worldbook-template-benchmark.mjs`，真实 Chromium 145、上游模板引擎、宿主 Adapter 与磁盘存储。20 个控制器、2 次投影；卡片 770,053 B，世界书 972,839 B。每组预热一次，再测三轮，取整轮耗时中位数。
 
 | 每次 RPC 附加延迟 | 旧版整轮 | 新版整轮 | 差异 |
 | --- | ---: | ---: | ---: |
@@ -33,8 +33,8 @@
 优化版：
 
 ```sh
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/template-refresh-after large 0
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/template-refresh-after-20 large 20
+node tests/performance/worldbook-template-benchmark.mjs /tmp/template-refresh-after large 0
+node tests/performance/worldbook-template-benchmark.mjs /tmp/template-refresh-after-20 large 20
 ```
 
 基线在隔离实验进程里加载 `d8efa450` 的 `tavern-script-host-adapter.js`，其他代码相同。该版本使用旧文本缓存；旧缓存实现本次未改。复现方式：
@@ -51,6 +51,6 @@ registerHooks({load(url, context, next) {
     : result
 }})
 JS
-node --import /tmp/template-cache-baseline.mjs tests/fixtures/worldbook-template-benchmark.mjs /tmp/template-refresh-before-clean large 0
-node --import /tmp/template-cache-baseline.mjs tests/fixtures/worldbook-template-benchmark.mjs /tmp/template-refresh-before-20 large 20
+node --import /tmp/template-cache-baseline.mjs tests/performance/worldbook-template-benchmark.mjs /tmp/template-refresh-before-clean large 0
+node --import /tmp/template-cache-baseline.mjs tests/performance/worldbook-template-benchmark.mjs /tmp/template-refresh-before-20 large 20
 ```

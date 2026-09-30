@@ -13,4 +13,7 @@ GitHub Actions 会频繁向 `origin/main` 推送 `chore: publish runtime manifes
 3. `git rebase origin/main`
 4. `git push origin main`
 
-禁止 force push。
+## 测试
+
+测试已有几千条，全量跑一次约 3 分钟。除非做版本发布，否则不要跑全量 `node bin/test-tavern.mjs`；只跑与改动相关的测试文件：
+`node bin/test-tavern.mjs tests/<相关>.test.mjs [更多文件…]`

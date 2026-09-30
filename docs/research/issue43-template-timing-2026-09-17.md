@@ -82,9 +82,9 @@ Windows 分支会跳过目录 fsync；本机目录同步约占一半，不能将
 ## 重跑
 
 ```sh
-node tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-formal
+node tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-formal
 # 单独测一组
-node tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-single large
+node tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-single large
 ```
 
 脚本自动启动和关闭浏览器、本地服务，清理临时存档。原始完整结果在 `output/playwright/issue43-formal/`，不提交；精简阶段指标保存在同目录文档旁的 `issue43-template-timing-2026-09-17.json`。

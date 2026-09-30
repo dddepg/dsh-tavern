@@ -352,7 +352,7 @@ revision 不连续、页面恢复或补丁失败时，iframe 请求新的完整�
 - 发现 iframe 调用 Helper 变量或消息写入 API 后，禁用自动替换，避免重跑其写操作。此机制不是对任意第三方脚本副作用的完整证明，也不修复卡片自身事件处理函数的错误。
 - 兜底替换会重建旧卡局部 UI，展开状态、选中标签等可能回到默认值；原有事件驱动卡片不受影响。超过 5 秒才轮询的无监听卡片也可能触发兜底。
 
-验证：`tests/status-refresh-fallback.test.mjs` 验证读取观察与事件/轮询边界，`tests/helper-context-refresh.test.mjs` 验证真实组件的替换、发送者校验与最新 Context。`tests/fixtures/status-refresh-browser-smoke.mjs` 可只读载入本地原卡 HTML，用真实 React、生产组件和 Helper 协议在浏览器中复现晚到、连续变化、回退及同值更新；只替换无关的依赖下载，不添加卡片监听器。`STATUS_SMOKE_BASELINE=0a789fd` 可运行修复前的固定版本作为对照。
+验证：`tests/status-refresh-fallback.test.mjs` 验证读取观察与事件/轮询边界，`tests/helper-context-refresh.test.mjs` 验证真实组件的替换、发送者校验与最新 Context。`tests/browser/status-refresh-browser-smoke.mjs` 可只读载入本地原卡 HTML，用真实 React、生产组件和 Helper 协议在浏览器中复现晚到、连续变化、回退及同值更新；只替换无关的依赖下载，不添加卡片监听器。`STATUS_SMOKE_BASELINE=0a789fd` 可运行修复前的固定版本作为对照。
 
 ### 模板更新
 

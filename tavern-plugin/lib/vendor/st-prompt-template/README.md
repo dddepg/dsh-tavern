@@ -27,7 +27,7 @@ Install the exact upstream package-lock in a temporary copy of upstream/ using `
 
 ```
 node tavern-plugin/lib/vendor/st-prompt-template/host-build/build.mjs /path/to/temporary/upstream /path/to/build-output
-node tests/fixtures/full-prompt-template-browser-smoke.mjs /path/to/build-output
+node tests/browser/full-prompt-template-browser-smoke.mjs /path/to/build-output
 ```
 
 The build fails on unresolved imports or compiler warnings and checks the dependency lock. Output includes a hash/size manifest marked `hostIntegrated: true`. Production mounts one dedicated browser instance per selected play session. Worldbook evaluation, opening initial variables, and foreground/background model requests use this upstream instance. Browser fixtures additionally exercise the same artifact with isolated data.
@@ -42,4 +42,4 @@ Authoritative snapshots, native saves, frame ownership/transport and provider re
 
 The packaged minified `host-build/artifact` is served by the production route with manifest integrity checking. It includes upstream settings HTML and third-party license notices. The production executor mounts the plugin and routes final model requests through its generation events. A connected Tavern page is required. This flag records production wiring, not complete SillyTavern host compatibility: reply DOM rendering, extension settings UI, and third-party extension APIs still need separate host integration. Unsupported host callbacks throw explicitly. The previous custom QuickJS/EJS implementation has been removed.
 
-Run `node tests/fixtures/full-prompt-template-native-browser-smoke.mjs /path/to/artifact` for browser → HTTP → native journal → reopen verification. It creates an isolated temporary profile, without touching a user's existing chat. Its model, macro, regex, and tokenizer services remain deterministic test implementations; it verifies template processing and persistence, not provider HTTP behavior or full regex parity.
+Run `node tests/browser/full-prompt-template-native-browser-smoke.mjs /path/to/artifact` for browser → HTTP → native journal → reopen verification. It creates an isolated temporary profile, without touching a user's existing chat. Its model, macro, regex, and tokenizer services remain deterministic test implementations; it verifies template processing and persistence, not provider HTTP behavior or full regex parity.

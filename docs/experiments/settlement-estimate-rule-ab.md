@@ -47,7 +47,7 @@
 设置 DEEPSEEK_API_KEY 后显式运行（会产生模型费用）：
 
 ```sh
-node docs/experiments/settlement-estimate-rule-ab.mjs /tmp/settlement-estimate-new-run
+node scripts/experiments/settlement-estimate-rule-ab.mjs /tmp/settlement-estimate-new-run
 ```
 
 使用新的输出目录。原始请求、响应、usage、状态与 summary.json 位于 `/tmp/tavern-estimate-ab-0912/`，不保存密钥；临时目录不保证长期保留。脚本通过 `node --check`，本次未修改生产代码。

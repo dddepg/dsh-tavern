@@ -158,7 +158,7 @@ DSH 中已有的能力由 adapter 翻译；没有的通用能力在宿主层补�
 - `tests/helper-host-api.test.mjs`：共享入口、更新身份、跨入口事件顺序/去重、once、脚本隔离注销、变量保存等待/失败、快速脚本就绪竞态。
 - `tests/helper-worldbook-api.test.mjs`：脚本 API → 生产宿主 adapter → 生产 World Book Library → 临时真实文件 → 创建新脚本环境回读。覆盖独立/内嵌世界书、增删改、字段、未知数据保留、extra 删除、冲突拒绝与绑定访问边界。
 - 更新关键词后，通过现有 `prepareWorldBookRecall` 验证新的关键词和内容能进入 DSH 召回。**没有验证所有位置/递归配置在最终模型请求中的完整 ST 语义。**
-- 浏览器夹具 `tests/fixtures/helper-host-browser-smoke.mjs` 使用真实浏览器、生产 srcdoc、模块加载器、iframe RPC 校验及宿主 adapter，存储指向可销毁的临时文件。只排除无关 CDN 库和图标，不访问用户资料、不调用模型。
+- 浏览器夹具 `tests/browser/helper-host-browser-smoke.mjs` 使用真实浏览器、生产 srcdoc、模块加载器、iframe RPC 校验及宿主 adapter，存储指向可销毁的临时文件。只排除无关 CDN 库和图标，不访问用户资料、不调用模型。
 - Chromium 验证：默认 `allow-scripts` sandbox 中创建与修改成功；销毁页面及脚本环境后，只读回读成功；两次宿主事件依次得到 `first, normal, once, first, normal`。快速只读脚本曾真实失败，修复后相同路径通过；受信任模式的同一回读与事件路径也通过。
 - 全量 `node --test tests/*.test.mjs`：1094 通过、9 跳过、0 失败（1103 项，包含字段删除回归）；最后一次全量运行约 21 秒。跳过项不计为已验证。
 - `git diff --check` 通过；没有重启或部署用户正在运行的 DSH 实例。
@@ -192,7 +192,7 @@ DSH 中已有的能力由 adapter 翻译；没有的通用能力在宿主层补�
 - 普通脚本、宿主门控、消息 iframe 等相关测试首轮 **72/72** 通过。
 - `tests/tavern-extension-settings.test.mjs` 验证临时真实 Profile 文件保存、跨实例恢复、独立插件并发合并、冲突拒绝、删除、Profile 隔离、特殊键安全、共享引用和写入期间编辑。
 - `tests/helper-native-worldinfo.test.mjs` 使用生产 bootstrap → 生产 Host Adapter → World Book Library → 临时真实文件；覆盖独立/内嵌格式，新增/删除条目，未知字段增删，原生/Helper 交叉冲突和绑定限制。
-- `tests/fixtures/helper-host-browser-smoke.mjs` 扩展为普通非 MVU 脚本，并支持 `--embedded`。真实 Chromium 默认 `allow-scripts` 沙箱中，独立世界书和内嵌世界书的写入均通过；分别销毁页面后从磁盘回读设置、世界书均通过。内嵌世界书还在受信任模式下回读通过。
+- `tests/browser/helper-host-browser-smoke.mjs` 扩展为普通非 MVU 脚本，并支持 `--embedded`。真实 Chromium 默认 `allow-scripts` 沙箱中，独立世界书和内嵌世界书的写入均通过；分别销毁页面后从磁盘回读设置、世界书均通过。内嵌世界书还在受信任模式下回读通过。
 - 浏览器验证继续使用生产 srcdoc、模块加载器、iframe RPC 白名单/令牌检查及生产宿主适配器；使用临时文件，不连接用户 Profile，不调用模型。排除了无关 CDN 依赖，并非完整应用及完整社区插件验收。
 - 本次实现提交 `0caf22f` 的独立 worktree 全量测试：**1128 项，1118 通过、10 跳过、0 失败**，约 32 秒；直接运行 package.json 对应的 `node --test tests/*.test.mjs`。并行场景功能正在修改主工作区，其旧源码断言曾使一次工作区全量测试失败；未修改该任务文件。`git diff --check` 通过。
 
@@ -236,7 +236,7 @@ DSH 中已有的能力由 adapter 翻译；没有的通用能力在宿主层补�
 ### 验证证据
 
 - `tests/helper-chat-data.test.mjs`：11 项行为测试，使用生产 bootstrap、Host Adapter、Chat Persistence 和临时真实 Chat Journal 文件。覆盖保存/恢复、删除、metadata 合并/reset、聊天隔离、并发合并/冲突、追加消息、写入期间编辑、保存失败、旧正文保护、临时消息拒绝、刷新与切换聊天竞态。
-- `tests/fixtures/helper-chat-data-browser-smoke.mjs`：真实 Chromium + 生产 srcdoc/模块加载器/RPC 令牌与白名单检查 + 生产宿主/存储。默认 `allow-scripts` 沙箱保存通过；销毁页面后的只读回读通过；受信任模式只读回读通过。原文、预置 Frame 和剧情 revision 保持不变。
+- `tests/browser/helper-chat-data-browser-smoke.mjs`：真实 Chromium + 生产 srcdoc/模块加载器/RPC 令牌与白名单检查 + 生产宿主/存储。默认 `allow-scripts` 沙箱保存通过；销毁页面后的只读回读通过；受信任模式只读回读通过。原文、预置 Frame 和剧情 revision 保持不变。
 - 浏览器故意尝试改写旧正文时收到预期拒绝。首次夹具还因未接入无关的诊断记录入口出现一次 500，已在夹具中单独接收诊断，重新运行保存与回读均通过，仅保留故意改写历史触发的预期错误；此项不属于存档 RPC 失败。浏览器测试排除了无关 CDN 依赖，不连接用户 Profile，也不发模型请求。
 - 最终全量 `node --test tests/*.test.mjs`：**1169 项，1156 通过、13 跳过、0 失败**，约 31 秒。`git diff --check` 通过。测试期间工作区有其他并行任务，但未提交或修改它们的文件。
 
@@ -275,5 +275,5 @@ Helper 缺失入口同时覆盖 `TavernHelper.name` 和 `window.name`，插件�
 ### 验证
 
 - `tests/helper-missing-capabilities.test.mjs`：空操作继续运行、核心拒绝、功能探测回退、插件自行安装回退、参数 getter/序列化不被触发、脚本身份、伪造消息拒绝、切换聊天、保存失败、真实文件回读、累计快照去重、限量和 ZIP 导出。
-- `tests/fixtures/helper-compatibility-browser-smoke.mjs`：真实 Chromium、生产 bootstrap/共享模块加载/父窗口校验、临时真实 Profile 存储与生产 ZIP 导出；默认 `allow-scripts` 沙箱和受信任模式均通过，重新加载保留旧记录并分开统计新运行实例。实际点击下载后的 ZIP 校验通过。脚本甲 100 次滚动空调用聚合为 count=100，脚本乙和两者事件回调分别归档，宏注册记为 rejected，生成函数探测记为 lookup；导出包不含测试参数里的密钥和正文，Chat/Frame 完全不变。夹具仅排除无关 CDN，不连接用户 Profile，不调用模型。
+- `tests/browser/helper-compatibility-browser-smoke.mjs`：真实 Chromium、生产 bootstrap/共享模块加载/父窗口校验、临时真实 Profile 存储与生产 ZIP 导出；默认 `allow-scripts` 沙箱和受信任模式均通过，重新加载保留旧记录并分开统计新运行实例。实际点击下载后的 ZIP 校验通过。脚本甲 100 次滚动空调用聚合为 count=100，脚本乙和两者事件回调分别归档，宏注册记为 rejected，生成函数探测记为 lookup；导出包不含测试参数里的密钥和正文，Chat/Frame 完全不变。夹具仅排除无关 CDN，不连接用户 Profile，不调用模型。
 - 全量回归：1181 项，1166 通过、15 跳过、0 失败，约 32 秒；包含同工作区其他任务的最新测试。`git diff --check` 通过。

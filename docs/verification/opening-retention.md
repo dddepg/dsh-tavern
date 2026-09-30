@@ -19,7 +19,7 @@
 浏览器复现：
 
 ```sh
-DSH_BROWSER_ROOT=/path/to/installed/dsh node tests/fixtures/opening-retention-browser-smoke.mjs
+DSH_BROWSER_ROOT=/path/to/installed/dsh node tests/browser/opening-retention-browser-smoke.mjs
 playwright-cli -s=opening-retention open <printed-local-url>
 playwright-cli -s=opening-retention eval 'async () => await window.verifyOpeningRetention()'
 ```

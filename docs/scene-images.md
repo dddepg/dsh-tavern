@@ -119,7 +119,7 @@ Desktop 设置顶部的「导出诊断信息」会随宿主日志带出生图连
 
 自动测试覆盖默认关闭、保留手动开关状态、旧配置迁移、显式启用、未启用/正文生成中的后台请求拒绝、保存不收费、接口请求、base64/URL 返回、凭据不转发、大小/格式限制、独立子 Agent 工具执行、重复点击、失败重试、正文版本绑定与刷新恢复。
 
-`tests/scene-image-native.test.mjs` 使用本机 DSH 的真实 Agent loop、工具和附件校验落盘，文字模型返回及生图 HTTP 服务由测试夹具提供。`tests/fixtures/scene-image-browser-smoke.mjs` 在此基础上挂载产品正文 renderer、按钮和设置组件，用浏览器验证图片位置、失败提示和恢复。
+`tests/scene-image-native.test.mjs` 使用本机 DSH 的真实 Agent loop、工具和附件校验落盘，文字模型返回及生图 HTTP 服务由测试夹具提供。`tests/browser/scene-image-browser-smoke.mjs` 在此基础上挂载产品正文 renderer、按钮和设置组件，用浏览器验证图片位置、失败提示和恢复。
 
 这些测试不消耗用户额度，也不等同于某个商业生图供应商的实测。实际画质、模型名/尺寸兼容及供应商审核行为仍需使用者自己的接口确认。
 

@@ -9,7 +9,7 @@
 - 卡片导入/导出保留配置及无关扩展；开场预览携带配置；稳定面板覆盖优先于卡片默认，模板明确声明优先于覆盖。修改其他面板配置不重建当前 iframe。
 - `tests/display-runtime-capture.test.mjs`：布局诊断限制节点数量和字段大小，保存后可从磁盘重放；相同证据去重，尺寸变化能更新；不修改已有变量，不复制全部历史变量。
 - `tests/live-card-update.test.mjs`：纯尺寸配置更新后正文、当前数值、回退快照数值保留。
-- `tests/fixtures/frame-viewport-height-browser-smoke.mjs`：旧行为 8 个浏览器场景全部通过，普通 600px、局部 120px、父视口 844px、sandbox 600px、长内容、悬浮元素、固定定位和居中布局保持原结果。
+- `tests/browser/frame-viewport-height-browser-smoke.mjs`：旧行为 8 个浏览器场景全部通过，普通 600px、局部 120px、父视口 844px、sandbox 600px、长内容、悬浮元素、固定定位和居中布局保持原结果。
 - 原有 iframe/状态栏/运行时/作用域刷新测试继续覆盖生命周期、跨视图更新与全屏回退；生成客户端通过 `--check`。
 
 ## 检查结果
