@@ -12,7 +12,15 @@ function installTavernBrand(doc, urls) {
   link.href = urls.logo;
   link.dataset.plugin = 'dsh-tavern-plugin';
   doc.head.appendChild(link);
+  // The host hardcodes its product name into document.title ("<session> — DeepSeek Harness").
+  const hostTitle = 'DeepSeek Harness';
+  function retitle() { if (doc.title.includes(hostTitle)) doc.title = doc.title.replace(hostTitle, 'DSH Tavern'); }
+  const Observer = doc.defaultView && doc.defaultView.MutationObserver;
+  const observer = Observer ? new Observer(retitle) : null;
+  if (observer) observer.observe(doc.head, { childList: true, subtree: true, characterData: true });
+  retitle();
   return function () {
+    if (observer) observer.disconnect();
     link.remove();
     for (const name of Object.keys(properties)) root.style.removeProperty(name);
   };
