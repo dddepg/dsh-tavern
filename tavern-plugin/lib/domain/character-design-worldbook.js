@@ -66,7 +66,7 @@ export function createCharacterDesignPublisher({ worldBooks, readCard }) {
     const source = binding.source || { kind: 'card', cardPath: chat.cardPath }
     const previousSource = chat.openingWorldbookSnapshot?.source
     const identity = value => value?.kind === 'card' ? value.cardPath : value?.path
-    if (previousSource && identity(previousSource) !== identity(source)) throw new Error('世界书绑定已变化，请先同步后重新设计人物')
+    if (previousSource && identity(previousSource) !== identity(before?.source || source)) throw new Error('世界书绑定已变化，请先同步后重新设计人物')
     // Validate against all bound books, including supplementary books.
     const all = { openingWorldbookSnapshot: { version: 1, document: structuredClone(before?.document ?? null) } }
     for (const character of characters) applyCharacterDesignWorldbook(all, character)
