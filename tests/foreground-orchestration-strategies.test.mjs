@@ -49,19 +49,10 @@ function strategies(overrides = {}) {
   return { value: createForegroundOrchestrationStrategies(options), compatibility: createCompatibilityOrchestrationStrategy(options.compatibility), calls, chats }
 }
 
-test('正式编排为兼容对话选择 SillyTavern 编译策略', async () => {
+test('正式编排拒绝运行已停用的 silly 会话', async () => {
   const run = strategies()
-  const chat = run.chats.get('compat')
-  const payload = { turn: 3, step: 1, messages: [userMessage('继续')] }
-  const prepared = await run.value.prepareStep({ chat, sessionId: 'compat', payload, decision: { kind: 'enter', messages: payload.messages }, requestId: 'compat-request' })
-  assert.equal(prepared.messages, payload.messages)
-  const projected = run.value.projectRequest({ sessionId: 'compat', messages: [] }, { turn: 3, step: 1 })
-  assert.equal(projected.messages[0].content[0].text, 'compat')
-  const assembly = await run.value.assembleSystemPrompt({ sections: [{}], contexts: [{}], tools: [] }, { chat, sessionId: 'compat' })
-  assert.deepEqual(assembly.sections, [])
-  assert.deepEqual(run.calls, [
-    ['compat.before', '继续'], ['compat.begin', 3, 'compat-request'], ['compat.compile', '继续'], ['compat.persist', 3]
-  ])
+  await assert.rejects(run.value.prepareStep({ chat: run.chats.get('compat'), sessionId: 'compat', payload: { step: 1 } }), /已停用/)
+  assert.deepEqual(run.calls, [])
 })
 
 test('游玩固定背景来自原生系统装配，预设前后段保持顺序，快照不重复发送', async () => {
@@ -353,7 +344,7 @@ test('native preset macros render across phases before projection without rewrit
   assert.equal(followup.messages[0].content[0].text, request.messages[0].content[0].text)
 })
 
-for (const sessionId of ['native', 'compat']) test('regeneration gates ordinary and stale inputs before preparation: '+sessionId,async()=>{
+for (const sessionId of ['native']) test('regeneration gates ordinary and stale inputs before preparation: '+sessionId,async()=>{
   const run=strategies();const chat=run.chats.get(sessionId)
   chat.regenInProgress=true;chat.regenRecovery={id:'current'}
   const input=message=>({chat,sessionId,payload:{turn:3,step:1,messages:[message]},decision:{kind:'enter',messages:[message]},requestId:'request'})

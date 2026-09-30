@@ -125,7 +125,7 @@ test('原生游玩把固定会话种子写在人物卡背景之后、开场白�
   assert.deepEqual(h.session().events, first)
 
   const compatibility = initializationFixture()
-  await compatibility.make().start({ ...compatibility.input, requestMode: 'sillytavern' })
+  await assert.rejects(compatibility.make().start({ ...compatibility.input, requestMode: 'sillytavern' }), /已停用/)
   assert.equal(seedMessages(compatibility.session()).length, 0)
 
   const card = initializationFixture()
@@ -205,7 +205,7 @@ test('double clicks and ensureOpening share session ordering and do not create d
   assert.deepEqual(h.session().events, before, 'reentering keeps the originally selected opening')
 })
 
-test('mode selection preserves legacy aliases and enables compatibility experiments', async () => {
+test('mode selection preserves legacy aliases and rejects silly mode', async () => {
   for (const mode of ['card', 'revision', 'extract']) {
     const h = initializationFixture()
     const chat = await h.make().start({ ...h.input, cardPath: '', mode })
@@ -218,10 +218,7 @@ test('mode selection preserves legacy aliases and enables compatibility experime
   }
   const h = initializationFixture()
   h.state.script = { title: '剧本', version: 1, chunks: [{ id: 'one', text: '第二个开场白' }, { id: 'two', text: '后续' }] }
-  const chat = await h.make().start({ ...h.input, mode: 'story', openingId: 'alternate:0', requestMode: 'sillytavern' })
-  assert.equal(chat.mode, 'script'); assert.equal(chat.openingText, '第二个开场白')
-  assert.equal(chat.requestMode, 'sillytavern'); assert.ok(chat.scriptState)
-  assert.equal(h.session().prefix, undefined, 'compatibility path must not install native prefix')
+  await assert.rejects(h.make().start({ ...h.input, mode: 'story', openingId: 'alternate:0', requestMode: 'sillytavern' }), /已停用/)
 })
 
 test('opening binds a pre-publication worldbook snapshot without leaving temporary chat metadata', async () => {

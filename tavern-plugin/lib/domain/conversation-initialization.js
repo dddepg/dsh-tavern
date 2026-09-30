@@ -81,6 +81,7 @@ export function createConversationInitialization(options) {
   }
 
   async function initialize({ cardPath, sessionId, mode, openingId, userName, requestMode, preparation, cardTask, importDraft = false }) {
+    if (requestMode === 'sillytavern') throw new Error('silly 模式已停用')
     const currentSettings = await settings()
     const defaults = normalizePlayDefaults(currentSettings.defaultPlaySettings)
     const effectiveRequestMode = requestMode === 'sillytavern' ? 'sillytavern' : 'dsh'
@@ -96,6 +97,7 @@ export function createConversationInitialization(options) {
     if (chatMode === 'story' && hasScript) chatMode = 'script'
     if (typeof sessionId === 'string' && sessionId !== '') {
       const current = await chats.resolve(sessionId)
+      if (current?.requestMode === 'sillytavern') throw new Error('silly 模式已停用')
       // 同一大模式（游玩/卡片）内复用当前会话；旧的自由故事会话不会被强行切换成剧本。
       if (current !== undefined && current.cardPath === str(cardPath) && groupOfMode(current.mode) === groupOfMode(chatMode)) {
         if (groupOfMode(current.mode) === 'play') await snapshots.ensure(current, card)

@@ -109,9 +109,8 @@ test('设置界面不重复提供已并入外观的分色，不恢复旧兼容�
   visit(root)
   assert.equal(nodes.some(node => node.type === context.TavernTextColorSettings), false)
   const inputs = nodes.filter(node => node.type === 'input')
-  assert.equal(inputs.length, 1)
-  assert.equal(inputs[0].props.checked, false)
-  assert.match(JSON.stringify(root), /尽量复刻sillytavern的请求格式，但失去agent能力/)
+  assert.equal(inputs.length, 0)
+  assert.doesNotMatch(JSON.stringify(root), /开放 silly 模式入口/)
   const select = nodes.find(node => node.type === 'select' && node.props['aria-label'] === '后台模型')
   assert.equal(select, undefined)
   assert.equal(nodes.some(node => node.type === 'textarea' || node.type === 'details'), false)
@@ -132,7 +131,7 @@ test('旧兼容开关不自动开放 silly 入口', async t => {
   assert.equal((await harness.read()).compatibilityMode, false)
   assert.equal((await harness.saved()).compatibilityMode, false)
   assert.equal(presentTavernSettings(await harness.saved(), {}).compatibilityMode, false)
-  assert.match(clientSource, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "silly 模式"/)
+  assert.doesNotMatch(clientSource, /onClick: function \(\) \{ switchPlayRequestMode\("sillytavern"\); \} \}, "silly 模式"/)
 })
 
 test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词列表', () => {
@@ -336,11 +335,13 @@ test('global play defaults merge individual switches without losing other defaul
   assert.throws(() => applyTavernSettingsPatch(saved, { defaultPlaySettings: { webSearchEnabled: 'false' } }))
 })
 
-test('silly 入口可显式开启并持久化，再关闭不影响其他设置', async t => {
+test('silly 入口停用，旧设置不能重新开启', async t => {
   const h = await settingsHarness(t)
   assert.equal((await h.read()).sillyModeEnabled, false)
-  assert.equal((await h.update({ sillyModeEnabled: true })).compatibilityMode, true)
-  assert.equal((await h.read()).sillyModeEnabled, true)
+  await h.profileData.writeJson(h.settingsPath, { sillyModeEnabled: true })
+  assert.equal((await h.read()).sillyModeEnabled, false)
+  await assert.rejects(h.update({ sillyModeEnabled: true }), /已停用/)
+  await assert.rejects(h.update({ compatibilityMode: true }), /已停用/)
   assert.equal((await h.update({ sillyModeEnabled: false })).compatibilityMode, false)
   assert.equal((await h.saved()).sillyModeEnabled, false)
 })

@@ -13,21 +13,13 @@ test('实验分支公开兼容会话并声明兼容能力可用', async () => {
   const context = { readTavernSettings: async () => ({ trustedCardMode: true, sillyModeEnabled: true }), listTavernSessions: async () => chats }
   vm.runInNewContext('this.list = async () => { switch ("listSessions") {' + server.slice(start, server.indexOf("case 'listMobileCardImports'", start)) + '} };', context)
   const result = await context.list()
-  assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['compat', 'native'])
-  assert.equal(result.capabilities.compatibilityMode, true)
+  assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['native'])
+  assert.equal(result.capabilities.compatibilityMode, false)
 })
 
-test('实验分支可以创建并重新进入兼容会话', async () => {
+test('拒绝创建 silly 会话', async () => {
   const h = initializationFixture()
-  const chat = await h.make().start({ ...h.input, requestMode: 'sillytavern' })
-  assert.equal(chat.requestMode, 'sillytavern')
-  assert.deepEqual(chat.runtimePresetSnapshot, h.state.preset)
-  assert.equal(h.state.presetReads, 1, 'compatibility conversations freeze the same selected preset at creation')
-  const before = structuredClone(h.session().events)
-  const reopened = await h.make().start({ ...h.input, sessionId: chat.sessionId, requestMode: 'sillytavern' })
-  assert.equal(reopened.id, chat.id)
-  assert.equal(reopened.requestMode, 'sillytavern')
-  assert.deepEqual(h.session().events, before)
+  await assert.rejects(h.make().start({ ...h.input, requestMode: 'sillytavern' }), /已停用/)
 })
 
 test('启动恢复包含兼容与普通会话', async () => {

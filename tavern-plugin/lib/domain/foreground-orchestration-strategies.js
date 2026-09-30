@@ -348,6 +348,7 @@ export function createForegroundOrchestrationStrategies(options) {
   }
 
   async function prepareStep(input) {
+    if (input.chat?.requestMode === 'sillytavern') throw new Error('silly 模式已停用')
     if (input.chat?.regenInProgress && Number(input.payload.step) === 1) {
       const inputs = (input.payload.messages || []).filter(isTurnInput)
       const saved = input.chat.regenRecovery
