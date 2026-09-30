@@ -23,10 +23,8 @@ output/
 # 用户数据（人物卡、聊天、剧本、素材、索引、设置、diff）
 data/
 
-# 本地上游源码参考（提交号和拉取方式记录在 references/README.md）
-references/SillyTavern/
-references/JS-Slash-Runner/
-references/ST-Prompt-Template/
+# 按需重新取得的本地参考副本；来源见 docs/research/reference-projects.md
+/references/
 
 # 私人请求快照，仅供本地诊断
 docs/research/sillytavern-successful-prompt-snapshot-*.json

@@ -45,8 +45,8 @@ macOS，Node 22.22.0，正式 ProfileDataStore / DurableFilePromotion / MvuDiagn
 首次导入旧日志仍有一次完整转换，约 28 ms；达到轮换阈值时也需要压缩，不应将 0.077 ms 解释为每次磁盘保存耗时。以上是日志路径测量，不是整轮 MVU 或对话加速比例。
 
 ```sh
-node tests/fixtures/mvu-diagnostic-benchmark.mjs output/mvu-diagnostics/buffered.json
-node tests/fixtures/mvu-diagnostic-benchmark.mjs output/mvu-diagnostics/immediate.json --immediate
+node tests/performance/mvu-diagnostic-benchmark.mjs output/mvu-diagnostics/buffered.json
+node tests/performance/mvu-diagnostic-benchmark.mjs output/mvu-diagnostics/immediate.json --immediate
 node --test tests/mvu-diagnostic-journal.test.mjs tests/mvu-diagnostics.test.mjs tests/profile-data-store.test.mjs tests/durable-file-promotion.test.mjs
 node bin/test-tavern.mjs
 ```

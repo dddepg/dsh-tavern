@@ -18,7 +18,7 @@
 
 诊断的 `runtime-dispatch.baseline` 新增无变量值的标记：`currentSnapshot`、`priorSnapshot`、`usesCurrentFallback`。后续可据此验证实际存档是否命中这一路径。
 
-浏览器复现命令：`MVU_LATEST_ONLY=1 node tests/fixtures/mvu-tool-retry-browser-smoke.mjs`，打开其本机地址并点击“验证”。不使用真实人物卡或付费模型。
+浏览器复现命令：`MVU_LATEST_ONLY=1 node tests/browser/mvu-tool-retry-browser-smoke.mjs`，打开其本机地址并点击“验证”。不使用真实人物卡或付费模型。
 
 ## 收到转换后的卡片后补验
 

@@ -1,7 +1,7 @@
 // Production sandbox, transport, diagnostic persistence/export; temporary Chat only.
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { createHelperChatDataHost } from './helper-chat-data-host.mjs'
+import { createHelperChatDataHost } from '../fixtures/helper-chat-data-host.mjs'
 import { createProfileDataStore } from '../../tavern-plugin/lib/profile-data-store.js'
 import { TAVERN_COMPATIBILITY_CAPABILITIES, createTavernCompatibilityDiagnosticStore } from '../../tavern-plugin/lib/domain/tavern-compatibility-diagnostics.js'
 import { createMvuDiagnosticStore, createMvuDiagnosticExport } from '../../tavern-plugin/lib/domain/mvu-diagnostics.js'

@@ -1,5 +1,5 @@
 // Actual sidebar and iframe in real React; synthetic local card, no model calls.
-// DSH_BROWSER_ROOT=/path/to/dsh node tests/fixtures/opening-retention-browser-smoke.mjs
+// DSH_BROWSER_ROOT=/path/to/dsh node tests/browser/opening-retention-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'

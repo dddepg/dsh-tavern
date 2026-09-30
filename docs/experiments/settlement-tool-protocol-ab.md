@@ -38,10 +38,10 @@
 
 ## 复现与验证
 
-`docs/experiments/settlement-tool-protocol-ab.mjs` 是显式付费实验，不加入自动测试。设置 DEEPSEEK_API_KEY 后运行：
+`scripts/experiments/settlement-tool-protocol-ab.mjs` 是显式付费实验，不加入自动测试。设置 DEEPSEEK_API_KEY 后运行：
 
 ```sh
-node docs/experiments/settlement-tool-protocol-ab.mjs /tmp/settlement-ab-new-run
+node scripts/experiments/settlement-tool-protocol-ab.mjs /tmp/settlement-ab-new-run
 ```
 
 应使用新输出目录；输出含公开 demo 请求、响应、usage、独立状态文件和 summary.json，不保存密钥。当前原始证据位于 `/tmp/tavern-settlement-ab-0912/flash/`（临时目录，不保证长期保留）。

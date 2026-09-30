@@ -1,9 +1,9 @@
-// Run: node tests/fixtures/long-template-benchmark.mjs 1800 output/issue25-synthetic
+// Run: node tests/performance/long-template-benchmark.mjs 1800 output/issue25-synthetic
 // Open the printed local URL in a real browser; results are written to OUTPUT/COUNT.json.
 // Uses production journal, template adapter, dispatch and official browser artifact.
 // Excludes DSH conversation UI, model calls and user-card scripts. Temporary data only.
 import { estimateWorldBookTokens } from '../../tavern-plugin/lib/domain/worldbook-activation.js'
-import { createFullTemplateRuntime } from './browser-template-transport.mjs'
+import { createFullTemplateRuntime } from '../fixtures/browser-template-transport.mjs'
 import { createPromptTemplateGlobalVariables } from '../../tavern-plugin/lib/domain/prompt-template-global-variables.js'
 import { createServer } from 'node:http'
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'

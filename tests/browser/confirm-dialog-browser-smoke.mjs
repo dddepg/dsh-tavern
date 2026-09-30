@@ -1,4 +1,4 @@
-// node tests/fixtures/confirm-dialog-browser-smoke.mjs; open the loopback URL.
+// node tests/browser/confirm-dialog-browser-smoke.mjs; open the loopback URL.
 // Uses the shipped implementation and styles; no native browser dialogs.
 import http from 'node:http'
 import { readFile } from 'node:fs/promises'

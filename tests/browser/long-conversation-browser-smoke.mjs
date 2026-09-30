@@ -1,5 +1,5 @@
 // Synthetic DOM regression for issue #19. No server, model, credentials or user data.
-// Run separately from concurrent unit tests: node tests/fixtures/long-conversation-browser-smoke.mjs
+// Run separately from concurrent unit tests: node tests/browser/long-conversation-browser-smoke.mjs
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'

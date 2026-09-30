@@ -28,7 +28,7 @@ MB 为未压缩 JSON 十进制字节。优化后的测试加入真实 background
 
 本轮降低了大对象复制与传输量，尚未实现与楼层数无关的热路径：消息数组浅复制、完整性检查、turn 映射和差异遍历仍有 O(N) 成本；测量末尾还有完整存档读回。后续可维护楼层与有效变量基线索引、按 dirty floor 生成效果、按页管理浏览器消息缓存，并将验证改为局部读回。目标应为 O(本次读取和变更量)，不能对任意遍历历史的第三方脚本承诺常数时间。两次单点测量不足以确定增长曲线。
 
-浏览器探针原始结果位于本地忽略目录 `output/playwright/mvu-settlement-probe/`（`run400atomic.txt`、`run800final.txt`）；夹具基于 `tests/fixtures/mvu-initialization-browser-smoke.mjs`。
+浏览器探针原始结果位于本地忽略目录 `output/playwright/mvu-settlement-probe/`（`run400atomic.txt`、`run800final.txt`）；夹具基于 `tests/browser/mvu-initialization-browser-smoke.mjs`。
 
 ## 持续回归
 
@@ -594,7 +594,7 @@ copyLazyHistoryHeader 此前只延迟历史数组/撤销载荷，仍完整复制
 
 给既有 variable-write-benchmark 增加 --count=N 参数，保持默认 600 消息不变。使用临时存储，真实 ScriptHostAdapter.updateVariables、Chat persistence/journal、conversation registry 和磁盘 summary index，固定每楼正文/变量大小及每次新值大小；compact 模式各类型一次预热、五次采样。读回断言目标变量、首楼历史隔离，并重新打开存储比对完整档案。未运行模型/官方 MVU 解析/浏览器，不是完整 MVU 结算总耗时。
 
-本机 Node v22.22.0，代码基线 164c79d8；运行命令为 `node tests/fixtures/variable-write-benchmark.mjs output/variable-write-scaling/N --compact --count=N`。原始结果分别保存在 output/variable-write-scaling/{20,200,800,10000}/results.json。
+本机 Node v22.22.0，代码基线 164c79d8；运行命令为 `node tests/performance/variable-write-benchmark.mjs output/variable-write-scaling/N --compact --count=N`。原始结果分别保存在 output/variable-write-scaling/{20,200,800,10000}/results.json。
 
 | 消息数 | 初始 JSON 字节 | message 中位 ms | chat 中位 ms | script 中位 ms | message 内部完整读档中位 ms |
 | --- | ---: | ---: | ---: | ---: | ---: |

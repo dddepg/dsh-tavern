@@ -2,7 +2,7 @@
 // Excludes only unrelated CDN assets; does not start the user's app or call a model.
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { createHelperWorldbookHost } from './helper-worldbook-host.mjs'
+import { createHelperWorldbookHost } from '../fixtures/helper-worldbook-host.mjs'
 
 const multiple = process.argv.includes('--multiple')
 const host = await createHelperWorldbookHost(process.argv.includes('--embedded'), multiple)

@@ -1,5 +1,5 @@
 // Real browser coverage for trusted card scripts that inject UI into the host document.
-// node tests/fixtures/card-host-artifact-browser-smoke.mjs
+// node tests/browser/card-host-artifact-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'

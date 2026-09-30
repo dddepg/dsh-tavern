@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {card} from '../../examples/manual-demo/resources.mjs';
 import {createMvuSettlementModule} from '../../tavern-plugin/lib/domain/mvu-background-settlement.js';
 const dir=process.argv[2];
-assert.ok(dir && process.env.DEEPSEEK_API_KEY, 'Usage: DEEPSEEK_API_KEY=... node docs/experiments/settlement-tool-protocol-ab.mjs OUTPUT_DIR');
+assert.ok(dir && process.env.DEEPSEEK_API_KEY, 'Usage: DEEPSEEK_API_KEY=... node scripts/experiments/settlement-tool-protocol-ab.mjs OUTPUT_DIR');
 await mkdir(dir, {recursive:true});
 const entries=card.data.character_book.entries;
 const initial={stat_data:JSON.parse(entries.find(e=>e.comment.startsWith('[initvar]')).content)};

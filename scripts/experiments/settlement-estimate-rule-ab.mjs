@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const card=JSON.parse(await readFile(new URL('../../examples/avra/cards/avra-complete.json', import.meta.url),'utf8'));
 import {createMvuSettlementModule} from '../../tavern-plugin/lib/domain/mvu-background-settlement.js';
 const dir=process.argv[2];
-assert.ok(dir && process.env.DEEPSEEK_API_KEY, 'Usage: DEEPSEEK_API_KEY=... node docs/experiments/settlement-estimate-rule-ab.mjs OUTPUT_DIR');
+assert.ok(dir && process.env.DEEPSEEK_API_KEY, 'Usage: DEEPSEEK_API_KEY=... node scripts/experiments/settlement-estimate-rule-ab.mjs OUTPUT_DIR');
 await mkdir(dir, {recursive:true});
 const initial={stat_data:{时间:'雨夜 · 二更',地点:'金麦穗酒馆',天气:'暴雨封城',线索:'乌鸦黑蜡信封',信任:18,状态:'冷静观察'}};
 const rules=[card.data.description,card.data.personality,card.data.scenario,

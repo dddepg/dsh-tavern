@@ -2,7 +2,7 @@
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { Session } from './dsh-session-host.mjs'
+import { Session } from '../fixtures/dsh-session-host.mjs'
 import { createBodyEditor } from '../../tavern-plugin/lib/domain/body-editor.js'
 import { createStoryTimeline } from '../../tavern-plugin/lib/domain/story-timeline.js'
 import { projectReplyLayers, projectReplyHistory } from '../../tavern-plugin/lib/domain/reply-presentation.js'

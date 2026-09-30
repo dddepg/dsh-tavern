@@ -1,13 +1,13 @@
 // Real renderer + real DSH child Agent/tools/attachment store + local image HTTP API.
-// DSH_BOOT_MODULE=/path/dsh-app-boot/lib/index.js node --expose-internals tests/fixtures/scene-image-browser-smoke.mjs
+// DSH_BOOT_MODULE=/path/dsh-app-boot/lib/index.js node --expose-internals tests/browser/scene-image-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { sessionEvents } from '../../tavern-plugin/lib/domain/session-events.js'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createSceneImageNativeRuntime } from './scene-image-native-runtime.mjs'
-import { comfyGraph } from './scene-image-comfy-workflow.mjs'
+import { createSceneImageNativeRuntime } from '../fixtures/scene-image-native-runtime.mjs'
+import { comfyGraph } from '../fixtures/scene-image-comfy-workflow.mjs'
 
 const runtime = await createSceneImageNativeRuntime(process.env.DSH_BOOT_MODULE)
 if (['1', 'multi'].includes(process.env.SCENE_BROWSER_REFERENCE)) {

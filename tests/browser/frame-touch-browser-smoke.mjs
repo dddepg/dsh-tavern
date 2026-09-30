@@ -1,4 +1,4 @@
-// Manual browser fixture: node tests/fixtures/frame-touch-browser-smoke.mjs
+// Manual browser fixture: node tests/browser/frame-touch-browser-smoke.mjs
 // Uses synthetic TouchEvents to verify real DOM/layout and postMessage routing.
 // Physical-device native gesture behavior still requires Android acceptance.
 import http from 'node:http'

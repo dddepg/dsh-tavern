@@ -1,5 +1,5 @@
 // Synthetic, isolated timing harness. No model calls or user archives.
-// node tests/fixtures/worldbook-template-benchmark.mjs [output/playwright/issue43-timing] [case-name] [rpc-delay-ms]
+// node tests/performance/worldbook-template-benchmark.mjs [output/playwright/issue43-timing] [case-name] [rpc-delay-ms]
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { chromium } from 'playwright'
 import fs from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
-import { createFullTemplateRuntime } from './browser-template-transport.mjs'
+import { createFullTemplateRuntime } from '../fixtures/browser-template-transport.mjs'
 import { createForegroundWorldbook } from '../../tavern-plugin/lib/domain/foreground-worldbook.js'
 import { createWorldBookLibrary } from '../../tavern-plugin/lib/domain/worldbook-library.js'
 import { createChatJournalStore } from '../../tavern-plugin/lib/domain/chat-journal-store.js'

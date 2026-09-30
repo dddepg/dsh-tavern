@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { helperClient } from './helper-host-harness.mjs'
+import { helperClient } from '../fixtures/helper-host-harness.mjs'
 const source = helperClient.createTurnErrorControls.toString()
 const server = createServer((_request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8')

@@ -1,7 +1,7 @@
 // Real browser regression for style-read reuse; timings are observations, not gates.
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { helperClient } from './helper-host-harness.mjs'
+import { helperClient } from '../fixtures/helper-host-harness.mjs'
 
 const browser = await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : {})

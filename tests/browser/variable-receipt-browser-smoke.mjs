@@ -1,7 +1,7 @@
 // Disposable production adapter/journal + browser runtime. No user data or model.
 import {createServer} from 'node:http'
 import {readFile} from 'node:fs/promises'
-import {createHelperChatDataHost} from './helper-chat-data-host.mjs'
+import {createHelperChatDataHost} from '../fixtures/helper-chat-data-host.mjs'
 const host=await createHelperChatDataHost(), receipts=[]
 await host.persistence.update('audit',chat=>({...chat,messages:Array.from({length:600},(_,i)=>({role:i%2?'assistant':'user',text:'正文'.repeat(2000),variables:[{stat_data:{hp:10,details:'历史变量'.repeat(1000)},schema:{}}]}))}))
 let client=await readFile(new URL('../../tavern-plugin/lib/client.js',import.meta.url),'utf8')

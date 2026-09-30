@@ -1,7 +1,7 @@
 // Real sandboxed script runtime and host storage, with no user Profile or model calls.
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { createHelperChatDataHost } from './helper-chat-data-host.mjs'
+import { createHelperChatDataHost } from '../fixtures/helper-chat-data-host.mjs'
 
 const host = await createHelperChatDataHost()
 const diagnostics = []

@@ -11,7 +11,7 @@
 // mode=opening-card-replay additionally reads MVU_SMOKE_DIAGNOSTICS_PATH and
 // MVU_SMOKE_DATA_ROOT to clone a failed chat in memory. MVU_SMOKE_EXPECT_ERROR
 // asserts a diagnostic substring instead of success; operations can be overridden.
-import { instrumentInitializationAwaits, instrumentInitializationClient } from './mvu-initialization-trace.mjs'
+import { instrumentInitializationAwaits, instrumentInitializationClient } from '../fixtures/mvu-initialization-trace.mjs'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

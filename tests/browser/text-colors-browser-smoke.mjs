@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { helperClient as client } from './helper-host-harness.mjs'
+import { helperClient as client } from '../fixtures/helper-host-harness.mjs'
 const sample = `<p>走廊里很安静。她停下脚步，轻声说：<br>“你好，<strong>很高兴</strong>见到你。”</p>
 <p><em>他会记得昨天的约定吗？</em> 她望向窗外。</p>
 <p><q>这是 HTML 引用。</q> <span style="color:#4aa696">“人物卡指定的颜色”</span></p>

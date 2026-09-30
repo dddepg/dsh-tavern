@@ -29,7 +29,7 @@
 显式设置 DEEPSEEK_API_KEY 后运行（会产生模型费用）：
 
 ```sh
-node docs/experiments/settlement-three-round-play.mjs /tmp/tavern-three-round-new-run
+node scripts/experiments/settlement-three-round-play.mjs /tmp/tavern-three-round-new-run
 ```
 
 本次证据：`/tmp/tavern-three-round-play-0912/` 下的 foreground 请求/响应、story.md、后台请求/响应、状态文件、current-state.json 和 summary.json。临时文件不保证长期保留，不保存密钥。脚本通过 node --check。本次未修改生产代码。

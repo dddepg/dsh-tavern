@@ -1,7 +1,7 @@
 // Production registered conversation owner + real React, iframe/module loader,
 // postMessage bridge and event gate. Local fixture scripts only; no user data,
 // external dependency downloads, model calls or paid API calls.
-// STATUS_SMOKE_DSH_ROOT=/path/to/installed/dsh node tests/fixtures/card-lifecycle-browser-smoke.mjs
+// STATUS_SMOKE_DSH_ROOT=/path/to/installed/dsh node tests/browser/card-lifecycle-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'

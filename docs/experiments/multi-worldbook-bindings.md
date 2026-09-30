@@ -25,7 +25,7 @@
 - 相关存储、合并、初值、开局、脚本接口、界面和文档测试：101 项通过；另补充的多书界面交互断言通过。
 - 静态和 EJS 同名初值用例均能开局，没有额外冲突拦截。
 - 新局 / 无快照旧局 × 内置主书 / 独立主书，覆盖 Helper 和原生 ST 两种写法；核对落盘存档，源书和另一份开局草稿不变。
-- Chromium 隔离浏览器，运行 `node tests/fixtures/helper-host-browser-smoke.mjs --embedded --multiple`：执行新增条目、改写条目、原生保存及重新加载脚本环境；使用真实客户端 iframe/RPC 与 Library/Host Adapter，读写临时文件。
+- Chromium 隔离浏览器，运行 `node tests/browser/helper-host-browser-smoke.mjs --embedded --multiple`：执行新增条目、改写条目、原生保存及重新加载脚本环境；使用真实客户端 iframe/RPC 与 Library/Host Adapter，读写临时文件。
 - `/verify` 核对：源书未变化，本局落盘共 3 条，主书修改保存成功、附加内容保留。
 - 完整 `pnpm test`：1961 项，1953 通过，8 失败。2 项界面旧断言，以及 5 项生图与 1 项台账结算集成断言；已在 `7b879b8` 的独立基线副本、相同宿主依赖上逐项复现，未因本功能修改这些测试。
 - 生成客户端一致性、语法与 diff 检查通过。安装版整套界面与真实模型游玩尚未验证；未合入 main、未部署。

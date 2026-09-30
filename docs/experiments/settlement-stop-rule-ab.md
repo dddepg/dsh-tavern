@@ -47,7 +47,7 @@
 设置 DEEPSEEK_API_KEY 后运行（产生模型费用，使用新目录）：
 
 ```sh
-node docs/experiments/settlement-stop-rule-ab.mjs /tmp/settlement-stop-new-run
+node scripts/experiments/settlement-stop-rule-ab.mjs /tmp/settlement-stop-new-run
 ```
 
 原始请求、响应、usage 与状态位于 `/tmp/tavern-stop-rule-ab-0912/`，不含密钥，临时目录不保证长期保留。

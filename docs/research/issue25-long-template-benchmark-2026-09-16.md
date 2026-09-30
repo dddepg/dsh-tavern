@@ -36,7 +36,7 @@
 ## 重跑
 
 ```sh
-node tests/fixtures/long-template-benchmark.mjs 1800 output/issue25-synthetic
+node tests/performance/long-template-benchmark.mjs 1800 output/issue25-synthetic
 ```
 
 用真实浏览器打开终端输出的本地 URL，页面完成后结果写入 `output/issue25-synthetic/1800.json`。其他两档分别使用 20、600。串行运行以避免测量相互干扰。结束后停止测试服务。原始测量结果保留在上述 output 目录，不随代码提交。

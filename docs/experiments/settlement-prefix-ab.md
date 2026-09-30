@@ -58,7 +58,7 @@
 设置 DEEPSEEK_API_KEY 后运行（产生模型费用，使用新目录）：
 
 ```sh
-node docs/experiments/settlement-prefix-ab.mjs /tmp/settlement-prefix-new-run
+node scripts/experiments/settlement-prefix-ab.mjs /tmp/settlement-prefix-new-run
 ```
 
 脚本通过 `node --check`。本次原始请求/响应、usage、状态与 summary.json 位于 `/tmp/tavern-prefix-ab-0912/`，无密钥；临时目录不保证长期保留。
