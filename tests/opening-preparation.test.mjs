@@ -79,7 +79,7 @@ test('准备页运行时变量和插件设置均隔离保存', async () => {
   const { record } = fixture()
   const service = createOpeningPreparation({ readCard: async () => card, worldBooks: { bound: async () => record } })
   const draft = await service.create('card', { runtime: true })
-  assert.equal(draft.runtime.context.extensionSettings.EjsTemplate.enabled, true)
+  assert.equal(draft.runtime.context.extensionSettings.EjsTemplate, undefined)
   assert.equal(draft.runtime.scripts[0].system, 'official-mvu')
   assert.match(draft.runtime.scripts[0].assetUrl, /vendor\/magvarupdate\/bundle.js$/)
   const result = await service.callRuntime(draft.id, 'updateTavernHelperVariables', { option: { type: 'message', message_id: 0 }, variables: { stat_data: { hp: 10 }, schema: {} } })
@@ -133,4 +133,21 @@ test('保留的开局草稿跨过原有效期仍可用，放弃立即释放，�
   assert.deepEqual(service.release(retained.id), { released: true })
   assert.throws(() => service.get(retained.id), /过期/)
   assert.deepEqual(service.release(retained.id), { released: false })
+})
+
+test('MVU 开局保留完整模板设置，卡脚本可按读取的基线保存修改', async () => {
+  let stored = { EjsTemplate: { enabled: true, code_blocks_enabled: true, depth_limit: 7 }, other: { enabled: false } }
+  const service = createOpeningPreparation({ readCard: async () => card, worldBooks: { bound: async () => null },
+    extensionSettings: { read: async () => structuredClone(stored), save: async (next, expected) => {
+      assert.deepEqual(expected, stored, '开局不能向插件设置存储提交伪造的基线')
+      stored = structuredClone(next)
+      return structuredClone(stored)
+    } } })
+  const draft = await service.create('card', { runtime: true })
+  assert.deepEqual(draft.runtime.context.extensionSettings, stored)
+  assert.deepEqual(service.templateState(draft.id).environment.extension_settings.EjsTemplate, stored.EjsTemplate)
+  const next = structuredClone(draft.runtime.context.extensionSettings)
+  next.EjsTemplate.depth_limit = -1
+  await service.callRuntime(draft.id, 'saveTavernExtensionSettings', { settings: next, expectedSettings: draft.runtime.context.extensionSettings })
+  assert.equal((await service.create('card', { runtime: true })).runtime.context.extensionSettings.EjsTemplate.depth_limit, -1)
 })

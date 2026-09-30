@@ -61,7 +61,8 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
       draft.diagnostics = projected.diagnostics.concat(extensions.diagnostics || [])
       draft.runtimeEnabled = projected.scripts.length > 0
       draft.extensionSettings = extensionSettings ? await extensionSettings.read() : {}
-      if (settings.runtime === true) { draft.extensionSettings.EjsTemplate = { enabled: true }; draft.runtimeEnabled = true }
+      // Starting MVU must not replace another plugin's settings or its save baseline.
+      if (settings.runtime === true) draft.runtimeEnabled = true
       draft.chat.sessionId = 'opening:' + draft.id
       drafts.set(draft.id, draft)
       return present(draft)

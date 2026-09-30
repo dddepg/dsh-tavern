@@ -78,3 +78,18 @@ test('MVU settings expose the usable host proxy without persisting its adapter c
     assert.equal(restored.额外模型解析配置.温度,0.7)
   } finally {w.close()}
 })
+
+test('MVU 宿主管理连接的随机头部读值与实际请求一致，并保留原连接偏好', () => {
+  const dom = new JSDOM('<body></body>', { url: 'https://host.invalid' })
+  const bridge = install({ window: dom.window, request: async () => ({ text: 'ok' }) })
+  try {
+    const saved = { 额外模型解析配置: { 模型名称: 'gemini-original', 随机头部: true, 温度: 0.5 } }
+    const visible = bridge.projectMvuSettings(saved)
+    const config = visible.额外模型解析配置
+    assert.equal(config.随机头部, false, '宿主代理不会使用 Gemini 随机头部')
+    assert.deepEqual(JSON.parse(JSON.stringify(visible)), saved)
+    const restored = bridge.normalizeMvuSettings({ ...visible, 额外模型解析配置: { ...config, 温度: 0.7 } }, saved)
+    assert.equal(restored.额外模型解析配置.随机头部, true)
+    assert.equal(restored.额外模型解析配置.温度, 0.7)
+  } finally { dom.window.close() }
+})
