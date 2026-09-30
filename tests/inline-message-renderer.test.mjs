@@ -1978,8 +1978,8 @@ test('opening submit helper uses native start, deduplicates and retries failures
 })
 
 test('native opening send resolves identity macros using the chosen player name', async () => {
-  const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
-  const identity = source.slice(source.indexOf('function substituteTavernIdentityMacros('), source.indexOf('// @include modules/frame-touch-scroll.js'))
+  const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
+  const identity = source.slice(source.indexOf('function substituteTavernIdentityMacros('), source.indexOf('function scrollTavernTouchChain('))
   const start = source.slice(source.indexOf('async function newConversation('), source.indexOf('async function preparePlayConversation('))
   const sent = []
   const timing = { measure: (_name, fn) => fn(), finish() {} }

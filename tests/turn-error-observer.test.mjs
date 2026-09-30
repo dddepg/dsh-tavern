@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import {readFile} from 'node:fs/promises'
-const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const start = source.indexOf('function observeTurnErrorProjection(')
 const end = source.indexOf('function SupersededTurnErrors(', start)
 

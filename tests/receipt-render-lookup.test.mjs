@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 function harness(){
  const context=vm.createContext({})
- const main=fs.readFileSync(new URL('../tavern-plugin/src/client/main.js',import.meta.url),'utf8')
+ const main=fs.readFileSync(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')
  const lookup=main.slice(main.indexOf('function tavernMvuReceiptForTurn('),main.indexOf('function TavernMvuReceipt('))
  vm.runInContext(fs.readFileSync(new URL('../tavern-plugin/lib/domain/indexed-array.js',import.meta.url),'utf8').replace(/^export .*$/gm,'')+'\n'+fs.readFileSync(new URL('../tavern-plugin/src/client/modules/session-view-sync.js',import.meta.url),'utf8')+'\n'+lookup,context)
  let visits=0,lookupVisits=0

@@ -159,7 +159,7 @@ test('逐层挂载历史消息共享已有视图，不为每层重新请求', as
 })
 
 test('历史消息 hook 首次挂载不强制刷新，后续修订仍刷新', async () => {
-  const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
   const start = source.indexOf('function useLiveTavernView(')
   const end = source.indexOf('function useTavernCoordination(', start)
   let previous
@@ -203,7 +203,7 @@ test('快照回收保护订阅者；过期请求不能复活旧快照；返回�
 })
 
 test('脚本会话在 messagesPending 期间不同步 execution', async () => {
-  const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
   assert.match(source, /messagesPending/)
   assert.match(source, /hydrateTavernHelperMessages/)
   assert.match(source, /wait for hydration before scripts/)
