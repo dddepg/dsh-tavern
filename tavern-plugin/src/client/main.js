@@ -9719,13 +9719,13 @@ window.__ModuleLoader__.load({
 			const active = ids.includes(selected) ? selected : ids[0];
 			if (!view || !view.tavernHelper || !ids.length) return null;
 			const h = React.createElement;
-			return h("section", { className: "dsh-tavern-status-runtime" },
-				h("div", { className: "dsh-tavern-panel-toolbar" }, h("div", { className: "dsh-tavern-panel-tabs", role: "tablist", "aria-label": "人物卡面板" },
+			return h("section", { className: "dsh-tavern-status-runtime" + (ids.length === 1 ? " single-panel" : "") },
+				h("div", { className: "dsh-tavern-panel-toolbar" }, ids.length > 1 ? h("div", { className: "dsh-tavern-panel-tabs", role: "tablist", "aria-label": "人物卡面板" },
 					statuses.concat(manual.map(function (entry) { return { viewId: entry.id, title: entry.title }; })).map(function (panel) {
 						return h("button", { key: panel.viewId, role: "tab", type: "button", "aria-selected": active === panel.viewId,
 							className: "dsh-tavern-panel-tab", onClick: function () { setSelected(panel.viewId); } }, panel.title || "角色状态");
-					})),
-                    statuses.some(panel => panel.viewId === active) ? h("button", { type: "button", className: "dsh-tavern-panel-refresh", title: "重新加载此面板，未保存的输入会清空", onClick: function () { tavernRetainedFrames.invalidatePanel(props.sessionId, active); setRefreshes(function (previous) { return Object.assign({}, previous, { [active]: (previous[active] || 0) + 1 }); }); } }, "↻ 刷新") : null),
+					})) : null,
+                    statuses.some(panel => panel.viewId === active) ? h("button", { type: "button", className: "dsh-tavern-panel-refresh", "aria-label": "刷新状态", title: "重新加载此面板，未保存的输入会清空", onClick: function () { tavernRetainedFrames.invalidatePanel(props.sessionId, active); setRefreshes(function (previous) { return Object.assign({}, previous, { [active]: (previous[active] || 0) + 1 }); }); } }, "↻") : null),
 				statuses.map(function (statusView) { return h("div", { key: props.sessionId + statusView.viewId, role: "tabpanel", hidden: active !== statusView.viewId,
 					"data-status-view-id": statusView.viewId, "data-template-revision": statusView.templateRevision },
 					h(TavernMessageFrame, {
@@ -10282,7 +10282,7 @@ window.__ModuleLoader__.load({
 			}
 			async function applyUpdatedCard() {
 				if (cardUpdateBusy || !view?.cardUpdate || view.cardUpdate.error) return;
-				if (!await askConfirm("将从资源库重新加载人物卡及绑定的世界书，本局脚本对世界书的修改会被替换。将预检最新状态栏、EJS、世界书与变量结构，再应用到当前游戏。已有剧情和保留字段的当前数值不变，新增变量补对应开场的初值，已从人物卡定义删除的变量会从当前及历史快照同步删除；显式改名迁移保留原值，以便回退后继续玩。预检失败不修改存档。更新会破坏提示词缓存，增加下一轮的 Token 费用和等待时间。是否继续？" + (view.cardUpdate.migrations?.length ? "\n\n声明的变量迁移：\n" + view.cardUpdate.migrations.join("\n") : ""))) return;
+				if (!await askConfirm("加载人物卡和世界书的最新变化？\n\n重新加载会破坏提示词缓存，增加下一轮的 Token 费用和等待时间。")) return;
 				setCardUpdateBusy(true); setCardUpdateError("");
 				try { await rpc("applyUpdatedCard", { digest: view.cardUpdate.digest }, props.sessionId); liveTavernView.invalidate(props.sessionId); }
 				catch (error) { setCardUpdateError(String(error.message || error)); }
