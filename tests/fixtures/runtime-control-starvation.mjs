@@ -35,7 +35,7 @@ const dispatch = (method, args) => {
   }
 }
 const start = host.indexOf("  ctx.provide('tavernSessionSignals',")
-vm.runInNewContext(host.slice(start, host.indexOf('\n  const webServer', start)), {
+vm.runInNewContext(host.slice(start, host.indexOf('\n  registerTavernHttpRoutes({', start)), {
   ctx: { provide(_name, value) { service = value } }, dispatch, runtimeGeneration: 'test'
 })
 const contract = TYPERT_REMOTE.descriptors.find(item => item.method === 'control')

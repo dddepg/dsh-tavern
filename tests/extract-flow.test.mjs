@@ -6,6 +6,8 @@ const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', im
 
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 
+const routeSource = await readFile(new URL('../tavern-plugin/lib/http/routes.js', import.meta.url), 'utf8')
+
 const scriptHostAdapterSource = await readFile(new URL('../tavern-plugin/lib/domain/tavern-script-host-adapter.js', import.meta.url), 'utf8')
 
 function between(source, start, end) {
@@ -35,7 +37,7 @@ test('开场白创建失败时在选择弹窗内持续显示具体阶段和错�
 })
 
 test('创建对话失败时服务端记录请求边界但不记录开场白正文', () => {
-  const dispatch = between(serverSource, 'async function dispatch', 'const webServer')
+  const dispatch = between(serverSource, 'async function dispatch', '  registerTavernHttpRoutes({')
 
   assert.match(dispatch, /console\.error\('dsh-tavern: 创建对话失败'/)
   assert.match(dispatch, /cardPath: str\(args && args\.path\)/)
@@ -64,7 +66,7 @@ test('人物卡 Helper 的世界书写入按资源串行，避免生命周期事
 })
 
 test('隔离 Helper iframe 可以只读加载已锁定的本机远程资源', () => {
-	const handler = between(serverSource, "handler: async (req, res) => {", "function contentText(message)")
+	const handler = routeSource
 	assert.match(handler, /const readsCachedAsset = req\.method === 'GET' && cachedAssetMatch/)
 	assert.match(handler, /const readsStaticAsset = req\.method === 'GET'/)
 	assert.match(handler, /const localOrOpaqueOrigin =/)
@@ -75,11 +77,11 @@ test('隔离 Helper iframe 可以只读加载已锁定的本机远程资源', ()
 })
 
 test('HTTP RPC 在启动恢复前注册，并等待运行时完成初始化', () => {
-	const routeRegistration = serverSource.indexOf("ctx.effect(() => webServer.register({")
+	const routeRegistration = serverSource.indexOf("  registerTavernHttpRoutes({")
 	const runtimeInitialization = serverSource.indexOf('await initializeRuntimeState()')
 	const runtimeReady = serverSource.indexOf('settleRuntimeReadiness({ ok: true })')
 	const historyRecovery = serverSource.indexOf('recoverRuntimeHistory(recoveredIndex).catch')
-	const handler = between(serverSource, "handler: async (req, res) => {", "function contentText(message)")
+	const handler = routeSource
 	assert.notEqual(routeRegistration, -1)
 	assert.notEqual(runtimeInitialization, -1)
 	assert.notEqual(runtimeReady, -1)

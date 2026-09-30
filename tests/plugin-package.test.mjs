@@ -21,6 +21,13 @@ test('standard package ships runtime resources without local links, host copies 
   for (const name of ['prepare', 'preinstall', 'install', 'postinstall']) assert.equal(manifest.scripts[name], undefined)
   const [packed] = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }))
   const files = new Set(packed.files.map(file => file.path))
+  // Splitting the entry must not leave any directly imported runtime module out of the package.
+  const entryPath = 'tavern-plugin/lib/index.js'
+  for (const node of parse(read(entryPath), { ecmaVersion: 'latest', sourceType: 'module' }).body) {
+    if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('.')) continue
+    const target = path.posix.normalize(path.posix.join(path.posix.dirname(entryPath), node.source.value))
+    assert.ok(files.has(target), `entry imports missing runtime module: ${target}`)
+  }
   for (const name of [
     'plugin.patch.yml', 'bin/plugin-package-guard.mjs', 'bin/update-diagnostics.mjs',
     'config/dsh-compatibility.json', 'config/plugin-web.LICENSE',
