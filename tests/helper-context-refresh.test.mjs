@@ -57,7 +57,9 @@ function mountFrame() {
   function render(helperContext, content = '<p>status</p>') {
     cursor = 0
     effects = []
-    const tree = client.TavernMessageFrame({ content, helperContext, turn: 1, eager: true, persistent: true, observeMvuView: false, runtimeReporting: false })
+    const panel = client.TavernPersistentStatusRuntime({ sessionId: 'status-test', view: { mode: 'story', tavernHelper: helperContext, tavernStatusViews: [{ viewId: 'panel', content, targetTurn: 1 }] } })
+    function findFrame(node) { if (!node || typeof node !== 'object') return; if (node.type === client.TavernMessageFrame) return node; return (node.children || []).map(findFrame).find(Boolean) }
+    const tree = client.TavernMessageFrame(findFrame(panel).props)
     const next = new Map()
     function frames(node) { return !node || typeof node !== 'object' ? [] : node.type === 'iframe' ? [node] : (node.children || []).flatMap(frames) }
     for (const element of frames(tree)) {
@@ -80,6 +82,7 @@ function mountFrame() {
 test('stale legacy status replaces only the live iframe, retains old UI until ready, and uses latest variables', () => {
   const host = mountFrame()
   const [old] = host.render(context(1, '未系'))
+  assert.ok(old.element.props.srcDoc.includes('<script data-dsh-tavern-status-refresh>'), 'the actual status panel must enable stale-variable refresh')
   host.message(old, 'dsh-tavern-frame-ready')
   host.render(context(2, '已系'))
   host.message(old, 'dsh-tavern-status-stale', {}) // reject wrong sender

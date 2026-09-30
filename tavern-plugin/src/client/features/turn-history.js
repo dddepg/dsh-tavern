@@ -29,7 +29,7 @@
 				statuses.map(function (statusView) { return h("div", { key: props.sessionId + statusView.viewId, role: "tabpanel", hidden: active !== statusView.viewId,
 					"data-status-view-id": statusView.viewId, "data-template-revision": statusView.templateRevision },
 					h(TavernMessageFrame, {
-					key: props.sessionId + statusView.viewId + (refreshes[statusView.viewId] || 0), preserveInstance: true,
+					key: props.sessionId + statusView.viewId + (refreshes[statusView.viewId] || 0),
 					content: String(statusView.content), sessionId: props.sessionId,
 					turn: Math.max(1, Number(statusView.targetTurn) || 1), partIndex: Math.max(0, Number(statusView.sourcePartIndex) || 0),
 					panelId: statusView.viewId, helperContext: view.tavernHelper,
