@@ -31,7 +31,9 @@ test('Windows broker transfers environment privately and reports launch failure'
 
 test('Windows updater survives a restrictive kill-on-close Job with Unicode arguments and environment', {skip:process.platform !== 'win32'}, async t => {
   const root = await mkdtemp(path.join(tmpdir(), '更新 job '))
-  t.after(() => rm(root, {recursive:true, force:true}))
+  // The probe runs with cwd=root and exits just after writing its result; until it
+  // exits Windows refuses to remove the directory (EBUSY), so let rm retry briefly.
+  t.after(() => rm(root, {recursive:true, force:true, maxRetries:20, retryDelay:100}))
   const probe = path.join(root, 'probe.cjs')
   const parentDone = path.join(root, 'parent.json')
   const resultFile = path.join(root, 'result.json')
