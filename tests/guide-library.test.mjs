@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createGuideLibrary, appendLibraryGuides } from '../tavern-plugin/lib/domain/guide-library.js'
+import { appendGuides } from '../tavern-plugin/lib/domain/guide-content.js'
+import { createGuideLibrary } from '../tavern-plugin/lib/domain/guide-library.js'
 
 test('guide library saves the complete game bundle independently and survives reopening', async () => {
   let document
@@ -12,12 +13,12 @@ test('guide library saves the complete game bundle independently and survives re
   await assert.rejects(library.save('空方案', []))
   assert.equal((await library.list()).length, 1)
   const existing = [{ id: 'old', text: '短句' }]
-  const loaded = appendLibraryGuides(existing, saved.guides)
+  const loaded = appendGuides(existing, saved.guides, { deduplicate: true })
   assert.equal(loaded.length, 2)
   assert.equal(loaded[0].id, 'old')
   assert.equal(existing.length, 1)
-  assert.deepEqual(appendLibraryGuides(loaded, saved.guides), loaded)
-  assert.throws(() => appendLibraryGuides(Array.from({ length: 20 }, (_, n) => ({ text: String(n) })), ['新增']), /20/)
+  assert.deepEqual(appendGuides(loaded, saved.guides, { deduplicate: true }), loaded)
+  assert.throws(() => appendGuides(Array.from({ length: 20 }, (_, n) => ({ text: String(n) })), ['新增'], { deduplicate: true }), /20/)
   await assert.rejects(library.get('missing'), /不存在/)
 })
 
@@ -26,7 +27,7 @@ test('rename and edit keep identity and loaded game content, and reject stale ed
   const store = { readJson: async () => structuredClone(value), updateJson: async (_, fn) => { value = await fn(structuredClone(value)); return structuredClone(value) } }
   const library = createGuideLibrary({ store })
   const original = await library.save('方案', [{ text: '原内容' }])
-  const loaded = appendLibraryGuides([], original.guides)
+  const loaded = appendGuides([], original.guides, { deduplicate: true })
   const renamed = await library.update({ id: original.id, expected: original, name: '新名称' })
   assert.equal(renamed.id, original.id)
   assert.equal(renamed.name, '新名称')

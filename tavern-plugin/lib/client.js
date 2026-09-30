@@ -14230,10 +14230,10 @@ window.__ModuleLoader__.load({
                 } catch (err) { setGuideError(String(err.message || err)); }
                 finally { setGuideBusy(false); }
             }
-			async function removeGuide(index) {
+			async function removeGuide(guide, index) {
 				setGuideBusy(true); setGuideError("");
 				try {
-					await rpc("deleteGuide", { index: index }, props.sessionId);
+					await rpc("deleteGuide", guide.id ? { id: guide.id } : { index, expected: guide }, props.sessionId);
 					liveTavernView.invalidate(props.sessionId);
 				} catch (err) { setGuideError(String(err && err.message || err)); }
 				finally { setGuideBusy(false); }
@@ -14344,7 +14344,7 @@ window.__ModuleLoader__.load({
 							(view.guides || []).length ? (view.guides || []).map(function (guide, index) {
 								return h("div", { key: guide.id || index, className: "dsh-tavern-guide-item" },
 									h("div", { className: "dsh-tavern-guide-text" }, guide.text),
-									h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(index); } }, "删除")
+									h("button", { className: "dsh-tavern-worldbook-del", disabled: guideBusy, onClick: function () { removeGuide(guide, index); } }, "删除")
 								);
 							}) : h("div", { className: "dsh-tavern-status-empty" }, "暂无 Guide。添加后用于后续剧情和候选项生成，不再需要时请删除。")
 						),
@@ -14353,7 +14353,7 @@ window.__ModuleLoader__.load({
                             h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy || !(view.guides || []).length, onClick: saveGuideLibrary }, "保存到 Guide 库")),
                         guideNotice ? h("p", { role: "status", className: "dsh-tavern-settings-desc" }, guideNotice) : null,
                         h("div", { className: "dsh-tavern-guide-add" },
-							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
+							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, maxLength: 2000, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
 							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加 Guide")
 						),
 						guideError ? h("div", { className: "dsh-card-error" }, guideError) : null

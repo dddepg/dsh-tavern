@@ -1,4 +1,5 @@
-import { createGuideLibrary, appendLibraryGuides } from './domain/guide-library.js'
+import { createConversationGuides } from './domain/conversation-guides.js'
+import { createGuideLibrary } from './domain/guide-library.js'
 import { copyJsonTree } from './domain/copy-json-tree.js'
 import { createCandidateContextReader } from './domain/candidate-context-reader.js'
 import { createCandidateWorldbookPreparation } from './domain/candidate-worldbook-preparation.js'
@@ -2377,29 +2378,7 @@ export async function apply(ctx) {
   async function listTavernSessions() {
     return await conversationRegistry.list()
   }
-  async function addGuide(sessionId, text) {
-    const chat = await chatForSession(sessionId)
-    if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
-    const guide = str(text).trim().slice(0, 2000)
-    if (guide === '') throw new Error('Guide 内容不能为空')
-    if (!Array.isArray(chat.guides)) chat.guides = []
-    if (chat.guides.length >= 20) throw new Error('Guide 数量已达上限（20 条）')
-    chat.guides.push({ id: uid('guide'), text: guide, createdAt: Date.now() })
-    chat.updatedAt = Date.now()
-    await writeChat(chat, { source: 'guide.add' })
-    return chat.guides
-  }
-  async function deleteGuide(sessionId, index) {
-    const chat = await chatForSession(sessionId)
-    if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
-    if (!Array.isArray(chat.guides)) chat.guides = []
-    const idx = clampInt(index, 0, Math.max(0, chat.guides.length - 1), -1)
-    if (idx < 0) throw new Error('Guide 序号无效')
-    chat.guides.splice(idx, 1)
-    chat.updatedAt = Date.now()
-    await writeChat(chat, { source: 'guide.delete' })
-    return chat.guides
-  }
+  const conversationGuides = createConversationGuides({ chats: { forSession: chatForSession, update: updateChat }, library: guideLibrary, isPlay: chat => groupOfMode(chat.mode) === 'play' })
   async function setPlayerName(sessionId, userName) {
     const chat = await chatForSession(sessionId)
     if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
@@ -3722,24 +3701,10 @@ export async function apply(ctx) {
       case 'editLedger': { await ledgerEditor(args || {}); return { view: await sessionView(args.sessionId) } }
       case 'updateGuideLibrary': return { item: await guideLibrary.update(args) }
       case 'listGuideLibrary': return { items: await guideLibrary.list() }
-      case 'saveGuideLibrary': {
-        const chat = await chatForSession(args?.sessionId)
-        if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
-        return { item: await guideLibrary.save(args.name, chat.guides) }
-      }
-      case 'loadGuideLibrary': {
-        const chat = await chatForSession(args?.sessionId)
-        if (!chat || groupOfMode(chat.mode) !== 'play') throw new Error('请先打开游玩会话')
-        const item = await guideLibrary.get(args.id)
-        const saved = await updateChat(chat.id, current => {
-          current.guides = appendLibraryGuides(current.guides, item.guides)
-          current.updatedAt = Date.now()
-          return current
-        }, { source: 'guide.library.load' })
-        return { guides: saved.guides }
-      }
-      case 'addGuide': return { guides: await addGuide(args && args.sessionId, args && args.text) }
-      case 'deleteGuide': return { guides: await deleteGuide(args && args.sessionId, args && args.index) }
+      case 'saveGuideLibrary': return { item: await conversationGuides.save(args?.sessionId, args?.name) }
+      case 'loadGuideLibrary': return { guides: await conversationGuides.load(args?.sessionId, args?.id) }
+      case 'addGuide': return { guides: await conversationGuides.add(args?.sessionId, args?.text) }
+      case 'deleteGuide': return { guides: await conversationGuides.remove(args?.sessionId, args) }
       case 'getBodyEdit': return { edit: await bodyEditor.read(args && args.sessionId) }
       case 'saveBodyEdit': return { view: await bodyEditor.save(args && args.sessionId, args) }
       case 'regenBody': return { view: await regenBody(args && args.chatId, args && args.guidance, args && args.sessionId) }
