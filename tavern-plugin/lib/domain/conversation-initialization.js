@@ -1,3 +1,4 @@
+import { applyOpeningCommand } from './opening-command.js'
 import { sessionEvents, appendSessionEvent } from './session-events.js'
 import { createHash } from 'node:crypto'
 import { cardOpeningChoices, resolveCardOpening } from './card-openings.js'
@@ -223,6 +224,7 @@ export function createConversationInitialization(options) {
         }
       }
     }
+    if (preparation && groupOfMode(chatMode) === 'play') applyOpeningCommand(chat, preparation.startCommand, preparation.messageVariables, now)
     delete chat.sceneOpeningWorldbook
     const hasSession = typeof sessionId === 'string' && sessionId !== ''
     if (importDraft) {

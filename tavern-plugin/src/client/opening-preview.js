@@ -21,6 +21,24 @@ function installOpeningPreviewBridge(token, preview) {
       parent.postMessage(Object.assign({ type, token, requestId }, payload), '*');
     });
   }
+  window.triggerSlash = function (line) {
+    const command = String(line || '');
+    return request('dsh-tavern-helper-call', { method: 'triggerTavernSlash', args: { line: command } }).catch(function (error) {
+      // Many legacy wizards replace their body before submitting. Keep a retry
+      // entry even when their own button and form have already disappeared.
+      if (typeof document !== 'undefined' && document.body) {
+        document.querySelector('[data-dsh-opening-error]')?.remove();
+        const notice = document.createElement('div');
+        notice.setAttribute('data-dsh-opening-error', ''); notice.setAttribute('role', 'alert');
+        notice.style.cssText = 'position:fixed;bottom:16px;left:16px;right:16px;z-index:2147483647;padding:16px;background:Canvas;color:CanvasText;border:1px solid currentColor;border-radius:8px;font:14px/1.6 system-ui';
+        const message = document.createElement('p'); message.textContent = '开局未完成：' + error.message;
+        const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = '重试开局';
+        retry.onclick = function () { notice.remove(); window.triggerSlash(command).catch(function () {}); };
+        notice.append(message, retry); document.body.append(notice);
+      }
+      throw error;
+    });
+  };
   window.generateRaw = function (config) {
     const payload = copy(config);
     const streaming = payload && payload.should_stream === true;
@@ -59,7 +77,7 @@ function installOpeningPreviewBridge(token, preview) {
     worldbook = copy(result.worldbook);
     return copy(worldbook.entries);
   };
-  window.TavernHelper = Object.assign({}, original && original.helper, { generateRaw: window.generateRaw, getCharWorldbookNames: window.getCharWorldbookNames,
+  window.TavernHelper = Object.assign({}, original && original.helper, { triggerSlash: window.triggerSlash, generateRaw: window.generateRaw, getCharWorldbookNames: window.getCharWorldbookNames,
     getWorldbook: window.getWorldbook, updateWorldbookWith: window.updateWorldbookWith });
   const chat = [{ is_user: false, name: preview.characterName || '', mes: swipes[selected], swipe_id: selected, swipes: swipes.slice() }];
   let savedIndex = selected;

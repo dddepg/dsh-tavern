@@ -1,3 +1,4 @@
+import { parseOpeningCommand } from './opening-command.js'
 import { worldbookContentDigest } from './worldbook-version.js'
 import { projectFullPromptTemplateState, applyFullPromptTemplateState } from './full-prompt-template-state.js'
 import { projectTavernHelperScripts } from './tavern-helper-scripts.js'
@@ -107,6 +108,13 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
         return { text: await generateRaw(args.config, { sessionId: draft.sourceSessionId,
           history: projectTavernHelperContext(draft.chat).messages.map(message => ({ role: message.role, text: message.message })) }) }
       }
+      if (method === 'prepareOpeningCommand') {
+        const command = parseOpeningCommand(args.line)
+        const openingId = args.openingId || draft.openingId || draft.openings[0]?.id
+        if (!draft.openings.some(opening => opening.id === openingId)) throw new Error('人物卡开场白不存在')
+        draft.startCommand = { ...command, openingId }
+        return { input: command.input }
+      }
       if (!draft.runtimeEnabled) throw new Error('准备页脚本运行时未初始化')
       if (method === 'loadTavernWorldInfo') return { worldInfo: exportSillyTavernWorldBook(draft.document) }
       if (method === 'getTavernHelperWorldbook') return { worldbook: present(draft).worldbook }
@@ -164,7 +172,7 @@ export function createOpeningPreparation({ readCard, worldBooks, generateRaw, re
       const selected = openingId || 'primary'
       const selectedIndex = draft.openings.findIndex(opening => opening.id === selected)
       if (selectedIndex < 0) throw new Error('人物卡开场白不存在')
-      return copy({ openingMessages: Object.fromEntries(draft.openings.map((opening,index)=>[opening.id,draft.chat.messages[0]?.swipes?.[index] ?? opening.text])), openingVariables: Object.fromEntries(draft.openings.map((opening, index) => [opening.id, draft.chat.messages[0]?.variables?.[index] || {}])), variables: draft.chat.variables || {}, messageVariables: draft.chat.messages[0]?.variables?.[selectedIndex] || {}, openingId: selected, sourceSessionId: draft.sourceSessionId, sourceLifecycleRevision: draft.sourceLifecycleRevision, worldbookSnapshot: { version: 1, libraryDigest: draft.libraryDigest, source: draft.source, document: draft.document } })
+      return copy({ startCommand: draft.startCommand?.openingId === selected ? draft.startCommand : undefined, openingMessages: Object.fromEntries(draft.openings.map((opening,index)=>[opening.id,draft.chat.messages[0]?.swipes?.[index] ?? opening.text])), openingVariables: Object.fromEntries(draft.openings.map((opening, index) => [opening.id, draft.chat.messages[0]?.variables?.[index] || {}])), variables: draft.chat.variables || {}, messageVariables: draft.chat.messages[0]?.variables?.[selectedIndex] || {}, openingId: selected, sourceSessionId: draft.sourceSessionId, sourceLifecycleRevision: draft.sourceLifecycleRevision, worldbookSnapshot: { version: 1, libraryDigest: draft.libraryDigest, source: draft.source, document: draft.document } })
     }
   }
 }

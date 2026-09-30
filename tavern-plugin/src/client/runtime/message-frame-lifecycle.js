@@ -366,6 +366,27 @@
 				} else if (data.type === "dsh-tavern-helper-call" && !props.sessionId && props.openingPreview) {
 					// The pending frame initializes its private draft before it becomes visible.
 					if (sourceDocument.key !== desired.key) return;
+                    if (data.method === "triggerTavernSlash") {
+                        if (!sourceDocument.openingCommandStart) {
+                            sourceDocument.openingCommandStart = Promise.resolve().then(async function () {
+                                if (!current() || sourceDocument !== visible) throw new Error("开场预览已失效，请重新打开");
+                                const plan = await invoke("callOpeningRuntime", { id: props.openingPreview.preparationId,
+                                    method: "prepareOpeningCommand", args: { line: String(data.args && data.args.line || ""),
+                                        openingId: openingPreviewSelection(props.openingPreview, props.openingPreview.selectedIndex) } });
+                                return submitOpening(sourceDocument, plan.input);
+                            }).catch(function (error) {
+                                sourceDocument.openingCommandStart = null;
+                                tavernErrorHub.report("开始游戏", error);
+                                throw error;
+                            });
+                        }
+                        sourceDocument.openingCommandStart.then(function (result) {
+                            if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result }, "*");
+                        }, function (error) {
+                            if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error.message || error) }, "*");
+                        });
+                        return;
+                    }
 					(data.method === "submitTavernHelperInput"
                         ? submitOpening(sourceDocument, data.args && data.args.text)
                         : invoke("callOpeningRuntime", { id: props.openingPreview.preparationId, method: data.method, args: data.args })).then(function (result) {

@@ -51,7 +51,7 @@ export const HELPER_MESSAGE_COLD_WINDOW = 48
 function tavernHelperRole(source) {
   return source.role === 'tavern-helper'
     ? (['system', 'assistant', 'user'].includes(source.tavernRole) ? source.tavernRole : 'assistant')
-    : (source.role === 'user' ? 'user' : 'assistant')
+    : (['system', 'user'].includes(source.role) ? source.role : 'assistant')
 }
 
 /** Project one Chat floor into the synchronous Tavern Helper message shape. */
