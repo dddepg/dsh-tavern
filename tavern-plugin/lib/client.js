@@ -9142,6 +9142,7 @@ window.__ModuleLoader__.load({
                     disposed = true;
                     ++intent;
                     setOn(false);
+                    if (nativeFullscreenElement(doc) === doc.documentElement) void exitDocumentFullscreen(doc);
                     if (typeof doc.removeEventListener === "function") {
                         doc.removeEventListener("fullscreenchange", onFsChange);
                         doc.removeEventListener("webkitfullscreenchange", onFsChange);
@@ -9177,6 +9178,7 @@ window.__ModuleLoader__.load({
                     const doc = button.current && button.current.ownerDocument;
                     setOn(!!(doc && (nativeFullscreenElement(doc) || (doc.documentElement && doc.documentElement.classList.contains("dsh-tavern-play-fullscreen")))));
                 }
+                sync();
                 const view = typeof window !== "undefined" ? window : null;
                 if (view) {
                     view.addEventListener("fullscreenchange", sync);
