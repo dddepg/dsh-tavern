@@ -321,9 +321,15 @@
 			if (record) {
 				const actions = h("div", { className: "dsh-tavern-library-head-actions" }, h("button", { className: "dsh-tavern-btn", onClick: exportFile }, "导出"), record.source.kind === "standalone" ? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: rename }, "重命名文件") : null, h("button", { className: "dsh-tavern-btn", disabled: busy || bindingBusy, onClick: function () { remove(record.source, record.view.displayName); } }, "删除世界书"), error ? h("div", { className: "dsh-tavern-dock-error" }, error) : null);
 				return h(WorldBookEditor, { record: record, sessionId: props.scope.sessionId, onBack: clear, actions: actions, bindingPanel: h(React.Fragment, null,
-                    record.source.kind === "standalone" ? h("section", { className: "dsh-tavern-worldbook-bindings" },
-                        h("label", null, h("input", { type: "checkbox", checked: record.globalEnabled === true, disabled: busy, onChange: function (event) { toggleGlobal(event.target.checked); } }), " 全局生效"),
-                        h("p", { className: "dsh-tavern-worldbook-binding-hint" }, "所有人物卡自动使用。新对话直接生效；已有对话需重新加载人物卡和世界书，重新加载会覆盖对话中的世界书修改。同一本书只加载一次。")) : null,
+                    record.source.kind === "standalone" ? h("label", { className: "dsh-tavern-worldbook-global" + (record.globalEnabled === true ? " enabled" : "") },
+                        h("span", { className: "dsh-tavern-worldbook-global-icon", "aria-hidden": "true" }, "🌐"),
+                        h("span", { className: "dsh-tavern-settings-copy" },
+                            h("span", { className: "dsh-tavern-settings-title" }, "全局生效", record.globalEnabled === true ? h("span", { className: "dsh-tavern-worldbook-global-badge" }, "已启用") : null),
+                            h("span", { className: "dsh-tavern-settings-desc" }, "所有人物卡自动使用这本世界书，同一本书只加载一次。"),
+                            h("span", { className: "dsh-tavern-worldbook-global-note" }, "新对话直接生效；已有对话需重新加载人物卡和世界书，这会覆盖对话中的世界书修改。")),
+                        h("span", { className: "dsh-tavern-settings-switch" },
+                            h("input", { type: "checkbox", role: "switch", checked: record.globalEnabled === true, disabled: busy, onChange: function (event) { toggleGlobal(event.target.checked); } }),
+                            h("span", { className: "dsh-tavern-settings-track", "aria-hidden": "true" }))) : null,
                     bindingPanel()), onSaved: function (result) { setRecord(result); refresh(); } });
 			}
 			function row(item) { const source = item.kind === "card" ? { kind: "card", cardPath: item.cardPath } : { kind: "standalone", path: item.path }; const resourcePath = item.kind === "card" ? item.cardPath : item.path; return h("div", { key: resourcePath, className: "dsh-tavern-card-pick-wrap" }, h("button", { className: "dsh-tavern-library-card", disabled: busy, onClick: function () { load(source); } }, h("b", null, item.name), h("span", null, (item.globalEnabled ? "全局生效 · " : "") + item.entryCount + " 条 · " + item.enabledCount + " 条启用" + (item.diagnostics ? " · " + item.diagnostics + " 个诊断" : "")), item.cardName ? h("span", null, "来自人物卡：" + item.cardName) : null), sessionMode === "card" ? h("button", { className: "dsh-tavern-resource-at", title: "在对话中引用", onClick: function () { props.appendMention("worldbook", resourcePath, item.name); } }, "在对话中引用") : null); }

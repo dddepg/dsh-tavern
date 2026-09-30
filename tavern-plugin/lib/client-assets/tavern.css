@@ -885,6 +885,14 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-worldbook > .dsh-tavern-script-row:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 
 /* Worldbook bindings: existing relationships lead; additions stay folded. */
+.dsh-tavern-worldbook-global { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-specific-input-major); cursor: pointer; transition: border-color .18s ease, background .18s ease; }
+.dsh-tavern-worldbook-global:hover { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 45%, var(--dsw-alias-border-l2)); }
+.dsh-tavern-worldbook-global.enabled { border-color: color-mix(in srgb, var(--dsh-tavern-accent) 55%, transparent); background: color-mix(in srgb, var(--dsh-tavern-accent) 8%, var(--dsw-specific-input-major)); }
+.dsh-tavern-worldbook-global:has(input:disabled) { cursor: default; opacity: .7; }
+.dsh-tavern-worldbook-global-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: color-mix(in srgb, var(--dsh-tavern-accent) 14%, transparent); font-size: 19px; }
+.dsh-tavern-worldbook-global .dsh-tavern-settings-title { display: flex; align-items: center; gap: 8px; }
+.dsh-tavern-worldbook-global-badge { padding: 1px 8px; border-radius: 999px; background: var(--dsh-tavern-accent-active); color: #fff; font-size: 11px; font-weight: 600; line-height: 18px; }
+.dsh-tavern-worldbook-global-note { display: block; margin-top: 4px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 1.55; }
 .dsh-tavern-worldbook-bindings { margin: 0 0 16px; padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; color: var(--dsw-alias-label-primary); }
 .dsh-tavern-worldbook-bindings-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 600; }
 .dsh-tavern-worldbook-bindings-count { color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 400; }
