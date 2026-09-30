@@ -15057,9 +15057,10 @@ window.__ModuleLoader__.load({
 				const revision = activity.phase + ":" + String(activityState.view.updatedAt || 0);
 				if (reconciledActivityRef.current === revision) return;
 				reconciledActivityRef.current = revision;
+				// The host list stream already carries running/activity/blank changes; a full
+				// session.list rescans every stored Session and cost seconds per turn.
 				liveTavernView.invalidate(props.sessionId);
-				if (typeof props.refreshSessions === "function") Promise.resolve(props.refreshSessions()).catch(function () {});
-			}, [props.sessionId, props.refreshSessions, activity.phase, activity.busy, activityState.view && activityState.view.updatedAt]);
+			}, [props.sessionId, activity.phase, activity.busy, activityState.view && activityState.view.updatedAt]);
 			async function generate(force, guidance) {
 				if (busy || activity.busy) return;
 				setBusy(true);
@@ -15823,7 +15824,6 @@ window.__ModuleLoader__.load({
 				{ name: "conversation.input.dock", id: "dsh-tavern-candidate-actions", order: -130, label: "候选项操作" },
 				function (props) { return React.createElement(CandidateDockActions, Object.assign({}, props, {
 					sessions: ctx.sessions,
-					refreshSessions: function () { return typeof ctx.sessions.refresh === "function" ? ctx.sessions.refresh() : Promise.resolve(); },
 					executeCompact: function (sessionId) { return ctx.remote.commands.execute(sessionId, "/compact", []); }
 				})); }
 			)), "dsh-tavern: candidate dock actions");
