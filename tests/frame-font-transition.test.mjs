@@ -39,3 +39,32 @@ test('字号重测不读取 CSS transition 保留的上一次放大值', () => {
     assert.equal(parseFloat(props.get('font-size')), 30)
   }
 })
+
+test('font scaling preserves a card transform transition instead of snapping it on every mouse move', async () => {
+  const { chromium } = await import('playwright')
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.route('**/*', route => route.abort())
+    await page.setContent('<iframe style="width:800px;height:600px"></iframe>')
+    const html = helperClient.buildTavernFrameDocument({ token: 'motion',
+      content: '<style>#card{transition:transform 2s linear}span{font-size:20px}</style><div id="card"><span>Click here</span></div>' })
+    await page.evaluate(html => { document.querySelector('iframe').srcdoc = html }, html)
+    const frame = page.frames()[1]
+    await frame.locator('#card').waitFor()
+    await page.evaluate(() => document.querySelector('iframe').contentWindow.postMessage({ type: 'dsh-tavern-font-size', token: 'motion', fontSize: 21 }, '*'))
+    await frame.waitForFunction(() => getComputedStyle(document.querySelector('span')).fontSize === '30px')
+    const result = await frame.evaluate(async () => {
+      const card = document.querySelector('#card')
+      card.style.transform = 'translateY(-100px)'
+      await new Promise(resolve => setTimeout(resolve, 120))
+      return { y: new DOMMatrixReadOnly(getComputedStyle(card).transform).m42,
+        font: getComputedStyle(document.querySelector('span')).fontSize }
+    })
+    assert.ok(result.y > -50 && result.y < 0, `transform should still interpolate, got ${result.y}`)
+    assert.equal(result.font, '30px')
+    // Real font changes still trigger recalculation after transform-only writes are ignored.
+    await frame.locator('span').evaluate(node => { node.style.fontSize = '24px' })
+    await frame.waitForFunction(() => getComputedStyle(document.querySelector('span')).fontSize === '36px')
+  } finally { await browser.close() }
+})

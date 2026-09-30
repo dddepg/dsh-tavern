@@ -155,8 +155,26 @@
 
 		function installTavernFrameFonts(token, restore) {
 			let fontSize = 14, scheduled = false, disposed = false;
-			const observer = new MutationObserver(schedule);
-			function observe() { observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["style", "class", "hidden"] }); }
+			// Mouse-follow effects update transforms every frame. They do not change
+			// typography; remeasuring would cancel the author's running transitions.
+			const paintOnly = new Set(["transform", "transform-origin", "translate", "rotate", "scale", "opacity"]);
+			function typographyChanged(record) {
+				if (record.type !== "attributes" || record.attributeName !== "style") return true;
+				const before = document.createElement("span").style;
+				before.cssText = record.oldValue || "";
+				const after = record.target.style;
+				if (!after) return true;
+				for (const name of new Set([...before, ...after])) {
+					if (paintOnly.has(name)) continue;
+					if (before.getPropertyValue(name) !== after.getPropertyValue(name)
+						|| before.getPropertyPriority(name) !== after.getPropertyPriority(name)) return true;
+				}
+				return false;
+			}
+			const observer = new MutationObserver(function (records) {
+				if (!records || records.some(typographyChanged)) schedule();
+			});
+			function observe() { observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ["style", "class", "hidden"] }); }
 			function schedule() {
 				if (scheduled || disposed) return;
 				scheduled = true;
