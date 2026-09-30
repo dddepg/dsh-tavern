@@ -38,6 +38,7 @@
             }
             function setOn(on) {
                 if (htmlClass) htmlClass.toggle("dsh-tavern-play-fullscreen", on);
+                header.classList?.toggle("dsh-tavern-immersive-header", on);
             }
             function enter() {
                 if (disposed) return;
@@ -138,7 +139,7 @@
                 className: "dsh-tavern-btn dsh-tavern-play-fullscreen" + (on ? " active" : ""),
                 "aria-label": on ? "退出全屏" : "全屏",
                 "aria-pressed": on,
-                title: on ? "退出全屏，显示浏览器顶栏和会话标题" : "进入全屏（隐藏浏览器顶栏）",
+                title: on ? "退出全屏，显示浏览器顶栏和会话标题" : "进入全屏并折叠顶部状态栏",
                 onClick: function () {
                     if (on) controller.current?.leave();
                     else controller.current?.enter();

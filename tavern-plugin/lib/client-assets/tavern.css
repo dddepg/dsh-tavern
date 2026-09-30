@@ -1240,7 +1240,17 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 /* Keep the existing browsing context when presenting a card at screen size. */
 .dsh-tavern-message-frame-slot > iframe.dsh-tavern-message-frame:fullscreen { width: 100vw !important; height: 100vh !important; max-height: none !important; background: var(--dsw-alias-bg-base, Canvas); }
 
-.dsh-tavern-immersive-header { display: none !important; }
+/* Collapse header chrome while keeping the same fullscreen control reachable. */
+header.dsh-tavern-immersive-header {
+  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; border: 0 !important;
+  visibility: hidden; overflow: visible !important;
+}
+header.dsh-tavern-immersive-header button.dsh-tavern-play-fullscreen {
+  visibility: visible; position: fixed; z-index: 100;
+  top: max(6px, env(safe-area-inset-top, 0px)); right: max(6px, env(safe-area-inset-right, 0px));
+  background: var(--dsw-alias-bg-base); box-shadow: 0 1px 6px #0002;
+}
 
 /* Worldbook entries put the editable text ahead of occasional configuration. */
 .dsh-tavern-worldbook-entry > .dsh-tavern-worldbook-entry-head { font-size: 14px; font-weight: 700; line-height: 1.6; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
