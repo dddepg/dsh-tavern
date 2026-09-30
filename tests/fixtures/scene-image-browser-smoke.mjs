@@ -46,7 +46,7 @@ const client = await readFile(new URL('../../tavern-plugin/lib/client.js', impor
 // no sidebar. Seed only that metadata, leaving the registered dock/renderers intact.
 // This fixture has a fixed story; image actions refresh through their DOM events.
 const fixtureClient = client.replace('const tavernSessionModes = { values: {},', 'const tavernSessionModes = { values: {"scene-parent":"story"},').replace('let tavernSessionSignals;', 'let tavernSessionSignals = { subscribe: () => () => {} };')
-const settingsSource = client.slice(client.indexOf('function SceneImageSettings()'), client.indexOf('function TavernSettingsSection()'))
+const settingsSource = client.slice(client.indexOf('function SceneImageSettings()'), client.indexOf('function createGlobalSettingsModule('))
 const css = await readFile(new URL('../../tavern-plugin/lib/client-assets/tavern.css', import.meta.url), 'utf8')
 const script = `${bundle}
 const React=modules.react;

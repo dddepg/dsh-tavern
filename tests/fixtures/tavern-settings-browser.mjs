@@ -4,7 +4,7 @@ import { chromium } from 'playwright'
 
 // Exercise the public plugin registration and real React effects/events. Only
 // the DSH host and HTTP boundary are fixtures; no component source extraction.
-export async function openTavernSettings(t, { settings, respond } = {}) {
+export async function openTavernSettings(t, { settings, respond, sceneImages = true } = {}) {
   const browser = await chromium.launch({ headless: true })
   t.after(() => browser.close())
   const page = await browser.newPage()
@@ -16,9 +16,14 @@ export async function openTavernSettings(t, { settings, respond } = {}) {
     if (!route.request().url().includes('/api/')) return route.fulfill({ contentType: 'text/html', body: '<main></main>' })
     const args = route.request().postDataJSON()
     calls.push({ method, args })
-    let result = await respond?.(method, args)
+    let result
+    try { result = await respond?.(method, args) } catch (error) {
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: false, error: error.message }) })
+    }
     if (result === undefined) {
-      if (method === 'getTavernSettings') result = { settings: {}, releaseCapabilities: { sceneImages: true } }
+      if (method === 'getTavernSettings') result = { settings: { defaultPlaySettings: { playerName: "你", backgroundTasks: { variables: true, posture: true } } }, releaseCapabilities: { sceneImages } }
+      else if (method === 'listPresets') result = { presets: [], activePresetPath: '' }
+      else if (method === 'getUserPreferenceProfile') result = { userProfile: { profiles: [], defaultProfileId: '' } }
       else if (method === 'getSceneImageSettings') result = { settings }
       else if (method === 'getCandidatePreferences') result = { candidateDismissMode: 'after-fill' }
       else if (method === 'confirmSessionPatch') result = {}
@@ -44,7 +49,7 @@ export async function openTavernSettings(t, { settings, respond } = {}) {
     modules['react-dom/client'].createRoot(document.querySelector('main')).render(modules.react.createElement(Settings))
   })
   const form = page.locator('.dsh-tavern-settings-group').filter({ has: page.getByRole('heading', { name: '生图 API 配置（全局共用）' }) })
-  await form.getByLabel(/^提供商/).waitFor().catch(async error => { throw Error(error.message + '\n' + JSON.stringify(errors) + '\n' + await page.locator('body').innerText()) })
+  if (sceneImages) await form.getByLabel(/^提供商/).waitFor().catch(async error => { throw Error(error.message + '\n' + JSON.stringify(errors) + '\n' + await page.locator('body').innerText()) })
   t.after(() => { if (errors.length) throw Error(errors.join('\n')) })
   return { page, form, calls }
 }

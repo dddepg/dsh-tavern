@@ -90,15 +90,15 @@ test('silly 入口默认关闭，旧关闭信任值不影响运行', async t => 
   }
 })
 
+const settingsModuleSource = await readFile(new URL('../tavern-plugin/src/client/modules/global-settings.js', import.meta.url), 'utf8')
+
 test('设置界面不重复提供已并入外观的分色，不恢复旧兼容样式选项', () => {
   const context = { GlobalPlayDefaults: function GlobalPlayDefaults() {}, DisplayPreferencesSettings: function DisplayPreferencesSettings() {}, CandidatePreferencesSettings: function CandidatePreferencesSettings() {}, PromptTemplateSettingsEntry: function PromptTemplateSettingsEntry() {}, TavernConversationWritingSkills: function TavernConversationWritingSkills() {}, TavernDefaultModelSetting: function TavernDefaultModelSetting() {}, TavernTextColorSettings: function TavernTextColorSettings() {}, ContextCompactionSettings: function ContextCompactionSettings() {}, SceneImageSettings: function SceneImageSettings() {}, React: {
     useState: initial => [initial, () => {}],
     useEffect() {},
     createElement: (type, props, ...children) => ({ type, props, children })
   } }
-  const start = clientSource.indexOf('function TavernSettingsSection()')
-  vm.runInNewContext(clientSource.slice(start, clientSource.indexOf('function SystemPromptSidebarTab()', start)) +
-    '; this.render = TavernSettingsSection;', context)
+  vm.runInNewContext(settingsModuleSource + '; this.render = createGlobalSettingsModule(this).TavernSettingsSection;', context)
   const root = context.render()
   const nodes = []
   function visit(node) {
