@@ -18,7 +18,7 @@ async function harness(t) {
     messages: Array.from({ length: 459 }, (_, turn) => ({ role: 'assistant', turn: turn + 1,
       text: `story ${turn}`, variables: { stat_data: { gold: 10, payload: 'history'.repeat(1000) } } })) })
   const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
-  const body = source.slice(source.indexOf('  function assistantMessageAtTurn('), source.indexOf('  const tavernScriptHostAdapter ='))
+  const body = source.slice(source.indexOf('  function cleanRuntimeUrl('), source.indexOf('  const tavernScriptHostAdapter ='))
   const hooks = { beforePatch: async () => {} }
   const capture = vm.runInNewContext(`(function(){${body};return captureDisplayRuntime})()`, {
     str: value => String(value ?? ''), groupOfMode: () => 'play',

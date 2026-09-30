@@ -1223,16 +1223,6 @@ export async function apply(ctx) {
     return reference
   }
 
-  function assistantMessageAtTurn(chat, requestedTurn) {
-    const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
-    let inferred = 1
-    for (const message of messages) {
-      if (message && message.role === 'user') inferred += 1
-      if (message && message.role === 'assistant' && Math.max(1, Number(message.turn) || (message.greeting === true ? 1 : inferred)) === requestedTurn) return message
-    }
-    return null
-  }
-
   function cleanRuntimeUrl(value) {
     return str(value).split(/[?#]/)[0].replace(/\/\/[^/@\s]+@/, '//').slice(0, 1000)
   }

@@ -25,10 +25,6 @@ async function exists(target) {
   try { await access(target); return true } catch { return false }
 }
 
-function comparableJson(value) {
-  return JSON.stringify(value, Object.keys(value || {}).sort())
-}
-
 export function safeResourceName(value, fallback = '未命名') {
   const name = path.basename(str(value).trim() || fallback).normalize('NFC')
   if (name === '.' || name === '..' || /[<>:"/\\|?*\u0000-\u001F]/.test(name) || /[. ]$/.test(name) || WINDOWS_RESERVED.test(name)) {
