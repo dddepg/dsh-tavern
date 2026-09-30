@@ -8299,7 +8299,7 @@ window.__ModuleLoader__.load({
             return h("div", { className: "dsh-tavern-user-profile" },
                 h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "Guide 库"), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: refresh }, "刷新")),
                 h("div", { className: "dsh-tavern-user-profile-body" },
-                    h("p", { className: "dsh-tavern-settings-desc" }, "在酒馆状态中保存本局 Guide，在这里选择方案加载。加载会追加到本局，不替换已有指导。"),
+                    h("p", { className: "dsh-tavern-settings-desc" }, "Guide 会注入模型上下文，用来引导剧情走向和文风。在酒馆状态中保存本局 Guide，在这里选择方案加载。加载会追加到本局，不替换已有指导。"),
                     error ? h("p", { role: "alert" }, error) : null,
                     notice ? h("p", { role: "status" }, notice) : null,
                     items === null ? h("p", null, "正在读取Guide 库…") : !items.length ? h("p", { className: "dsh-tavern-status-empty" }, "暂无方案。可在酒馆状态的指导区域保存本局 Guide。") : items.map(item =>
@@ -10502,7 +10502,7 @@ window.__ModuleLoader__.load({
 				return (date.getMonth() + 1) + "/" + date.getDate() + " " + String(date.getHours()).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0");
 			}
 			const h = React.createElement;
-			if (!view) return h("aside", { className: "dsh-tavern-status" },
+			if (!view) return h("aside", { className: "dsh-tavern-status dsh-tavern-status-dashboard" },
 				h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "状态栏")),
 				h("div", { className: "dsh-tavern-status-body" },
 					h("div", { className: "dsh-tavern-status-empty" }, missingCard ? "人物卡已删除，酒馆状态不可用；已有对话仍可查看。" : (loadState === "retrying" ? "正在重新连接酒馆状态…" : (error || (loadState === "loading" ? "正在加载酒馆状态…" : "选择人物卡后，这里会显示持续状态。")))),
@@ -10516,7 +10516,7 @@ window.__ModuleLoader__.load({
 				: view.cardUpdate.cardChanged && view.cardUpdate.worldbookChanged ? "人物卡和世界书有变化"
 				: view.cardUpdate.cardChanged ? "人物卡有变化"
 				: view.cardUpdate.worldbookChanged ? "世界书有变化" : "";
-			return h("aside", { className: "dsh-tavern-status" },
+			return h("aside", { className: "dsh-tavern-status dsh-tavern-status-dashboard" },
 				h("div", { className: "dsh-tavern-status-head" },
 					h("div", { className: "dsh-tavern-status-role" }, view.card.name),
                     h("nav", { className: "dsh-tavern-status-resource-links", "aria-label": "本局资料" },
@@ -10549,8 +10549,9 @@ window.__ModuleLoader__.load({
 					(view.presentationWarnings || []).map(function (warning, index) {
 						return h("div", { className: "dsh-card-error", key: "presentation-warning-" + index }, warning);
 					}),
-					h("section", { className: "dsh-tavern-status-section" },
-						h("div", { className: "dsh-tavern-status-label" }, "正则加载不对？前端美化不对？内容生成不对？"),
+					h("details", { className: "dsh-tavern-status-section dsh-tavern-status-support" },
+                        h("summary", null, "遇到显示或生成问题？"),
+                        h("p", { className: "dsh-tavern-settings-desc" }, "正则加载、前端美化或内容生成异常，可交给卡片 Agent 排查。"),
 						h("div", { className: "dsh-tavern-debug-panel" },
 							h("button", { className: "dsh-tavern-debug-open", disabled: debugBusy || !latestDebugTurn, onClick: openDebugger }, debugBusy ? "正在打开卡片 Agent…" : "交给卡片 Agent 调试")
 						)
@@ -10564,9 +10565,11 @@ window.__ModuleLoader__.load({
                         busy: running || view.activity?.busy || view.regenInProgress
                     }) : null,
 					h("section", { className: "dsh-tavern-status-section dsh-tavern-guide-section" },
-						h("div", { className: "dsh-tavern-status-label" }, "Guide"),
-                        h("div", { className: "dsh-tavern-guide-destinations" },
-                            h("div", null, "将本局 Guide 保存到库，即可在其他游戏中选择加载。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
+						h("div", { className: "dsh-tavern-status-label" }, "剧情指导", h("span", { className: "dsh-tavern-guide-caption" }, "Guide · " + (view.guides || []).length)),
+                        h("p", { className: "dsh-tavern-settings-desc" }, "Guide 是给模型的指导，会注入上下文，用来引导剧情走向和文风。"),
+                        h("details", { className: "dsh-tavern-guide-destinations" },
+                            h("summary", null, "长期偏好与人物设定"),
+                            h("div", null, "跨游戏通用的个人喜好，可在长期偏好中设置。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
                             h("div", null, "故事专属设定写入人物卡。", h("button", { type: "button", disabled: !view.card.path, onClick: () => props.openStyleTab("dsh-tavern:cards", { cardPath: view.card.path }) }, "打开人物卡 ↗"))),
 						h("div", { className: "dsh-tavern-guide-list" },
 							(view.guides || []).length ? (view.guides || []).map(function (guide, index) {

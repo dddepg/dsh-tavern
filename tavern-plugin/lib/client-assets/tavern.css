@@ -1865,3 +1865,41 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 .dsh-tavern-guide-heading h3 { margin: 0; min-width: 0; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
 .dsh-tavern-guide-heading > button { flex: none; padding: 5px 9px; font-size: 12px; background: transparent; }
 .dsh-tavern-guide-heading > button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* Gameplay status: quiet sections, one primary Guide action. */
+.dsh-tavern-status-dashboard { container-type: inline-size; }
+.dsh-tavern-status-dashboard > .dsh-tavern-status-head { padding: 20px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-role { margin: 0; color: var(--dsw-alias-label-primary); font-size: 20px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-resource-links { margin-top: 10px; gap: 16px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-settle { margin-top: 12px; font-size: 11px; }
+.dsh-tavern-status-dashboard > .dsh-tavern-status-body { padding: 16px 20px 24px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-section { margin: 0 0 18px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-label { font-size: 13px; font-weight: 650; letter-spacing: 0; color: var(--dsw-alias-label-primary); }
+.dsh-tavern-status-dashboard .dsh-tavern-settings-desc { font-size: 12px; line-height: 1.7; margin: 6px 0 12px; }
+.dsh-tavern-status-dashboard .dsh-tavern-card-reload { gap: 8px; align-items: center; }
+.dsh-tavern-status-dashboard .dsh-tavern-card-reload .dsh-tavern-btn { background: transparent; border: 1px solid var(--dsw-alias-border-l2); font-size: 11px; padding: 7px 10px; border-radius: 8px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-support { border-bottom: 1px solid var(--dsw-alias-border-l2); padding-bottom: 14px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.dsh-tavern-status-dashboard summary { cursor: pointer; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-section { padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-input-major); }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-section > .dsh-tavern-status-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; }
+.dsh-tavern-guide-caption { font-size: 11px; color: var(--dsw-alias-label-tertiary); font-weight: 400; white-space: nowrap; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-destinations { font-size: 11px; margin: 0 0 14px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-destinations > div { padding-top: 6px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-section .dsh-tavern-guide-list { gap: 0; margin-top: 4px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-section .dsh-tavern-guide-item { padding: 12px 0; gap: 12px; border: 0; border-bottom: 1px solid var(--dsw-alias-border-l2); border-radius: 0; background: transparent; flex-wrap: nowrap; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-text { font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; flex-basis: auto; }
+.dsh-tavern-status-dashboard .dsh-tavern-worldbook-del { flex-shrink: 0; min-height: 32px; padding: 4px 6px; font-size: 11px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-actions { flex-wrap: wrap; margin: 10px 0 16px; gap: 6px 16px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-actions > button { flex: none; background: transparent; padding: 4px 0; min-height: 32px; font-size: 11px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-add { align-items: flex-end; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-add textarea { min-height: 84px; padding: 10px 12px; font-size: 12px; border-radius: 10px; }
+.dsh-tavern-status-dashboard .dsh-tavern-guide-add > button { width: auto; min-height: 36px; padding: 8px 18px; border-radius: 8px; font-size: 12px; }
+.dsh-tavern-status-dashboard .dsh-tavern-character-design-head { gap: 12px; align-items: center; }
+.dsh-tavern-status-dashboard .dsh-tavern-character-design-head .dsh-tavern-btn { background: transparent; border: 1px solid var(--dsw-alias-border-l2); font-size: 11px; padding: 6px 10px; }
+.dsh-tavern-status-dashboard .dsh-tavern-status-empty { font-size: 12px; line-height: 1.7; }
+.dsh-tavern-status-dashboard button:focus-visible, .dsh-tavern-status-dashboard summary:focus-visible, .dsh-tavern-status-dashboard textarea:focus-visible { outline: 2px solid var(--dsh-tavern-accent); outline-offset: 3px; }
+@container (max-width: 360px) {
+  .dsh-tavern-status-dashboard > .dsh-tavern-status-head { padding: 16px; }
+  .dsh-tavern-status-dashboard > .dsh-tavern-status-body { padding: 12px; }
+  .dsh-tavern-status-dashboard .dsh-tavern-guide-section { padding: 12px; }
+}
