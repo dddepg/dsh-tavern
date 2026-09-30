@@ -1104,14 +1104,6 @@
 						if (input) input.focus();
 					});
 				} }, "✎ 自由行动（直接在下方输入）") : null,
-				expanded && panel.phase === "ready" && panel.traceSessionId ? h("button", { className: "dsh-tavern-question-free", title: panel.traceMode === "continuable" ? "打开持续存在的后台 Agent" : "打开后台候选任务的推理与工具调用记录", onClick: async function () {
-					try {
-						await props.sessions.refreshSubagents(panel.sessionId);
-						props.sessions.openSubagent({ parentSessionId: panel.sessionId, childSessionId: panel.traceSessionId, mode: panel.traceMode });
-					} catch (err) {
-						tavernErrorHub.report("后台 Agent 轨迹", "无法打开后台 Agent 轨迹：" + String(err && err.message || err));
-					}
-				} }, panel.traceMode === "continuable" ? "查看后台 Agent" : "查看后台候选任务轨迹") : null,
 				expanded && panel.phase === "ready" && panel.choices && panel.choices.length ? h("div", { className: "dsh-tavern-question-foot" },
 					h("button", { className: "dsh-tavern-question-primary", disabled: selected < 0, onClick: function () {
 						if (selected < 0) return;
@@ -1210,7 +1202,7 @@
 						}),
 						h("div", { className: "dsh-tavern-question-foot" },
 							h("button", { className: "dsh-tavern-question-primary", disabled: panel.phase === "loading", onClick: generate }, "生成并替换正文"),
-							h("button", { className: "dsh-tavern-question-free", onClick: function () { setRegenPanel(null); } }, "取消")
+							h("button", { className: "dsh-tavern-btn quiet", onClick: function () { setRegenPanel(null); } }, "取消")
 						)
 					);
 			return h("div", { className: "dsh-tavern-question" },
@@ -1229,6 +1221,10 @@
             }), "dsh-tavern: conversation settings tab");
             // Replace shipped host chrome that is noise in the Tavern profile.
             // Same id + lower priority shadows the host entry (lowest renders).
+            ctx.effect(() => slots.inject("conversation.session.header.utilities", () => slots.register(
+                { name: "conversation.session.header.utilities", id: "dsh-better-sidebar:bottom-toggle", order: 10, priority: -1 },
+                () => null
+            )), "dsh-tavern: hide bottom panel toggle");
             ctx.effect(() => slots.inject("conversation.session.header.actions", () => slots.register(
                 { name: "conversation.session.header.actions", id: "agent-preset", order: -10, priority: -1 },
                 () => null
