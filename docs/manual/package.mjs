@@ -11,6 +11,7 @@ export const publicFiles = [...new Set([
   'index.html', 'product.html',
   'assets/manual.css', 'assets/manual.js', 'assets/manual-state.js',
   'assets/product.css', 'assets/product.js', 'assets/social.png',
+  ...['favicon.svg', 'favicon-32.png', 'dsh-tavern-app-icon-192.png'].map(name => `assets/brand/${name}`),
   ...Object.values(pageScreenshots).flat().map(key => `images/manual/${screenshots[key].file}`),
   ...['overview', 'card-editor', 'free-play-candidates', 'script-mode'].map(name => `images/readme/${name}.png`),
   ...Object.keys(demoDownloads).map(name => `examples/manual-demo/${name}`),
