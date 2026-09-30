@@ -97,9 +97,9 @@ export const installation = `
 
 ### 第 1 步：下载安装包
 
-[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe)
+[下载 Windows 一键在线安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe)
 
-下载的文件名是 \`DSH-Tavern-Desktop-2.0.13-x64-Setup-upgrade-fix.exe\`。这是在线安装器，安装时仍需要联网。
+下载的文件名是 \`DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe\`。这是在线安装器，安装时仍需要联网。
 
 ### 第 2 步：安装并等待完成
 
