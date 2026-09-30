@@ -20,7 +20,9 @@ try {
   process.exit(1)
 }
 
-const tests = ['tests', 'testsets/tests'].flatMap(directory =>
+// Optional file arguments run a focused subset; no arguments runs the full suite (release only).
+const selected = process.argv.slice(2).map(file => path.resolve(file))
+const tests = selected.length ? selected : ['tests', 'testsets/tests'].flatMap(directory =>
   readdirSync(path.join(SOURCE_ROOT, directory))
     .filter(name => name.endsWith('.test.mjs'))
     .sort()
