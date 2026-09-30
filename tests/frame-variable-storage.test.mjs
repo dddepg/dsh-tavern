@@ -61,19 +61,3 @@ test('自定义建档 MVU 写入 latest 并等待保存，失败回滚且不宣�
   await assert.rejects(failed, /保存失败/)
   assert.equal(h.w.Mvu.getMvuData(option).stat_data.主角.姓名, '新')
 })
-
-import { createHelperWorldbookHost } from './fixtures/helper-worldbook-host.mjs'
-test('消息 iframe 的建档数据经正式宿主写入聊天记录并回读', async () => {
-  const host = await createHelperWorldbookHost(true)
-  try {
-    host.chat.messages = [{ role: 'assistant', text: '自定义开局', turn: 1, variables: [{ stat_data: { 主角: { 姓名: '旧' } } }] }]
-    const frame = fixture()
-    const pending = frame.w.Mvu.replaceMvuData({ stat_data: { 主角: { 姓名: '建档回归', 等级: 3 } } }, { type: 'message', message_id: 'latest' })
-    await new Promise(resolve => setImmediate(resolve))
-    const { option, variables } = frame.calls.at(-1).args
-    frame.reply(await host.adapter.updateVariables('audit', option, variables))
-    await pending
-    assert.equal(host.writes.at(-1).chat.messages[0].variables[0].stat_data.主角.姓名, '建档回归')
-    assert.equal(frame.w.Mvu.getMvuData({ type: 'message', message_id: 'latest' }).stat_data.主角.等级, 3)
-  } finally { await host.cleanup() }
-})

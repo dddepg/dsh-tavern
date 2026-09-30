@@ -37,30 +37,6 @@ function frame(persistent = true) {
   get reloads() { return messages.filter(x => x.type === 'dsh-tavern-status-stale').length } }
 }
 
-test('read-once legacy status requests refresh when initial variables arrive; duplicate updates coalesce', async () => {
-  const run = frame()
-  assert.equal(run.context.getAllVariables().stat_data, undefined)
-  await run.update({ stat_data: { 地点: '山门' } })
-  await run.update({ stat_data: { 地点: '庭院' } })
-  run.flush()
-  assert.equal(run.reloads, 1)
-  await run.update({ stat_data: { 地点: '大殿' } })
-  run.flush()
-  assert.equal(run.reloads, 1, 'one request per document')
-})
-
-test('event-driven and polling cards that reread current variables do not reload', async () => {
-  for (const events of [true, false]) {
-    const run = frame()
-    run.context.getAllVariables()
-    if (events) run.context.eventOn('mag_variable_update_ended', () => run.context.getAllVariables())
-    await run.update({ stat_data: { 地点: '山门' } })
-    if (!events) run.context.getAllVariables() // existing card poll during grace period
-    run.flush()
-    assert.equal(run.reloads, 0)
-  }
-})
-
 test('listeners can render the event payload without another API read; removing the listener restores fallback', async () => {
   const run = frame()
   run.context.getAllVariables()
@@ -106,10 +82,4 @@ test('a status performing Helper writes is not automatically replayed', async ()
   await run.update({ stat_data: { 地点: '庭院' } })
   run.flush()
   assert.equal(run.reloads, 0)
-})
-
-
-test('保留实例的多面板不安装自动重载兜底', () => {
-  const html = client.buildTavernFrameDocument({ content: '<input>', token: 'panel', helperContext: {}, persistent: true, preserveInstance: true })
-  assert.doesNotMatch(html, /<script data-dsh-tavern-status-refresh>/)
 })

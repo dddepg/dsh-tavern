@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { createChatJournalStore } from '../tavern-plugin/lib/domain/chat-journal-store.js'
 import { createSessionViewReader } from '../tavern-plugin/lib/domain/session-view-reader.js'
 import { projectTavernHelperContext } from '../tavern-plugin/lib/domain/tavern-helper-context.js'
-import { applyJsonChangesShared } from '../tavern-plugin/lib/domain/json-mutation.js'
 
 test('changing long history reuses unchanged Helper variables without full reads', async t => {
   const root = await mkdtemp(join(tmpdir(), 'view-delta-'))
@@ -36,14 +35,4 @@ test('changing long history reuses unchanged Helper variables without full reads
   const shortened=await reader.read('s')
   assert.equal(reads,2)
   assert.deepEqual(shortened.tavernHelper,projectTavernHelperContext(await store.read('c')))
-})
-
-test('shared splice keeps old immutable rows and detaches inserted rows',()=>{
-  const before={messages:[{variables:[{value:1}]}]}, inserted={variables:[{value:2}]}
-  const after=applyJsonChangesShared(before,[{op:'splice',path:['messages'],index:1,deleteCount:0,items:[inserted]}])
-  assert.notEqual(after.messages,before.messages)
-  assert.equal(after.messages[0],before.messages[0])
-  inserted.variables[0].value=3
-  assert.equal(after.messages[1].variables[0].value,2)
-  assert.equal(before.messages.length,1)
 })

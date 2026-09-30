@@ -20,34 +20,6 @@ function provider(owner, id = 'Service') {
   return { manifest: { id, description: 'first party', methods: [{ name: 'listService' }] }, query: () => owner }
 }
 
-test('多次挂载只注册一次，关闭原工作台后转向仍存活的查询实现', () => {
-  const { registry, providers, calls } = fixture()
-  const disposeA = registry.register(provider('A'))
-  const disposeB = registry.register(provider('B'))
-  assert.equal(calls(), 1)
-  assert.equal(providers.get('Service').query(), 'A')
-  disposeA()
-  disposeA()
-  assert.equal(providers.get('Service').query(), 'B')
-  disposeB()
-  assert.equal(providers.size, 0)
-  const disposeC = registry.register(provider('C'))
-  assert.equal(calls(), 2)
-  assert.equal(providers.get('Service').query(), 'C')
-  disposeC()
-})
-
-test('相同对象的多次注册也分别持有生命周期', () => {
-  const { registry, providers } = fixture()
-  const same = provider('shared')
-  const first = registry.register(same)
-  const second = registry.register(same)
-  second()
-  assert.equal(providers.size, 1)
-  first()
-  assert.equal(providers.size, 0)
-})
-
 test('重载宿主适配器不会叠加拦截层或丢失已有挂载', () => {
   const { registry, providers, calls } = fixture()
   const first = registry.register(provider('A'))

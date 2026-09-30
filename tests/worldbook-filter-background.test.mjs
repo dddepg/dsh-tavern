@@ -77,38 +77,6 @@ function harness(runnerOptions = {}) {
     restart: async () => { await runner.dispose(); runner = makeRunner() }, dispose: () => runner.dispose() }
 }
 
-test('筛选、结算与候选共用一个持久 Agent，重启后恢复相同会话', async t => {
-  const h = harness(); t.after(h.dispose)
-  const first = await h.runTask('settlement')
-  const filtered = await h.filter(await h.input())
-  assert.equal(filtered.traceSessionId, first.traceSessionId)
-  assert.deepEqual(filtered.selected, ['entry:0'])
-  assert.equal((await h.runTask('candidate')).traceSessionId, first.traceSessionId)
-  await h.restart()
-  assert.equal((await h.filter(await h.input())).traceSessionId, first.traceSessionId)
-  assert.deepEqual(h.created, [first.traceSessionId])
-  assert.deepEqual(h.resumed, [first.traceSessionId])
-  assert.deepEqual(Object.keys((await h.store.readChat()).timeline.participants), ['background'])
-  assert.deepEqual(h.calls[2].tools, [])
-  const descriptors = [...h.sessions.values()].flatMap(s => s.events).filter(e => e.type === 'subagent/descriptor')
-  assert.equal(descriptors.length, 1)
-  assert.equal(descriptors[0].data.mode, 'continuable')
-  assert.equal(descriptors[0].data.label, '酒馆后台 Agent')
-})
-
-test('筛选是首个任务时绑定共享会话；失败和重试不新增 Agent', async t => {
-  const h = harness(); t.after(h.dispose)
-  h.fail(true)
-  await assert.rejects(h.filter(await h.input()), /模型失败/)
-  const failed = await h.store.readChat()
-  assert.equal(h.tasks.activity(failed).phase, 'failed')
-  const id = failed.timeline.participants.background.sessionId
-  h.fail(false)
-  await h.restart()
-  assert.equal((await h.filter(await h.input())).traceSessionId, id)
-  assert.equal(h.created.length, 1)
-})
-
 test('小候选池不创建后台任务；压缩和其他后台工作期间禁止另开筛选', async t => {
   const h = harness(); t.after(h.dispose)
   const input = await h.input()

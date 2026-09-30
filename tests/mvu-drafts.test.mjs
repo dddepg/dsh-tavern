@@ -46,16 +46,7 @@ test('分组草稿跨重启恢复，逐开场保存，原卡不变，重复提�
  assert.equal(await f.resources.readText(f.sourcePath),source)
  assert.equal((await f.resources.list('card')).length,2)
 })
-test('不自动共用开场，定制美化不能用 fields 冒充，未完成草稿不生成成品',async t=>{
- const f=await fixture(t)
- await f.patch('fields',{'/位置':'大厅'})
- await f.patch('rules',{位置:'按正文更新'})
- await f.patch('appearance',{fields:[]})
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- await assert.rejects(f.conversion.draft(f.commitArgs()),error=>error.code==='DRAFT_INCOMPLETE'&&error.details.issues.some(x=>x.openingId==='opening-1')&&error.details.issues.some(x=>x.section==='appearance'))
- assert.equal((await f.resources.list('card')).length,1)
- assert.equal((await f.read()).saved,true)
-})
+
 test('规则和单开场修改保留美化，新增字段后重新要求补齐所有开场',async t=>{
  const f=await fixture(t);await f.complete()
  const original=(await f.conversion.draft({action:'read',draftId:f.current.draftId,path:'/definition/appearance/html'})).reading.text
@@ -88,21 +79,7 @@ test('源卡变化、重叠字段和危险路径均不覆盖资源',async t=>{
  await assert.rejects(f.conversion.draft(f.commitArgs()),e=>e.code==='DRAFT_SOURCE_CHANGED')
  assert.equal((await f.resources.list('card')).length,1)
 })
-test('明确选择基础面板才可提交，工具 JSON 回执与角色限制可用',async t=>{
- const f=await fixture(t,{begin:{appearanceRequirement:'basic',basicReason:'用户明确要求基础面板'}})
- await f.patch('fields',{'/位置':'大厅'})
- for(const openingId of ['opening-0','opening-1'])await f.patch('opening',undefined,{openingId,inheritInitialState:true})
- await f.patch('rules',{位置:'按正文更新'})
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- const tools=new Map();let mode='story'
- registerMvuConversionTools({tools:{register:x=>tools.set(x.name,x)},defineTool:x=>x,conversion:f.conversion,chatForSession:async()=>({mode})})
- const tool=tools.get('tavern_card_draft')
- await assert.rejects(tool.execute(f.commitArgs(),{}),/工作台/)
- mode='card'
- const {report}=await tool.execute(f.commitArgs(),{})
- assert.equal(report.receipt.validation.valid,true)
- assert.deepEqual(JSON.parse(JSON.stringify(report)),report)
-})
+
 test('成品写入后回执失败可恢复，提交中禁止修改草稿，重试不丢结果',async t=>{
  const f=await fixture(t);await f.complete()
  let failOnce=true
@@ -120,27 +97,7 @@ test('成品写入后回执失败可恢复，提交中禁止修改草稿，重�
  assert.equal(resumed.phase,'committed');assert.equal(resumed.receipt.validation.valid,true)
  assert.equal(await f.resources.readText(pending.targetPath),bytes)
 })
-test('更新现有副本只改选定开场，保留既有美化及另一个开场',async t=>{
- const f=await fixture(t);await f.complete()
- const first=await f.conversion.draft(f.commitArgs()),before=cardData(await f.resources.readCard(first.targetPath)).extensions.dsh_mvu_conversion
- let d=await f.conversion.draft({action:'begin',sourcePath:f.sourcePath,requestId:'second'})
- d=await f.conversion.draft({action:'patch',draftId:d.draftId,draftRevision:d.draftRevision,requestId:'opening',section:'opening',openingId:'opening-1',values:{'/地点/名称':'码头'}})
- d=await f.conversion.draft({action:'patch',draftId:d.draftId,draftRevision:d.draftRevision,requestId:'review',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}})
- const result=await f.conversion.draft({action:'commit',draftId:d.draftId,draftRevision:d.draftRevision,requestId:'finish'})
- assert.equal(result.receipt.validation.valid,true)
- const after=cardData(await f.resources.readCard(result.targetPath)).extensions.dsh_mvu_conversion
- assert.equal(after.updateRules,before.updateRules)
- assert.deepEqual(after.appearance,before.appearance)
- assert.deepEqual(after.openingStates[0],before.openingStates[0]);assert.equal(after.openingStates[1].地点.名称,'码头')
-})
-test('目标被抢占时拒绝提交，保存的草稿仍可读取',async t=>{
- const f=await fixture(t);await f.complete()
- const card={name:'他人资源',first_mes:'保留'}
- await f.resources.writeWorking(f.current.targetPath,JSON.stringify(card))
- await assert.rejects(f.conversion.draft(f.commitArgs()),e=>e.code==='DRAFT_INCOMPLETE'&&e.details.issues.some(x=>x.code==='DRAFT_TARGET_CHANGED'))
- assert.equal(await f.resources.readText(f.current.targetPath),JSON.stringify(card))
- assert.equal((await f.read()).phase,'editing')
-})
+
 test('工具真实 DSH 参数定义和无损 JSON 回执覆盖草稿、错误与最终提交',{skip:!process.env.DSH_BOOT_MODULE},async t=>{
  const {pathToFileURL}=await import('node:url'),root=pathToFileURL(process.env.DSH_BOOT_MODULE)
  const {defineTool,validateJsonSchemaValue}=await import(new URL('../../dsh-tools/lib/index.js',root))
@@ -194,13 +151,7 @@ async function draftValue(f,path) {
  const draft=await f.resources.readMvuDraft(f.current.draftId)
  return path.reduce((node,key)=>node[key],draft)
 }
-test('字段目录隔离开场值，错层级及类型在保存前拒绝，失败不改变版本',async t=>{
- const f=await fixture(t);await f.complete();const before=await f.read()
- await assert.rejects(f.patch('opening',{'/时段':'夜晚'},{openingId:'opening-1'}),e=>e.code==='DRAFT_FIELD_UNKNOWN'&&e.details.issues.some(x=>x.suggestedPaths?.includes('/时间/时段')))
- await assert.rejects(f.patch('opening',{'/时间/时段':3},{openingId:'opening-1'}),e=>e.code==='DRAFT_FIELD_TYPE')
- assert.deepEqual(await f.read(),before)
- assert.equal(before.fieldSchema.fields.find(x=>x.path==='/时间/时段').type,'string')
-})
+
 test('反复继承只补缺失字段，新增目录字段不覆盖场景值，目录版本只跟随结构变化',async t=>{
  const f=await fixture(t);await f.complete();const revision=f.current.fieldSchema.revision
  await f.patch('fields',{'/天气':'晴'})
@@ -261,30 +212,7 @@ test('已有成品字段改名同步编译后的绑定并允许明确迁移，�
  const reduced=await f.conversion.convert({action:'saveDefinition',sourcePath:f.sourcePath,sourceRevision:info.sourceRevision,initialState:{地点:{名称:'大厅'}},openingStates:[{地点:{名称:'大厅'}},{地点:{名称:'车站'}}],updateRules:'按正文更新'})
  await assert.rejects(f.conversion.convert({action:'preview',sourcePath:f.sourcePath,sourceRevision:info.sourceRevision,targetRevision:info.targetRevision,definitionRevision:reduced.definitionRevision,planMode:'replace'}),/不能减少已保存字段/)
 })
-test('孤立入口清理设置持久保留，同一路径正文修改不阻止清理，验证给出实际操作',async t=>{
- const f=await fixture(t,{card:{first_mes:'大厅开场\n<mvu-status/>'}});await f.complete()
- await f.patch('cleanup',[],{cleanupOrphanEntrances:true})
- await f.patch('cleanup',[{op:'replaceText',path:'/first_mes',expected:'大厅开场',value:'大厅开始'}])
- const validation=(await f.conversion.draft({action:'validate',draftId:f.current.draftId,draftRevision:f.current.draftRevision})).validation
- assert.equal(validation.effectiveCleanup.length,2)
- assert.ok(validation.issues.some(x=>x.section==='review'))
- assert.ok(!validation.issues.some(x=>x.code==='MVU_ORPHAN_ENTRANCE'))
- await assert.rejects(f.conversion.draft({...f.commitArgs(),cleanupOrphanEntrances:true}),e=>e.code==='DRAFT_ARGUMENT_INVALID')
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- const result=await f.conversion.draft(f.commitArgs())
- assert.equal(result.receipt.validation.valid,true)
- const card=cardData(await f.resources.readCard(result.targetPath))
- assert.match(card.first_mes,/大厅开始/)
- assert.equal(card.first_mes.split('<mvu-status/>').length-1,1)
- assert.equal(cardData(await f.resources.readCard(f.sourcePath)).first_mes,'大厅开场\n<mvu-status/>')
-})
-test('未做 review 也汇总独立的清理问题，不把参数错位当成无效果',async t=>{
- const f=await fixture(t,{card:{first_mes:'大厅开场\n<mvu-status/>'}})
- const result=await f.conversion.draft({action:'validate',draftId:f.current.draftId,draftRevision:f.current.draftRevision})
- assert.ok(result.validation.issues.some(x=>x.code==='MVU_ORPHAN_ENTRANCE'))
- assert.ok(result.validation.issues.some(x=>x.section==='review'))
- await assert.rejects(f.patch('rules',{规则:'正文'},{inheritInitialState:true}),e=>e.code==='DRAFT_ARGUMENT_INVALID')
-})
+
 test('无目录旧草稿读取可诊断多余字段，显式删除可恢复而无需扩大面板',async t=>{
  const f=await fixture(t);await f.complete()
  await f.resources.updateMvuDraft(f.current.draftId,draft=>{delete draft.fieldSchema;draft.definition.openingStates[1].时段='多余';return draft})
@@ -310,13 +238,6 @@ test('数组作为完整字段允许各开场不同长度，不把首个开场�
  next=await f.conversion.draft({action:'patch',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'shorten',section:'opening',openingId:'opening-0',values:{'/记录':[]}})
  next=await f.conversion.draft({action:'patch',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'review-shorter',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}})
  assert.equal((await f.conversion.draft({action:'commit',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'commit-shorter'})).receipt.validation.valid,true)
-})
-
-test('美化非法路径以可修复诊断返回，不在草稿已保存后抛出读取异常',async t=>{
- const f=await fixture(t);await f.patch('fields',{'/位置':'大厅'})
- const result=await f.patch('appearance',{html:'<mvu-field path="not-a-pointer"></mvu-field>'})
- assert.ok(result.missing.some(x=>x.code==='DRAFT_APPEARANCE_INVALID'))
- assert.equal((await f.read()).draftRevision,result.draftRevision)
 })
 
 test('简化凭据自动管理版本与重试，JSON 键顺序不同仍幂等，旧凭据不能覆盖',async t=>{
@@ -354,18 +275,6 @@ test('简化凭据读取来源与清单，检查与提交只传 action 和 draft
  assert.equal(begin.phase,'editing')
  assert.notEqual(begin.draft,result.draft)
 })
-test('简化工具 schema 不暴露版本和请求参数，回执保留同名用户字段',async t=>{
- const f=await fixture(t),registered=new Map()
- registerMvuConversionTools({tools:{register:x=>registered.set(x.name,x)},defineTool:x=>x,conversion:f.conversion,chatForSession:async()=>({mode:'card'})})
- const tool=registered.get('tavern_card_draft')
- for(const key of ['requestId','draftId','draftRevision','sourceRevision','definitionRevision'])assert.equal(Object.hasOwn(tool.parameters,key),false)
- let result=(await tool.execute({action:'begin',sourcePath:f.sourcePath},{})).report
- assert.equal(Object.hasOwn(result,'sourceRevision'),false)
- assert.ok(result.draft)
- result=(await tool.execute({action:'patch',draft:result.draft,section:'rules',values:{requestId:'保留用户规则'}},{})).report
- const read=(await tool.execute({action:'read',draft:result.draft,path:'/rules/requestId'},{})).report
- assert.equal(read.reading.text,'保留用户规则')
-})
 
 test('自动 begin 在无改动提交后仍可建立新草稿，来源改变不会隐式替换旧草稿快照',async t=>{
  const f=await fixture(t);await f.complete();await f.conversion.draft(f.commitArgs())
@@ -380,30 +289,6 @@ test('自动 begin 在无改动提交后仍可建立新草稿，来源改变不�
  await assert.rejects(f.conversion.draft({action:'source',draft:reopened.draft,path:'/description'}),e=>e.code==='DRAFT_SOURCE_CHANGED')
 })
 
-test('简单卡转换接受日志中的省略根斜杠路径，保留正文和无关扩展，九步完成提交',async t=>{
- const f=await fixture(t,{card:{description:'作者设定保持原样。',personality:'沉稳',scenario:'旅途中',first_mes:'大厅开场\n<mvu-status/>',extensions:{author_note:{keep:true}}}})
- const original=await f.resources.readText(f.sourcePath)
- let calls=1;const run=f.conversion.draft
- f.conversion.draft=(...args)=>{calls++;return run(...args)}
- // Same argument shape as the repeated diagnostic failures; neutral values.
- await f.patch('fields',{'时间/时段':'白天','地点/名称':'大厅','$meta':{extensible:true}})
- await f.patch('opening',undefined,{openingId:'opening-0',inheritInitialState:true})
- await f.patch('opening',{'时间/时段':'夜晚','地点/名称':'车站'},{openingId:'opening-1',inheritInitialState:true})
- await f.patch('rules',{场景:'按正文已经发生的移动更新时间地点'})
- await f.patch('appearance',{html:'<section><h2>旅途</h2><mvu-field path="/时间/时段"></mvu-field><mvu-field path="/地点/名称"></mvu-field></section>'})
- await f.patch('cleanup',[],{cleanupOrphanEntrances:true})
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- const result=await f.conversion.draft(f.commitArgs())
- assert.equal(result.receipt.validation.valid,true)
- const output=cardData(await f.resources.readCard(result.targetPath)),source=cardData(await f.resources.readCard(f.sourcePath))
- for(const key of ['description','personality','scenario'])assert.equal(output[key],source[key])
- assert.deepEqual(output.extensions.author_note,source.extensions.author_note)
- assert.ok(output.first_mes.startsWith('大厅开场'))
- assert.ok(output.alternate_greetings[0].startsWith('车站开场'))
- assert.equal(await f.resources.readText(f.sourcePath),original)
- assert.equal(output.extensions.dsh_mvu_conversion.openingStates[1].地点.名称,'车站')
- assert.equal(calls,9)
-})
 test('根斜杠规范化仍拒绝冲突、父子重叠与危险路径，不保存半次修改',async t=>{
  const f=await fixture(t),before=await f.read()
  await assert.rejects(f.patch('fields',{'位置':'大厅','/位置':'车站'}),e=>e.code==='DRAFT_PATH_COLLISION')

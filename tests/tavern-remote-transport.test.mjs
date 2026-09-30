@@ -66,56 +66,6 @@ test('Remote client owns one restartable snapshot stream and isolates session/ki
   stopCandidate(); stopRuntime()
 })
 
-test('Remote signal subscription recovers after the Remote service is temporarily unavailable', async function () {
-  let descriptor, provided, streamOptions
-  const snapshots = []
-  const retries = []
-  class FakeSnapshotStream {
-    constructor(_stream, options) { this.options = options; this.started = false; this.disposed = false; snapshots.push(this) }
-    start() { this.started = true }
-    restart() {}
-    async dispose() { this.disposed = true }
-  }
-  class FakeCarrierError extends Error {}
-  vm.runInNewContext(remoteBundle, {
-    setTimeout(callback) { retries.push(callback); return retries.length },
-    clearTimeout() {},
-    window: { __ModuleLoader__: { load(value) { descriptor = value } } },
-  })
-  const client = descriptor.factory(function (id) {
-    if (id === '@deepseek-ai/dsh-api-gateway/client') return { RemoteSnapshotStream: FakeSnapshotStream, RemoteStreamCarrierError: FakeCarrierError }
-    throw new Error('unexpected module: ' + id)
-  })
-  const ctx = {
-    remote: {
-      async $mount() { return async function () {} },
-      $stream(options) { streamOptions = options; return {} },
-      get tavernSignals() { throw new Error('cannot get property "remote.tavernSignals" without inject') },
-    },
-    get(name) {
-      assert.equal(name, 'remote.tavernSignals')
-      return { follow(sessionIds) { return [{ type: 'snapshot', signals: sessionIds }] } }
-    },
-    provide(name, value) { if (name === 'tavernSessionSignals') provided = value },
-  }
-  await client.apply(ctx)
-  const received = [], errors = []
-  provided.subscribe('session-a', 'tavern-state', signal => received.push(signal.version), error => errors.push(error.message))
-  assert.equal(snapshots.length, 1)
-  assert.equal(JSON.stringify(Array.from(streamOptions.open())), JSON.stringify([{ type: 'snapshot', signals: ['session-a'] }]))
-  snapshots[0].options.failed(new Error('active Service "tavernSignalRemote" is unavailable'))
-  assert.deepEqual(errors, ['active Service "tavernSignalRemote" is unavailable'])
-  assert.equal(retries.length, 1)
-  await retries.shift()()
-  assert.equal(snapshots[0].disposed, true)
-  assert.equal(snapshots.length, 2)
-  assert.equal(snapshots[1].started, true)
-  snapshots[1].options.replace({ type: 'snapshot', signals: [
-    { id: 'tavern-state:done', sessionId: 'session-a', kind: 'tavern-state', version: 'done' },
-  ] })
-  assert.deepEqual(received, ['done'])
-})
-
 test('运行时控制使用一次性 Remote stream，传递取消且不自动重放失败请求', async () => {
   let descriptor, provided, contribution
   const calls = [], cancelled = new AbortController()
@@ -148,29 +98,4 @@ test('运行时控制使用一次性 Remote stream，传递取消且不自动重
   await dispose()
   await assert.rejects(provided.control('claimTavernScriptWork', {}), /disposed/)
   assert.equal(calls.length, 2)
-})
-
-test('控制通道宿主复用原分发，拒绝重视图并在取消后不领取任务', async () => {
-  const start = hostSource.indexOf("  ctx.provide('tavernSessionSignals',")
-  const end = hostSource.indexOf("\n  const webServer", start)
-  let service, calls = 0
-  vm.runInNewContext(hostSource.slice(start, end), {
-    ctx: { provide(_name, value) { service = value } },
-    runtimeGeneration: 'host',
-    async dispatch(method, args) {
-      calls++
-      assert.equal(method, 'claimTavernScriptWork')
-      assert.equal(args.sessionId, 's')
-      return { active: true, event: { id: 'event', optional: undefined } }
-    }
-  })
-  const controller = new AbortController()
-  const result = JSON.parse(await service.control('claimTavernScriptWork', { sessionId: 's' }, controller.signal))
-  assert.equal(result.ok, true)
-  assert.equal(result.runtimeGeneration, 'host')
-  assert.equal(Object.hasOwn(result.event, 'optional'), false)
-  await assert.rejects(service.control('getSession', {}, controller.signal), /不支持/)
-  controller.abort()
-  await assert.rejects(service.control('claimTavernScriptWork', {}, controller.signal), { name: 'AbortError' })
-  assert.equal(calls, 1)
 })

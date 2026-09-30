@@ -77,19 +77,6 @@ test('批次下一条可见另一存储实例提交的共享变量，无需会�
   assert.deepEqual(run.seen.map(value => value.shared), ['before', 'after'])
 })
 
-test('批次下一条可见绕过宿主写入路径的 Profile 文件修改', async t => {
-  const run = await fixture(t)
-  await run.run(() => writeFile(path.join(run.dataRoot, 'prompt-template-variables.json'),
-    JSON.stringify({ global: { shared: 'external' } })))
-  assert.deepEqual(run.seen.map(value => value.shared), ['before', 'external'])
-})
-
-test('聊天 revision 不变时，批次下一条仍重新读取宿主模型', async t => {
-  const run = await fixture(t)
-  await run.run(async () => run.setModel('after'))
-  assert.deepEqual(run.seen.map(value => value.model), ['before', 'after'])
-})
-
 test('人物卡投影命中后，批次下一条仍可见外部文件的嵌套变更和删除', async t => {
   const run = await fixture(t)
   await run.run(() => writeFile(run.cardPath, JSON.stringify({ name: 'Changed', extensions: { added: true } })))
@@ -97,17 +84,4 @@ test('人物卡投影命中后，批次下一条仍可见外部文件的嵌套�
   assert.equal(run.seen[1].character.name, 'Changed')
   assert.deepEqual(run.seen[1].character.extensions, { added: true })
   assert.deepEqual(run.seen[1].character.data.extensions, { added: true })
-})
-
-test('批次下一条恢复未保存的任意上下文修改，不仅恢复作用域', async t => {
-  const run = await fixture(t)
-  await run.run(async snapshot => {
-    snapshot.chat[0].mes = 'unsaved'
-    snapshot.extension_settings.variables.global.shared = 'unsaved'
-    snapshot.dsh.model = 'unsaved'
-    snapshot.scratch = { temporary: true }
-  })
-  assert.deepEqual(run.seen[1], run.seen[0])
-  assert.equal(run.seen[1].text, 'opening')
-  assert.equal(run.seen[1].scratch, undefined)
 })

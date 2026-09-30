@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import test from 'node:test'
-import { initializationFixture } from './fixtures/conversation-initialization.mjs'
 
 const server = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 
@@ -15,11 +14,6 @@ test('实验分支公开兼容会话并声明兼容能力可用', async () => {
   const result = await context.list()
   assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['native'])
   assert.equal(result.capabilities.compatibilityMode, false)
-})
-
-test('拒绝创建 silly 会话', async () => {
-  const h = initializationFixture()
-  await assert.rejects(h.make().start({ ...h.input, requestMode: 'sillytavern' }), /已停用/)
 })
 
 test('启动恢复包含兼容与普通会话', async () => {

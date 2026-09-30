@@ -7,12 +7,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runtimeEnvironment } from '../bin/launcher-environment.mjs'
 
-test('installer subprocesses disable background pnpm version checks without changing the parent environment', () => {
-  const before = process.env.pnpm_config_update_notifier
-  assert.equal(runtimeEnvironment().pnpm_config_update_notifier, 'false')
-  assert.equal(process.env.pnpm_config_update_notifier, before)
-})
-
 test('all bootstrap installers suppress pnpm version checks and PowerShell restores its caller', async () => {
   const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
   const windows = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')

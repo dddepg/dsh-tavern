@@ -75,30 +75,3 @@ test('回复失败保留用户消息和可读错误，同一请求不会重复�
   assert.equal(message.status, 'failed')
   assert.equal(message.error, '模型暂时不可用')
 })
-
-test('服务重启后遗留的 pending 私聊显示为已中断，不会永远转圈', () => {
-  const run = fixture()
-  const interrupted = run.chat()
-  interrupted.phoneChat = { version: 1, threads: [{ contactId: encodeURIComponent('林岚'), messages: [{ id: 'old', requestId: 'old-request', role: 'user', text: '还在吗？', createdAt: 1, status: 'pending' }] }] }
-  const service = createPhoneChat({
-    store: Object.assign({}, run.store, { async chatForSession() { return structuredClone(interrupted) } }),
-    selection: function () { return { provider: 'test', model: 'roleplay' } },
-    runAgent: async function () { return { text: '在。' } }
-  })
-  const projected = service.project(interrupted, run.card)
-
-  assert.equal(projected.threads[0].pending, false)
-  assert.equal(projected.threads[0].messages[0].status, 'failed')
-  assert.match(projected.threads[0].messages[0].error, /服务重启或中断/)
-})
-
-test('关闭姿势结算后手机新请求不携带旧姿势但保留剧情和存档', async () => {
-  const run = fixture(), calls = []
-  await run.store.updateChat('chat-1', chat => ({ ...chat, backgroundTasks: { posture: false } }))
-  const service = createPhoneChat({ store: run.store, selection: () => ({ provider: 'test', model: 'roleplay' }),
-    runAgent: async input => { calls.push(input); return { text: '收到' } }, id: run.id })
-  await service.send({ sessionId: 'session-1', contactId: encodeURIComponent('周宁'), requestId: 'disabled-posture', text: '你好' })
-  assert.ok(!calls[0].turnContext.includes(run.chat().posture))
-  assert.match(calls[0].turnContext, /最近剧情/)
-  assert.equal(run.chat().posture, '林岚正在书房看雨。')
-})

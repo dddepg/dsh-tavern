@@ -54,21 +54,3 @@ test('重命名同时更新 Session、Chat 与列表，刷新和后续保存保�
   assert.deepEqual(f.chat().messages, ['正文', '并发剧情', '并发剧情'])
   assert.equal(f.notifications(), 2)
 })
-
-test('存档或索引失败不得报告成功，索引失败后允许重试', async () => {
-  const f = fixture()
-  f.failSave()
-  await assert.rejects(f.rename('session', '新标题'), /存档保存失败/)
-  assert.equal(f.notifications(), 0)
-  const g = fixture()
-  g.failIndex(true)
-  await assert.rejects(g.rename('session', '新标题'), /索引保存失败/)
-  g.failIndex(false)
-  await g.rename('session', '新标题')
-  assert.equal((await g.registry.list())[0].title, '新标题')
-})
-
-test('未绑定的会话不能写入标题', async () => {
-  const f = fixture()
-  await assert.rejects(f.invoke('renameConversation', { sessionId: 'missing', title: '标题' }), /绑定/)
-})

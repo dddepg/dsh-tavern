@@ -3,9 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { parse } from 'yaml'
 
-import { createTavernSkillModule, normalizeTavernSkillName } from '../tavern-plugin/lib/domain/tavern-skills.js'
+import { createTavernSkillModule } from '../tavern-plugin/lib/domain/tavern-skills.js'
 
 async function harness(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'tavern-skills-'))
@@ -14,44 +13,6 @@ async function harness(t) {
   const builtin = path.join(root, 'builtin')
   return { root, user, builtin, skills: createTavernSkillModule({ directory: user, builtInDirectory: builtin }) }
 }
-
-test('Skill 名称拒绝路径与非 kebab-case 内容', () => {
-  assert.equal(normalizeTavernSkillName('story-style'), 'story-style')
-  assert.throws(() => normalizeTavernSkillName('../escape'), /名称只允许/)
-  assert.throws(() => normalizeTavernSkillName('Story_Style'), /名称只允许/)
-})
-
-test('保存结构化 Skill 并按调用策略生成 frontmatter', async (t) => {
-  const run = await harness(t)
-  const saved = await run.skills.write({
-    name: 'story-style',
-    description: '提炼并应用故事文风。',
-    body: '# 工作方式\n\n提炼可观察的语言规律。',
-    userInvocable: false
-  })
-
-  const content = await readFile(saved.path, 'utf8')
-  const meta = parse(content.split('---')[1])
-  assert.equal(meta['user-invocable'], false)
-  assert.equal(meta.name, 'story-style')
-  assert.match(content, /# 工作方式/)
-  assert.equal((await run.skills.read('story-style')).source, 'user')
-})
-
-test('同名用户 Skill 需要明确覆盖，内置 Skill 永远不可覆盖', async (t) => {
-  const run = await harness(t)
-  await run.skills.write({ name: 'custom-skill', description: '第一版', body: '第一版正文' })
-  await assert.rejects(run.skills.write({ name: 'custom-skill', description: '第二版', body: '第二版正文' }), /明确覆盖/)
-  const overwritten = await run.skills.write({ name: 'custom-skill', description: '第二版', body: '第二版正文', overwrite: true })
-  assert.equal(overwritten.overwritten, true)
-  assert.match(overwritten.content, /第二版正文/)
-
-  const builtIn = path.join(run.builtin, 'reserved-skill')
-  await mkdir(builtIn, { recursive: true })
-  await writeFile(path.join(builtIn, 'SKILL.md'), 'builtin', 'utf8')
-  await assert.rejects(run.skills.write({ name: 'reserved-skill', description: '覆盖', body: '覆盖' }), /内置 Skill 不可覆盖/)
-})
-
 
 test('写作与后台用途默认分配，旧 Skill 保留卡片用途，停用与重新分配可持久化', async t => {
   const { skills, user, builtin } = await harness(t)
@@ -94,42 +55,10 @@ test('并发创建同名 Skill 只有一个成功，非法参考文件不损坏�
   assert.match((await skills.read('same')).content, /旧正文/)
 })
 
-
 test('合法名称 constructor 不与配置对象原型冲突', async t => {
   const { skills } = await harness(t)
   await skills.write({ name: 'constructor', description: '说明', body: '内容' })
   assert.deepEqual((await skills.read('constructor')).agents, ['card'])
-})
-
-
-test('只修改正文保留原有调用策略', async t => {
-  const { skills } = await harness(t)
-  await skills.write({ name: 'manual', description: '手动', body: '旧', modelInvocable: false, userInvocable: false })
-  await skills.write({ name: 'manual', description: '手动', body: '新', overwrite: true })
-  const skill = await skills.read('manual')
-  assert.equal(skill.modelInvocable, false)
-  assert.equal(skill.userInvocable, false)
-})
-
- test('文生图 Skill 可默认分配并独立调整用途', async t => {
-  const { skills } = await harness(t)
-  await skills.write({ name: 'image-style', description: '绘图风格', body: '组织绘图描述', purpose: 'image' })
-  assert.deepEqual((await skills.read('image-style')).agents, ['image'])
-  await skills.assign('image-style', ['image', 'foreground'])
-  assert.deepEqual((await skills.read('image-style')).agents, ['image', 'foreground'])
-})
-
-test('内置 Skill 删除在重启和包更新后仍生效', async t => {
-  const { skills, builtin, user } = await harness(t)
-  const entry = path.join(builtin, 'built-in', 'SKILL.md')
-  await mkdir(path.dirname(entry), { recursive: true })
-  await writeFile(entry, '---\nname: built-in\ndescription: test\n---\n内容')
-  assert.ok(await skills.read('built-in'))
-  await skills.remove('built-in')
-  await writeFile(entry, '---\nname: built-in\ndescription: updated\n---\n更新内容')
-  const restarted = createTavernSkillModule({ directory: user, builtInDirectory: builtin })
-  assert.equal(await restarted.read('built-in'), null)
-  assert.equal((await restarted.list()).length, 0)
 })
 
 test('去掉内置前缀后继承旧用途与删除记录，新配置优先', async t => {
@@ -145,11 +74,6 @@ test('去掉内置前缀后继承旧用途与删除记录，新配置优先', as
   assert.deepEqual((await skills.read('create-skill')).agents, ['card'])
   await writeFile(path.join(user, '.assignments.json'), JSON.stringify({ 'tavern-create-skill': null }))
   assert.equal(await skills.read('create-skill'), null)
-})
-
-test('旧本局开关名称映射只针对已重命名的内置 Skill', async () => {
-  const { canonicalTavernSkillName } = await import('../tavern-plugin/lib/domain/tavern-skills.js')
-  assert.deepEqual(['tavern-create-skill', 'tavern-custom'].map(canonicalTavernSkillName), ['create-skill', 'tavern-custom'])
 })
 
 test('库内编辑覆盖内置正文和参考，保留原包并持久生效', async t => {

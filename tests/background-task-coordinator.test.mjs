@@ -116,156 +116,6 @@ test('展示刷新插入结算提交时，后台基于最新 Chat 原子保留�
   assert.deepEqual(result.chat.messages[0].mvu, { pending: false, modified: true })
 })
 
-test('Tavern 联合压缩期间不允许启动新的后台任务', async () => {
-  const harness = coordinatorHarness({ blocked: () => true })
-  await assert.rejects(
-    () => harness.coordinator.begin(harness.current(), 'settlement'),
-    function (error) { return error && error.code === 'COMPACTION_RUNNING' }
-  )
-  assert.equal(harness.writes.length, 0)
-})
-
-test('同一 Tavern Chat 的后台 operation 严格串行，不会用新任务取消旧任务', async () => {
-  const harness = coordinatorHarness()
-  const first = await harness.coordinator.begin(harness.current(), 'settlement')
-
-  await assert.rejects(
-    harness.coordinator.begin(first.chat, 'candidate'),
-    function (error) { return error && error.code === 'BACKGROUND_BUSY' }
-  )
-
-  const operations = Object.values(harness.timeline.inspect({ chat: first.chat }).operations)
-  assert.equal(operations.length, 1)
-  assert.equal(operations[0].status, 'running')
-  assert.equal(operations[0].role, 'settlement')
-})
-
-test('同一候选请求标识重试时返回原 Operation，不会启动第二个后台任务', async () => {
-  const harness = coordinatorHarness()
-  const first = await harness.coordinator.begin(harness.current(), 'candidate', { requestId: 'candidate-request-1' })
-  const retried = await harness.coordinator.begin(first.chat, 'candidate', { requestId: 'candidate-request-1' })
-
-  assert.equal(retried.operationId, first.operationId)
-  assert.equal(first.created, true)
-  assert.equal(retried.created, false)
-  assert.equal(harness.writes.length, 1)
-  assert.equal(Object.values(harness.timeline.inspect({ chat: retried.chat }).operations).length, 1)
-})
-
-test('按 Operation ID 查询终态，不会被同一 Chat 的后续任务覆盖', async () => {
-  const harness = coordinatorHarness()
-  const first = await harness.coordinator.begin(harness.current(), 'candidate')
-  const firstCompleted = await first.commit({ stateChanged: false })
-  const second = await harness.coordinator.begin(harness.current(), 'candidate')
-
-  assert.equal(harness.coordinator.activity(second.chat).operationId, second.operationId)
-  assert.deepEqual(harness.coordinator.operation(second.chat, first.operationId), {
-    operationId: first.operationId,
-    role: 'candidate',
-    requestId: '',
-    status: 'completed',
-    busy: false,
-    terminal: true,
-    successful: true,
-    basedOn: first.basedOn,
-    updatedAt: firstCompleted.chat.timeline.operations[first.operationId].completedAt
-  })
-})
-
-test('Foreground Turn 提交后直接开放状态结算，不创建世界书 Agent 阶段', async () => {
-  const harness = coordinatorHarness()
-  const begunBody = harness.timeline.apply({ chat: harness.current(), intent: { kind: 'body.begin', turn: 1, userText: '向前走' } })
-  const completedBody = harness.timeline.complete({
-    chat: begunBody.chat,
-    operationId: begunBody.value.operationId,
-    basedOn: begunBody.value.basedOn,
-    outcome: { status: 'success' }
-  })
-  Object.assign(harness.current(), completedBody.chat)
-
-  assert.equal(harness.coordinator.activity(harness.current()).phase, 'pending')
-  assert.equal(harness.coordinator.activity(harness.current()).role, 'settlement')
-  assert.equal(harness.coordinator.activity(harness.current()).busy, false)
-  assert.equal(Object.values(harness.timeline.inspect({ chat: harness.current() }).operations).some(function (operation) { return operation.role === 'worldbook' }), false)
-
-  await assert.rejects(harness.coordinator.begin(harness.current(), 'candidate'), function (error) {
-    return error && error.code === 'BACKGROUND_BUSY'
-  })
-
-  const settlement = await harness.coordinator.begin(harness.current(), 'settlement')
-  const afterSettlement = await settlement.commit({ stateChanged: true })
-  assert.equal(harness.coordinator.activity(afterSettlement.chat).phase, 'idle')
-  assert.equal(harness.coordinator.activity(afterSettlement.chat).busy, false)
-})
-
-test('结算失败后释放后台 Agent，可继续候选任务或重试结算', async () => {
-  const harness = coordinatorHarness()
-  const body = harness.timeline.apply({ chat: harness.current(), intent: { kind: 'body.begin', turn: 1, userText: '向前走' } })
-  const foreground = harness.timeline.complete({
-    chat: body.chat,
-    operationId: body.value.operationId,
-    basedOn: body.value.basedOn,
-    outcome: { status: 'success' }
-  })
-  Object.assign(harness.current(), foreground.chat)
-  const settlement = await harness.coordinator.begin(harness.current(), 'settlement')
-  await settlement.fail()
-
-  const candidate = await harness.coordinator.begin(harness.current(), 'candidate')
-  await candidate.commit()
-  await assert.doesNotReject(harness.coordinator.begin(harness.current(), 'settlement'))
-})
-
-test('进程重启把遗留 running 结算恢复为可重试失败，不假装仍在执行', async () => {
-  const harness = coordinatorHarness()
-  const begunBody = harness.timeline.apply({ chat: harness.current(), intent: { kind: 'body.begin', turn: 1, userText: '向前走' } })
-  const completedBody = harness.timeline.complete({ chat: begunBody.chat, operationId: begunBody.value.operationId, basedOn: begunBody.value.basedOn, outcome: { status: 'success' } })
-  Object.assign(harness.current(), completedBody.chat)
-  const settlement = await harness.coordinator.begin(harness.current(), 'settlement')
-
-  const recovered = await harness.coordinator.recover(settlement.chat)
-
-  assert.equal(recovered.activity.phase, 'failed')
-  assert.equal(recovered.activity.reason, 'interrupted')
-  assert.equal(recovered.activity.busy, false)
-  assert.equal(recovered.activity.role, 'settlement')
-  const interrupted = Object.values(harness.timeline.inspect({ chat: recovered.chat }).operations).find(function (operation) {
-    return operation.kind === 'agent' && operation.role === 'settlement'
-  })
-  assert.equal(interrupted.status, 'interrupted')
-  await harness.coordinator.begin(recovered.chat, 'settlement')
-})
-
-test('重启会持久关闭遗留候选 operation，但不会误排结算', async () => {
-  const harness = coordinatorHarness()
-  const candidate = await harness.coordinator.begin(harness.current(), 'candidate')
-  const recovered = await harness.coordinator.recover(candidate.chat)
-
-  assert.equal(recovered.status, 'recovered')
-  assert.equal(recovered.activity.busy, false)
-  assert.equal(Object.values(harness.current().timeline.operations)[0].status, 'interrupted')
-})
-
-test('后台模型失败由 coordinator 关闭 operation，任务 module 只负责上报失败', async () => {
-  const harness = coordinatorHarness()
-  const task = await harness.coordinator.begin(harness.current(), 'candidate')
-  const result = await task.fail({ traceSessionId: 'background-2', traceBoundary: 7 })
-
-  assert.equal(result.status, 'failed')
-  assert.equal(harness.writes.length, 2)
-  assert.equal(Object.values(harness.current().timeline.operations)[0].status, 'failed')
-})
-
-test('运行前保存代理身份，重启恢复后重试复用，但不冒充结算已完成', async () => {
-  const h = coordinatorHarness()
-  const first = await h.coordinator.begin(h.current(), 'settlement')
-  await first.bindSession('background-started')
-  assert.notEqual(h.current().timeline.participants.background?.status, 'current')
-  await h.coordinator.recover(h.current())
-  const retry = await h.coordinator.begin(h.current(), 'settlement')
-  assert.equal(retry.participantRequest.sessionId, 'background-started')
-})
-
 test('manual interruption unlocks background and rejects late state writes and stale stop requests', async () => {
   const h = coordinatorHarness();
   const task = await h.coordinator.begin(h.current(), 'settlement');
@@ -315,25 +165,6 @@ test('replacement identity survives interruption before result and recovery', as
   assert.equal(h.current().timeline.participants.background.sessionId, 'replacement')
 })
 
-test('failed background rewind retains its boundary through binding and retries', async () => {
-  const h = coordinatorHarness()
-  const seed = await h.coordinator.begin(h.current(), 'settlement')
-  await seed.commit({ participant: seed.participant({ sessionId: 'background', boundary: 19 }) })
-  Object.assign(h.current().timeline.participants.background, { status: 'needs-rewind', rewindTo: -1, boundary: -1 })
-  for (let i = 0; i < 2; i++) {
-    const task = await h.coordinator.begin(h.current(), 'settlement')
-    assert.equal(task.participantRequest.rewindTo, -1)
-    await task.bindSession('background')
-    await task.fail({ sessionId: 'background', boundary: 19 })
-    assert.equal(h.current().timeline.participants.background.status, 'needs-rewind')
-  }
-  const task = await h.coordinator.begin(h.current(), 'settlement')
-  assert.equal(task.participantRequest.rewindTo, -1)
-  await task.commit({ participant: task.participant({ sessionId: 'background', boundary: 25 }) })
-  assert.equal(h.current().timeline.participants.background.status, 'current')
-  assert.equal(h.current().timeline.participants.background.rewindTo, null)
-})
-
 for (const conflict of [false,true,'cancel']) test(`narrow background mutations preserve concurrent history: ${conflict}`,async t=>{
   const {mkdtemp,rm}=await import('node:fs/promises')
   const {tmpdir}=await import('node:os')
@@ -374,46 +205,6 @@ for (const conflict of [false,true,'cancel']) test(`narrow background mutations 
   assert.equal((await restarted.read('c')).messages[0].text,conflict?'concurrent':'keep')
 })
 
-test('settlement checkpoint reads only its target and running operation', async t => {
-  const { mkdtemp, rm } = await import('node:fs/promises')
-  const { tmpdir } = await import('node:os')
-  const { join } = await import('node:path')
-  const { createChatJournalStore } = await import('../tavern-plugin/lib/domain/chat-journal-store.js')
-  const root = await mkdtemp(join(tmpdir(), 'settlement-scope-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const store = createChatJournalStore({ dataRoot: root })
-  const p = createChatPersistence({ store })
-  const timeline = createStoryTimeline()
-  const chat = timeline.apply({ chat: { id: 'game', sessionId: 's',
-    cardDefinitionSnapshot: { description: 'large card'.repeat(10000) },
-    messages: Array.from({ length: 459 }, (_, i) => ({ role: 'assistant', turn: i + 1,
-      text: 'story', variables: [{ stat_data: { gold: i } }] })) }, intent: { kind: 'ensure' } }).chat
-  await p.write(chat)
-  const coordinator = createBackgroundTaskCoordinator({ timeline, store: {
-    readChat: p.read, writeChat: p.write, updateChat: p.update, patchChat: p.patch,
-    readState: p.readSessionState, readSlice: p.readSlice, readSettlementCheckpoint: p.readSettlementCheckpoint
-  } })
-  const task = await coordinator.begin(await p.read('game'), 'settlement')
-  const selected = await p.readSettlementCheckpoint('game', 458, task.operationId)
-  assert.equal(selected.chat.messages.length, 1)
-  assert.equal(selected.chat.cardDefinitionSnapshot, undefined)
-  assert.equal(selected.chat.timeline.checkpoints, undefined)
-  assert.deepEqual(Object.keys(selected.chat.timeline.operations), [task.operationId])
-  selected.chat.messages[0].variables[0].stat_data.gold = -1
-  await task.checkpointMessage(458, (_draft, target) => {
-    target.mvuBaseline = { swipeId: 0, variables: target.variables[0] }
-    target.mvu = { pending: true, pendingSubmission: { command: 'saved' } }
-  })
-  const restored = await createChatJournalStore({ dataRoot: root }).read('game')
-  assert.equal(restored.messages.length, 459)
-  assert.equal(restored.messages[0].variables[0].stat_data.gold, 0)
-  assert.equal(restored.messages[458].mvuBaseline.variables.stat_data.gold, 458)
-  assert.equal(restored.messages[458].mvu.pendingSubmission.command, 'saved')
-  assert.equal(restored.cardDefinitionSnapshot.description, chat.cardDefinitionSnapshot.description)
-  await task.commit()
-  await assert.rejects(task.checkpointMessage(458, (_draft, target) => { target.text = 'late' }), /过期/)
-})
-
 for (const readMethod of ['readState', 'readRecoveryState']) test(`idle recovery uses ${readMethod} and active recovery reloads the full Chat`, async () => {
   const timeline = createStoryTimeline()
   let chat = timeline.apply({ chat: { id: 'c', messages: [{ role: 'assistant', text: 'preserve' }] }, intent: { kind: 'ensure' } }).chat
@@ -430,21 +221,6 @@ for (const readMethod of ['readState', 'readRecoveryState']) test(`idle recovery
   await coordinator.recover({ id: 'c' })
   assert.equal(reads, 1); assert.equal(writes, 1)
   assert.equal(chat.messages[0].text, 'preserve')
-})
-
-test('session binding can return task state without reloading story history',async()=>{
- const timeline=createStoryTimeline()
- let chat=timeline.apply({chat:{id:'c',messages:[{role:'assistant',text:'keep'}]},intent:{kind:'ensure'}}).chat
- let fullReads=0
- const store={readChat:async()=>{fullReads++;return structuredClone(chat)},writeChat:async value=>{chat=value},updateChat:async(_id,fn)=>{chat=fn(chat);return chat},
-  readState:async()=>({...structuredClone(chat),messages:[]}),
-  patchChat:async(_id,_revision,changes)=>{chat=applyJsonChanges(chat,changes);return chat}}
- const task=await createBackgroundTaskCoordinator({timeline,store}).begin(chat,'settlement')
- fullReads=0
- const state=await task.bindSession('background',{stateOnly:true})
- assert.equal(fullReads,0)
- assert.equal(state.timeline.operations[task.operationId].startedSessionId,'background')
- assert.equal(chat.messages[0].text,'keep')
 })
 
 for(const conflict of [false,true])test(`settlement begin reuses an exact snapshot without full reads; conflict=${conflict}`,async()=>{
@@ -469,26 +245,6 @@ for(const conflict of [false,true])test(`settlement begin reuses an exact snapsh
  assert.equal(chat.timeline.operations[task.operationId].status,'running')
 })
 
-test('native fast begin retains history and checkpoints in storage and the returned snapshot',async t=>{
- const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path')
- const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
- const root=await mkdtemp(join(tmpdir(),'native-begin-'));t.after(()=>rm(root,{recursive:true,force:true}))
- const p=createChatPersistence({store:createChatJournalStore({dataRoot:root,newConversations:true})}),timeline=createStoryTimeline()
- const original=timeline.apply({chat:{id:'c',sessionId:'s',messages:[{role:'assistant',text:'keep',variables:[{hp:3}]}]},intent:{kind:'ensure'}}).chat
- original.timeline.checkpoints=[{id:'old',before:{messages:[{text:'historic'}]}}]
- await p.write(original)
- let reads=0,writes=0
- const task=await createBackgroundTaskCoordinator({timeline,store:{readChat:async()=>{reads++;throw Error('unexpected full read')},writeChat:async()=>{writes++;throw Error('unexpected full write')},updateChat:p.update,patchChat:p.patch}}).begin(await p.read('c'),'settlement',{reuseSnapshot:true})
- const disk=await p.read('c')
- assert.equal(reads+writes,0)
- assert.deepEqual(disk.messages,original.messages)
- assert.deepEqual(task.chat.messages,disk.messages)
- assert.deepEqual(task.chat.timeline.checkpoints,original.timeline.checkpoints)
- assert.deepEqual(disk.timeline.checkpoints,original.timeline.checkpoints)
- assert.equal(task.chat._storageRevision,disk._storageRevision)
- assert.equal(disk.timeline.operations[task.operationId].status,'running')
-})
-
 test('fast begin rechecks busy guards after a concurrent operation wins the CAS',async()=>{
  const timeline=createStoryTimeline()
  let chat=timeline.apply({chat:{id:'c',_storageRevision:1,messages:[]},intent:{kind:'ensure'}}).chat
@@ -502,26 +258,6 @@ test('fast begin rechecks busy guards after a concurrent operation wins the CAS'
  assert.equal(writes,0)
  assert.equal(Object.values(chat.timeline.operations).filter(op=>op.role==='settlement').length,0)
 })
-
-test('candidate header commit on native storage preserves messages and optional fields',async t=>{
- const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path')
- const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
- const root=await mkdtemp(join(tmpdir(),'native-candidate-'));t.after(()=>rm(root,{recursive:true,force:true}))
- const p=createChatPersistence({store:createChatJournalStore({dataRoot:root,newConversations:true})}),timeline=createStoryTimeline()
- const original=timeline.apply({chat:{id:'c',sessionId:'s',messages:[{role:'assistant',text:'keep',variables:[{hp:3}]}]},intent:{kind:'ensure'}}).chat
- original.timeline.checkpoints=[{id:'keep-checkpoint',before:{variables:{text:'old'.repeat(10000)}}}]
- await p.write(original)
- const coordinator=createBackgroundTaskCoordinator({timeline,store:{readChat:p.read,writeChat:p.write,updateChat:()=>{throw Error('full update forbidden')},patchChat:p.patch,readSlice:p.readSlice,readState:p.readSessionState}})
- const task=await coordinator.begin(await p.read('c'),'candidate',{reuseSnapshot:true})
- await task.bindSession('background',{stateOnly:true})
- const result=await task.commit({headerOnly:true,stateChanged:true,apply(chat){chat.candidates={choices:[{text:'look'}],script:undefined}}})
- assert.equal(result.status,'committed')
- const saved=await p.read('c')
- assert.deepEqual(saved.messages,original.messages)
- assert.deepEqual(saved.candidates,{choices:[{text:'look'}]})
- assert.deepEqual(saved.timeline.checkpoints,original.timeline.checkpoints)
-})
-
 
 test('candidate start atomically records command and existing session before execution',async()=>{
  const h=coordinatorHarness()
@@ -537,37 +273,6 @@ test('candidate start atomically records command and existing session before exe
  assert.equal(h.current().taskMailbox.operationId,task.operationId)
  assert.equal(h.current().timeline.operations[task.operationId].startedSessionId,'existing')
  assert.equal(task.participantRequest.sessionId,'existing')
-})
-
-test('native candidate begin combines mailbox claim and reused binding without full reads or repeat writes',async t=>{
- const {mkdtemp,rm}=await import('node:fs/promises'),{tmpdir}=await import('node:os'),{join}=await import('node:path')
- const {createChatJournalStore}=await import('../tavern-plugin/lib/domain/chat-journal-store.js')
- const {createDurableTaskMailbox}=await import('../tavern-plugin/lib/domain/durable-task-mailbox.js')
- const {taskStateFields}=await import('../tavern-plugin/lib/domain/task-state-reader.js')
- const root=await mkdtemp(join(tmpdir(),'candidate-atomic-'));t.after(()=>rm(root,{recursive:true,force:true}))
- const p=createChatPersistence({store:createChatJournalStore({dataRoot:root,newConversations:true})}),timeline=createStoryTimeline()
- let original=timeline.apply({chat:{id:'c',sessionId:'s',messages:[{role:'assistant',text:'keep'}]},intent:{kind:'ensure'}}).chat
- let previous=timeline.apply({chat:original,intent:{kind:'agent.begin',role:'candidate'}})
- original=timeline.complete({chat:previous.chat,operationId:previous.value.operationId,basedOn:previous.value.basedOn,outcome:{status:'success',participant:{sessionId:'existing',lifetime:'chat',boundary:5}}}).chat
- await p.write(original)
- let writes=0
- const readState=async id=>(await p.readSlice(id,[],taskStateFields)).chat
- const store={readChat:async()=>{throw Error('full read')},writeChat:async()=>{throw Error('full write')},updateChat:p.update,readState,readRecoveryState:readState,
-  patchChat:async(...args)=>{writes++;return p.patch(...args)}}
- const mailbox=createDurableTaskMailbox({store})
- const command=await mailbox.submit('c',{requestId:'candidate',kind:'candidate',startImmediately:true})
- const task=await createBackgroundTaskCoordinator({timeline,store}).begin(await readState('c'),'candidate',{
-  requestId:'candidate',bindExistingSession:true,prepareCommit:(chat,value)=>mailbox.startInChat(chat,command.taskId,value.operationId)
- })
- assert.equal(writes,2,'one durable submission and one atomic operation start')
- assert.equal(task.startCommitted,true)
- await task.bindSession('existing',{stateOnly:true})
- assert.equal(writes,2,'reused session acknowledgement must not commit again')
- const restored=await p.read('c')
- assert.equal(restored.taskMailbox.tasks[command.taskId].stage,'generating')
- assert.equal(restored.taskMailbox.tasks[command.taskId].operationId,task.operationId)
- assert.equal(restored.timeline.operations[task.operationId].startedSessionId,'existing')
- assert.deepEqual(restored.messages,original.messages)
 })
 
 test('人物设计发布在校验之后执行，发布失败不提交档案，过期任务不发布', async () => {

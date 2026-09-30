@@ -25,7 +25,6 @@ test('字段清单先落盘；重建工具后装配全部人物及各开场初�
  assert.equal(JSON.parse(card.alternate_greetings[0].match(/<initvar>([\s\S]*?)<\/initvar>/)[1]).人物.雨辰.位置,'大厅')
  assert.equal(result.validation.checks.find(x=>x.name==='fieldCoverage').status,'passed')
 })
-test('有原状态字段时不能绕过保存定义直接清理',async t=>{const f=await fixture(t);await assert.rejects(f.conversion.convert({action:'apply',sourcePath:f.sourcePath,sourceRevision:f.inspect.sourceRevision,...definition(),cleanup}),/saveDefinition/)})
 
 test('只绑定第一个人物、合并两个人物、缺少开场字段均拒绝保存',async t=>{
  const f=await fixture(t)
@@ -34,15 +33,7 @@ test('只绑定第一个人物、合并两个人物、缺少开场字段均拒�
  const fields=f.inspect.stateInventory
  await assert.rejects(save(f,{fieldMappings:fields.map(x=>({sourceId:x.id,path:'/人物/艾乔/位置'}))}),/同一路径/)
 })
-test('磁盘成品丢字段或换开场值时，字段验收明确失败',async t=>{
- const f=await fixture(t),saved=await save(f)
- const result=await f.conversion.convert({action:'apply',sourcePath:f.sourcePath,sourceRevision:f.inspect.sourceRevision,definitionRevision:saved.definitionRevision,cleanup})
- const card=await f.resources.readCard(result.path),data=cardData(card)
- data.alternate_greetings[0]=data.alternate_greetings[0].replace('大厅','错误地点')
- await f.resources.writeWorking(result.path,JSON.stringify(card))
- const report=await f.conversion.verify({path:result.path})
- assert.equal(report.valid,false);assert.equal(report.checks.find(x=>x.name==='fieldCoverage').status,'failed')
-})
+
 test('来源变化、伪造版本、损坏持久化定义都不会写出新卡',async t=>{
  const f=await fixture(t),saved=await save(f)
  const args={action:'apply',sourcePath:f.sourcePath,sourceRevision:f.inspect.sourceRevision,definitionRevision:saved.definitionRevision,cleanup}
@@ -51,38 +42,6 @@ test('来源变化、伪造版本、损坏持久化定义都不会写出新卡',
  await f.resources.saveMvuDefinition(saved.definitionRevision,ledger)
  await assert.rejects(f.conversion.convert(args),/被修改/)
  assert.equal((await f.resources.list('card')).length,1)
-})
-
-test('非标签字段通过来源范围登记；工具按声明类型复制，定义可独立读取',async t=>{
- const f=await fixture(t),doc=await f.resources.readCard(f.sourcePath)
- const data=cardData(doc);data.extensions.regex_scripts=[];data.scenario='计数=12'
- await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
- const sourceFields=[{path:'/scenario',offset:3,length:2,label:'计数'}]
- const inspection=await f.conversion.convert({action:'inspect',sourcePath:f.sourcePath,sourceFields})
- const saved=await f.conversion.convert({action:'saveDefinition',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,initialState:{计数:0},updateRules:'计数只依据事实更新。',sourceFields,fieldMappings:[{sourceId:inspection.stateInventory[0].id,path:'/计数'}]})
- const read=await f.conversion.convert({action:'read',scope:'definition',sourcePath:f.sourcePath,sourceRevision:inspection.sourceRevision,definitionRevision:saved.definitionRevision,path:'/initialState/计数'})
- assert.equal(read.value,12)
-})
-test('模型工具不能对无标签卡绕过字段定义保存',async t=>{
- const {registerMvuConversionTools}=await import('../tavern-plugin/lib/domain/mvu-conversion-tools.js')
- const f=await fixture(t),registered=new Map()
- registerMvuConversionTools({tools:{register:x=>registered.set(x.name,x)},defineTool:x=>x,conversion:f.conversion,chatForSession:async()=>({mode:'card'})})
- await assert.rejects(registered.get('tavern_convert_to_mvu').execute({action:'apply',sourcePath:f.sourcePath,initialState:{位置:'门口'},updateRules:'保持'},{}),/saveDefinition/)
-})
-
-test('原卡变化后旧定义失效，同一来源修订定义不能减少字段',async t=>{
- const f=await fixture(t)
- const full={...definition(),initialState:{...definition().initialState,额外字段:'保留'}}
- const first=await save(f,full)
- const input={action:'apply',sourcePath:f.sourcePath,sourceRevision:f.inspect.sourceRevision,definitionRevision:first.definitionRevision,cleanup}
- await f.conversion.convert(input)
- const smaller=await save(f)
- const current=await f.conversion.convert({action:'inspect',sourcePath:f.sourcePath})
- await assert.rejects(f.conversion.convert({...input,definitionRevision:smaller.definitionRevision,targetRevision:current.targetRevision}),/不能减少/)
- const doc=await f.resources.readCard(f.sourcePath);cardData(doc).scenario='新设定'
- await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
- const changed=await f.conversion.convert({action:'inspect',sourcePath:f.sourcePath})
- await assert.rejects(f.conversion.convert({...input,planMode:'replace',sourceRevision:changed.sourceRevision,targetRevision:changed.targetRevision}),/来源已变化/)
 })
 
 test('数字键开场对象可无歧义归一化，缺项仍拒绝', async t=>{

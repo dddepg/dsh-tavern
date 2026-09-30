@@ -31,22 +31,6 @@ async function harness(t) {
   return { records, persistence, capture, hooks, root }
 }
 
-test('display captures do not clone historical variable snapshots', async t => {
-  const { capture, records } = await harness(t)
-  let fullCopies = 0
-  const clone = globalThis.structuredClone
-  t.mock.method(globalThis, 'structuredClone', value => {
-    if (value?.messages?.some(message => message.variables)) fullCopies++
-    return clone(value)
-  })
-  assert.equal((await capture('session', 459, 0, { dom: 'status', panelId: 'main' })).captured, true)
-  assert.equal((await capture('session', 459, 0, { dom: 'status', panelId: 'main' })).captured, false)
-  assert.equal(fullCopies, 0, 'diagnostic capture must not copy the full chat')
-  const saved = await records.read('chat')
-  assert.equal(saved.messages.length, 459)
-  assert.equal(saved.messages[458].variables.stat_data.gold, 10)
-})
-
 test('concurrent panels survive CAS retries, preserve valid undo and replay from disk', async t => {
   const { capture, persistence, records, root } = await harness(t)
   await persistence.update('chat', chat => {

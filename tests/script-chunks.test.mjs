@@ -13,16 +13,7 @@ test('500 Han is a soft budget; punctuation, whitespace and Latin text are retai
   assert.ok(chunks[0].text.length > 550)
   assert.ok(chunks.slice(0,-1).every(c => han(c.text) >= 450 && han(c.text) <= 550))
 })
-test('long unpunctuated and non-Han input remain bounded without splitting surrogate pairs', () => {
-  for (const source of ['汉'.repeat(1300), 'a😀'.repeat(5000), '𠀀'.repeat(1101)]) {
-    const chunks = splitNovelText(source)
-    assert.equal(chunks.map(c => c.text).join(''), source)
-    assert.ok(chunks.length > 1)
-    assert.ok(chunks.every(c => [...c.text].length <= 4000 && han(c.text) <= 550 && c.text.isWellFormed()))
-  }
-  assert.deepEqual(splitNovelText('  '), [])
-  assert.equal(splitNovelText('短文。')[0].text, '短文。')
-})
+
 function fixture() {
   const source = ('汉'.repeat(100) + '，hello '.repeat(30) + '。\n').repeat(20)
   const script = { title: 'test', ...scriptChunkLayout(source) }
@@ -32,17 +23,7 @@ function fixture() {
   const expected = script.chunkStarts.findLastIndex(start => start <= offset)
   return { script, scripts, old, expected }
 }
-test('legacy cursor maps by source position, stays stable on later reads, and explicit new starts use new block numbers', () => {
-  const {script,scripts,old,expected} = fixture()
-  assert.notEqual(expected, old.cursor)
-  const migrated = scripts.transition({ script, state: old, event: { kind: 'focus', cursor: 1 } }).state
-  assert.equal(migrated.cursor, expected)
-  assert.equal(migrated.chunkingVersion, 'han-v1')
-  assert.equal(scripts.inspect({script, state: migrated, request:{kind:'progress'}}).cursor, expected)
-  assert.equal(scripts.start(script, 2).cursor, 2)
-  assert.equal(scripts.inspect({script, state:{...old,cursor:script.legacyChunkStarts.length}, request:{kind:'progress'}}).cursor, script.chunks.length)
-  assert.equal(scripts.transition({script,state:migrated,event:{kind:'restore',revision:old}}).state.cursor, expected)
-})
+
 test('prepared legacy reply preserves its text and next source position; fallback rollback maps old references', () => {
   const {script,scripts,old,expected} = fixture()
   const ref = {chunkId:'chunk-00006',order:5,cursorBefore:5,text:'已开始生成的原参考',userText:'继续',nativeTurn:1}

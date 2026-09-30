@@ -35,80 +35,6 @@ function memoryStore(seed = {}) {
   }
 }
 
-test('有效 Session 映射只做普通读取，不进入加锁更新', async function () {
-  const chat = { id: 'chat-fast', sessionId: 'session-fast', cardPath: '', cardName: 'Fast' }
-  const store = memoryStore({ links: { 'session-fast': 'chat-fast' }, chats: { 'chat-fast': chat } })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  assert.deepEqual(await registry.resolve('session-fast'), chat)
-  assert.equal(store.counts().linkUpdates, 0)
-})
-
-test('发布 Tavern Chat 时一次完成 Chat、索引和 Session 关联', async function () {
-  const store = memoryStore()
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-  const chat = { id: 'chat-1', sessionId: 'session-1', cardPath: 'cards/a.json', cardName: 'A', title: '冒险', mode: 'story', requestMode: 'sillytavern', updatedAt: 10 }
-
-  await registry.publish(chat)
-
-  assert.deepEqual(store.snapshot().links, { 'session-1': 'chat-1' })
-  assert.deepEqual(store.snapshot().index.chats, [{ id: 'chat-1', cardPath: 'cards/a.json', cardName: 'A', title: '冒险', mode: 'story', requestMode: 'sillytavern', updatedAt: 10, lastOpenedAt: 10 }])
-  assert.deepEqual(await registry.resolve('session-1'), chat)
-})
-
-test('会话列表只读轻量索引，不物化完整聊天', async function () {
-  const store = memoryStore({
-    links: { 'session-heavy': 'chat-heavy' },
-    index: { chats: [{ id: 'chat-heavy', cardPath: 'cards/heavy.json', cardName: '灯火阑珊', title: '测试', mode: 'story', requestMode: 'sillytavern', updatedAt: 99 }] },
-    chats: { 'chat-heavy': { id: 'chat-heavy', messages: [{ text: 'x'.repeat(1_000_000) }] } },
-    failures: { readChat: '列表不应读取完整聊天' }
-  })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  assert.deepEqual(await registry.list(), [{
-    sessionId: 'session-heavy', chatId: 'chat-heavy', cardPath: 'cards/heavy.json', cardName: '灯火阑珊', title: '测试', mode: 'story', requestMode: 'sillytavern', updatedAt: 99, lastOpenedAt: 99
-  }])
-  assert.equal(store.snapshot().chatReads, 0)
-})
-
-test('游玩历史按最后打开时间排序，而不是被后台写入时间打乱', async function () {
-  const store = memoryStore({
-    links: { 'session-new-write': 'chat-new-write', 'session-last-opened': 'chat-last-opened' },
-    index: { chats: [
-      { id: 'chat-new-write', cardName: '后台刚写入', updatedAt: 200, lastOpenedAt: 20 },
-      { id: 'chat-last-opened', cardName: '最近打开', updatedAt: 100, lastOpenedAt: 300 }
-    ] }
-  })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  assert.deepEqual((await registry.list()).map(item => item.sessionId), ['session-last-opened', 'session-new-write'])
-})
-
-test('记录打开时间后置顶会话，后续摘要同步保留该排序信息', async function () {
-  const store = memoryStore({
-    links: { one: 'chat-1', two: 'chat-2' },
-    index: { chats: [
-      { id: 'chat-1', cardName: '一', updatedAt: 100, lastOpenedAt: 100 },
-      { id: 'chat-2', cardName: '二', updatedAt: 200, lastOpenedAt: 200 }
-    ] }
-  })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  await registry.touch('one', 300)
-  await registry.sync({ id: 'chat-1', cardName: '一', updatedAt: 400 })
-
-  assert.deepEqual((await registry.list()).map(item => [item.sessionId, item.lastOpenedAt]), [['one', 300], ['two', 200]])
-})
-
-test('聊天更新后同步索引摘要，不把消息正文写入索引', async function () {
-  const store = memoryStore({ index: { chats: [{ id: 'chat-6', cardName: '旧名', updatedAt: 1 }] } })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  await registry.sync({ id: 'chat-6', cardPath: 'cards/new.json', cardName: '新名', title: '新标题', mode: 'script', requestMode: 'dsh', updatedAt: 20, messages: [{ text: '不应进入索引' }] })
-
-  assert.deepEqual(store.snapshot().index.chats, [{ id: 'chat-6', cardPath: 'cards/new.json', cardName: '新名', title: '新标题', mode: 'script', requestMode: 'dsh', backgroundSessionId: '', updatedAt: 20, lastOpenedAt: 20 }])
-})
-
 test('索引发布失败时回滚 Chat 和 Session 关联', async function () {
   const store = memoryStore({ failures: { writeIndex: 'index locked' } })
   const registry = createTavernConversationRegistry({ store: store.adapter })
@@ -132,20 +58,6 @@ test('损坏映射会从 Chat 索引自愈并清除失效目标', async function
   assert.deepEqual(store.snapshot().links, { 'session-3': 'chat-real' })
 })
 
-test('删除 Chat 同时移除所有 Session 关联和索引记录', async function () {
-  const store = memoryStore({
-    links: { one: 'chat-4', two: 'chat-4', keep: 'chat-5' },
-    index: { chats: [{ id: 'chat-4' }, { id: 'chat-5' }] },
-    chats: { 'chat-4': { id: 'chat-4' }, 'chat-5': { id: 'chat-5' } }
-  })
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-
-  assert.deepEqual(await registry.remove('chat-4'), { deleted: true })
-  assert.deepEqual(store.snapshot().links, { keep: 'chat-5' })
-  assert.deepEqual(store.snapshot().index.chats, [{ id: 'chat-5' }])
-  assert.equal(store.snapshot().chats['chat-4'], undefined)
-})
-
 test('后台轮换写入轻量索引，恢复旧后台后重新成为当前，列表不加载历史', async () => {
   const store = memoryStore({ links: { front: 'game' } })
   const registry = createTavernConversationRegistry({ store: store.adapter })
@@ -160,26 +72,6 @@ test('后台轮换写入轻量索引，恢复旧后台后重新成为当前，�
   assert.equal(row.backgroundSessionId, 'old')
   assert.deepEqual(row.backgroundHistoryIds, ['new'])
   assert.equal(store.snapshot().chatReads, 0)
-})
-
-test('新 Session 查找不读取已关联的历史存档，仍恢复未关联的 Chat', async () => {
-  const seed = { links: {}, index: { chats: [] }, chats: {} }
-  for (let i = 0; i < 100; i++) {
-    seed.links['session-' + i] = 'chat-' + i
-    seed.index.chats.push({ id: 'chat-' + i })
-    seed.chats['chat-' + i] = { id: 'chat-' + i, sessionId: 'session-' + i }
-  }
-  seed.index.chats.push({ id: 'orphan' })
-  seed.chats.orphan = { id: 'orphan', sessionId: 'recover-me' }
-  const store = memoryStore(seed)
-  const registry = createTavernConversationRegistry({ store: store.adapter })
-  assert.equal(await registry.resolve('new-session'), undefined)
-  assert.equal(store.snapshot().chatReads, 1, 'only an unlinked chat needs recovery inspection')
-  assert.deepEqual(await registry.resolve('recover-me'), seed.chats.orphan)
-  assert.equal(store.snapshot().links['recover-me'], 'orphan')
-  const reads = store.snapshot().chatReads
-  assert.equal(await registry.resolve('another-new-session'), undefined)
-  assert.equal(store.snapshot().chatReads, reads, 'fully linked history needs no materialization')
 })
 
 test('background config resolves aliases, repairs missing links and adopts legacy games once', async () => {

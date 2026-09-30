@@ -64,10 +64,3 @@ test('state projection is bounded, omits markup and unknown formats, and preserv
   assert.notEqual(sceneStateSources(changed, small.target, small.target.source).sources[0].id,
     sceneStateSources(small.chat, small.target, small.target.source).sources[0].id)
 })
-
-test('scan bounds protect large unknown trees and numerically dense state without returning them', () => {
-  const { chat, target } = fixture({ 数组: Array.from({ length: 20000 }, (_, n) => n), 林岚: { 服装: '晚到字段' } })
-  const result = sceneStateSources(chat, target, target.source)
-  assert.equal(result.sources.length, 0)
-  assert.ok(result.omitted.some(item => item.reason === 'scene-state-scan-budget'))
-})

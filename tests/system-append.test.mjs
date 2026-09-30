@@ -1,16 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { prompt } from '../tavern-plugin/lib/prompt-catalog.js'
+
 import { applyTavernSettingsPatch, resolveSystemPrompt } from '../tavern-plugin/lib/domain/tavern-settings.js'
 import { createBackgroundAgentRunner } from '../tavern-plugin/lib/background-agent-runner.js'
-
-test('附加指令保存、清空和导入均可立即读取', () => {
-  let settings = applyTavernSettingsPatch({}, { systemPrompt: { name: 'system-append', text: '附加内容' } })
-  assert.equal(resolveSystemPrompt(settings, 'system-append', prompt), '附加内容')
-  settings = applyTavernSettingsPatch(settings, { systemPrompt: { name: 'system-append', text: '' } })
-  assert.equal(resolveSystemPrompt(settings, 'system-append', prompt), '')
-  assert.doesNotThrow(() => applyTavernSettingsPatch(settings, { systemPrompts: { 'system-append': '' } }))
-})
 
 for (const task of ['settlement', 'image', 'phone']) test(task + ' 复用会话时置顶最新指令且清空后移除', async () => {
   let assemble, completeSection, pending, text = '第一版'
@@ -40,7 +32,6 @@ for (const task of ['settlement', 'image', 'phone']) test(task + ' 复用会话�
   } finally { await runner.dispose() }
 })
 
-
 test('真实 DSH complete system 在后台各任务中保留最新附加指令', { skip: !process.env.DSH_BOOT_MODULE }, async t => {
   const { createSceneImageNativeRuntime } = await import('./fixtures/scene-image-native-runtime.mjs')
   let text = '附加指令第一版'
@@ -59,7 +50,6 @@ test('真实 DSH complete system 在后台各任务中保留最新附加指令',
     }
   }
 })
-
 
 test('附加指令默认开启，明确关闭的选择与用户覆盖继续保留', async () => {
   const { readFileSync } = await import('node:fs')

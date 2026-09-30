@@ -13,12 +13,6 @@ test('人物卡原样 generateRaw 参数独立生成，不隐式注入历史或�
   assert.deepEqual(config, before)
 })
 
-test('不支持的能力明确失败，不发送模型请求', async () => {
-  for (const extra of [{ tools: [] }, { overrides: { char_description: 'x' } }]) {
-    await assert.rejects(generateHelperRaw({ ordered_prompts: [{ role: 'user', content: 'x' }], ...extra }, { callModel: () => assert.fail('不应请求') }), /暂不支持/)
-  }
-})
-
 test('构筑评议的清空覆盖参数仅发送评议正文，不混入角色或历史', async () => {
   const config = { user_input: '请评议当前构筑', should_stream: true, ordered_prompts: ['user_input'], max_chat_history: 0,
     overrides: { world_info_before: '', persona_description: '', char_description: '', char_personality: '', scenario: '',

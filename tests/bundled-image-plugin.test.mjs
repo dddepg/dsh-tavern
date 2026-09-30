@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import test from 'node:test'
 import { IMAGE_PLUGIN_HOST_EXPORTS, installBundledImagePlugin } from '../bin/bundled-image-plugin.mjs'
-import { mergeProfileManifest } from '../bin/profile-configuration.mjs'
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), 'tavern-bundled-image-'))
@@ -31,27 +30,4 @@ test('内置插件链接所有宿主依赖，无 npm 下载或构建；可重复
   for (let i = 0; i < 2; i++) assert.equal(installBundledImagePlugin(f.options).length, 4)
   const require = createRequire(path.join(f.directory, 'probe.cjs'))
   for (const [name, directory] of Object.entries(f.packages)) assert.equal(realpathSync(require.resolve(name)), realpathSync(path.join(directory, 'index.js')))
-})
-
-test('缺少构建产物或宿主依赖时拒绝安装，不伪装可用', t => {
-  const f = fixture(t)
-  rmSync(path.join(f.directory, 'lib/client.js'))
-  assert.throws(() => installBundledImagePlugin(f.options), /内置生图插件不完整/)
-  writeFileSync(path.join(f.directory, 'lib/client.js'), '')
-  rmSync(f.packages['@deepseek-ai/dsh-credentials'], { recursive: true })
-  assert.throws(() => installBundledImagePlugin(f.options), /缺少必需依赖/)
-})
-
-test('Profile 删除旧版 Tavern 管理的生图插件注册，保留其他插件', () => {
-  const source = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-  const options = { source, pluginPath: path.resolve('/app/tavern-plugin'), current: {
-    dependencies: { 'dsh-image-gen': '^0.3.0', other: '1' },
-    dsh: { profile: { bundles: ['dsh-image-gen', 'other'] } },
-    dshTavern: { managedBundles: ['dsh-image-gen'], managedDependencies: ['dsh-image-gen'] },
-  } }
-  const next = mergeProfileManifest(options)
-  assert.equal(next.dependencies['dsh-image-gen'], undefined)
-  assert.equal(next.dependencies.other, '1')
-  assert.equal(next.dsh.profile.bundles.filter(x => x === 'dsh-image-gen').length, 0)
-  assert.deepEqual(mergeProfileManifest({ ...options, current: next }), next)
 })

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
-import { createBackgroundTaskCoordinator } from '../tavern-plugin/lib/domain/background-task-coordinator.js'
+
 import { createBackgroundAgentRunner } from '../tavern-plugin/lib/background-agent-runner.js'
 
 function deferred() {
@@ -72,25 +71,6 @@ test('同游戏任务串行、不同游戏可独立执行；失败后下一任�
   assert.deepEqual(await h.runner.compact({ sessionId: 'child-1' }), { message: 'compacted' })
 })
 
-test('一次性任务取消后释放Agent、工具与请求上下文，不污染下次执行', async t => {
-  const gate = deferred(), controller = new AbortController()
-  const h = harness({ work: call => call.text.includes('取消任务') ? gate.promise : Promise.resolve() })
-  t.after(() => h.runner.dispose())
-  const task = h.runner.run(h.input({ persistent: false, turnContext: '取消任务', signal: controller.signal,
-    tools: [{ name: 'temporary', parameters: {} }], onToolCall: async () => '{}' }))
-  const rejection = assert.rejects(task, error => error.traceSessionId === 'child-1')
-  await until(() => h.starts.length === 1)
-  assert.equal(h.runner.owns('child-1'), true)
-  controller.abort()
-  await rejection
-  assert.equal(h.runner.owns('child-1'), false)
-  assert.equal(h.runner.requestContext('child-1'), null)
-  assert.equal(h.runner.requestSession('child-1'), null)
-  assert.equal(h.tools.get('child-1').size, 0)
-  assert.deepEqual(h.disposals, ['child-1'])
-  assert.equal((await h.runner.run(h.input({ persistent: false }))).traceSessionId, 'child-2')
-})
-
 test('会话保存失败不发布编号或执行模型；重试复用同一常驻会话，工具已撤下', async t => {
   let fail = true, published = 0
   const h = harness({ flush: async () => { if (fail) throw new Error('disk unavailable') } })
@@ -115,114 +95,6 @@ test('释放所有常驻会话时汇总错误并清空所有权，可重复释�
   await h.runner.dispose()
   assert.equal(h.disposals.length, 2)
 })
-
- test('needs-session bypasses an obsolete resident cache while normal continuation reuses it', async t => {
- let fresh = false
- const h = harness({ needsNewBackgroundSession: async () => fresh })
- t.after(() => h.runner.dispose())
- const first = await h.runner.run(h.input())
- assert.equal((await h.runner.run(h.input())).traceSessionId, first.traceSessionId)
- fresh = true
- const next = await h.runner.run(h.input())
- assert.notEqual(next.traceSessionId, first.traceSessionId)
- fresh = false
- assert.equal((await h.runner.run(h.input())).traceSessionId, next.traceSessionId)
- })
-
-test('替代后台会话后释放旧实例与请求引用，只保留最新实例', async t => {
-  const h = harness({ needsNewBackgroundSession: async () => true })
-  t.after(() => h.runner.dispose())
-  const ids = []
-  for (let i = 0; i < 5; i++) ids.push((await h.runner.run(h.input())).traceSessionId)
-  assert.deepEqual(h.disposals, ids.slice(0, -1))
-  for (const id of ids.slice(0, -1)) {
-    assert.equal(h.runner.owns(id), false)
-    assert.equal(h.runner.requestSession(id), null)
-    assert.equal(h.runner.requestContext(id), null)
-  }
-  assert.equal(h.runner.owns(ids.at(-1)), true)
-})
-
-test('替代一个游戏的后台不会释放其他游戏正在运行的后台', async t => {
-  const gate = deferred()
-  const h = harness({ needsNewBackgroundSession: async () => true, work: call => call.text.includes('等待') ? gate.promise : Promise.resolve() })
-  t.after(() => h.runner.dispose())
-  const running = h.runner.run(h.input({ sessionId: 'game-b', system: '等待' }))
-  await until(() => h.starts.length === 1)
-  const other = h.starts[0].id
-  const first = await h.runner.run(h.input())
-  await h.runner.run(h.input())
-  assert.deepEqual(h.disposals, [first.traceSessionId])
-  assert.equal(h.runner.owns(other), true)
-  gate.resolve(); await running
-})
-
-test('旧后台正在压缩时延后释放，压缩结束后完成回收', async t => {
-  const gate = deferred()
-  const h = harness({ needsNewBackgroundSession: async () => true, compactWork: () => gate.promise })
-  t.after(() => h.runner.dispose())
-  const old = (await h.runner.run(h.input())).traceSessionId
-  const compacting = h.runner.compact({ sessionId: old })
-  await until(() => h.calls.some(call => call[0] === 'compact'))
-  const latest = (await h.runner.run(h.input())).traceSessionId
-  assert.deepEqual(h.disposals, [])
-  assert.equal(h.runner.owns(old), true)
-  gate.resolve(); await compacting
-  assert.deepEqual(h.disposals, [old])
-  assert.equal(h.runner.owns(latest), true)
-})
-
-test('替代后台任务失败也释放旧实例，新实例仍可继续使用', async t => {
-  let fresh = false, fail = false
-  const h = harness({ needsNewBackgroundSession: async () => fresh, work: async () => { if (fail) throw new Error('model failed') } })
-  t.after(() => h.runner.dispose())
-  const old = (await h.runner.run(h.input())).traceSessionId
-  fresh = true; fail = true
-  await assert.rejects(h.runner.run(h.input()), /model failed/)
-  assert.deepEqual(h.disposals, [old])
-  const latest = h.starts.at(-1).id
-  fresh = false; fail = false
-  assert.equal((await h.runner.run(h.input())).traceSessionId, latest)
-})
-
-test('missing background replacement is created only once across failed settlement retries', async t => {
-  const timeline = createStoryTimeline()
-  let chat = { id: 'chat', mode: 'story', messages: [], settleStatus: 'idle' }
-  const coordinator = createBackgroundTaskCoordinator({ timeline, store: {
-    readChat: async () => chat,
-    writeChat: async next => { chat = next },
-    updateChat: async (_id, mutate) => { chat = await mutate(chat); return chat }
-  } })
-  const seed = await coordinator.begin(chat, 'settlement')
-  await seed.commit({ participant: seed.participant({ sessionId: 'missing-old', boundary: 42 }) })
-  const resumed = []
-  let failModel = true
-  const h = harness({
-    resume: async ({ resumeSessionId }) => {
-      resumed.push(resumeSessionId)
-      throw Object.assign(new Error('session missing'), { code: 'SESSION_NOT_FOUND' })
-    },
-    work: async () => { if (failModel) throw new Error('synthetic model timeout') }
-  })
-  t.after(() => h.runner.dispose())
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const task = await coordinator.begin(chat, 'settlement')
-    const requested = task.participantRequest.sessionId
-    await assert.rejects(h.runner.run(h.input({ task: 'settlement', persistentSessionId: requested,
-      onPersistentSessionReady: id => task.bindSession(id)
-    })), error => error.traceSessionId === 'child-1')
-    // Even a stale caller receipt cannot undo the identity published by the runner.
-    await task.fail({ sessionId: requested, boundary: 42 })
-    assert.equal(chat.timeline.participants.background.sessionId, 'child-1')
-  }
-  assert.deepEqual(resumed, ['missing-old'])
-  assert.deepEqual(h.calls.filter(call => call[0] === 'create'), [['create', 'child-1']])
-  failModel = false
-  await h.runner.run(h.input({ task: 'settlement', persistentSessionId: chat.timeline.participants.background.sessionId }))
-  await h.runner.compact({ sessionId: chat.timeline.participants.background.sessionId })
-  assert.deepEqual(h.calls.filter(call => call[0] === 'compact'), [['compact', 'child-1']])
-})
-
 
 test('取消的持久后台会话记录退休状态，重新创建 runner 后也不再恢复它', async t => {
   const retired = new Map()

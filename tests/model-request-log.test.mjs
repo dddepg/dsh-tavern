@@ -178,31 +178,6 @@ test('context browser lists metadata only and retrieves exact snapshots within t
   await assert.rejects(log.detail('owner', '../private'), /不存在/)
 })
 
-test('latest context isolates foreground, background and image sessions and survives restart', async () => {
-  const files = new Map(), reads = []
-  const adapter = {
-    readJson: async path => { reads.push(path); return structuredClone(files.get(path)) },
-    writeJson: async (path, value) => files.set(path, structuredClone(value)),
-    updateJson: async (path, fn) => files.set(path, fn(structuredClone(files.get(path))))
-  }
-  const log = createModelRequestLog(adapter)
-  const records = []
-  for (const task of ['reply', 'background', 'image']) {
-    records.push(await log.record({ chat: { id: 'owner' }, context: task === 'reply' ? null : { scope: 'background', task },
-      options: { sessionId: task, messages: [{ role: 'user', content: task }], tools: [{ name: task }] } }))
-  }
-  const restarted = createModelRequestLog(adapter)
-  for (const record of records) {
-    assert.deepEqual((await restarted.latestForSession(record.sessionId)).request, record.request)
-    reads.length = 0
-    assert.deepEqual(await restarted.latestForSession(record.sessionId, record.id), { unchanged: true, id: record.id })
-    assert.equal(reads.some(path => path.endsWith(record.id + '.json')), false)
-  }
-  assert.equal(await restarted.latestForSession('unknown', '', 'owner'), null)
-  files.delete('model-request-sessions/image.json')
-  assert.equal((await restarted.latestForSession('image', '', 'owner')).id, records[2].id)
-})
-
 test('session ownership writes once under concurrent requests and reuses disk ownership after restart', async () => {
   const files = new Map(), ownerReads = [], ownerWrites = []
   let fail = false

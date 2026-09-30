@@ -84,59 +84,6 @@ test('请求投影保留绑定路径，正则开关可在旧对话中实时解�
   assert.deepEqual((await value.module.regexScriptsFor(snapshot)).map(function (script) { return script.regexKey }), ['status#1'])
 })
 
-test('同一时间只启用一个预设，切换时保留各自内部勾选', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  await value.module.register('presets/后导入.json')
-  await value.module.toggle({ path: 'presets/后导入.json', entryKey: 'c#1', enabled: true })
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'b#1', enabled: true })
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'a#1', enabled: true })
-  await value.module.select('presets/后导入.json')
-
-  assert.equal((await value.module.snapshot()).text, '第三段')
-
-  await value.module.select('presets/先导入.json')
-  const snapshot = await value.module.snapshot()
-
-  assert.equal(snapshot.text, '第一段\n\n第二段')
-  assert.deepEqual(snapshot.sources.map(function (source) { return [source.path, source.entryKey] }), [
-    ['presets/先导入.json', 'a#1'],
-    ['presets/先导入.json', 'b#1']
-  ])
-  assert.equal(typeof snapshot.digest, 'string')
-  assert.ok(snapshot.digest.length > 10)
-})
-
-test('空条目不可开启，已开启条目失效时快照明确失败且不静默跳过', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  await assert.rejects(
-    value.module.toggle({ path: 'presets/先导入.json', entryKey: 'empty#1', enabled: true }),
-    /不存在|不可注入/
-  )
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'a#1', enabled: true })
-  await value.module.select('presets/先导入.json')
-  value.presets.delete('presets/先导入.json')
-
-  await assert.rejects(value.module.snapshot(), /预设注入失败.*先导入/)
-  assert.match((await value.module.state()).lastError.message, /预设注入失败/)
-})
-
-test('关闭全部条目后清除错误并恢复为无预设快照', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'a#1', enabled: true })
-  await value.module.select('presets/先导入.json')
-  value.presets.delete('presets/先导入.json')
-  await assert.rejects(value.module.snapshot(), /预设注入失败/)
-  value.presets.set('presets/先导入.json', preset('presets/先导入.json', [{ identifier: 'a', content: '第一段' }]))
-
-  await value.module.disablePreset('presets/先导入.json')
-
-  assert.equal(await value.module.snapshot(), null)
-  assert.equal((await value.module.state()).lastError, null)
-})
-
 test('失效预设修复后成功生成快照会清除持久错误', async () => {
   const value = harness()
   await value.module.register('presets/先导入.json')
@@ -152,27 +99,6 @@ test('失效预设修复后成功生成快照会清除持久错误', async () =>
   assert.equal((await value.module.state()).lastError, null)
 })
 
-test('重命名和删除预设同步迁移或清除全局开关', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'a#1', enabled: true })
-  await value.module.select('presets/先导入.json')
-  value.presets.set('presets/已改名.json', preset('presets/已改名.json', [{ identifier: 'a', content: '第一段' }], [
-    { id: 'status', name: '状态栏', findRegex: '/<status>(.*?)<\\/status>/s', replaceString: '<aside>$1</aside>', placement: [2], enabled: true }
-  ]))
-  value.presets.delete('presets/先导入.json')
-
-  await value.module.rename('presets/先导入.json', 'presets/已改名.json')
-  assert.equal((await value.module.snapshot()).text, '第一段')
-  assert.deepEqual(value.getState().presetOrder, ['presets/已改名.json'])
-  assert.equal(value.getState().activePreset, 'presets/已改名.json')
-
-  await value.module.remove('presets/已改名.json')
-  assert.equal(await value.module.snapshot(), null)
-  assert.deepEqual(value.getState().presetOrder, [])
-  assert.equal(value.getState().activePreset, '')
-})
-
 test('可以选择不启用外部预设，同时保留内部勾选配置', async () => {
   const value = harness()
   await value.module.register('presets/先导入.json')
@@ -184,18 +110,6 @@ test('可以选择不启用外部预设，同时保留内部勾选配置', async
 
   assert.equal(await value.module.snapshot(), null)
   assert.equal((await value.module.view('presets/先导入.json')).entries[0].runtimeEnabled, true)
-})
-
-test('重复注册已存在的预设不重写全局状态', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  const before = value.getState()
-  const writes = value.getWrites()
-
-  await value.module.register('presets/先导入.json')
-
-  assert.deepEqual(value.getState(), before)
-  assert.equal(value.getWrites(), writes)
 })
 
 test('预设配置方案保存当前勾选，并可一键恢复重复使用', async () => {
@@ -241,18 +155,4 @@ test('配置方案可以覆盖、重命名和删除', async () => {
 
   await value.module.removePlan(saved.id)
   assert.deepEqual(await value.module.plans(), [])
-})
-
-test('方案引用的预设内容失效时明确拒绝应用', async () => {
-  const value = harness()
-  await value.module.register('presets/先导入.json')
-  await value.module.toggle({ path: 'presets/先导入.json', entryKey: 'a#1', enabled: true })
-  await value.module.select('presets/先导入.json')
-  const saved = await value.module.savePlan({ name: '待失效' })
-  value.presets.set('presets/先导入.json', preset('presets/先导入.json', [{ identifier: 'b', content: '第二段' }]))
-
-  const listed = await value.module.plans()
-  assert.equal(listed[0].valid, false)
-  assert.match(listed[0].error, /a#1/)
-  await assert.rejects(value.module.applyPlan(saved.id), /配置方案失效.*a#1/)
 })

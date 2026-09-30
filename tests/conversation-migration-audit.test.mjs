@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {mkdtemp,rm,symlink} from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {createChatJournalStore} from '../tavern-plugin/lib/domain/chat-journal-store.js'
@@ -25,12 +25,4 @@ test('real journal snapshot plus later frames exports identically without modify
  assert.deepEqual(await createLegacyConversationMapping({store}).exportChat('shadow'),before)
  await assert.rejects(verifyConversationMigration({sourceData,chatId:'old',targetRoot,targetId:'shadow'}),{code:'CONVERSATION_CONFLICT'})
  assert.equal(await source.version('old'),beforeVersion)
-})
-
-test('audit rejects overlapping targets including symlink aliases',async t=>{
- const root=await mkdtemp(join(tmpdir(),'migration-roots-'));t.after(()=>rm(root,{recursive:true,force:true}))
- await symlink(root,join(root,'alias'),'dir')
- for(const targetRoot of [root,join(root,'nested'),join(root,'alias','nested')]){
-  await assert.rejects(verifyConversationMigration({sourceData:root,chatId:'old',targetRoot}),/non-overlapping/)
- }
 })

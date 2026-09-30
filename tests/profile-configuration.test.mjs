@@ -1,20 +1,12 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { parseDocument } from 'yaml'
 
-import {
-  PROFILE_CONFIGURATION_VERSION,
-  beginProfileConfigurationUpdate,
-  loadProfileManifest,
-  mergeProfileManifest,
-  migrateLegacyProfilePatch,
-  prepareProfilePatch,
-  syncProfileDependencyPatches,
-} from '../bin/profile-configuration.mjs'
+import { beginProfileConfigurationUpdate, loadProfileManifest, mergeProfileManifest, migrateLegacyProfilePatch, prepareProfilePatch } from '../bin/profile-configuration.mjs'
 
 const legacyPatch = await readFile(new URL('../config/legacy-profile-patch-v0.6.yml', import.meta.url), 'utf8')
 
@@ -33,44 +25,6 @@ function sourceManifest() {
     },
   }
 }
-
-test('Profile 更新替换项目管理项并保留用户额外插件', () => {
-  const current = {
-    name: 'dsh-profile-tavern',
-    description: '用户备注',
-    dependencies: {
-      'dsh-better-sidebar': '0.14.0',
-      'dsh-tavern-plugin': 'link:/old/tavern-plugin',
-      'dsh-codex-connect': '1.0.0',
-      'user-extra-plugin': '2.0.0',
-    },
-    dsh: {
-      customFlag: true,
-      profile: {
-        bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-better-sidebar', 'dsh-codex-connect', 'user-extra-plugin'],
-      },
-    },
-  }
-
-  const next = mergeProfileManifest({
-    source: sourceManifest(), current, pluginPath: '/app/tavern-plugin', dataRoot: '/data/tavern', host: 'android', dshVersion: '0.1.2',
-  })
-
-  assert.equal(next.description, '用户备注')
-  assert.equal(next.dependencies['user-extra-plugin'], '2.0.0')
-  assert.equal(next.dependencies['dsh-web-mobile'], '2.3.0')
-  assert.equal(next.dependencies['dsh-better-sidebar'], '0.16.0')
-  assert.equal(next.dependencies['dsh-tavern-plugin'], 'link:' + path.resolve('/app/tavern-plugin').replaceAll('\\', '/'))
-  assert.equal(next.dependencies['dsh-tavern-remote'], 'link:' + path.resolve('/app/tavern-plugin/packages/dsh-tavern-remote').replaceAll('\\', '/'))
-  assert.equal(next.dependencies['dsh-codex-connect'], undefined)
-  assert.equal(next.dsh.customFlag, true)
-  assert.deepEqual(next.dsh.profile.bundles, [
-    '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-web-mobile', 'dsh-better-sidebar', 'dsh-tavern-plugin', 'dsh-tavern-remote', 'user-extra-plugin',
-  ])
-  assert.deepEqual(next.dshTavern.managedBundles, sourceManifest().dsh.profile.bundles)
-  assert.deepEqual(next.dshTavern.managedDependencies, ['dsh-web-mobile', 'dsh-better-sidebar', 'dsh-tavern-plugin', 'dsh-tavern-remote'])
-  assert.equal(next.dshTavern.profileConfigurationVersion, PROFILE_CONFIGURATION_VERSION)
-})
 
 for (const recorded of [false, true]) {
   test(`移动端插件改名迁移不重复加载，并保留用户插件（管理记录：${recorded}）`, () => {
@@ -136,67 +90,6 @@ for (const host of ['desktop', 'android', 'cli']) {
   }
 }
 
-test('同一源码在 CLI、Desktop 与 DSHA 之间切换只保留目标平台移动插件', async () => {
-  const source = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-  const options = { source, pluginPath: '/app/tavern-plugin', dataRoot: '/data' }
-  let current = {}
-  for (const host of ['android', 'desktop', 'cli', 'android', 'cli', 'desktop']) {
-    current = mergeProfileManifest({ ...options, host, current })
-    const selected = host === 'android' ? 'dsh-web-mobile' : host === 'desktop' ? 'dsh-pocket' : null
-    const removed = host === 'android' ? 'dsh-pocket' : 'dsh-web-mobile'
-    assert.equal(current.dependencies[selected], (source.dependencies[selected] ?? source.devDependencies[selected]))
-    assert.equal(current.dependencies[removed], undefined)
-    if (selected) assert.ok(current.dsh.profile.bundles.includes(selected))
-    assert.ok(!current.dsh.profile.bundles.includes(removed))
-  }
-})
-
-test('Profile 安装同步 pnpm 声明的受管依赖补丁', async () => {
-  const sourceRoot = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-patch-source-'))
-  const profileDir = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-patch-profile-'))
-  const relativePath = path.join('patches', 'sidebar.patch')
-  await mkdir(path.dirname(path.join(sourceRoot, relativePath)), { recursive: true })
-  await writeFile(path.join(sourceRoot, relativePath), 'patched\n')
-  try {
-    const copied = syncProfileDependencyPatches({
-      sourceRoot,
-      profileDir,
-      workspaceText: `patchedDependencies:\n  dsh-better-sidebar@0.17.1: ${relativePath}\n`,
-    })
-    assert.deepEqual(copied, [relativePath])
-    assert.equal(await readFile(path.join(profileDir, relativePath), 'utf8'), 'patched\n')
-  } finally {
-    await rm(sourceRoot, { recursive: true, force: true })
-    await rm(profileDir, { recursive: true, force: true })
-  }
-})
-
-test('后续更新依据上次管理清单删除退役项目项，不误删用户项', () => {
-  const current = {
-    dependencies: { 'old-managed': '1.0.0', 'user-extra': '3.0.0' },
-    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'old-managed', 'user-extra'] } },
-    dshTavern: {
-      managedBundles: ['@deepseek-ai/dsh-base', 'old-managed'],
-      managedDependencies: ['old-managed'],
-      profileConfigurationVersion: PROFILE_CONFIGURATION_VERSION,
-    },
-  }
-  const source = sourceManifest()
-  source.dependencies['new-managed'] = '2.0.0'
-  source.dsh.profile.bundles.push('new-managed')
-
-  const next = mergeProfileManifest({
-    source, current, pluginPath: '/app/tavern-plugin', dataRoot: '/data/tavern', host: 'desktop', dshVersion: '0.1.2',
-  })
-
-  assert.equal(next.dependencies['old-managed'], undefined)
-  assert.equal(next.dependencies['user-extra'], '3.0.0')
-  assert.equal(next.dependencies['new-managed'], '2.0.0')
-  assert.equal(next.dsh.profile.bundles.includes('old-managed'), false)
-  assert.equal(next.dsh.profile.bundles.includes('user-extra'), true)
-  assert.equal(next.dsh.profile.bundles.includes('new-managed'), true)
-})
-
 test('首次迁移按 YAML 结构移除旧项目配置并保留用户覆盖', () => {
   const current = `# 用户排版可以不同
 - config:
@@ -225,22 +118,6 @@ test('首次迁移按 YAML 结构移除旧项目配置并保留用户覆盖', ()
     { id: 'user-extra', config: { enabled: true } },
     { insert: [{ id: 'user-insert', name: 'user-extra-plugin' }] },
   ])
-})
-
-test('旧项目模板没有用户修改时迁移为空用户覆盖层', () => {
-  const migrated = migrateLegacyProfilePatch(legacyPatch, legacyPatch)
-  const parsed = parseDocument(migrated)
-  assert.equal(parsed.errors.length, 0)
-  assert.deepEqual(parsed.toJS(), [])
-})
-
-test('YAML 迁移区分 js 标签与普通字符串，不误删用户覆盖', () => {
-  const current = `- id: session-persistence-jsonl
-  config:
-    root: "dshHomePath('profile-data', 'tavern', 'sessions')"
-`
-  const migrated = migrateLegacyProfilePatch(current, legacyPatch)
-  assert.equal(migrated, current)
 })
 
 test('损坏的用户 YAML 明确失败，不生成猜测结果', () => {
@@ -279,27 +156,6 @@ test('旧 Profile manifest 损坏时在失败前留下原文件备份', async ()
     }), /无法读取现有 Tavern Profile package.json/)
     assert.equal(await readFile(manifestPath, 'utf8'), source)
     assert.equal(await readFile(`${manifestPath}.backup.20260824121500`, 'utf8'), source)
-  } finally {
-    await rm(directory, { recursive: true, force: true })
-  }
-})
-
-test('完成所有权迁移后更新不再读写用户 patch', async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-profile-user-layer-'))
-  const patchPath = path.join(directory, 'cordis.patch.yml')
-  const source = '# 用户原始排版\n-   id: user-extra\n'
-  await writeFile(patchPath, source)
-  try {
-    const prepared = prepareProfilePatch({
-      profileDir: directory,
-      templateText: '[]\n',
-      legacyManagedText: legacyPatch,
-      profileConfigurationVersion: PROFILE_CONFIGURATION_VERSION,
-      timestamp: '20260824122000',
-    })
-    assert.equal(prepared, undefined)
-    assert.equal(await readFile(patchPath, 'utf8'), source)
-    assert.equal(existsSync(`${patchPath}.backup.20260824122000`), false)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

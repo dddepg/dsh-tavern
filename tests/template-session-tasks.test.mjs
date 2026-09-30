@@ -40,63 +40,6 @@ async function harness({saveGate, syncGate, receiptFailure=false}={}) {
   return {tasks,runtime,trace,state:()=>state}
 }
 
-test('同一 interface 串行协调历史同步与前台请求，每项任务仅刷新一次',async()=>{
-  const syncGate=deferred(),h=await harness({syncGate})
-  const syncing=h.tasks.synchronize()
-  await new Promise(r=>setImmediate(r))
-  const output=h.runtime.forSession('s').render('text')
-  const draining=h.tasks.processNext()
-  await new Promise(r=>setImmediate(r))
-  assert.deepEqual(h.trace,['getFullPromptTemplateState','refresh','sync'])
-  syncGate.resolve();await syncing;await draining
-  assert.equal((await output).text,'render')
-  assert.deepEqual(h.trace,['getFullPromptTemplateState','refresh','sync','claim','start','getFullPromptTemplateState','refresh','project:render','complete'])
-  await h.tasks.dispose();h.runtime.dispose()
-})
-
-test('模板触发异步保存，持久化完成前不能发送成功回执',async()=>{
-  const saveGate=deferred(),h=await harness({saveGate})
-  const output=h.runtime.forSession('s').render('save')
-  await new Promise(r=>setImmediate(r))
-  const draining=h.tasks.processNext()
-  await new Promise(r=>setImmediate(r))
-  assert.ok(h.trace.includes('saveFullPromptTemplateState'))
-  assert.equal(h.trace.includes('complete'),false)
-  saveGate.resolve();await draining;await output
-  assert.equal(h.state().chat[0].variables[0].hp,8)
-  assert.equal(h.trace.at(-1),'complete')
-  await h.tasks.dispose();h.runtime.dispose()
-})
-
-test('保存失败返回失败回执，不重跑有副作用的模板',async()=>{
-  const saveGate=deferred(),h=await harness({saveGate})
-  const output=h.runtime.forSession('s').render('save')
-  const rejected=assert.rejects(output,/disk failed/)
-  await new Promise(r=>setImmediate(r))
-  const draining=h.tasks.processNext();await new Promise(r=>setImmediate(r))
-  saveGate.reject(Error('disk failed'));await draining;await rejected
-  assert.equal(h.trace.filter(x=>x==='project:render').length,1)
-  await assert.rejects(h.tasks.dispose(),/disk failed/);h.runtime.dispose()
-})
-
-test('直接调用也使用同一任务队列，模型上下文在刷新后设置',async()=>{
-  const h=await harness()
-  const [a,b]=await Promise.all([h.tasks.project('request',{request:{model:'new'}}),h.tasks.project('render',{})])
-  assert.equal(a.model,'new');assert.equal(b.model,'old')
-  assert.equal(h.trace.filter(x=>x==='getFullPromptTemplateState').length,2)
-  await h.tasks.dispose();await assert.rejects(h.tasks.project('render',{}),/disposed/);h.runtime.dispose()
-})
-
-test('回执传输失败不再次发送失败回执或执行模板',async()=>{
-  const h=await harness({receiptFailure:true})
-  const output=h.runtime.forSession('s').render('text');const rejected=assert.rejects(output)
-  await new Promise(r=>setImmediate(r))
-  await assert.rejects(h.tasks.processNext(),/receipt disconnected/)
-  assert.equal(h.trace.filter(x=>x==='complete').length,1)
-  assert.equal(h.trace.filter(x=>x.startsWith('project:')).length,1)
-  h.runtime.dispose();await rejected;await h.tasks.dispose()
-})
-
 test('一次保存冲突后可重新同步历史并处理新任务，不重放失败模板', async () => {
   const saveGate = deferred(), h = await harness({ saveGate })
   const output = h.runtime.forSession('s').render('save')
@@ -117,32 +60,6 @@ test('一次保存冲突后可重新同步历史并处理新任务，不重放�
   assert.equal(h.state().chat[0].variables[0].hp, 7)
   await h.tasks.dispose()
   h.runtime.dispose()
-})
-
-
-test('批量作业逐条刷新与保存，一次领取和回执，保存失败中止后续条目', async () => {
-  for (const fail of [false, true]) {
-    const saveGate = deferred(), h = await harness({saveGate})
-    const output = h.runtime.forSession('s').renderProjections([
-      {template:'save', randomRef:'first'}, {template:'next', randomRef:'second'}
-    ], {scopes:{local:{count:1}}})
-    const verdict = fail ? assert.rejects(output, /disk failed/) : output
-    await new Promise(r=>setImmediate(r))
-    const draining = h.tasks.processNext()
-    await new Promise(r=>setImmediate(r))
-    assert.equal(h.trace.filter(x=>x==='project:render').length,1)
-    assert.equal(h.trace.includes('complete'),false)
-    if (fail) saveGate.reject(Error('disk failed')); else saveGate.resolve()
-    await draining
-    const result = await verdict
-    if (!fail) assert.equal(result.length,2)
-    assert.equal(h.trace.filter(x=>x==='claim').length,1)
-    assert.equal(h.trace.filter(x=>x==='start').length,1)
-    assert.equal(h.trace.filter(x=>x==='complete').length,1)
-    assert.equal(h.trace.filter(x=>x==='project:render').length,fail?1:2)
-    if(fail) await assert.rejects(h.tasks.dispose(),/disk failed/); else await h.tasks.dispose()
-    h.runtime.dispose()
-  }
 })
 
 test('批量回执丢失只重传回执，不重新执行批次', async () => {

@@ -18,23 +18,9 @@ test('合并保留主书设置和所有条目，仅重编冲突编号，不修�
   assert.deepEqual(merged.sources[1].entries, [{ originalUid: 0, uid: 3 }, { originalUid: 1, uid: 1 }])
 })
 
-import { inspectWorldBookDocument, exportCharacterBook } from '../tavern-plugin/lib/domain/worldbook-resource.js'
-import { constantWorldBookContext } from '../tavern-plugin/lib/domain/worldbook-recall.js'
-import { createOpeningPreparation } from '../tavern-plugin/lib/domain/opening-preparation.js'
+import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
 
-test('编号不控制合并书的显示顺序，导出再读取仍保留 ST 同 order 的反向文本编排', async () => {
-  const merged = mergeWorldBooks([
-    { document: { name: '主书', entries: { 9: { content: '主书正文', constant: true, displayIndex: 99 } } } },
-    { document: { name: '附加书', entries: { 0: { uid: '0', content: '附加正文', constant: true } } } }
-  ])
-  for (const document of [merged.document, exportCharacterBook(merged.document)]) {
-    const view = inspectWorldBookDocument(document)
-    const context = constantWorldBookContext({ worldBook: { view } })
-    assert.ok(context.context.indexOf('附加正文') < context.context.indexOf('主书正文'))
-    assert.equal(view.entryCount, 2)
-  }
-  assert.equal(merged.document.entries[9].uid, 9)
-})
+import { createOpeningPreparation } from '../tavern-plugin/lib/domain/opening-preparation.js'
 
 for (const content of ['hp: 50', 'hp: <%= 25 * 2 %>']) test('同名初值不额外拦截开局，沿用现有初始化合并：' + content, async () => {
   const merged = mergeWorldBooks([

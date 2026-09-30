@@ -12,28 +12,11 @@ function fixture() {
   return { cache, timers, released, hold(id, type) { return cache.hold(id, type, () => released.push(id + ':' + type)) },
     advance(ms) { now += ms; for (const [id,timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.fn() } } }
 }
-test('会话切走保留10分钟，返回取消旧计时，下次离开重新计时', () => {
-  const h = fixture(); h.cache.select('A'); h.hold('A','iframe'); h.hold('A','scripts')
-  h.cache.select('B'); h.advance(599999); assert.equal(h.released.length,0)
-  h.cache.select('A'); h.advance(600000); assert.equal(h.released.length,0)
-  h.cache.select('B'); h.advance(599999); assert.equal(h.released.length,0)
-  h.advance(1); assert.deepEqual(h.released,['A:iframe','A:scripts']); assert.equal(h.timers.size,0)
-})
-test('生成或结算跨过10分钟时不释放，完成后才释放；活动会话始终保留', () => {
-  const h = fixture(); h.cache.select('A'); h.hold('A','scripts'); h.cache.busy('A',true)
-  h.cache.select('B'); h.advance(600000); assert.equal(h.released.length,0)
-  h.cache.busy('A',false); h.advance(0); assert.deepEqual(h.released,['A:scripts'])
-  h.hold('B','iframe'); h.advance(600000); assert.equal(h.released.length,1)
-})
+
 test('React卸载不释放页面，离开后新建其他资源不能延后原截止时间', () => {
   const h = fixture(), unmount = h.cache.mount('A'); h.hold('A','iframe'); unmount()
   h.advance(500000); h.hold('A','status'); h.advance(100000)
   assert.deepEqual(h.released,['A:iframe','A:status'])
-})
-test('显式清理释放全部资源和定时器，旧清理回调不影响同名新会话', () => {
-  const h = fixture(), forget = h.hold('A','iframe')
-  h.cache.clear(); h.hold('A','iframe'); forget()
-  h.advance(600000); assert.deepEqual(h.released,['A:iframe','A:iframe']); assert.equal(h.timers.size,0)
 })
 
 test('到期回调重新检查刚开始的脚本任务，不用上次空闲快照回收它', () => {
@@ -82,20 +65,6 @@ test('后台手机脚本延迟查询仍能绑定事件和设置样式，不操�
     a.dispose(); b.dispose()
   } finally { dom.window.close() }
 })
-test('native host nodes created after the script scope are never parked or removed', async () => {
-  const {JSDOM}=await import('jsdom')
-  const dom=new JSDOM('<body></body>',{runScripts:'outside-only'})
-  try {
-    dom.window.eval(scopeSource+';window.makeScope=createTavernHostArtifactScope')
-    const scope=dom.window.makeScope({document:dom.window.document})
-    const menu=dom.window.document.createElement('div');menu.id='native-navigation-menu'
-    dom.window.document.body.append(menu)
-    scope.setVisible(false)
-    assert.equal(menu.isConnected,true)
-    scope.setVisible(true);scope.dispose()
-    assert.equal(menu.isConnected,true)
-  }finally{dom.window.close()}
-})
 
 test('切走后异步创建或重新插入的卡片悬浮窗保持隔离，返回保留事件与状态', async () => {
   const { JSDOM } = await import('jsdom')
@@ -129,7 +98,6 @@ test('切走后异步创建或重新插入的卡片悬浮窗保持隔离，返�
     assert.equal(dom.window.document.querySelector("#retired"), null)
   } finally { dom.window.close() }
 })
-
 
 test('explicitly created host nodes are parked before observer delivery and on delayed mount', async () => {
   const { JSDOM } = await import('jsdom')

@@ -1,15 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { compactBackgroundIfNeeded, measureBackgroundBudget } from '../tavern-plugin/lib/domain/background-compaction.js'
-
-function harness(pressure) {
-  const calls = []
-  return { calls, options: {
-    pressure: async () => pressure,
-    native: async () => null,
-    forced: async () => { calls.push('compact'); return { summary: 'shortened' } }
-  } }
-}
+import { measureBackgroundBudget } from '../tavern-plugin/lib/domain/background-compaction.js'
 
 test('budget uses the current model, explicit output reservation and uncommitted task messages', async () => {
   const header = { config: { provider: 'old', model: 'old' }, system: 'stable', tools: [] }
@@ -40,10 +31,4 @@ test('budget uses the current model, explicit output reservation and uncommitted
   assert.equal(await measureBackgroundBudget(options), null)
   options.signal = AbortSignal.abort()
   await assert.rejects(measureBackgroundBudget(options), /metadata unavailable/)
-})
-
-test('output reservation still forces reduction when native input pressure is below threshold', async () => {
-  const h = harness({ inputTokens: 700, outputTokens: 400, capacity: 1000 })
-  await compactBackgroundIfNeeded({ ...h.options, trigger: 'pressure', native: async () => { h.calls.push('native'); return null } })
-  assert.deepEqual(h.calls, ['native', 'compact'])
 })

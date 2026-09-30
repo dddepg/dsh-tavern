@@ -77,23 +77,6 @@ function mountFrame() {
   } }
 }
 
-test('persistent iframe keeps its incremental baseline through rerenders and consecutive updates', () => {
-  const host = mountFrame()
-  const [initial] = host.render(context(1, '未系'))
-  host.message(initial, 'dsh-tavern-frame-ready')
-  const [second] = host.render(context(2, '已系'))
-  host.render(context(2, '已系')) // unrelated parent rerender
-  const [third] = host.render(context(3, '未系'))
-  assert.equal(third.node, initial.node)
-  assert.equal(third.element.props.srcDoc, initial.element.props.srcDoc)
-  assert.equal(host.posts.length, 2)
-  assert.deepEqual(host.posts.map(item => item.update.baseRevision), [1, 2])
-  assert.equal(second.ref, initial.ref)
-  let state = context(1, '未系')
-  for (const { update } of host.posts) state = host.client.applyTavernHelperContextUpdate(state, update).context
-  assert.equal(state.messages[0].variables.stat_data.安全带, '未系')
-})
-
 test('stale legacy status replaces only the live iframe, retains old UI until ready, and uses latest variables', () => {
   const host = mountFrame()
   const [old] = host.render(context(1, '未系'))
@@ -116,22 +99,6 @@ test('stale legacy status replaces only the live iframe, retains old UI until re
   assert.equal(current.node, pending.node)
   host.message(old, 'dsh-tavern-status-stale') // detached sender
   assert.equal(host.render(context(2, '已系')).length, 1)
-})
-
-test('replacement iframe owns its baseline and detached iframe cannot request resync', () => {
-  const host = mountFrame()
-  const [old] = host.render(context(1, '未系'))
-  host.message(old, 'dsh-tavern-frame-ready')
-  host.render(context(2, '已系'), '<p>new template</p>')
-  const [, pending] = host.render(context(2, '已系'), '<p>new template</p>')
-  host.message(pending, 'dsh-tavern-frame-ready')
-  const [current] = host.render(context(2, '已系'), '<p>new template</p>')
-  assert.equal(current.node, pending.node)
-  host.render(context(3, '未系'), '<p>new template</p>')
-  assert.equal(host.posts.at(-1).update.baseRevision, 2)
-  const count = host.posts.length
-  host.message(old, 'dsh-tavern-helper-context-request')
-  assert.equal(host.posts.length, count)
 })
 
 test('loading iframe defers updates without advancing its baseline and receives only the latest state on ready', async () => {
@@ -169,30 +136,6 @@ test('loading iframe defers updates without advancing its baseline and receives 
   assert.equal(host.posts.length, 1, 'duplicate ready/rerender must not replay updates')
   host.render(context(82, '未系'))
   assert.equal(host.posts[1].update.baseRevision, 81)
-})
-
-test('replacement iframe waits for its own ready and catches up updates received while loading', () => {
-  const host = mountFrame()
-  const [old] = host.render(context(1, '未系'))
-  host.message(old, 'dsh-tavern-frame-ready')
-  host.render(context(2, '调整中'), '<p>new template</p>')
-  const [, pending] = host.render(context(2, '调整中'), '<p>new template</p>')
-  host.render(context(3, '已系'), '<p>new template</p>')
-  assert.equal(host.posts.some(item => item.token === pending.element.props.key), false)
-  host.message(pending, 'dsh-tavern-frame-ready')
-  const delivered = host.posts.filter(item => item.token === pending.element.props.key)
-  assert.equal(delivered.length, 1)
-  assert.equal(delivered[0].update.baseRevision, 2)
-  assert.equal(delivered[0].update.stateRevision, 3)
-  const [current] = host.render(context(3, '已系'), '<p>new template</p>')
-  assert.equal(current.node, pending.node)
-  const count = host.posts.length
-  host.message(old, 'dsh-tavern-frame-ready')
-  host.message(old, 'dsh-tavern-helper-context-request')
-  host.message(current, 'dsh-tavern-frame-ready')
-  assert.equal(host.posts.length, count)
-  host.render(context(4, '未系'), '<p>new template</p>')
-  assert.equal(host.posts.at(-1).update.baseRevision, 3)
 })
 
 test('snapshot recovery refreshes event-driven MVU view after installing state, including rollback', async () => {

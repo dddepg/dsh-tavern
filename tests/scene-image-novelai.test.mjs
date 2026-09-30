@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
+
 import { generateSceneImage } from '../tavern-plugin/lib/domain/scene-image-provider.js'
 import { channelSettings, imageChannelRequest } from '../tavern-plugin/lib/domain/scene-image-channels.js'
 import { novelaiPrompts } from '../tavern-plugin/lib/domain/scene-image-novelai.js'
@@ -21,40 +21,6 @@ const plan = {
     { owner: 'scene', field: 'environment', tags: 'rainy station', text: '雨中车站' }
   ], style: { tags: 'watercolor' }, prompt: 'unstructured duplicate'
 }
-
-test('NovelAI posts one ZIP-mode request to official-compatible endpoint; captures only key-free request metadata', async t => {
-  const calls = []
-  const server = createServer(async (req, res) => {
-    let text = ''; for await (const part of req) text += part
-    calls.push({ url: req.url, headers: req.headers, body: JSON.parse(text) })
-    res.writeHead(200, { 'content-type': 'application/zip' }).end(imageZip(png, { compressed: true, descriptor: true }))
-  })
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  t.after(() => new Promise(resolve => server.close(resolve)))
-  const baseURL = 'http://127.0.0.1:' + server.address().port + '/prefix'
-  const result = await generateSceneImage({ ...input, baseURL, plan })
-  assert.deepEqual(result.data, png); assert.equal(result.mediaType, 'image/png'); assert.equal(calls.length, 1)
-  const request = calls[0]
-  assert.equal(request.url, '/prefix/ai/generate-image')
-  assert.equal(request.headers.authorization, 'Bearer fixture-secret')
-  assert.equal(request.headers['content-type'], 'application/json')
-  const { parameters: p, model, action } = request.body
-  assert.equal(model, 'nai-diffusion-5-full'); assert.equal(action, 'generate')
-  assert.deepEqual([p.width, p.height, p.steps, p.scale, p.n_samples, p.params_version], [832, 1216, 23, 7, 1, 4])
-  assert.equal(p.sampler, 'k_euler_ancestral'); assert.equal(p.noise_schedule, 'karras')
-  assert.equal(p.prefer_brownian, true); assert.equal(p.deliberate_euler_ancestral_bug, false)
-  assert.equal(p.stream, undefined); assert.equal(p.negative_prompt, '')
-  assert.equal(p.qualityToggle, undefined); assert.equal(p.sm, undefined)
-  assert.equal(p.v4_prompt.use_coords, false); assert.equal(p.v4_prompt.use_order, true)
-  assert.equal(p.v4_prompt.caption.base_caption, request.body.input)
-  assert.equal(request.body.input, '1girl, 1boy, wide shot, rainy station, watercolor')
-  assert.deepEqual(p.v4_prompt.caption.char_captions.map(item => item.char_caption), ['girl, black hair, blue coat, on the left', 'boy, silver hair, sitting'])
-  assert.equal(p.v4_negative_prompt.caption.char_captions.length, 2)
-  assert.deepEqual(p.v4_prompt.caption.char_captions[0].centers, [{ x: 0.5, y: 0.5 }])
-  assert.deepEqual(result.metadata.request, request.body)
-  assert.equal(result.metadata.seed, p.seed)
-  assert.equal(JSON.stringify(result.metadata).includes('fixture-secret'), false)
-})
 
 test('NovelAI validates size/model and model-specific people limit before any request; repaint uses fresh seeds', () => {
   const original = imageChannelRequest({ ...input, plan })

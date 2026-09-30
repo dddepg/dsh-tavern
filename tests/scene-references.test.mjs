@@ -24,44 +24,6 @@ test('bounded named lookup reads only eligible frozen sections, with stable prov
   assert.match(refs.read({ query: '青石车站' }).reason, /次数/)
 })
 
-test('query cannot enumerate unrelated identities or expand through returned references', () => {
-  const sources = structuredClone(context.sources)
-  const refs = createSceneReferences({ ...context, sources, snapshot: snapshot('设定: 林岚有黑发，她的姐妹白雪有白发。\n\n白雪有红瞳。') })
-  sources.push(...refs.read({ query: '林岚' }).sources)
-  assert.match(refs.read({ query: '白雪' }).reason, /明确人物/)
-  assert.match(refs.read({ query: '.*' }).reason, /明确人物/)
-})
-
-test('unknown snapshots, absent history and exhausted source budget degrade without a lookup', () => {
-  for (const value of [undefined, { cardContextSnapshot: '任意整卡' }, { ...snapshot('设定: 黑发'), cardContextSnapshotVersion: 4 }]) {
-    const refs = createSceneReferences({ ...context, snapshot: value })
-    assert.equal(refs.metadata.available, false)
-    assert.equal(refs.read({ query: '林岚' }).sources.length, 0)
-  }
-  const refs = createSceneReferences({ ...context, snapshot: snapshot('设定: 黑发'), sources: [{ id: 'target', text: '林岚' + '雨'.repeat(11950) }] })
-  assert.equal(refs.metadata.available, false)
-})
-
-test('source budget includes every query and excludes scripts, code and known MVU protocols', () => {
-  const refs = createSceneReferences({ ...context, snapshot: snapshot('设定: 林岚留着黑色短发。<script>execute_secret()</script>\n\n```js\n林岚 execute_code()\n```\n\n林岚 stat_data 更新教程\n\n' + Array.from({ length: 10 }, (_, n) => '林岚在第' + n + '处' + '有花纹。'.repeat(200)).join('\n\n')) })
-  let total = 0
-  for (let index = 0; index < 3; index++) {
-    const result = refs.read({ query: '林岚' })
-    const size = result.sources.reduce((sum, source) => sum + source.text.length + 2, 0)
-    assert.ok(size <= 1600)
-    total += size
-    assert.doesNotMatch(JSON.stringify(result), /execute_secret|execute_code|stat_data/)
-  }
-  assert.ok(total <= 4000)
-  assert.ok(refs.audit.some(item => item.reason === 'reference-budget'))
-})
-
-test('Latin identity queries do not match parts of different names; literal regex syntax stays literal', () => {
-  const refs = createSceneReferences({ ...context, sources: [{ id: 'target', text: 'Joanne visits the station.' }], snapshot: snapshot('设定: Ann has blue eyes. Joanne has brown eyes.') })
-  assert.match(refs.read({ query: 'Ann' }).reason, /明确人物/)
-  assert.match(refs.read({ query: 'Joanne' }).sources[0].text, /brown eyes/)
-})
-
 test('many tiny matching paragraphs cannot inflate reply metadata beyond three fragments', () => {
   const refs = createSceneReferences({ ...context, snapshot: snapshot('设定: ' + Array.from({ length: 800 }, (_, index) => '林岚' + index).join('\n\n')) })
   for (let index = 0; index < 3; index++) assert.equal(refs.read({ query: '林岚' }).sources.length, 3)

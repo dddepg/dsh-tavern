@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
 
 const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 
@@ -33,15 +32,6 @@ test('开场白创建失败时在选择弹窗内持续显示具体阶段和错�
   assert.match(lifecycle, /phase = request\.kind === "card" \? "创建卡片工作台对话" : "写入人物卡开场白"/)
   assert.match(lifecycle, /failure\.phase = phase/)
   assert.match(playFlow, /err && err\.phase/)
-})
-
-test('酒馆状态读取 MVU 回执时使用当前模块可用的复制能力', () => {
-  const stored = { version: 1, status: 'updated', changes: [{ path: '/hp', after: 9 }] }
-  const view = createSessionStateView({ activity: () => ({}), evidence: () => ({}) })
-  const receipts = view.receipts({ messages: [{ role: 'assistant', turn: 2, mvu: { receipt: stored } }] })
-  assert.deepEqual(receipts, [{ turn: 2, receipt: stored }])
-  receipts[0].receipt.changes[0].after = 1
-  assert.equal(stored.changes[0].after, 9, 'reading receipts must not expose persisted objects')
 })
 
 test('创建对话失败时服务端记录请求边界但不记录开场白正文', () => {

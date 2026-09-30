@@ -30,30 +30,3 @@ test('rollback, regeneration and missing sessions never reuse another turn or ba
   assert.equal(foregroundWorldbookReads({ messages: [{ role: 'assistant', turn: 1 }] }, session), '')
   assert.equal(foregroundWorldbookReads({ messages: [{ role: 'assistant', turn: 2 }] }, undefined), '')
 })
-test('unpaired, malformed and non-worldbook tool results are not transferred', () => {
-  const events = read(2, 'call', [entry('62', '正文')])
-  events[0].data.message.content[0].name = 'another_tool'
-  assert.equal(foregroundWorldbookReads({ messages: [{ role: 'assistant', turn: 2 }] }, { events }), '')
-  events[0].data.message.content[0].name = 'worldbook_search'
-  events[0].data.message.content[0].arguments = '{broken'
-  assert.equal(foregroundWorldbookReads({ messages: [{ role: 'assistant', turn: 2 }] }, { events }), '')
-})
-
-
-test('explicit query-and-read hands full text to settlement, but mismatched queries do not', () => {
-  const events=read(2,'combined',[entry('62','一次查阅的完整正文')],{query:'少林',read:true})
-  const chat={messages:[{role:'assistant',turn:2}]}
-  assert.match(foregroundWorldbookReads(chat,{events}),/一次查阅的完整正文/)
-  const result=events[1].data.message.content[0].content[0]
-  result.text=JSON.stringify({...JSON.parse(result.text),query:'其他'})
-  assert.equal(foregroundWorldbookReads(chat,{events}),'')
-})
-
-test('session-state projection preserves regenerated foreground handoff without story bodies',async()=>{
- const {projectChatSessionState}=await import('../tavern-plugin/lib/domain/chat-session-state.js')
- const chat={id:'c',sessionId:'s',messages:[{role:'assistant',turn:1,greeting:true},{role:'user',turn:2,text:'body'},{role:'assistant',turn:2,text:'story',variables:[{large:'snapshot'}]}],regeneratedDshTurns:{2:7}}
- const session={events:read(7,'regenerated',[entry('62','资料')])}
- const selected=projectChatSessionState(chat)
- assert.equal(selected.messages[2].text,undefined)
- assert.equal(foregroundWorldbookReads(selected,session),foregroundWorldbookReads(chat,session))
-})

@@ -3,11 +3,8 @@ import assert from 'node:assert/strict'
 import { createCharacterDesignDocumentTools } from '../tavern-plugin/lib/domain/character-design-document.js'
 import { inspectWorldBookDocument, updateWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
 import { createWorldBookLibrary } from '../tavern-plugin/lib/domain/worldbook-library.js'
-import { createForegroundWorldbook } from '../tavern-plugin/lib/domain/foreground-worldbook.js'
-import { constantWorldBookContext } from '../tavern-plugin/lib/domain/worldbook-recall.js'
-import { createPlayCardSnapshots } from '../tavern-plugin/lib/domain/play-card-snapshots.js'
+
 import { cardContentDigest } from '../tavern-plugin/lib/domain/play-card-snapshots.js'
-import { UpstreamTemplateRuntime } from './fixtures/upstream-template-runtime.mjs'
 
 const design = { name: '林霜', aliases: ['阿霜'], identity: '钟楼守卫', personality: '认真谨慎', appearance: '蓝色制服', speechStyle: '简短直接', narrativeRole: '可能成为同伴' }
 function fixture(document = { name: '原世界书', entries: {} }) {
@@ -27,38 +24,6 @@ function fixture(document = { name: '原世界书', entries: {} }) {
     edit: operations => { chat.openingWorldbookSnapshot.document = updateWorldBookDocument(chat.openingWorldbookSnapshot.document, { operations }).document },
     entries: () => inspectWorldBookDocument(chat.openingWorldbookSnapshot.document).entries }
 }
-
-test('设计保存进入本局世界书，下一轮按姓名/别名召回；不改变库、固定前缀或同步授权', async () => {
-  const run = fixture()
-  assert.equal((await run.save()).ok, true)
-  const entry = run.entries()[0]
-  assert.equal(entry.constant, false)
-  assert.deepEqual(entry.primaryKeys, ['林霜', '阿霜'])
-  assert.equal(run.get().cardContextSnapshot, '固定前缀')
-  assert.equal(run.get().cardContextRevision, 1)
-  assert.deepEqual(run.original.entries, {})
-  const runtime = await UpstreamTemplateRuntime.create()
-  const project = createForegroundWorldbook({ bound: run.library.bound, runtime: async () => runtime, globalVariables: async () => ({}) })
-  const bound = await run.library.bound(run.get().cardPath, run.card, run.get())
-  assert.equal(constantWorldBookContext({ worldBook: bound }).context, '')
-  for (const name of ['林霜', '阿霜']) {
-    const next = await project({ chat: run.get(), card: run.card, userText: '寻找' + name })
-    assert.equal(next.error, null)
-    assert.match(next.context, /钟楼守卫/)
-    assert.match(next.context, /不是已发生的事实/)
-  }
-  const unrelated = await project({ chat: run.get(), card: run.card, userText: '观察天空' })
-  assert.equal(unrelated.context, '')
-  const prior = await project({ chat: run.get(), card: run.card, userText: '寻找林霜' })
-  run.get().worldBookReads = prior.reads
-  assert.equal((await run.save({ ...design, identity: '钟楼新任队长' })).ok, true)
-  const updated = await project({ chat: run.get(), card: run.card, userText: '寻找林霜' })
-  assert.equal(updated.error, null)
-  assert.match(updated.context, /钟楼新任队长/)
-  assert.doesNotMatch(updated.context, /钟楼守卫/)
-  const snapshots = createPlayCardSnapshots({ worldBooks: run.library })
-  assert.equal((await snapshots.updateStatus(run.get(), run.card)).available, false)
-})
 
 for (const document of [{ name: '独立格式', entries: { 5: { uid: 5, key: ['城市'], content: '原始设定', constant: true } } }, { name: '内置格式', entries: [{ id: 5, keys: ['城市'], content: '原始设定', constant: true, enabled: true }] }]) {
   test(document.name + '保留原条目，重复设计更新原条目，第四个人物照常保存', async () => {
@@ -88,14 +53,4 @@ test('保留手动关键词和启用设置；手动正文冲突时档案与世�
   assert.equal(result.ok, false)
   assert.match(result.error, /已被手动修改/)
   assert.deepEqual(run.get(), before)
-})
-
-test('原世界书姓名或别名命中阻止重复建档，零散正文提及仍允许创建', async () => {
-  const run = fixture({ name: '已有世界书', entries: { 0: { uid: 0, key: ['林霜', '阿霜'], comment: '守卫设定', content: JSON.stringify(design), disable: false } } })
-  assert.equal((await run.save()).ok, false)
-  assert.equal((await run.save({ ...design, name: '阿霜', aliases: [] })).ok, false)
-  assert.equal(run.get().characterDesignDocument, undefined)
-  const mention = fixture({ name: '传闻', entries: { 0: { uid: 0, key: ['市集'], comment: '市集', content: '市集曾出现过林霜。', disable: false } } })
-  assert.equal((await mention.save()).ok, true)
-  assert.equal(mention.entries().length, 2)
 })

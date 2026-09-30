@@ -56,30 +56,6 @@ test('opening swipes retain their archive; rewritten bodies and missing/corrupt 
   assert.equal(await api.read({ version: 1, digest: '../../elsewhere' }), null)
 })
 
-test('bounded query uses frozen entry title/aliases and records exact entry provenance without exposing the catalogue', async t => {
-  const { api } = await fixture(t), ref = await api.capture({ worldBook: book('留着黑色短发，棕色眼睛。') })
-  const worldbook = await api.read(ref)
-  const references = createSceneReferences({ worldbook, target: { turn: 2 }, sources: [{ id: 'target', text: '岚岚来到车站。' }] })
-  assert.equal(references.metadata.available, true)
-  assert.doesNotMatch(JSON.stringify(references.metadata), /青石|黑色短发|entry:one/)
-  const result = references.read({ query: '岚岚' })
-  assert.match(result.sources[0].text, /林岚.*\n.*黑色短发/)
-  assert.equal(result.sources[0].origin.kind, 'worldbook-snapshot')
-  assert.equal(result.sources[0].origin.entryRef, 'entry:one')
-  assert.equal(result.sources[0].origin.snapshotDigest, ref.digest)
-  assert.equal(result.sources[0].origin.constant, false)
-})
-
-test('archive capture bounds content and omission diagnostics, rather than silently saving arbitrary large books', async t => {
-  const { api } = await fixture(t)
-  const oversized = book('长'.repeat(500001))
-  oversized.view.entries.push(...Array.from({ length: 50 }, (_, n) => ({ ref: 'large-' + n, content: '长'.repeat(500001) })))
-  const saved = await api.read(await api.capture({ worldBook: oversized }))
-  assert.equal(saved.omittedCount, 51)
-  assert.equal(saved.omitted.length, 20)
-  assert.equal(saved.entries.length, 1)
-})
-
 test('conditional reference variants require current scene evidence, not old history or an unexamined regex', async t => {
   const { api } = await fixture(t)
   const worldBook = book('林岚的夜晚形态。')

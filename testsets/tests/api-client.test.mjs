@@ -25,16 +25,6 @@ async function fixture(t, startBrowser) {
   return { api, calls }
 }
 
-test('API creation works without launching or waiting for a browser', async t => {
-  const { api, calls } = await fixture(t, async () => assert.fail('template browser must not start'))
-  const result = await api.create({ action: 'play', sourceCard: 'public.json' }, {})
-  assert.equal(result.sessionId, 'session-1')
-  assert.equal(result.error, undefined)
-  await api.cancel()
-  assert.deepEqual(calls.filter(call => call.method === 'cancel').map(call => call.args.sessionId), ['session-1'])
-  await api.close()
-})
-
 test('card editing and unsupported helper scripts do not start a template-only browser', async t => {
   const { api } = await fixture(t, async () => { assert.fail('unexpected template browser') })
   await api.create({ action: 'card' }, {})

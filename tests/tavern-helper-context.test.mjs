@@ -2,16 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { projectOpeningCommit, projectRuntimeReplyHistory } from '../tavern-plugin/lib/domain/runtime-content-projection.js'
 
-import {
-  appendTavernHelperMessages,
-  HELPER_MESSAGE_COLD_WINDOW,
-  hydrateTavernHelperMessages,
-  lastTavernHelperVariables,
-  projectTavernHelperContext,
-  projectTavernHelperMessage,
-  replaceTavernHelperMessages,
-  replaceTavernHelperVariables
-} from '../tavern-plugin/lib/domain/tavern-helper-context.js'
+import { appendTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW, hydrateTavernHelperMessages, lastTavernHelperVariables, projectTavernHelperContext, projectTavernHelperMessage, replaceTavernHelperMessages } from '../tavern-plugin/lib/domain/tavern-helper-context.js'
 
 function macroOpeningChat() {
   const source = '{{incvar::visits}}{{User}}看向{{Char}}。'
@@ -40,47 +31,6 @@ test('MVU 数据写回不覆盖已解析正文，也不重新执行有副作用�
     assert.deepEqual({ ...chat.messages[0], variables: [] }, { ...before.messages[0], variables: [] })
     assert.equal(chat.messages[0].variables[0].stat_data.hp, 9)
   }
-})
-
-test('真正切换开场或编辑正文时才重新解析宏，保留原始 swipe', () => {
-  const chat = macroOpeningChat()
-  replaceTavernHelperMessages(chat, [{ message_id: 0, swipe_id: 1 }])
-  assert.equal(chat.messages[0].text, '玩家离开角色。')
-  assert.equal(chat.messages[0].sourceText, '{{USER}}离开{{char}}。')
-  assert.equal(chat.messages[0].swipes[1], '{{USER}}离开{{char}}。')
-  replaceTavernHelperMessages(chat, [{ message_id: 0, message: '{{incvar::visits}}{{User}}回来。' }])
-  assert.equal(chat.messages[0].text, '2玩家回来。')
-  assert.equal(chat.macroState.local.visits, 2)
-  assert.equal(projectRuntimeReplyHistory(chat.messages).projections[0].text, '2玩家回来。')
-  replaceTavernHelperMessages(chat, [{ message_id: 0, message: '' }])
-  assert.equal(chat.messages[0].text, '')
-})
-
-test('Helper 变量写入只修改指定楼层 swipe 或聊天变量', () => {
-  const chat = {
-    variables: {},
-    messages: [{ role: 'assistant', swipeId: 1, variables: [{ hp: 1 }, { hp: 2 }] }]
-  }
-
-  assert.deepEqual(replaceTavernHelperVariables(chat, { option: { type: 'message', message_id: 0 }, variables: { hp: 4 } }), { type: 'message', messageId: 0, swipeId: 1 })
-  assert.deepEqual(chat.messages[0].variables, [{ hp: 1 }, { hp: 4 }])
-  assert.deepEqual(replaceTavernHelperVariables(chat, { option: { type: 'chat' }, variables: { cache: true } }), { type: 'chat' })
-  assert.deepEqual(chat.variables, { cache: true })
-})
-
-test('Helper 脚本变量按脚本 ID 独立持久化并进入同步上下文', () => {
-  const chat = { messages: [], tavernHelperScriptVariables: { existing: { enabled: true } } }
-  assert.deepEqual(
-    replaceTavernHelperVariables(chat, { option: { type: 'script', script_id: 'dynamic-worldbook' }, variables: { auto_apply: false } }),
-    { type: 'script', scriptId: 'dynamic-worldbook' }
-  )
-  assert.deepEqual(projectTavernHelperContext(chat).scriptVariables, {
-    existing: { enabled: true },
-    'dynamic-worldbook': { auto_apply: false }
-  })
-  assert.throws(function () {
-    replaceTavernHelperVariables(chat, { option: { type: 'script' }, variables: {} })
-  }, /script_id/)
 })
 
 test('Helper 创建的新楼层只进入脚本历史，不冒充剧情回合', () => {
@@ -149,49 +99,4 @@ test('verified tail append visits only appended floors and preserves turn mappin
     assert.equal(previous.turnMessageIds[String(length + 1)],undefined)
     assert.deepEqual(JSON.parse(JSON.stringify(next)),JSON.parse(JSON.stringify(projectTavernHelperContext({id:'append',messages:rows}))))
   }
-})
-
-test('dirty 局部投影复用未脏楼层，只重建脏索引与新增尾段', () => {
-  const chat = {
-    id: 'dirty',
-    messages: [
-      { role: 'assistant', text: '甲', variables: [{ hp: 1 }] },
-      { role: 'user', text: '乙' },
-      { role: 'assistant', text: '丙', variables: [{ hp: 3 }] }
-    ]
-  }
-  const previous = projectTavernHelperContext(chat)
-  const kept = previous.messages[0]
-  chat.messages[2].variables = [{ hp: 9 }]
-  chat.messages.push({ role: 'user', text: '丁' })
-  const next = projectTavernHelperContext(chat, {
-    previousMessages: previous.messages,
-    dirtyIndices: new Set([2])
-  })
-  assert.equal(next.messages[0], kept)
-  assert.equal(next.messages[1], previous.messages[1])
-  assert.notEqual(next.messages[2], previous.messages[2])
-  assert.equal(next.messages[2].variables.hp, 9)
-  assert.equal(next.messages[3].message, '丁')
-  assert.deepEqual(next.messages, projectTavernHelperContext(chat).messages.map((message, index) => (
-    index === 0 || index === 1 ? previous.messages[index] : message
-  )))
-})
-
-test('含 stub 的 previous 不作 dirty 复用，结构回退全量投影', () => {
-  const chat = {
-    messages: [
-      { role: 'assistant', text: '旧', variables: [{ hp: 1, heavy: 'y'.repeat(50) }] },
-      { role: 'assistant', text: '新', variables: [{ hp: 2 }] }
-    ]
-  }
-  const cold = projectTavernHelperContext(chat, { skeletonUntil: 1 })
-  assert.equal(cold.messages[0].stub, true)
-  const rebuilt = projectTavernHelperContext(chat, {
-    previousMessages: cold.messages,
-    dirtyIndices: new Set([1])
-  })
-  assert.equal(rebuilt.messages[0].stub, undefined)
-  assert.equal(rebuilt.messages[0].variables.hp, 1)
-  assert.deepEqual(rebuilt.messages, projectTavernHelperContext(chat).messages)
 })

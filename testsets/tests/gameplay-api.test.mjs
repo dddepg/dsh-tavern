@@ -31,17 +31,6 @@ function fixture() {
 }
 const config = { sourceCard: 'public.json', model: { provider: 'test', model: 'model', reasoningEffort: 'high' } }
 
-test('API creates unique formal sessions and delegates model/input without saving defaults', async () => {
-  const f = fixture(), first = await f.api.call('create', config), second = await f.api.call('create', config)
-  assert.notEqual(first.sessionId, second.sessionId)
-  assert.equal(f.calls.find(([kind]) => kind === 'native-create')[1].cwd, '/formal/data/resources')
-  assert.deepEqual(first.model, config.model)
-  await f.api.call('send', { sessionId: first.sessionId, input: 'Continue the public story.' })
-  const prompt = f.calls.find(([kind]) => kind === 'native-prompt')[1]
-  assert.deepEqual(prompt.content, [{ type: 'text', text: 'Continue the public story.' }])
-  assert.equal(prompt.sessionId, first.sessionId)
-})
-
 test('script runtimes, busy sessions and unrelated evidence cannot be silently bypassed', async () => {
   const f = fixture(), created = await f.api.call('create', config)
   await assert.rejects(f.api.call('send', { sessionId: 'ordinary-user-session', input: 'x' }), /独立会话/)

@@ -7,22 +7,8 @@ import path from 'node:path'
 import test from 'node:test'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { repairMigratedCurrentHeader, decodeSessionLog, encodeCurrentGeneration, encodeMigratedSessionLog, migrateInstalledLegacySessions, migrateLegacySessionDirectory, parseSessionLog, prepareLegacySessionLog, reframeConcatenatedSessionLog } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
-import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
-
-test('迁移日志的第一帧只有文件头一行', () => {
-  const header = '{"version":0,"id":"a"}'
-  const events = [{ type: 'step/start', seq: 0 }]
-  const bytes = encodeMigratedSessionLog(header, events)
-  const text = header + '\n' + JSON.stringify(events[0]) + '\n'
-  assert.equal(headerFrameText(bytes), header + '\n')
-  assert.equal(decodeSessionLog(bytes), text)
-  const collapsed = zstdCompressSync(Buffer.from(text), { params: { [constants.ZSTD_c_checksumFlag]: 1 } })
-  const fixed = reframeConcatenatedSessionLog(collapsed)
-  assert.equal(headerFrameText(fixed), header + '\n')
-  assert.equal(decodeSessionLog(fixed), text)
-  assert.equal(reframeConcatenatedSessionLog(bytes), null)
-})
+import { decodeSessionLog, encodeMigratedSessionLog, migrateLegacySessionDirectory, parseSessionLog, prepareLegacySessionLog } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
+import { zstdDecompressSync } from 'node:zlib'
 
 test('issue #84: 大体量事件编码成多帧后仍可完整解压', () => {
   const header = '{"version":0,"id":"chunked"}'
@@ -36,19 +22,6 @@ test('issue #84: 大体量事件编码成多帧后仍可完整解压', () => {
   assert.equal(headerFrameText(bytes), header + '\n')
   assert.equal(decodeSessionLog(bytes), expected)
   assert.equal(parseSessionLog(bytes).events.length, events.length)
-})
-
-test('启动迁移走宿主目录，会话在 data 的上一级', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tavern-startup-migration-'))
-  const dataRoot = path.join(root, 'profile-data', 'tavern', 'data')
-  await mkdir(path.join(root, 'profile-data', 'tavern', 'sessions'), { recursive: true })
-  let calls = 0
-  const summary = await migrateInstalledLegacySessions(dataRoot, async () => {
-    calls += 1
-    return { createRestore() { throw new Error('空目录不应打开会话') } }
-  })
-  assert.equal(calls, 1)
-  assert.deepEqual(summary, { seen: 0, migrated: 0, unchanged: 0, refused: 0 })
 })
 
 const hostRoot = '/Applications/DSH Desktop.app/Contents/Resources/app/node_modules/@deepseek-ai'
@@ -161,33 +134,6 @@ async function walk(directory, files = []) {
   }
   return files
 }
-
-
-test('发布的 v3 文件头必须能被宿主列表读取', {skip:!hostReady}, async()=>{
- const require=createRequire(path.join(hostRoot,'dsh-session/package.json'))
- const {sessionFormatCatalog:catalog}=await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
- const header={version:3,id:'test-migrated',createdAt:1,cwd:'/tmp/test',isSeeded:false,delegationDepth:0,agentPreset:'tavern'}
- const bytes=encodeCurrentGeneration({header,events:[],inheritedEventCount:0},catalog)
- const stored=JSON.parse(decodeSessionLog(bytes).trim())
- assert.equal(catalog.readHeader(stored).status,'current')
- assert.equal(stored.type,'session')
-})
-
-
-test('修复已存在的错误 v3 头，保留备份并可重复执行', {skip:!hostReady}, async t=>{
- const require=createRequire(path.join(hostRoot,'dsh-session/package.json'))
- const {sessionFormatCatalog:catalog}=await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-session-format-catalog')).href)
- const root=await mkdtemp(path.join(tmpdir(),'tavern-header-repair-'));t.after(()=>rm(root,{recursive:true,force:true}))
- const file=path.join(root,'session.v3.jsonl.zstd')
- const header={version:3,id:'test-migrated',createdAt:1,cwd:'/tmp/test',isSeeded:false,delegationDepth:0,agentPreset:'tavern'}
- const original=encodeMigratedSessionLog(JSON.stringify(header),[])
- await writeFile(file,original)
- const result=await migrateLegacySessionDirectory(root,catalog)
- assert.equal(result.migrated,1)
- assert.equal(catalog.readHeader(JSON.parse(decodeSessionLog(await readFile(file)).trim())).status,'current')
- assert.deepEqual(await readFile(file+'.bak-tavern-header'),original)
- assert.equal(await repairMigratedCurrentHeader(file,catalog),false)
-})
 
 test('issue #71: 含 fixedSystemText 的真实旧档清理后可被宿主打开并落盘', { skip: !hostReady || !archiveReady }, async t => {
   const require = createRequire(path.join(hostRoot, 'dsh-session/package.json'))

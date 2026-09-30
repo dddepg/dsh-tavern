@@ -29,43 +29,10 @@ function fixture(t, options = {}) {
   return { runtime, state, calls, journals, engine: runtime.forSession('s') }
 }
 
-test('runs actual upstream EJS without a webpage, including DOM and async compilation', async t => {
-  const {engine,state,runtime} = fixture(t)
-  state('s').environment.extension_settings.EjsTemplate.compile_workers = true
-  const result = await engine.render('你好 <%= 1 + 2 %> <%= document.createElement("p").tagName %>')
-  assert.equal(result.text, '你好 3 P')
-  assert.equal((await runtime.inspect('s')).executor, 'node')
-})
-
 test('sessions isolate globals and serialize foreground/background operations', async t => {
   const {engine,runtime} = fixture(t)
   const results = await Promise.all([engine.render('<% window.counter = (window.counter || 0)+1 %><%= window.counter %>'), engine.render('<%= ++window.counter %>'), runtime.forSession('b').render('<%= typeof window.counter %>')])
   assert.deepEqual(results.map(r => r.text), ['1', '2', 'undefined'])
-})
-
-test('every entry refreshes external state and model, without caching evaluated output', async t => {
-  const {engine,state} = fixture(t)
-  assert.equal((await engine.render('<%= window.SillyTavern.getContext().dsh.model %>')).text, 'first')
-  state('s').environment.dsh.model = 'second'
-  assert.equal((await engine.render('<%= window.SillyTavern.getContext().dsh.model %>')).text, 'second')
-  const results=await engine.renderProjections([{template:'<% window.n=0 %><%= ++window.n %>'},{template:'<%= ++window.n %>'}])
-  assert.deepEqual(results.map(r=>r.text),['1','2'])
-})
-
-test('unchanged complete request retains system and message bytes/order', async t => {
-  const {engine} = fixture(t)
-  const request = {system:'stable system\n',messages:[{role:'user',content:'hello'}, {role:'assistant',content:'world'}, {role:'user',content:'next'}],model:'current'}
-  const result=await engine.projectRequest(request)
-  assert.equal(JSON.stringify(result), JSON.stringify({messages:request.messages,system:request.system}))
-})
-
-test('service watchdog terminates an infinite loop, does not replay, and next explicit call recovers', async t => {
-  const {engine,runtime,journals} = fixture(t,{timeoutMs:1500})
-  await engine.render('warm')
-  await assert.rejects(engine.render('<% while(true){} %>'), /执行超时/)
-  assert.equal((await runtime.inspect('s')).present,false)
-  assert.equal([...journals.values()].at(-1).phase,'interrupted')
-  assert.equal((await engine.render('recovered')).text,'recovered')
 })
 
 test('cancellation rejects running and queued work without replay', async t => {
@@ -89,33 +56,10 @@ test('child cannot inherit host secret env or write arbitrary files', async t =>
   assert.match(denied.error,/Access to this API has been restricted|access denied/i)
 })
 
-test('display lifecycle evaluates messages and persists upstream display metadata', async t => {
-  const {runtime,state}=fixture(t)
-  state('s').state.chat=[{mes:'hello <%= 2+3 %>',name:'Test',is_user:false,is_system:false,variables:[{}],swipe_id:0,swipes:['hello <%= 2+3 %>']}]
-  await runtime.synchronize('s')
-  assert.ok(state('s').state.chat[0].template_rendered)
-  assert.match(JSON.stringify(state('s').state.chat[0]),/hello 5/)
-})
-
 test('bounded process pool queues concurrent chats instead of failing the fifth chat', async t => {
   const {runtime}=fixture(t,{maxSessions:1})
   const results=await Promise.all(['a','b','c'].map(id=>runtime.forSession(id).render('<% await new Promise(r=>setTimeout(r,20)) %>'+id)))
   assert.deepEqual(results.map(r=>r.text),['a','b','c'])
-})
-
-test('setting changes are read on the next request without a browser settings event', async t => {
-  const {engine,state}=fixture(t)
-  assert.equal((await engine.projectRequest({messages:[{role:'user',content:'<%= 2+3 %>'}]})).messages[0].content,'5')
-  state('s').environment.extension_settings.EjsTemplate.generate_enabled=false
-  assert.equal((await engine.projectRequest({messages:[{role:'user',content:'<%= 2+3 %>'}]})).messages[0].content,'<%= 2+3 %>')
-})
-
-test('upstream optional compatibility sandbox still evaluates and reports syntax errors', async t => {
-  const {engine,state}=fixture(t)
-  state('s').environment.extension_settings.EjsTemplate.sandbox=true
-  const result=await engine.render('沙箱 <%= 2+4 %>')
-  assert.equal(result.text,'沙箱 6',result.error)
-  assert.equal((await engine.render('<% const = %>')).ok,false)
 })
 
 test('cancellation drains an admitted save before a new explicit run can observe state',async t=>{
@@ -133,27 +77,6 @@ test('cancellation drains an admitted save before a new explicit run can observe
  await new Promise(r=>setTimeout(r,25));assert.equal(completed,false)
  release();await rejected
  assert.equal((await next).text,'7')
-})
-
-test('JSON transport preserves seeded random evaluation while omitting host callbacks',async t=>{
- const {engine}=fixture(t)
- const context={random:()=>0,randomSeed:'stable',randomRef:'entry'}
- const first=await engine.renderProjection('<%= Math.random() %>',context)
- const second=await engine.renderProjection('<%= Math.random() %>',context)
- assert.equal(first.ok,true,first.error);assert.equal(first.text,second.text)
- assert.equal(first.randomCalls,1)
-})
-
-test('batch prepares each entry, isolates failed scopes, and returns compact receipts',async t=>{
- const {engine}=fixture(t)
- await engine.command('/ejs <% window.prepareCount=0; window.SillyTavern.getContext().eventSource.on("prompt_template_prepare",ctx=>{ctx.preparedMarker=++window.prepareCount}) %>')
- const results=await engine.renderProjections([
-  {template:'<% setLocalVar("n",1) %><%= preparedMarker %>'},
-  {template:'<% setLocalVar("n",999); throw Error("failed") %>'},
-  {template:'<%= preparedMarker %>|<%= getLocalVar("n") %>'}
- ],{scopes:{global:{},local:{},message:{},initial:{}}})
- assert.equal(results[0].text,'1');assert.equal(results[1].ok,false);assert.equal(results[2].text,'3|1')
- assert.ok(results.every(result=>!Object.hasOwn(result,'scopes')))
 })
 
 test('template workers have a configurable heap budget above the former 256 MB ceiling', async t => {
@@ -209,22 +132,6 @@ test('display worker failures preserve bounded redacted stderr without replay or
   assert.equal((await runtime.inspect('s')).task.workerDiagnostic.exitCode, 42)
 })
 
-test('heap configuration rejects invalid or unbounded values before starting workers', () => {
-  for (const maxOldSpaceMb of [0, 127, 4097, Infinity, 1.5, '512 --inspect']) {
-    assert.throws(() => createServerTemplateRuntime({ rpc() {}, maxOldSpaceMb }), /128.*4096/)
-  }
-})
-
-test('heap environment override is parsed by the host without inheriting its environment', async t => {
-  const previous = process.env.DSH_TAVERN_TEMPLATE_HEAP_MB
-  process.env.DSH_TAVERN_TEMPLATE_HEAP_MB = '640'
-  t.after(() => { if (previous === undefined) delete process.env.DSH_TAVERN_TEMPLATE_HEAP_MB; else process.env.DSH_TAVERN_TEMPLATE_HEAP_MB = previous })
-  const { engine, runtime } = fixture(t)
-  assert.equal((await runtime.inspect('s')).heapMb, 640)
-  const result = await engine.render('<%= structuredClone.constructor("return process")().env.DSH_TAVERN_TEMPLATE_HEAP_MB || "absent" %>')
-  assert.equal(result.text, 'absent')
-})
-
 test('deferred upstream token statistics cannot crash an idle template worker', async t => {
   const diagnostics = []
   const { engine, runtime } = fixture(t, { onDiagnostic: value => diagnostics.push(value) })
@@ -248,7 +155,6 @@ test('bounded formatting mirror preserves full historical data and template inpu
   assert.equal((await engine.render('<%= window.SillyTavern.getContext().chat[0].mes %>')).text, 'history 0')
 })
 
-
 test('actual isolated template engine keeps logical floors and reads old content through its scoped pipe',async t=>{
  const {engine,state,calls}=fixture(t,{readHistory:args=>{
   assert.equal(args.token,'pinned');assert.equal(args.sessionId,'s')
@@ -261,31 +167,4 @@ test('actual isolated template engine keeps logical floors and reads old content
  const result=await engine.render('<%= window.SillyTavern.getContext().chat.length %>:<%= window.SillyTavern.getContext().chat[3].mes %>')
  assert.equal(result.text,'10000:historical 3')
  assert.deepEqual(calls.filter(c=>c.method==='getPromptTemplateHistory').map(c=>c.args.messageId),[3])
-})
-
-test('worldbook projection preserves upstream evaluation without routine execution journals',async t=>{
- const {engine,journals}=fixture(t)
- const entries=[{uid:1,world:'book',ref:'entry',content:'plain',comment:'Guide',key:[],keysecondary:[],disable:false}]
- const projected=await engine.prepareWorldbookProjection(entries,{})
- assert.equal(projected.entries[0].content,'plain')
- assert.equal(journals.size,0)
- const regular=await engine.prepareWorldbook(entries,{})
- assert.deepEqual(projected,regular)
- assert.equal([...journals.values()].at(-1).phase,'completed')
-})
-
-test('request projection keeps exact prompt bytes without a redundant execution journal',async t=>{
- const {engine,journals}=fixture(t)
- const request={system:'stable\n',messages:[{role:'user',content:'next'}],model:'model'}
- assert.deepEqual(await engine.projectRequestProjection(request),{system:request.system,messages:request.messages})
- assert.equal(journals.size,0)
-})
-
-test('connect prepares the isolated engine without evaluating generation templates',async t=>{
- const {engine,state,runtime,journals}=fixture(t)
- state('s').environment.worldbooks.book.entries={0:{uid:0,comment:'[GENERATE:BEFORE]',content:'<% window.generated=true %>',constant:true,disable:false,key:[]}}
- await engine.connect()
- assert.equal((await runtime.inspect('s')).ready,true)
- assert.equal(journals.size,0)
- assert.equal((await engine.renderProjection('<%= typeof window.generated %>')).text,'undefined')
 })

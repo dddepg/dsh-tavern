@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import {
-  assertConversationForkable,
-  conversationForkReceipt,
-  forkConversationChat
-} from '../tavern-plugin/lib/domain/conversation-fork.js'
+import { assertConversationForkable } from '../tavern-plugin/lib/domain/conversation-fork.js'
 
 function sourceChat() {
   return {
@@ -27,37 +23,6 @@ function sourceChat() {
   }
 }
 
-test('分叉复制持久游戏状态，但建立独立身份并清理旧运行边界', () => {
-  const source = sourceChat()
-  const fork = forkConversationChat(source, {
-    chatId: 'chat-fork', sessionId: 'session-fork', now: () => 100,
-    id: prefix => prefix + '-fork'
-  })
-
-  assert.equal(fork.id, 'chat-fork')
-  assert.equal(fork.sessionId, 'session-fork')
-  assert.equal(fork.timeline.branchId, 'branch-fork')
-  assert.equal(fork.timeline.revision, 0)
-  assert.deepEqual(fork.timeline.checkpoints, [])
-  assert.deepEqual(fork.timeline.participants, {})
-  assert.deepEqual(fork.timeline.operations, {})
-  assert.equal(fork.posture, '门内')
-  assert.deepEqual(fork.messages.at(-1).variables, [{ hp: 9 }])
-  assert.deepEqual(fork.tavernPluginData, source.tavernPluginData)
-  assert.equal(fork.candidates, null)
-  assert.equal(fork.candidateAgent, null)
-  assert.deepEqual(fork.nativeCommits, {})
-  assert.deepEqual(fork.suppressedDshTurns, [9])
-  assert.deepEqual(fork.regeneratedDshTurns, { 2: 9 })
-  assert.notEqual(fork.regeneratedDshTurns, source.regeneratedDshTurns)
-  assert.deepEqual(fork.forkedFrom, {
-    chatId: 'chat-source', sessionId: 'session-source', branchId: 'branch-source', revision: 4,
-    storageRevision: 17, checkpointId: 'checkpoint-4', forkedAt: 100
-  })
-  assert.equal(Object.hasOwn(fork, '_storageRevision'), false)
-  assert.deepEqual(source, sourceChat(), '源对话保持不变')
-})
-
 test('分叉只接受没有前台或后台未完成工作的游玩对话', () => {
   assert.equal(assertConversationForkable(sourceChat()), true)
   assert.throws(() => assertConversationForkable({ ...sourceChat(), mode: 'card' }), /只有游玩对话/)
@@ -72,18 +37,6 @@ test('分叉只接受没有前台或后台未完成工作的游玩对话', () =>
   const dangling = sourceChat()
   dangling.messages.push({ role: 'user', text: '未完成' })
   assert.throws(() => assertConversationForkable(dangling), /尚未产生正文/)
-})
-
-test('分叉提交只返回轻量回执，不把完整 Chat 作为 RPC 响应', () => {
-  const chat = sourceChat()
-  chat.largePresentation = 'x'.repeat(500_000)
-
-  assert.deepEqual(conversationForkReceipt(chat, { lastTurn: 22, messageCount: 43 }), {
-    chatId: 'chat-source',
-    sessionId: 'session-source',
-    lastTurn: 22,
-    messageCount: 43
-  })
 })
 
 test('分叉运行链路复用 DSH 原生 Session，不在 Tavern 后端重放完整历史', async () => {

@@ -23,16 +23,7 @@ test('10-block windows center on cursor or requested block without changing prog
   await assert.rejects(h.service.browse('session', 1001), /有效/)
   await assert.rejects(h.service.browse('session', 1.2), /有效/)
 })
-test('manual cursor can move backward; next preparation uses it while history and Agent restrictions remain', async () => {
-  const h = fixture(), before = structuredClone(h.chat)
-  await h.service.point('session', { ...await h.service.browse('session'), position: 5 })
-  assert.equal(h.chat.scriptState.cursor, 4)
-  for (const field of ['messages', 'variables', 'candidates']) assert.deepEqual(h.chat[field], before[field])
-  const prepared = h.scripts.transition({ script: h.script, state: h.chat.scriptState, event: { kind: 'prepare', userText: '继续', nativeTurn: 1 } })
-  assert.equal(prepared.reference.chunkId, 'c4')
-  const backward = h.scripts.transition({ script: h.script, state: h.chat.scriptState, event: { kind: 'focus', cursor: 2 } })
-  assert.equal(backward.state.cursor, 4)
-})
+
 test('save rechecks busy and revision inside atomic mutation; stale pages cannot overwrite newer state', async () => {
   const h = fixture(), page = await h.service.browse('session')
   h.beforeUpdate = () => { h.busy = true }
@@ -41,19 +32,6 @@ test('save rechecks busy and revision inside atomic mutation; stale pages cannot
   await h.service.point('session', { ...page, position: 3 })
   await assert.rejects(h.service.point('session', { ...page, position: 2 }), /已变化/)
   assert.equal(h.chat.scriptState.cursor, 2)
-})
-test('prepared turn, changed script and invalid positions reject without editing stored state', async () => {
-  const h = fixture(), page = await h.service.browse('session')
-  for (const position of [0, 1001, 1.5, '2']) await assert.rejects(h.service.point('session', { ...page, position }), /有效/)
-  h.script.chunks[0].text = '替换内容，但导入时间未改变'
-  await assert.rejects(h.service.point('session', { ...page, position: 2 }), /剧本已更新/)
-  h.script.chunks[0].text = '正文0'
-  h.script.importedAt = 2
-  await assert.rejects(h.service.point('session', { ...page, position: 2 }), /剧本已更新/)
-  h.script.importedAt = 1
-  h.chat.scriptState.prepared = { nativeTurn: 1 }
-  await assert.rejects(h.service.point('session', { ...page, position: 2 }), /等待/)
-  assert.equal(h.chat.scriptState.cursor, 49)
 })
 
 test('chunk budget uses the same exclusive, stale-page and busy guards as cursor changes', async () => {

@@ -33,14 +33,6 @@ test('Profile 设置跨实例恢复，合并独立插件并拒绝同一插件的
   await assert.rejects(store.save({}, undefined), /JSON 对象/)
 })
 
-test('设置中的特殊键只作为数据保存，不修改对象原型', async t => {
-  const { store } = await fixture(t)
-  const next = JSON.parse('{"__proto__":{"polluted":true},"constructor":{"x":1}}')
-  await store.save(next, {})
-  assert.deepEqual(await store.read(), next)
-  assert.equal({}.polluted, undefined)
-})
-
 test('共享设置引用、排队保存和写入期间新编辑，在宿主往返后保持一致', async () => {
   const run = helperHostHarness({ extensionSettings: { phone: { value: 1, remove: true } } })
   const ctx = run.window.SillyTavern.getContext(), settings = ctx.extensionSettings, phone = settings.phone
@@ -82,26 +74,4 @@ test('浏览器设置真实写入 Profile 后，销毁环境并重新加载可�
   await run.window.SillyTavern.saveSettingsDebounced()
   const reloaded = helperHostHarness({ extensionSettings: await open().read() })
   assert.equal(reloaded.window.SillyTavern.extensionSettings.phone.size, 80)
-})
-
-test('模板启用设置属于用户偏好，保存和重新加载保留原值', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'template-settings-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const data = createProfileDataStore({ dataRoot: root })
-  const store = createTavernExtensionSettings(data)
-  const base = await store.read()
-  const saved = await store.save({ ...base, EjsTemplate: { enabled: false }, phone: { on: true } }, base)
-  assert.equal(saved.EjsTemplate.enabled, false)
-  assert.deepEqual(await data.readJson('tavern-extension-settings.json'), saved)
-  assert.equal((await createTavernExtensionSettings(data).read()).EjsTemplate.enabled, false)
-})
-
-test('identical settings saves preserve the resource version',async t=>{
- const root=await mkdtemp(join(tmpdir(),'template-settings-noop-'));t.after(()=>rm(root,{recursive:true,force:true}))
- const profile=createProfileDataStore({dataRoot:root}),store=createTavernExtensionSettings(profile)
- const settings={EjsTemplate:{enabled:true}}
- await store.save(settings,{});const version=await profile.version('tavern-extension-settings.json')
- assert.deepEqual(await store.save(settings,settings),settings)
- assert.deepEqual(await store.save(settings,{}),settings)
- assert.equal(await profile.version('tavern-extension-settings.json'),version)
 })

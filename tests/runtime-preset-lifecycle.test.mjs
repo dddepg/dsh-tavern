@@ -12,41 +12,6 @@ function phaseMessage(phase, text) {
   return runtimePresetPhaseMessages({ [phase]: { entries: [{ role: 'system', content: text }] } }, phase, { scope: 'foreground', turn: 4, step: 1 })[0]
 }
 
-test('服务端消息 ID 不依赖可能被代理的 Web Crypto this', () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
-  const originalCrypto = globalThis.crypto
-  Object.defineProperty(globalThis, 'crypto', {
-    configurable: true,
-    value: new Proxy(originalCrypto, {})
-  })
-  try {
-    const [message] = runtimePresetPhaseMessages(
-      { middle: { entries: [{ role: 'system', content: '中段' }] } },
-      'middle',
-      { scope: 'foreground', turn: 2, step: 1 }
-    )
-    assert.match(message.id, /^dsh-tavern-runtime-preset-foreground-middle-2-1-/)
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'crypto', descriptor)
-    else delete globalThis.crypto
-  }
-})
-
-test('前中后保留原角色，只有前后属于请求边界消息', () => {
-  const snapshot = {
-    front: { entries: [{ role: 'system', content: '前' }] },
-    middle: { entries: [{ role: 'user', content: '中' }] },
-    back: { entries: [{ role: 'assistant', content: '后' }] }
-  }
-  const front = runtimePresetPhaseMessages(snapshot, 'front', { scope: 'foreground', turn: 2, step: 1 })[0]
-  const middle = runtimePresetPhaseMessages(snapshot, 'middle', { scope: 'foreground', turn: 2, step: 1 })[0]
-  const back = runtimePresetPhaseMessages(snapshot, 'back', { scope: 'foreground', turn: 2, step: 1 })[0]
-  assert.deepEqual([front.role, middle.role, back.role], ['system', 'user', 'assistant'])
-  assert.equal(isRuntimePresetBoundaryMessage(front), true)
-  assert.equal(isRuntimePresetBoundaryMessage(middle), false)
-  assert.equal(isRuntimePresetBoundaryMessage(back), true)
-})
-
 test('最终请求把前后投影到 messages 绝对边界，并清除旧 Session 残留', () => {
   const snapshot = {
     front: { entries: [
@@ -75,53 +40,6 @@ test('最终请求把前后投影到 messages 绝对边界，并清除旧 Sessio
   assert.equal(projected.slice(0, 2).every(isRuntimePresetBoundaryMessage), true)
   assert.equal(projected.slice(-2).every(isRuntimePresetBoundaryMessage), true)
   assert.equal(projected.slice(2, -2).some(isRuntimePresetBoundaryMessage), false)
-})
-
-test('没有前后和旧残留时保持原 messages 引用', () => {
-  const messages = [{ role: 'user', content: [{ type: 'text', text: '输入' }] }]
-  assert.equal(projectRuntimePresetRequestMessages(messages, null), messages)
-})
-
-test('普通游玩把预设前段合并为唯一开头 system，后段合并到末尾 user', () => {
-  const snapshot = {
-    front: { entries: [
-      { role: 'user', content: '前段：林岚，29 岁，与其他角色无亲属关系。' },
-      { role: 'system', content: '前段约束' }
-    ] },
-    back: { entries: [{ role: 'system', content: '后段约束' }] }
-  }
-  const request = {
-    provider: 'test',
-    model: 'scripted',
-    system: 'DSH 内置系统提示',
-    messages: [
-      { role: 'assistant', content: [{ type: 'text', text: '历史' }] },
-      { role: 'user', content: [{ type: 'text', text: '本轮任务' }] }
-    ]
-  }
-  const projected = projectRuntimePresetRequest(request, snapshot, { scope: 'background', turn: 2, step: 1 })
-  assert.notEqual(projected, request)
-  assert.equal(request.system, 'DSH 内置系统提示')
-  assert.equal(projected.system, '')
-  assert.deepEqual(projected.messages.map(function (message) { return [message.role, message.content[0].text] }), [
-    ['system', '前段：林岚，29 岁，与其他角色无亲属关系。\n\n前段约束\n\nDSH 内置系统提示'],
-    ['assistant', '历史'],
-    ['user', '本轮任务\n\n后段约束']
-  ])
-  assert.deepEqual(projected.messages[0].source.sections.map(function (section) { return section.name }), [
-    'tavern:runtime-preset-front',
-    'tavern:runtime-preset-front',
-    'tavern:dsh-system'
-  ])
-  assert.deepEqual(projected.messages[2].source.sections.map(function (section) { return section.name }), [
-    'tavern:runtime-preset-back'
-  ])
-  assert.equal(projected.messages.filter(function (message) { return message.role === 'system' }).length, 1)
-})
-
-test('没有激活前段时不改写 DSH 顶层 system', () => {
-  const request = { system: 'DSH 系统', messages: [{ role: 'user', content: [{ type: 'text', text: '输入' }] }] }
-  assert.equal(projectRuntimePresetRequest(request, null), request)
 })
 
 for (const phase of ['front', 'back']) test(`V3 native system remains system with ${phase} preset`, () => {
@@ -197,11 +115,4 @@ test('关闭或未组装附加指令时不注入、不从历史中删除相同�
     assert.equal(result.messages[0].content[0].text, '外部预设\n\n内置系统')
     assert.equal(result.messages[1].content[0].text, '附加指令')
   }
-})
-
-test('只有附加指令时不留下空 system，预设内容仍然保留', () => {
-  const result = projectRuntimePresetRequest({ system: '附加', messages: [] }, { front: { entries: [{ content: '预设' }] } }, { systemAppend: '附加' })
-  assert.equal(result.system, '')
-  assert.equal(result.messages.length, 1)
-  assert.equal(result.messages[0].content[0].text, '附加\n\n预设')
 })

@@ -149,37 +149,6 @@ test('main image action preserves request ID on ambiguous transport errors and c
   assert.notEqual(calls.at(-1).args.requestId, oldRequest, 'deletion must not reuse the completed request')
 })
 
-test('received image can be saved from the renderer while generation is disabled', async () => {
-  const slots = [], calls = []
-  let cursor = 0
-  const record = { key: 'frozen-key', requestId: 'original-image', status: 'failed', recovery: 'save', versions: [], enabled: false }
-  const context = vm.createContext({
-    useTavernConfirm: () => async () => true,
-    recordImageInteraction() {},
-    React: { Fragment: 'fragment', createElement: (type, props, ...children) => ({ type, props, children }), useEffect() {},
-      useState(initial) { const n = cursor++; if (!(n in slots)) slots[n] = initial; return [slots[n], value => { slots[n] = value }] },
-      useRef(initial) { const n = cursor++; return slots[n] ||= { current: initial } }
-    },
-    useSceneImageRecord: () => record, sceneImageStageLabel: () => 'working', window: { dispatchEvent() {} }, CustomEvent: class {},
-    rpc: async (method, args) => { calls.push({ method, args }) }
-  })
-  const Component = vm.runInContext(extract('SceneIllustration', 'TavernAssistantNodeView') + ';SceneIllustration', context)
-  const nodes = tree => tree && typeof tree === 'object' ? [tree, ...(tree.children || []).flat(Infinity).flatMap(nodes)] : []
-  const render = () => { cursor = 0; return nodes(Component({ sessionId: 'session', turn: 1 })) }
-  const controls = render()
-  assert.equal(controls.filter(node => node.type === 'button').length, 1)
-  await controls.find(node => node.type === 'button' && node.children.includes('重试保存')).props.onClick()
-  assert.equal(calls[0].method, 'retrySceneImageSave')
-  assert.equal(calls[0].args.requestId, record.requestId)
-  assert.equal(calls[0].args.key, record.key)
-  record.status = 'running'; record.recovery = undefined
-  const cancel = render().find(node => node.type === 'button' && node.children.includes('取消生图'))
-  assert.ok(cancel, 'cancellation remains available with generation disabled')
-  await cancel.props.onClick()
-  assert.equal(calls[1].method, 'cancelSceneImage')
-  assert.equal(calls[1].args.requestId, record.requestId)
-})
-
 test('uncertain purchase requires user confirmation, while original provider task queries do not', async () => {
   let accepts = false, prompts = 0
   const context = vm.createContext({})

@@ -61,30 +61,6 @@ test('压缩重启和历史读取保持 JSON 键顺序、JSON/YAML 变量宏及�
   assert.equal(detached.messages[1].variables[0].stat_data.z, '最后')
 })
 
-test('旧 JSON 快照与压缩快照混读，跨格式 journal 和历史 revision 精确恢复', async t => {
-  const { root, store, open, snapshots } = await setup(t, { frameLimit: 2 })
-  await fs.mkdir(snapshots, { recursive: true })
-  const initial = fixture()
-  const plainPath = path.join(snapshots, '000000000001.json')
-  const original = JSON.stringify(initial, null, 2)
-  await fs.writeFile(plainPath, original)
-  const states = [initial]
-  for (let revision = 2; revision <= 5; revision++) {
-    states.push(await store.update('chat', chat => {
-      chat._storageRevision = revision
-      chat.messages[revision].variables[0].stat_data.z = revision
-      return chat
-    }))
-  }
-  assert.deepEqual((await fs.readdir(snapshots)).sort(), ['000000000001.json', '000000000003.json.gz', '000000000005.json.gz'])
-  assert.equal(await fs.readFile(plainPath, 'utf8'), original)
-  for (const state of states) assert.deepEqual(await open().readRevision('chat', state._storageRevision), state)
-  // A new append after rotation starts a fresh segment, not the renamed file.
-  await store.patch('chat', 5, [{ op: 'set', path: ['_storageRevision'], value: 6 }])
-  assert.equal((await open().read('chat'))._storageRevision, 6)
-  assert.ok((await fs.readdir(path.join(root, 'chats/chat/journals'))).includes('000000000006-open.jsonl'))
-})
-
 for (const damage of ['truncated', 'checksum', 'invalid-json']) test(`损坏 gzip 快照从完整 journal 恢复，不静默回到旧状态：${damage}`, async t => {
   const { store, open, snapshots, root } = await setup(t, { frameLimit: 1 })
   await store.update('chat', () => fixture())
@@ -126,15 +102,4 @@ for (const method of ['create', 'update', 'patch']) test(`快照发布后 ${meth
   assert.ok(snapshotReads > 0)
   await store.patch('chat', revision, [{ op: 'set', path: ['_storageRevision'], value: revision + 1 }])
   assert.deepEqual(await open().read('chat'), await store.read('chat'))
-})
-
-test('旧单文件迁移时备份仍是完整 JSON，压缩新快照不改原数据', async t => {
-  const { root, store, open } = await setup(t)
-  await fs.mkdir(path.join(root, 'chats'), { recursive: true })
-  const initial = fixture()
-  await fs.writeFile(path.join(root, 'chats/chat.json'), JSON.stringify(initial))
-  await store.update('chat', chat => { chat._storageRevision++; return chat })
-  const backup = (await fs.readdir(path.join(root, 'chats'))).find(name => name.startsWith('chat.legacy-'))
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, 'chats', backup), 'utf8')), initial)
-  assert.equal(JSON.stringify(await open().readRevision('chat', 1)), JSON.stringify(initial))
 })

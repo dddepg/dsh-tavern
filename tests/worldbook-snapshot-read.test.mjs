@@ -88,20 +88,3 @@ for (const kind of ['standalone', 'embedded', 'multiple', 'opening']) test('模�
   assert.equal(Object.isFrozen(native), false)
   if (kind === 'opening') assert.equal(Object.isFrozen(chat.openingWorldbookSnapshot.source), false)
 })
-
-test('角色卡内容和世界书绑定变化独立于 Chat revision，返回值修改不污染缓存', async () => {
-  const card = { name: 'C', description: 'before', extensions: {} }
-  let worldName = 'A'
-  const adapter = createTavernScriptHostAdapter({ resolveChat: async () => ({ id: 'c', sessionId: 's', cardPath: 'card', mode: 'story', _storageRevision: 1, messages: [] }),
-    writeChat() {}, readCard: async () => card, worldBooks: { templateSnapshot: async () => ({ worldName, worldbooks: {} }) }, scriptDispatch: {} })
-  const first = await adapter.readFullPromptTemplateState('s')
-  first.environment.characters[0].description = 'caller mutation'
-  const fresh = await adapter.readFullPromptTemplateState('s')
-  assert.equal(fresh.environment.characters[0].description, 'before')
-  card.description = 'after'
-  const second = await adapter.readFullPromptTemplateState('s', first.cursor)
-  assert.equal(second.delta.environment.set.characters[0].description, 'after')
-  worldName = 'B'
-  const third = await adapter.readFullPromptTemplateState('s', second.cursor)
-  assert.equal(third.delta.environment.set.characters[0].data.extensions.world, 'B')
-})

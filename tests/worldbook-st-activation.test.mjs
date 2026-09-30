@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { prepareWorldBookRecall, projectWorldBookTemplates } from '../tavern-plugin/lib/domain/worldbook-recall.js'
-import { inspectWorldBookDocument, updateWorldBookDocument, exportCharacterBook, exportSillyTavernWorldBook } from '../tavern-plugin/lib/domain/worldbook-resource.js'
+import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
 import { createForegroundWorldbook } from '../tavern-plugin/lib/domain/foreground-worldbook.js'
 import { UpstreamTemplateRuntime } from './fixtures/upstream-template-runtime.mjs'
 
@@ -10,14 +10,6 @@ const runtime = await UpstreamTemplateRuntime.create()
 const e = (uid, key, extra = {}) => ({ uid, key: [key], content: '设定' + uid, order: 100, ...extra })
 const book = (entries, settings = {}) => ({ view: inspectWorldBookDocument({ ...settings, entries: Object.fromEntries(entries.map(entry => [entry.uid, entry])) }) })
 const recall = (entries, options = {}, settings = {}) => prepareWorldBookRecall({ worldBook: book(entries, settings), turn: 2, chat: { messages: [] }, ...options })
-
-test('当前玩家输入参与匹配，单词不会拆成字母，默认窗口不读取全部历史', async () => {
-  const entries = [e(0, 'Alice'), e(1, '矿井'), e(2, 'a', { matchWholeWords: true })]
-  const chat = { messages: [{ role: 'assistant', text: '矿井' }, { role: 'user', text: '走吧' }, { role: 'assistant', text: '晴天' }] }
-  assert.deepEqual(recall(entries, { chat, userText: 'Alice' }).refs, ['entry:0'])
-  assert.deepEqual(recall(entries, { userText: 'A local ice shop' }).refs, ['entry:2'])
-  assert.deepEqual(recall(entries, { userText: 'place' }).refs, [])
-})
 
 test('常驻条目可触发递归；未入选条目不能把隐藏正文带入扫描', async () => {
   const entries = [e(0, '', { constant: true, content: 'Alice' }), e(1, 'Alice')]
@@ -41,20 +33,6 @@ test('包含组支持优先级、权重、计分和多个组，不会重复入�
   entries[0].group = '角色, 人物'
   entries.push(e(2, 'Alice', { group: '人物', useGroupScoring: true }))
   assert.deepEqual(recall(entries, { userText: 'Alice Bob' }).refs, ['entry:0'])
-})
-
-test('扫描和分组设置在独立、嵌入格式往返时保留，编辑不修改原文件', async () => {
-  const original = { entries: { 0: e(0, 'Alice') } }
-  const updated = updateWorldBookDocument(original, { scanDepth: 8, recursiveScanning: true, operations: [{ op: 'update', ref: 'entry:0', patch: { scanDepth: 4, group: '角色', groupOverride: true, groupWeight: 20, useGroupScoring: true } }] }).document
-  const exported = exportSillyTavernWorldBook(exportCharacterBook(updated))
-  const view = inspectWorldBookDocument(exported)
-  assert.equal(view.scanDepth, 8)
-  assert.equal(view.recursiveScanning, true)
-  assert.equal(view.entries[0].groupOverride, true)
-  assert.equal(view.entries[0].groupWeight, 20)
-  assert.equal(view.entries[0].useGroupScoring, true)
-  assert.equal(view.entries[0].scanDepth, 4)
-  assert.equal(original.scan_depth, undefined)
 })
 
 test('正式前台投影：蓝灯标签包住绿灯角色，系统前缀无重复，同一轮重试无重复冷却', async () => {

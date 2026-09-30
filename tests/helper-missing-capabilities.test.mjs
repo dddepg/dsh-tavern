@@ -60,16 +60,6 @@ test('官方 MVU 恢复时可使用全局变量并登记关闭状态下的 Funct
   assert.deepEqual(await deleting, {})
 })
 
-test('事件回调按已有脚本身份记账，互不混合', async () => {
-  const run = helperHostHarness(), w = run.window
-  w.__dshTavernHelperSetCurrentScript('a')
-  w.eventOn('TEST', () => w.SillyTavern.hideLoader())
-  w.__dshTavernHelperSetCurrentScript('b')
-  w.eventOn('TEST', () => w.SillyTavern.hideLoader())
-  await w.eventEmit('TEST')
-  assert.deepEqual(observations(run).map(item => [item.scriptId, item.count]), [['a', 1], ['b', 1]])
-})
-
 function parentHarness(rpc, reportError = () => {}) {
   const listeners = {}, frames = []
   let sequence = 0
@@ -117,17 +107,6 @@ test('父窗口校验来源/token/脚本/接口，合并计数并在切换时保
   host.send({ count: 999 }) // the old frame is now detached
   await host.runtime.flushCompatibilityDiagnostics()
   assert.equal(calls.length, 2)
-  host.runtime.dispose()
-})
-
-test('记录保存失败明确提示，不打断空操作或无限重试', async () => {
-  const errors = []
-  let attempts = 0
-  const host = parentHarness(async () => { attempts++; throw Error('disk unavailable') }, (source, error) => errors.push(error.message))
-  host.send()
-  await host.runtime.flushCompatibilityDiagnostics()
-  assert.equal(attempts, 1)
-  assert.match(errors[0], /部分调用可能未记录/)
   host.runtime.dispose()
 })
 

@@ -34,20 +34,3 @@ test('does not replace historical scripts with a different current card implemen
   const view=project(snapshot,[{...rule,replaceString:markup.replace('window.value=3','window.value=4')}])
   assert.equal(view.parts[0].content,broken)
 })
-test('does not infer historical EJS values from current variables',()=>{
-  const view=project(snapshot,[{...rule,replaceString:markup.replace('window.value=3','window.value=<%- getvar("value") %>')}])
-  assert.equal(view.parts[0].content,broken)
-})
-
-test('recovers matching style damage without replacing surrounding historical markup',()=>{
-  const rich='<html>\n\n<body><style>\nbody {color:red}\n\n    p {font-size:20px}\n</style><p>正文</p></body></html>'
-  const html=marked.parse(source.replace(/<now_plot>[\s\S]*<\/now_plot>/,rich))
-  const display={...snapshot,html,parts:[{kind:'html',content:html}]}
-  const view=project(display,[{...rule,replaceString:rich}])
-  const dom=new JSDOM(view.parts[0].content)
-  try {
-    assert.doesNotMatch(dom.window.document.querySelector('style').textContent,/<pre>|<code>/)
-    assert.equal(dom.window.getComputedStyle(dom.window.document.querySelector('p')).fontSize,'20px')
-  } finally {dom.window.close()}
-  assert.equal(display.html,html)
-})

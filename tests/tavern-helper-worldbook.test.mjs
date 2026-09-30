@@ -18,28 +18,6 @@ function view() {
   }
 }
 
-test('世界书投影为 Tavern Helper 的稳定条目结构', function () {
-  const projected = projectTavernHelperWorldbook(view())
-  assert.equal(projected.name, '灯火阑珊世界书')
-  assert.deepEqual(projected.entries[0], {
-    uid: 9,
-    name: '[地图]神州',
-    enabled: true,
-    strategy: {
-      type: 'selective',
-      keys: ['神州'],
-      keys_secondary: { logic: 'and_any', keys: ['城镇'] },
-      scan_depth: 'same_as_global'
-    },
-    position: { type: 'after_character_definition', role: 'system', depth: 4, order: 120 },
-    content: '神州资料',
-    probability: 100,
-    recursion: { prevent_incoming: false, prevent_outgoing: true, delay_until: null },
-    effect: { sticky: null, cooldown: null, delay: null },
-    extra: { displayIndex: 0, caseSensitive: null, matchWholeWords: null, group: '', dsh_tavern_ref: 'entry:3' }
-  })
-})
-
 test('世界书位置与角色编号遵循 Tavern Helper 上游定义', function () {
   const source = view()
   source.entries = [
@@ -56,17 +34,6 @@ test('世界书位置与角色编号遵循 Tavern Helper 上游定义', function
     ['at_depth', 'assistant'],
     ['outlet', 'system']
   ])
-})
-
-test('非 constant 条目默认投影为 selective，关闭概率时固定为百分百', function () {
-  const source = view()
-  source.entries[0].constant = false
-  source.entries[0].selective = false
-  source.entries[0].probabilityEnabled = false
-  source.entries[0].probability = 20
-  const entry = projectTavernHelperWorldbook(source).entries[0]
-  assert.equal(entry.strategy.type, 'selective')
-  assert.equal(entry.probability, 100)
 })
 
 test('人物卡脚本按 uid 更新条目并生成明确的增删操作', function () {

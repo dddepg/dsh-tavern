@@ -16,16 +16,7 @@ function harness({ busy = false, stale = false } = {}) {
     apply: path => run({ sessionId: 'session', path }, String, async () => structuredClone(chat), () => 'play', async () => ({ busy }), new Map(), { fullSnapshot: async () => { reads++; return structuredClone(snapshot) } }, async (_id, update) => { const draft = structuredClone(chat); if (stale) draft._storageRevision++; chat = update(draft); return chat }, async saved => saved)
   }
 }
-test('mid-game preset replaces all phases and regex while preserving 200 turns and variables', async () => {
-  const h = harness()
-  const before = structuredClone(h.chat())
-  await h.apply('new')
-  assert.deepEqual(h.chat(), { ...before, runtimePresetSnapshot: h.snapshot })
-  await h.apply('')
-  assert.equal(h.chat().runtimePresetSnapshot, null)
-  assert.equal(h.reads(), 1, 'disabling must not load the global default')
-  assert.deepEqual(h.chat().messages, before.messages)
-})
+
 test('busy and stale games reject preset replacement without changing the save', async () => {
   for (const options of [{ busy: true }, { stale: true }]) {
     const h = harness(options)

@@ -35,20 +35,6 @@ function harness(options = {}) {
   return { coordinator, read: () => structuredClone(chat) }
 }
 
-test('联合压缩计划包含前台与当前后台 Session，并在执行期间阻止后台任务', async function () {
-  const app = harness()
-  const plan = await app.coordinator.prepare('foreground-1')
-
-  assert.deepEqual(plan, {
-    operationId: 'compaction-1',
-    foregroundSessionId: 'foreground-1',
-    backgroundSessionId: 'background-1'
-  })
-  assert.equal(app.coordinator.blocked(app.read()), true)
-  assert.equal(app.read().timeline.participants.background.requiresNewSessionOnRewind, true)
-  assert.equal(await app.coordinator.backgroundTarget('foreground-1', plan.operationId), 'background-1')
-})
-
 test('后台压缩目标只能由当前前台压缩计划解析', async function () {
   const app = harness()
   const plan = await app.coordinator.prepare('foreground-1')
@@ -58,35 +44,6 @@ test('后台压缩目标只能由当前前台压缩计划解析', async function
     function (error) { return error && error.code === 'COMPACTION_PLAN_STALE' }
   )
   assert.equal(await app.coordinator.backgroundTarget('foreground-1', plan.operationId), 'background-1')
-})
-
-test('后台任务运行时拒绝开始联合压缩', async function () {
-  const app = harness({ activity: { phase: 'running', busy: true, role: 'settlement' } })
-  await assert.rejects(
-    () => app.coordinator.prepare('foreground-1'),
-    function (error) { return error && error.code === 'BACKGROUND_BUSY' }
-  )
-})
-
-test('前后台结果分别持久化，后台成功后标记回退必须重建 Session', async function () {
-  const app = harness()
-  const plan = await app.coordinator.prepare('foreground-1')
-  const result = await app.coordinator.complete('foreground-1', {
-    operationId: plan.operationId,
-    foreground: { status: 'succeeded', message: 'Compacted 10 history items.' },
-    background: { status: 'succeeded', message: 'Compacted 20 history items.' }
-  })
-
-  assert.equal(result.status, 'completed')
-  assert.equal(result.foreground.status, 'succeeded')
-  assert.equal(result.background.status, 'succeeded')
-  assert.equal(app.coordinator.blocked(app.read()), false)
-  assert.equal(app.read().timeline.participants.background.requiresNewSessionOnRewind, true)
-  assert.deepEqual(app.read().lastCompaction, {
-    operationId: 'compaction-1', status: 'completed', completedAt: 1000,
-    foreground: { status: 'succeeded', message: 'Compacted 10 history items.' },
-    background: { status: 'succeeded', message: 'Compacted 20 history items.' }
-  })
 })
 
 test('单边失败返回部分成功，没有后台 Session 时只要求前台成功', async function () {

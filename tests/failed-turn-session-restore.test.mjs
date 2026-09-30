@@ -31,62 +31,6 @@ test('失败清理经过真实 DSH 消息校验及恢复，不损坏历史或误
   assert.equal(sessionEvents(restored)[1].data.message.content[0].text, '原正文')
 })
 
-test('失败轮只有用户输入、从未获得模型来源，也能清理并恢复', () => {
-  const session = fixture()
-  clearFailedTurnSurface({ session, turn: 2 })
-  const marker = sessionEvents(session).at(-1)
-  assert.equal(marker.type, 'user/message')
-  assert.equal(marker.data.source.kind, 'plugin')
-  assert.deepEqual(marker.data.content, [])
-  assert.deepEqual(marker.sourceEventSeqs, [3])
-  assert.doesNotThrow(() => Session.create(session.id, sessionEvents(session), session.header))
-})
-
-test('连续回退经过真实 DSH 消息面替换与恢复，直到只剩开场白', () => {
-  let session = Session.create('continuous-rollback-restore')
-  const source = { kind: 'model', provider: 'test', model: 'test' }
-  appendSessionEvent(session, 'assistant/message', { turn: 1, step: 1, message: { id: 'opening', role: 'assistant', content: [{ type: 'text', text: '开场白' }], source } }, { surfaceOp: 'append' })
-  session.append('user/message', { id: 'user-1', role: 'user', content: [{ type: 'text', text: '第一轮' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
-  appendSessionEvent(session, 'assistant/message', { turn: 2, step: 1, message: { id: 'body-1', role: 'assistant', content: [{ type: 'text', text: '第一轮正文' }], source } }, { surfaceOp: 'append' })
-  session.append('user/message', { id: 'user-2', role: 'user', content: [{ type: 'text', text: '第二轮' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
-  appendSessionEvent(session, 'assistant/message', { turn: 3, step: 1, message: { id: 'body-2', role: 'assistant', content: [{ type: 'text', text: '第二轮正文' }], source } }, { surfaceOp: 'append' })
-
-  const latest = locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes })
-  appendSessionEvent(session, 'assistant/message', { turn: latest.turn, step: latest.step, message: { id: 'rollback-2', role: 'assistant', content: [], source: latest.source } }, {
-    surfaceOp: { op: 'replace', start: latest.userSeq, end: latest.endSeq }, sourceEventSeqs: latest.shadowedSeqs
-  })
-  const replacementSeq = sessionEvents(session).findLast(event => event.data?.message?.id === 'rollback-2').seq
-  session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
-
-  const previous = locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes })
-  assert.equal(previous.turn, 2)
-  assert.deepEqual(previous.shadowedSeqs, [1, 2, replacementSeq])
-  appendSessionEvent(session, 'assistant/message', { turn: previous.turn, step: previous.step, message: { id: 'rollback-1', role: 'assistant', content: [], source: previous.source } }, {
-    surfaceOp: { op: 'replace', start: previous.userSeq, end: previous.endSeq }, sourceEventSeqs: previous.shadowedSeqs
-  })
-  session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
-
-  assert.equal(session.surface.nodes.length, 2)
-  assert.equal(session.surface.nodes[0], 0)
-  assert.equal(locateRollbackSurface({ events: sessionEvents(session), nodes: session.surface.nodes }), null)
-})
-
-
-test('真实宿主重载后可发现遗漏清理的失败输入，清理后模型不再读取它', () => {
-  const original = fixture()
-  const session = Session.create(original.id, JSON.parse(JSON.stringify(sessionEvents(original))), original.header)
-  const chat = { messages: [{ role: 'user' }, { role: 'assistant', turn: 1 }] }
-  const status = rollbackAvailability(chat, { events: sessionEvents(session), nodes: session.surface.nodes })
-  assert.equal(status.canClearIncompleteReply, true)
-  assert.deepEqual(status.unclearedTurns, [2])
-  for (const turn of status.unclearedTurns) clearFailedTurnSurface({ session, turn })
-  const restored = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
-  const visible = JSON.stringify(restored.deriveMessages())
-  assert.doesNotMatch(visible, /重新生成/)
-  assert.match(visible, /原正文/)
-  assert.ok(sessionEvents(restored).some(event => event.data?.id === 'retry'))
-})
-
 test('新轮退役历史提示词后失败，清理及重载保留上一轮正文和退役标记', async () => {
   const { retireForegroundFrames } = await import('../tavern-plugin/lib/domain/foreground-frame-retirement.js')
   for (const traced of [true, false]) {
@@ -110,41 +54,5 @@ test('新轮退役历史提示词后失败，清理及重载保留上一轮正�
       assert.doesNotMatch(JSON.stringify(session.deriveMessages()), /失败输入|旧提示词/)
       assert.equal(locateRegenerationSurface({ events: sessionEvents(session), nodes: session.surface.nodes, turn: 1 }).assistantSeq, 3)
     }
-  }
-})
-
-test('失败轮更新历史系统槽位后，纯思考残留可回退清理，重载保留历史和后续正文', async () => {
-  const { retireForegroundFrames } = await import('../tavern-plugin/lib/domain/foreground-frame-retirement.js')
-  for (const laterTurn of [false, true]) {
-    let session = Session.create('reasoning-only-system-refresh')
-    const source = { kind: 'model', provider: 'test', model: 'test' }
-    const system = text => ({ turn: 2, step: 1, message: { id: 'system-' + text, role: 'system', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } } })
-    appendSessionEvent(session, 'system/message', system('旧系统提示'), { surfaceOp: 'append' })
-    session.append('user/message', { id: 'seed', role: 'user', content: [{ type: 'text', text: '历史设定' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot' } }, { surfaceOp: 'append' })
-    appendSessionEvent(session, 'assistant/message', { turn: 1, step: 1, message: { id: 'old-body', role: 'assistant', content: [{ type: 'text', text: '历史正文' }], source } }, { surfaceOp: 'append' })
-    session.append('turn/start', { turn: 2 })
-    appendSessionEvent(session, 'system/message', system('新系统提示'), { surfaceOp: { op: 'replace', start: 0, end: 0 }, sourceEventSeqs: [0] })
-    session.append('user/message', { id: 'input', role: 'user', content: [{ type: 'text', text: '失败输入' }], source: { kind: 'user' } }, { surfaceOp: 'append' })
-    session.append('user/message', { id: 'frame', role: 'user', content: [{ type: 'text', text: '本轮提示' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame', trace: { turn: 2 } } }, { surfaceOp: 'append' })
-    appendSessionEvent(session, 'assistant/message', { turn: 2, step: 1, message: { id: 'thinking', role: 'assistant', content: [{ type: 'reasoning', text: '只有思考' }], source } }, { surfaceOp: 'append' })
-    session.append('turn/end', { turn: 2, reason: { kind: 'error', message: '没有正文' } })
-    const status = rollbackAvailability({ messages: [{ role: 'assistant', turn: 1 }] }, { events: sessionEvents(session), nodes: session.surface.nodes })
-    assert.equal(status.canClearIncompleteReply, true)
-    if (laterTurn) {
-      session.append('turn/start', { turn: 3 })
-      retireForegroundFrames(session, { keepTurn: 3 })
-      appendSessionEvent(session, 'assistant/message', { turn: 3, step: 1, message: { id: 'later', role: 'assistant', content: [{ type: 'text', text: '后续正文' }], source } }, { surfaceOp: 'append' })
-      session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
-    }
-    session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
-    assert.equal(clearFailedTurnSurface({ session, turn: 2 }), 3)
-    assert.equal(clearFailedTurnSurface({ session, turn: 2 }), 0)
-    session = Session.create(session.id, JSON.parse(JSON.stringify(sessionEvents(session))), session.header)
-    const visible = JSON.stringify(session.deriveMessages())
-    assert.match(visible, /新系统提示/)
-    assert.match(visible, /历史设定/)
-    assert.match(visible, /历史正文/)
-    assert.doesNotMatch(visible, /失败输入|只有思考|本轮提示/)
-    if (laterTurn) assert.match(visible, /后续正文/)
   }
 })

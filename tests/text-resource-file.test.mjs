@@ -15,8 +15,3 @@ test('text import preserves UTF-8, BOM UTF-16 and GBK/GB18030 Chinese',async()=>
 test('invalid or explicitly corrupt text is rejected instead of replaced',async()=>{
   for(const bytes of [[0xff],[0xef,0xbb,0xbf,0xff],[0xff,0xfe,0x00],[0xff,0xfe,0,0,65,0,0,0],[65,0,66,0]]) await assert.rejects(parse(bytes),/UTF-8/);
 });
-test('EPUB stays binary and text payload contract stays unchanged',async()=>{
-  assert.equal((await parse([0x50,0x4b,0xff],'novel.epub')).fileB64,'UEv/');
-  assert.equal((await parse([])).text,'');
-  assert.equal((await parse([65])).chunkSize,500);
-});

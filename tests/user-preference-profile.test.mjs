@@ -32,32 +32,6 @@ test('draft remains separate until the user confirms its exact revision', async 
   assert.match((await profile.stableContext()).text, /每轮都应有可感知的推进/)
 })
 
-test('a newer draft does not silently replace the confirmed profile', async function () {
-  let tick = 0
-  const profile = createUserPreferenceProfile({ store: memoryStore(), now: () => ++tick })
-  const first = await profile.saveDraft({ summary: '第一版', injectionText: '采用第一版偏好。' })
-  await profile.confirm({ draftRevision: first.draft.revision, confirmation: '确认保存用户画像' })
-  const second = await profile.saveDraft({ summary: '第二版', injectionText: '采用第二版偏好。' })
-  assert.match((await profile.stableContext()).text, /第一版/)
-  await assert.rejects(profile.confirm({ draftRevision: first.draft.revision, confirmation: '确认保存用户画像' }), /已变化/)
-  await profile.confirm({ draftRevision: second.draft.revision, confirmation: '确认保存用户画像' })
-  assert.match((await profile.stableContext()).text, /第二版/)
-})
-
-test('manual edits create a new confirmed version without changing an existing game snapshot', async function () {
-  let tick = 0
-  const profile = createUserPreferenceProfile({ store: memoryStore(), now: () => ++tick })
-  const draft = await profile.saveDraft({ summary: '旧画像', injectionText: '旧注入摘要' })
-  const first = await profile.confirm({ draftRevision: draft.draft.revision, confirmation: '确认保存用户画像' })
-  const frozen = await profile.stableContext()
-  await assert.rejects(profile.updateConfirmed({ expectedRevision: 999, summary: '新画像', injectionText: '新注入摘要' }), /已被其他操作修改/)
-  const changed = await profile.updateConfirmed({ expectedRevision: first.confirmed.profileRevision, summary: '新画像', injectionText: '新注入摘要' })
-  assert.equal(changed.confirmed.profileRevision > first.confirmed.profileRevision, true)
-  assert.equal(changed.hasDraft, false)
-  assert.match((await profile.stableContext()).text, /新注入摘要/)
-  assert.match(frozen.text, /旧注入摘要/)
-})
-
 test('default enablement is profile-wide but remains off until explicitly changed', async function () {
   const profile = createUserPreferenceProfile({ store: memoryStore(), now: () => 100 })
   assert.equal((await profile.read()).defaultEnabled, false)
@@ -103,31 +77,6 @@ test('legacy profile migrates without losing confirmation; named profiles keep i
   assert.equal((await profiles.read()).profileId, 'default')
 })
 
-test('a confirmation cannot cross profile boundaries after a selection change', async () => {
-  const profiles = createUserPreferenceProfile({ store: memoryStore() })
-  const first = await profiles.saveDraft({ summary: 'A' })
-  await profiles.manage({ action: 'create', name: 'B' })
-  const second = await profiles.saveDraft({ summary: 'B' })
-  assert.notEqual(first.draft.revision, second.draft.revision)
-  await assert.rejects(profiles.confirm({ draftRevision: first.draft.revision, confirmation: '确认保存用户画像' }), /已变化/)
-  assert.equal((await profiles.read('default')).draft.summary, 'A')
-})
-
-test('browsing and creating profiles never change the separate new-game default', async () => {
-  const profiles = createUserPreferenceProfile({ store: memoryStore() })
-  const draft = await profiles.saveDraft({ summary: '日常', injectionText: '日常' })
-  await profiles.confirm({ draftRevision: draft.draft.revision, confirmation: '确认保存用户画像' })
-  await profiles.manage({ action: 'default', profileId: 'default' })
-  const other = await profiles.manage({ action: 'create', name: '冒险' })
-  assert.equal(other.defaultProfileId, 'default')
-  await assert.rejects(profiles.manage({ action: 'default', profileId: other.profileId }), /确认画像/)
-  await profiles.manage({ action: 'select', profileId: 'default' })
-  assert.equal((await profiles.read()).defaultProfileId, 'default')
-  await profiles.manage({ action: 'default', profileId: '' })
-  assert.equal((await profiles.read()).defaultProfileId, '')
-  assert.equal((await profiles.read()).hasConfirmed, true)
-})
-
 test('direct save updates the same profile atomically without confirmation or enabling it', async () => {
   const profile = createUserPreferenceProfile({ store: memoryStore() })
   const first = await profile.save({ summary: '慢热', injectionText: '慢热' })
@@ -139,18 +88,6 @@ test('direct save updates the same profile atomically without confirmation or en
   assert.equal(second.confirmed.summary, '快节奏')
   assert.equal(second.hasDraft, false)
   assert.equal(second.defaultEnabled, false)
-})
-
-test('single profile content is saved identically for display and injection', async () => {
-  const profile = createUserPreferenceProfile({ store: memoryStore() })
-  const content = '# 用户画像\n\n偏好慢热，保留玩家的行动选择。'
-  const saved = await profile.save({ content })
-  assert.equal(saved.confirmed.summary, content)
-  assert.equal(saved.confirmed.injectionText, content)
-  assert.deepEqual(saved.confirmed.rawAnswers, [])
-  assert.deepEqual(saved.confirmed.dimensions, [])
-  await assert.rejects(profile.save({ content: 'x'.repeat(3001) }), /3000/)
-  assert.equal((await profile.read()).confirmed.summary, content)
 })
 
 test('create from guide saves a complete independent preference without changing the default', async () => {

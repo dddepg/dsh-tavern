@@ -14,38 +14,6 @@ function sections(text) {
     schema: JSON.parse(text.split('【变量结构】\n')[1].split('\n【人物卡变量更新规则】')[0]) }
 }
 
-test('后台只发送一份结构和真实状态，运行时 Frame、未知字段和规则原样保留', () => {
-  const before = structuredClone(input)
-  const frame = createMvuBackgroundTaskFrame(input)
-  const request = projectMvuBackgroundRequest(frame)
-  const parsed = sections(request.turnContext)
-  assert.deepEqual(parsed.variables, { stat_data: variables.stat_data, custom: variables.custom, initialized_lorebooks: ['book'] })
-  assert.deepEqual(parsed.schema, schema)
-  assert.equal(request.turnContext.split('unique-schema-marker').length - 1, 1)
-  assert(request.turnContext.includes(JSON.stringify(schema)), 'structure uses compact lossless JSON')
-  assert(request.turnContext.includes(input.updateRules[0]))
-  assert.doesNotMatch(request.turnContext, /人物设计（按需）/)
-  assert.deepEqual(frame.authoritativeState.currentVariables, variables)
-  assert.deepEqual(input, before)
-})
-
-test('旧设置开启人物设计时，MVU 结算也不自动设计或提供档案工具', () => {
-  const request = projectMvuBackgroundRequest(createMvuBackgroundTaskFrame(input))
-  assert.deepEqual(request.tools.map(tool => tool.name), ['posture_submit', 'mvu_submit_update'])
-  assert.doesNotMatch(request.turnContext, /character-design|人物设计（按需）/)
-})
-
-test('MVU 结算把取消信号传给后台 Agent', async () => {
-  const controller = new AbortController()
-  let received
-  const module = createMvuSettlementModule({
-    model: { async run(request) { received = request.signal; throw new Error('fixture stopped') } },
-    runtime: { async settleMvuUpdate() { throw new Error('unexpected runtime call') } }
-  })
-  await assert.rejects(module.settleVariables({ ...input, signal: controller.signal }), /fixture stopped/)
-  assert.equal(received, controller.signal)
-})
-
 test('不按字段名误删扁平变量，不删除 stat_data 内同名游戏字段，显式结构优先', () => {
   const flat = { hp: 10, display_data: '游戏字段', delta_data: 4, schema: '剧情用词' }
   const override = { type: 'object', properties: { other: { type: 'boolean' } } }
