@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "3cf2843ef540c4759915d2e0ae5d85f459b5a03e",
-  "releaseSequence": 435,
+  "revision": "0de367bbd54e5450d98f5470e94b0b336a5ee1a6",
+  "releaseSequence": 436,
   "version": "2.4.0",
   "files": [
     {
@@ -371,13 +371,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "15890dd7356e89b828b856e0243cdfb77d7c57690f671c5339e592c1d74152a5",
-      "size": 228359
+      "sha256": "cfcedaa36dc1424a1d878e283a899e71b7b63fe4c12fcb83f7da06473cc203d1",
+      "size": 228912
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "8c50566472cdebc0341acb5270d8665c8158a8b71497d29469b8049b096fbc32",
-      "size": 1368463
+      "sha256": "11a4191ebae6b443f07a085966724dccdf4aa976deef5d4bc9693473c0efbbf2",
+      "size": 1369100
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -4621,8 +4621,8 @@
     },
     {
       "path": "tavern-plugin/src/client/ui/message-frame.js",
-      "sha256": "407585b04b34c6b0e572b60cb114bfcab523d49d828e77b3f27e631018f34b77",
-      "size": 32339
+      "sha256": "14d4dfb41b73dc7a63009f03d41d8b6f369289ab2aa2513b2c6518b56a85dcb1",
+      "size": 32413
     },
     {
       "path": "tavern-plugin/src/client/variable-receipts.js",
