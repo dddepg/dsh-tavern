@@ -16085,13 +16085,15 @@ window.__ModuleLoader__.load({
             }, [props.contextSessionId, refresh]);
 			const request = record && record.request;
             const text = React.useMemo(() => request ? JSON.stringify(request, null, 2) : "", [request]);
-            const sections = React.useMemo(() => requestContextSections(request), [request]);
+            const sections = React.useMemo(() => requestContextSections(request).map(section => ({ ...section, searchText: (section.title + section.text).toLowerCase() })), [request]);
+            // Contexts reach 100k+ characters; filter off the typing path.
+            const deferredQuery = React.useDeferredValue(query.toLowerCase());
             function downloadJson() {
                 const url = URL.createObjectURL(new Blob([text], { type: "application/json;charset=utf-8" }));
                 const link = document.createElement("a"); link.href = url; link.download = "request-context.json";
                 document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
-            const visibleSections = sections.filter(section => !query || (section.title + section.text).toLowerCase().includes(query.toLowerCase()));
+            const visibleSections = React.useMemo(() => sections.filter(section => !deferredQuery || section.searchText.includes(deferredQuery)), [sections, deferredQuery]);
             return h("section", { className: "dsh-tavern-full-context" },
                 h("header", { className: "dsh-context-header" },
                     h("div", null, h("h3", null, "完整上下文"), h("p", null, "最近一次请求 · 系统提示、工具与完整消息")),
@@ -16108,19 +16110,21 @@ window.__ModuleLoader__.load({
                 !loading && !record && !error ? h("p", { className: "dsh-context-empty" }, "暂无请求记录，发送消息后刷新查看。") : null,
                 loading && !record ? h("p", { className: "dsh-context-empty" }, "正在读取完整上下文…") : null,
                 request ? h("div", { className: "dsh-context-list" },
-                    visibleSections.map(section => h("details", { key: record.id + ":" + (section.displayKey || section.title), open: !!query },
-                        h("summary", null, h("span", { className: "dsh-context-chevron", "aria-hidden": true }, "›"),
+                    visibleSections.map((section, sectionIndex) => h(TavernLazyDetails, { key: record.id + ":" + (section.displayKey || section.title) + (deferredQuery ? ":search" : ""),
+                        // Searching opens the first matches only; opening every match would lay out the whole request.
+                        defaultOpen: !!deferredQuery && sectionIndex < 20,
+                        summary: h("summary", null, h("span", { className: "dsh-context-chevron", "aria-hidden": true }, "›"),
                             h("span", { className: "dsh-context-section-title" }, section.title),
                             h("span", { className: "dsh-context-count" }, (section.count ?? section.text.length).toLocaleString() + " 字符")),
-                        ...(section.displayParts || [{ text: section.text }]).filter(part => part.text.trim()).map((part, index) => part.catalog
+                        render: () => h(React.Fragment, null, ...(section.displayParts || [{ text: section.text }]).filter(part => part.text.trim()).map((part, index) => part.catalog
                             ? h("details", { key: index, className: "dsh-context-source" },
                                 h("summary", null, h("span", { className: "dsh-context-chevron", "aria-hidden": true }, "›"), part.label),
                                 h("pre", null, part.text))
                             : h("div", { key: index }, part.label ? h("div", { className: "dsh-context-part-label" }, part.label) : null, h("pre", null, part.text))),
                         section.metadataText && section.metadataText !== "{}" ? h("details", { className: "dsh-context-source" },
                             h("summary", null, h("span", { className: "dsh-context-chevron", "aria-hidden": true }, "›"), "来源与消息信息"),
-                            h("pre", null, section.metadataText)) : null)),
-                    query && !visibleSections.length ? h("p", { className: "dsh-context-empty" }, "没有匹配的内容") : null) : null,
+                            h("pre", null, section.metadataText)) : null) })),
+                    deferredQuery && !visibleSections.length ? h("p", { className: "dsh-context-empty" }, "没有匹配的内容") : null) : null,
                 request ? h("p", { className: "dsh-context-footnote" }, "发送时的上下文快照 · 供应商协议转换前 · 消息顺序保持不变") : null
             );
 		}
