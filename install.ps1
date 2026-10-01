@@ -774,6 +774,12 @@ try {
   Write-InstallStatus '本地处理：正在更新程序文件，保留用户数据…'
   New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
   # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data\ 用户数据会保留。
+  # 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
+  $PruneScript = Join-Path $SourceDir.FullName 'bin\prune-installed-files.mjs'
+  if (Test-Path -LiteralPath $PruneScript) {
+    & node $PruneScript $SourceDir.FullName $AppDir
+    if ($LASTEXITCODE -ne 0) { Write-Warning '旧版本遗留文件清理失败，继续安装。' }
+  }
   Get-ChildItem -LiteralPath $SourceDir.FullName -Force | Copy-Item -Destination $AppDir -Recurse -Force
   Assert-InstallFiles $AppDir
   $PathsFile = Join-Path $TempDir 'install-paths.txt'

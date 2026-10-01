@@ -581,6 +581,10 @@ fi
 
 mkdir -p "${APP_DIR}"
 # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data/ 用户数据会保留。
+# 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
+if [ -f "${SOURCE_DIR}/bin/prune-installed-files.mjs" ]; then
+  node "${SOURCE_DIR}/bin/prune-installed-files.mjs" "${SOURCE_DIR}" "${APP_DIR}" || echo "警告：旧版本遗留文件清理失败，继续安装。" >&2
+fi
 cp -R "${SOURCE_DIR}/." "${APP_DIR}/"
 if [ "${USED_CDN}" -eq 1 ]; then rm -f -- "${APP_DIR}/.dsh-tavern-release.json"; fi
 case ${TARGET_COMMIT} in
