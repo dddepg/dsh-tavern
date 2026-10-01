@@ -576,6 +576,8 @@ window.__ModuleLoader__.load({
 
 // @include ui/lazy-details.js
 
+// @include ui/visible-refresh.js
+
 
 // @include runtime/host-artifacts.js
 

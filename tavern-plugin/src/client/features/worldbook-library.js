@@ -279,15 +279,8 @@
 					return relations;
 				});
 			}
-			React.useEffect(function () {
-				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks")) refresh(); }
-				window.addEventListener("dsh-tavern-data-changed", onData);
-				return function () {
-					window.removeEventListener("dsh-tavern-data-changed", onData);
-					refreshModule.current.dispose();
-				};
-			}, []);
+			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks"); }, refresh);
+			React.useEffect(function () { return function () { refreshModule.current.dispose(); }; }, []);
 			React.useEffect(function () { if (requestedSource) load(requestedSource); }, [JSON.stringify(requestedSource)]);
 			function clear() { setRecord(null); setAssociations(null); setSelectedCardPath(""); if (props.ctx && props.tab) props.ctx.betterSidebar.updateTab(props.tab.id, { meta: null }); }
 			function changeSortMode(value) {

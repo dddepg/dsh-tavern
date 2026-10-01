@@ -2808,6 +2808,32 @@ window.__ModuleLoader__.load({
 			return React.createElement("details", attributes, props.summary, open ? props.render() : null);
 		}
 
+		// Sidebar tabs stay mounted while hidden. A data change refreshes a visible
+		// tab at once; a hidden tab only marks itself stale and refreshes when shown,
+		// so one save does not fan out into every library's full catalog fetch.
+		function useVisibleDataRefresh(visible, affects, refresh, key) {
+			const shown = visible !== false;
+			const state = React.useRef({ stale: true, shown: shown, refresh: refresh, affects: affects });
+			state.current.shown = shown;
+			state.current.refresh = refresh;
+			state.current.affects = affects;
+			React.useEffect(function () {
+				function onData(event) {
+					if (!state.current.affects(event)) return;
+					if (state.current.shown) state.current.refresh();
+					else state.current.stale = true;
+				}
+				window.addEventListener("dsh-tavern-data-changed", onData);
+				return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
+			}, []);
+			React.useEffect(function () { state.current.stale = true; }, [key]);
+			React.useEffect(function () {
+				if (!shown || !state.current.stale) return;
+				state.current.stale = false;
+				state.current.refresh();
+			}, [shown, key]);
+		}
+
 
 		const tavernSessionModes = { values: {}, listeners: new Set() };
 		function publishSessionModes(items) {
@@ -12548,12 +12574,7 @@ window.__ModuleLoader__.load({
 					} catch (err) { setError(String(err && err.message || err)); }
 					finally { setBusy(false); }
 				}
-			React.useEffect(function () {
-				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["scripts", "cards", "sessions"], "resources")) refresh(); }
-				window.addEventListener("dsh-tavern-data-changed", onData);
-				return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
-			}, [props.sessionId]);
+			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["scripts", "cards", "sessions"], "resources"); }, refresh, props.sessionId);
 			const h = React.createElement;
 				const readOnly = !view || view.mode !== "card";
 			const mounted = view && view.workspace && Array.isArray(view.workspace.mountedResources) ? view.workspace.mountedResources : [];
@@ -12681,6 +12702,7 @@ window.__ModuleLoader__.load({
 				component: function (props) {
 					return React.createElement(TavernResourcesTab, {
 						sessionId: props.scope.sessionId,
+						visible: props.visible,
 						appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); },
 					});
 				}
@@ -12851,7 +12873,7 @@ window.__ModuleLoader__.load({
 
 
 			function createExternalPresetAndBypassPlanFeatureModule() {
-			function usePresetCatalog(sessionId, errorSink) {
+			function usePresetCatalog(sessionId, errorSink, visible) {
 				const [catalog, setCatalog] = React.useState({ presets: [], activePresetPath: "", activePresetTitle: "", sessionMode: "" });
 				function refresh() {
 					return Promise.all([rpc("listPresets", {}, sessionId), rpc("getSession", { sessionId: sessionId }, sessionId)]).then(function (all) {
@@ -12860,18 +12882,14 @@ window.__ModuleLoader__.load({
 						setCatalog(next); if (errorSink) errorSink(""); return next;
 					}, function (err) { if (errorSink) errorSink(String(err && err.message || err)); return null; });
 				}
-				React.useEffect(function () {
-					refresh(); function onData(event) { if (tavernDataChangeAffects(event, ["presets", "sessions"], "presets")) refresh(); }
-					window.addEventListener("dsh-tavern-data-changed", onData);
-					return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
-				}, [sessionId]);
+				useVisibleDataRefresh(visible, function (event) { return tavernDataChangeAffects(event, ["presets", "sessions"], "presets"); }, refresh, sessionId);
 				return [catalog, refresh];
 			}
 
 			function ExternalPresetLibraryTab(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
 				const [error, setError] = usePersistentError("预设库");
-				const [catalog, refresh] = usePresetCatalog(props.scope.sessionId, setError);
+				const [catalog, refresh] = usePresetCatalog(props.scope.sessionId, setError, props.visible);
 				const [detailPath, setDetailPath] = React.useState("");
 				const [preset, setPreset] = React.useState(null);
 				const [entryDrafts, setEntryDrafts] = React.useState({});
@@ -13076,7 +13094,7 @@ window.__ModuleLoader__.load({
 				const ctx = input.ctx;
 				const appendMention = input.appendMention;
 				return ctx.effect(function () {
-					const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:presets", title: "预设库", order: 4, single: true, component: function (props) { return React.createElement(ExternalPresetLibraryTab, { scope: props.scope, appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); } }); } });
+					const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:presets", title: "预设库", order: 4, single: true, component: function (props) { return React.createElement(ExternalPresetLibraryTab, { scope: props.scope, visible: props.visible, appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); } }); } });
 					return function () { if (typeof dispose === "function") dispose(); };
 				}, "dsh-tavern: preset library");
 			}
@@ -13366,15 +13384,8 @@ window.__ModuleLoader__.load({
 					return relations;
 				});
 			}
-			React.useEffect(function () {
-				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks")) refresh(); }
-				window.addEventListener("dsh-tavern-data-changed", onData);
-				return function () {
-					window.removeEventListener("dsh-tavern-data-changed", onData);
-					refreshModule.current.dispose();
-				};
-			}, []);
+			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks"); }, refresh);
+			React.useEffect(function () { return function () { refreshModule.current.dispose(); }; }, []);
 			React.useEffect(function () { if (requestedSource) load(requestedSource); }, [JSON.stringify(requestedSource)]);
 			function clear() { setRecord(null); setAssociations(null); setSelectedCardPath(""); if (props.ctx && props.tab) props.ctx.betterSidebar.updateTab(props.tab.id, { meta: null }); }
 			function changeSortMode(value) {

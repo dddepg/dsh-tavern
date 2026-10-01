@@ -33,12 +33,7 @@
 					} catch (err) { setError(String(err && err.message || err)); }
 					finally { setBusy(false); }
 				}
-			React.useEffect(function () {
-				refresh();
-				function onData(event) { if (tavernDataChangeAffects(event, ["scripts", "cards", "sessions"], "resources")) refresh(); }
-				window.addEventListener("dsh-tavern-data-changed", onData);
-				return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
-			}, [props.sessionId]);
+			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["scripts", "cards", "sessions"], "resources"); }, refresh, props.sessionId);
 			const h = React.createElement;
 				const readOnly = !view || view.mode !== "card";
 			const mounted = view && view.workspace && Array.isArray(view.workspace.mountedResources) ? view.workspace.mountedResources : [];
@@ -166,6 +161,7 @@
 				component: function (props) {
 					return React.createElement(TavernResourcesTab, {
 						sessionId: props.scope.sessionId,
+						visible: props.visible,
 						appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); },
 					});
 				}

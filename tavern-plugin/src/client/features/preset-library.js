@@ -13,7 +13,7 @@
 
 
 			function createExternalPresetAndBypassPlanFeatureModule() {
-			function usePresetCatalog(sessionId, errorSink) {
+			function usePresetCatalog(sessionId, errorSink, visible) {
 				const [catalog, setCatalog] = React.useState({ presets: [], activePresetPath: "", activePresetTitle: "", sessionMode: "" });
 				function refresh() {
 					return Promise.all([rpc("listPresets", {}, sessionId), rpc("getSession", { sessionId: sessionId }, sessionId)]).then(function (all) {
@@ -22,18 +22,14 @@
 						setCatalog(next); if (errorSink) errorSink(""); return next;
 					}, function (err) { if (errorSink) errorSink(String(err && err.message || err)); return null; });
 				}
-				React.useEffect(function () {
-					refresh(); function onData(event) { if (tavernDataChangeAffects(event, ["presets", "sessions"], "presets")) refresh(); }
-					window.addEventListener("dsh-tavern-data-changed", onData);
-					return function () { window.removeEventListener("dsh-tavern-data-changed", onData); };
-				}, [sessionId]);
+				useVisibleDataRefresh(visible, function (event) { return tavernDataChangeAffects(event, ["presets", "sessions"], "presets"); }, refresh, sessionId);
 				return [catalog, refresh];
 			}
 
 			function ExternalPresetLibraryTab(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
 				const [error, setError] = usePersistentError("预设库");
-				const [catalog, refresh] = usePresetCatalog(props.scope.sessionId, setError);
+				const [catalog, refresh] = usePresetCatalog(props.scope.sessionId, setError, props.visible);
 				const [detailPath, setDetailPath] = React.useState("");
 				const [preset, setPreset] = React.useState(null);
 				const [entryDrafts, setEntryDrafts] = React.useState({});
@@ -238,7 +234,7 @@
 				const ctx = input.ctx;
 				const appendMention = input.appendMention;
 				return ctx.effect(function () {
-					const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:presets", title: "预设库", order: 4, single: true, component: function (props) { return React.createElement(ExternalPresetLibraryTab, { scope: props.scope, appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); } }); } });
+					const dispose = ctx.betterSidebar.registerTab({ id: "dsh-tavern:presets", title: "预设库", order: 4, single: true, component: function (props) { return React.createElement(ExternalPresetLibraryTab, { scope: props.scope, visible: props.visible, appendMention: function (kind, path, label) { appendMention(props.scope.sessionId, kind, path, label); } }); } });
 					return function () { if (typeof dispose === "function") dispose(); };
 				}, "dsh-tavern: preset library");
 			}
