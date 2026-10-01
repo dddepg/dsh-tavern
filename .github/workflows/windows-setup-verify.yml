@@ -1,0 +1,59 @@
+name: Windows Setup Verify
+
+# Verifies a published Setup EXE byte for byte: downloads it from the release URL,
+# checks SHA-256, runs the launcher integration checks, then a complete online install
+# where direct connections are blocked and only the Windows system proxy works.
+on:
+  workflow_dispatch:
+    inputs:
+      setup_url:
+        description: Published Setup EXE URL
+        default: https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe
+      setup_sha256:
+        description: Expected SHA-256
+        default: cdb14589aff5bb63706010bd8a1e7de010ef52ae81206231c403f4ca02c28d01
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download published Setup
+        env:
+          SETUP_URL: ${{ inputs.setup_url }}
+          SETUP_SHA256: ${{ inputs.setup_sha256 }}
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'verify'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          curl.exe --fail --location --retry 3 --silent --show-error --output "$root\Setup.exe" $env:SETUP_URL
+          if ($LASTEXITCODE -ne 0) { throw "Download failed: $env:SETUP_URL" }
+          $actual = (Get-FileHash -LiteralPath "$root\Setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:SETUP_SHA256.ToLowerInvariant()) { throw "SHA-256 mismatch: $actual" }
+          Write-Output "PASS: published Setup matches $actual"
+
+      - name: Launcher integration checks
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'verify'
+          ./packaging/windows/test.ps1 -Launcher "$root\Setup.exe" -TestDirectory "$root\launcher-test"
+
+      - name: Online install through the system proxy only
+        timeout-minutes: 30
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'verify'
+          ./packaging/windows/test-system-proxy.ps1 -Launcher "$root\Setup.exe" -TestDirectory "$root\proxy-test"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-setup-verify-logs
+          path: |
+            ${{ runner.temp }}/verify/**/launcher-error.txt
+            ${{ runner.temp }}/verify/**/setup-upgrade.log
+            ${{ runner.temp }}/verify/**/smoke-result.json
+            ${{ runner.temp }}/verify/**/proxy-hosts.log
+            ${{ runner.temp }}/verify/**/update-diagnostics.jsonl
+          if-no-files-found: ignore
