@@ -1208,6 +1208,27 @@ test('动态媒体 src 和属性观察器不重新代理，图片仍走缓存', 
   assert.match(image.getAttribute('src'), /^\/api\/dsh-tavern\/static-assets/)
 })
 
+test('style 观察器无法改写的远程地址不回写，避免自触发死循环；带括号的引号地址也走缓存', () => {
+  const document = client.buildTavernFrameDocument({ content: `<div style="background-image:url('https://img.example/Saki%20(5).png')"></div>` })
+  assert.ok(document.includes('/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://img.example/Saki%20(5).png')))
+  const script = document.match(/<script data-dsh-tavern-static-cache>([\s\S]*?)<\/script>/)[1]
+  let observe
+  const writes = []
+  class Element {
+    constructor(tag) { this.tagName = tag; this.nodeType = 1; this.attrs = {} }
+    setAttribute(k, v) { writes.push(k); this.attrs[k] = v }
+    getAttribute(k) { return this.attrs[k] }
+  }
+  vm.runInNewContext(script, { window: {}, Element, document: { documentElement: {} }, MutationObserver: class { constructor(fn) { observe = fn } observe() {} } })
+  const quoted = new Element('DIV'); quoted.attrs.style = 'background-image: url("https://img.example/Saki%20(5).png")'
+  const text = new Element('DIV'); text.attrs.style = '--credit: "https://example.com"'
+  observe([quoted, text].map(target => ({ target })))
+  assert.equal(quoted.attrs.style, 'background-image: url("/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://img.example/Saki%20(5).png') + '")')
+  writes.length = 0
+  observe([quoted, text].map(target => ({ target })))
+  assert.deepEqual(writes, [], '值不变时写回 style 会再次触发观察器')
+})
+
 test('右侧持久页面记录被捕获的按钮异常和执行日志，但不采集 DOM', () => {
   const html = client.buildTavernFrameDocument({ content: '', token: 'diagnostics', persistent: true, helperContext: { messages: [] }, observeMvuView: false, runtimeReporting: true })
   const script = html.match(/<script data-dsh-tavern-frame>([\s\S]*?)<\/script>/)[1]
