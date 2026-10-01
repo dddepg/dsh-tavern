@@ -34,12 +34,38 @@ test('所有卡片入口以默认偏好建立 system 快照，管理工具仍指
     assert.equal(chat.userProfileManagementId, editingId)
     assert.match(chat.userProfileContextSnapshot, /固定偏好/)
     assert.equal(h.session(chat.sessionId).prefix, chat.cardContextSnapshot)
-    if (cardTask !== 'edit') {
+    if (cardTask === 'user-profile') {
       assert.equal(chat.cardContextSnapshot, chat.userProfileContextSnapshot)
+      assert.equal(chat.cardReferenceContext, undefined)
+    } else if (cardTask !== 'edit') {
+      // Card-bound card Agents get the foreground card + constant-worldbook reference, frozen at start.
+      assert.deepEqual(chat.cardReferenceContext, { version: 1 })
+      assert.equal(chat.cardEditContext, undefined)
+      assert.ok(chat.cardContextSnapshot.startsWith(chat.userProfileContextSnapshot + '\n\n'))
+      assert.match(chat.cardContextSnapshot, /固定描述[\s\S]*逐轮系统[\s\S]*固定世界书/)
+      assert.doesNotMatch(chat.cardContextSnapshot, /动态世界书|逐轮后置/)
       assert.equal(chat.cardDefinitionSnapshot, undefined)
-      assert.doesNotMatch(chat.cardContextSnapshot, /固定描述|逐轮系统|固定世界书/)
+      assert.equal(chat.cardContentDigest, undefined)
+      assert.equal(chat.sceneOpeningWorldbook, undefined)
     }
   }
+})
+
+test('卡片 Agent system：保留卡片人设，人物卡与常驻世界书作为参考资料附在说明之后', async () => {
+  const strategy = createNativePlayOrchestrationStrategy({ modeFor: async () => 'card', visibleTools: async () => [], controlledToolNames: new Set(),
+    cardSystemPrompt: () => '卡片 Agent 职责', cardReferencePrompt: () => '参考资料说明', workspaceContext: () => '卡片资源工作区' })
+  const fixed = [
+    { name: 'tavern:user-preference', text: '【用户已确认的长期偏好】偏好' },
+    { name: 'tavern:character-card', text: '【故事设定 · 人物卡】卡' },
+    { name: 'tavern:card-system-prompt', text: '【人物卡系统提示】卡内提示' },
+    { name: 'tavern:constant-worldbook', text: '【常驻世界书】书' },
+    { name: 'tavern:variable-directory', text: '变量目录' }
+  ]
+  const names = async (chat, sections) => (await strategy.assembleSystemPrompt({ tools: [] }, { sessionId: 's', chat, fixedSystemSections: sections })).sections.map(section => section.name)
+  assert.deepEqual(await names({ mode: 'card', cardReferenceContext: { version: 1 } }, fixed), [
+    'tavern:user-preference', 'tavern:card-system', 'tavern:card-reference', 'tavern:character-card', 'tavern:card-system-prompt', 'tavern:constant-worldbook', 'tavern:resource-workspace'])
+  assert.deepEqual(await names({ mode: 'card' }, fixed.slice(0, 1)), ['tavern:user-preference', 'tavern:card-system', 'tavern:resource-workspace'])
+  assert.deepEqual(await names({ mode: 'card', cardEditContext: { version: 1 } }, fixed), fixed.map(section => section.name))
 })
 
 test('重新进入卡片会话保留原偏好；默认关闭或仅有草案时不注入', async () => {
@@ -143,4 +169,35 @@ test('真实卡片 Agent 请求：偏好仅在 system，附加指令置顶且修
     if (index < 2) assert.ok(request.system.startsWith(index ? '附加指令第二版\n\n' : '附加指令第一版\n\n'))
     else assert.doesNotMatch(request.system, /附加指令/)
   }
+})
+
+test('真实卡片 Agent 请求：绑定人物卡时 system 附带人物卡与常驻世界书参考，不进入消息', { skip: !process.env.DSH_BOOT_MODULE }, async t => {
+  const { profile } = await profiles()
+  const h = await createInitializationNative(process.env.DSH_BOOT_MODULE, { userPreferenceProfile: profile, assembleStablePrefix: false })
+  t.after(() => h.dispose())
+  let chat = await h.open().start({ ...h.input, mode: 'card' })
+  assert.deepEqual(chat.cardReferenceContext, { version: 1 })
+  const snapshots = createPlayCardSnapshots({ userPreferenceProfile: profile, writeChat: async next => { chat = next; return next } })
+  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const implementation = source.slice(source.indexOf('  async function ensureNativeSystemPrefix('), source.indexOf('  async function ensureNativeCardWorkspace('))
+  const ensurePrefix = vm.runInNewContext(`(${implementation.trim()})`, {
+    readSessionStablePrefix, ensureSessionStablePrefix, ensureSessionVariableDirectory,
+    ensurePlayCardSnapshot: snapshots.ensure, stablePrefixStorage: undefined, sessionStore: { flush: session => h.ctx.sessions.flush(session) }
+  })
+  const strategy = createNativePlayOrchestrationStrategy({ modeFor: async () => 'card', visibleTools: async () => [], controlledToolNames: new Set(),
+    cardSystemPrompt: () => '卡片 Agent 职责', cardReferencePrompt: () => '参考资料说明', workspaceContext: () => '卡片资源工作区' })
+  registerTurnLifecycleHooks({ ctx: h.ctx, chatForSession: async () => chat, ensureNativeSystemPrefix: ensurePrefix,
+    backgroundAgentRunner: { owns: () => false }, fullTemplateRuntime: { cancel() {} }, clearRuntimePresetRequestState() {},
+    userMessageForTurn: () => null, contentText: () => '', foregroundHandoff: { end() {} },
+    sessionStore: { flush: session => h.ctx.sessions.flush(session) }, foregroundStrategies: strategy, turnOrchestrator: { modeFor: async () => 'card' },
+    publishResourceWorkspace: async () => ({}), runtimePrompt: () => ''
+  })
+  h.target.agent.followup({ id: crypto.randomUUID(), role: 'user', content: [{ type: 'text', text: '帮我改一下描述' }], source: { kind: 'human' } })
+  await h.target.agent.whenIdle()
+  const request = h.requests.at(-1)
+  const order = ['固定偏好', '卡片 Agent 职责', '参考资料说明', '不可丢失的固定背景', 'Fixture card special instruction', 'Fixture constant worldbook', '卡片资源工作区'].map(text => request.system.indexOf(text))
+  assert.ok(order.every((index, i) => index >= 0 && (i === 0 || index > order[i - 1])), JSON.stringify(order))
+  assert.doesNotMatch(request.system, /Fixture card writing constraint/)
+  const messages = JSON.stringify(request.messages.filter(m => m.role !== 'system').map(m => m.content))
+  for (const text of ['不可丢失的固定背景', 'Fixture constant worldbook', '固定偏好']) assert.ok(!messages.includes(text), text)
 })

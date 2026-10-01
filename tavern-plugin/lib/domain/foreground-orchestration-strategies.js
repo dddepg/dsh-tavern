@@ -3,6 +3,8 @@ import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
 import { projectRuntimePresetRequest } from './runtime-preset-lifecycle.js'
 
+const CARD_REFERENCE_SECTIONS = new Set(['tavern:character-card', 'tavern:card-system-prompt', 'tavern:constant-worldbook'])
+
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
@@ -326,6 +328,13 @@ export function createNativePlayOrchestrationStrategy(options) {
     if (mode === 'card' && !cardEdit) {
       const text = typeof options.cardSystemPrompt === 'function' ? options.cardSystemPrompt().trim() : ''
       if (text) sections.push({ name: 'tavern:card-system', text })
+      // Card material is reference data for the card Agent, not its persona.
+      const reference = fixed.filter(section => CARD_REFERENCE_SECTIONS.has(section.name))
+      if (reference.length) {
+        const note = typeof options.cardReferencePrompt === 'function' ? options.cardReferencePrompt().trim() : ''
+        if (note) sections.push({ name: 'tavern:card-reference', text: note })
+        sections.push(...reference)
+      }
       const workspace = options.workspaceContext(input.cwd, input.workspaceProjection)
       if (workspace !== '') sections.push({ name: 'tavern:resource-workspace', text: workspace })
     }

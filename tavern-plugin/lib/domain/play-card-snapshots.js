@@ -9,7 +9,8 @@ export function cardContentDigest(card) { return createHash('sha256').update(JSO
 const VERSION = 7
 function str(value) { return value === undefined || value === null ? '' : String(value) }
 function usesFixedContext(chat) { return chat && (!chat.mode || ['story', 'script', 'card'].includes(chat.mode)) }
-function preferenceOnly(chat) { return chat.mode === 'card' && chat.cardEditContext?.version !== 1 }
+function cardAgent(chat) { return chat.mode === 'card' && chat.cardEditContext?.version !== 1 }
+function preferenceOnly(chat) { return cardAgent(chat) && chat.cardReferenceContext?.version !== 1 }
 
 /** Owns snapshot preparation, migration, persistence and concurrent build sharing. */
 export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeChat, captureSceneWorldbook, userPreferenceProfile, logger = console }) {
@@ -41,7 +42,9 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
       userProfileRevision: preference === null ? 0 : preference.revision,
       userProfileContextSnapshot: preference === null ? '' : preference.text
     }
-    if (preferenceOnly(chat)) return patch
+    // Card Agents edit the card itself: keep only the reference text, never a
+    // definition snapshot that later reads would prefer over the live card.
+    if (cardAgent(chat)) return patch
     Object.assign(patch, {
       cardDefinitionSnapshot: structuredClone(card),
       cardContentDigest: cardContentDigest(card),

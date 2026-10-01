@@ -1852,10 +1852,10 @@ export async function apply(ctx) {
   async function ensureNativeSystemPrefix(session, chat) {
     const before = readSessionStablePrefix(session)
     const revision = Number(chat.cardContextRevision) || 0
-    const preferenceOnly = chat.mode === 'card' && chat.cardEditContext?.version !== 1
-    const text = !preferenceOnly && before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
+    const cardAgent = chat.mode === 'card' && chat.cardEditContext?.version !== 1
+    const text = !cardAgent && before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
     const prefix = await ensureSessionStablePrefix(session, text, stablePrefixStorage, revision)
-    const directory = preferenceOnly ? false : ensureSessionVariableDirectory(session, chat)
+    const directory = cardAgent ? false : ensureSessionVariableDirectory(session, chat)
     if (directory || prefix && prefix.event !== before?.event) await sessionStore.flush(session)
     return prefix
   }
@@ -3997,6 +3997,7 @@ export async function apply(ctx) {
       },
       visibleTools: async function (sessionId) { return await turnOrchestrator.visibleTools(sessionId) },
       cardSystemPrompt: function () { return prompt('card-system') },
+      cardReferencePrompt: function () { return prompt('card-reference') },
       workspaceContext: function (cwd, projection) { return resourceWorkspaceContext(cwd, projection, runtimePrompt('card-workspace')) },
       ensureSessionPrefix: async function (input) {
         return await ensureNativeSystemPrefix(input.payload.agent.session, input.chat)

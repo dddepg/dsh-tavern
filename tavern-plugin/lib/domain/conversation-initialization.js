@@ -151,6 +151,9 @@ export function createConversationInitialization(options) {
     chat.runtimePresetPath = str(runtimePresetSnapshot && runtimePresetSnapshot.presetPath)
     chat.macroState = macroState
     if (cardEditExperiment) chat.cardEditContext = { version: 1 }
+    // Other card-bound card sessions keep the card Agent persona but receive the
+    // same card + constant-worldbook snapshot as the foreground, frozen at start.
+    else if (chatMode === 'card' && card !== null) chat.cardReferenceContext = { version: 1 }
     if (preparation && groupOfMode(chatMode) === 'play') chat.openingWorldbookSnapshot = structuredClone(preparation.worldbookSnapshot)
     // The sidebar setting is the sole opt-in; opening previews and legacy clients cannot override it.
     const selectedProfile = options.userPreferenceProfile
