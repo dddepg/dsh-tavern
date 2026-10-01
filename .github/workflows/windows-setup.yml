@@ -1,8 +1,8 @@
 name: Windows Setup
 
-# Builds the one-click Setup EXE from the pinned Desktop 2.0.13 payload and
-# runs the launcher integration checks. The payload and 7za.exe are extracted
-# from the last published Setup and verified by SHA-256 in extract-build-inputs.ps1.
+# Builds the one-click Setup EXE: upstream DSH Desktop 2.0.13 plus the Tavern
+# launcher that installs the plugin. Inputs are pinned by SHA-256; build.ps1
+# injects the resulting payload hash into the launcher.
 on:
   workflow_dispatch:
   push:
@@ -20,14 +20,18 @@ on:
       - .github/workflows/windows-setup.yml
 
 env:
-  INPUT_SETUP_URL: https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe
+  DESKTOP_SETUP_URL: https://github.com/anywhere-labs/dsh-desktop/releases/download/v2.0.13/DSH-Desktop-2.0.13-x64-Setup.exe
+  DESKTOP_SETUP_SHA256: 3aa0c75b891470d1621f5589574530c7509b68d854859b059164fbfb7cd93490
+  # Standalone 7za.exe embedded in the EXE to unpack the payload on user machines.
+  SEVENZIP_EXTRA_URL: https://github.com/ip7z/7zip/releases/download/26.03/7z2603-extra.7z
+  SEVENZIP_EXTRA_SHA256: 191894e6acb3647ffb69ce630479ff318523b2e2b9890aa7f05c1127c2e59b8f
 
 jobs:
   build:
     runs-on: windows-latest
     defaults:
       run:
-        # Windows PowerShell 5.1 (.NET Framework) loads the launcher assembly resources.
+        # Same Windows PowerShell 5.1 that end users have.
         shell: powershell
     steps:
       - uses: actions/checkout@v4
@@ -35,10 +39,23 @@ jobs:
       - name: Fetch pinned build inputs
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'build'
-          New-Item -ItemType Directory -Force $root | Out-Null
-          curl.exe --fail --location --retry 3 --output "$root\input-setup.exe" $env:INPUT_SETUP_URL
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to download input Setup' }
-          ./packaging/windows/extract-build-inputs.ps1 -Launcher "$root\input-setup.exe" -Destination "$root\inputs"
+          New-Item -ItemType Directory -Force "$root\inputs" | Out-Null
+          function Get-Pinned([string]$Url, [string]$Sha256, [string]$Destination) {
+            curl.exe --fail --location --retry 3 --silent --show-error --output $Destination $Url
+            if ($LASTEXITCODE -ne 0) { throw "Download failed: $Url" }
+            $actual = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $Sha256) { throw "SHA-256 mismatch for ${Url}: $actual" }
+          }
+          Get-Pinned $env:DESKTOP_SETUP_URL $env:DESKTOP_SETUP_SHA256 "$root\inputs\DSH-Desktop-2.0.13-x64-Setup.exe"
+          Get-Pinned $env:SEVENZIP_EXTRA_URL $env:SEVENZIP_EXTRA_SHA256 "$root\inputs\7z-extra.7z"
+          & 'C:\Program Files\7-Zip\7z.exe' e "$root\inputs\7z-extra.7z" "-o$root\inputs" 'x64\7za.exe' -y | Out-Null
+          if (-not (Test-Path -LiteralPath "$root\inputs\7za.exe")) { throw '7za.exe not found in 7-Zip extra package' }
+
+      - name: Build payload
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'build'
+          # Full 7z.exe is required to read the NSIS installer.
+          ./packaging/windows/build-payload.ps1 -DesktopSetup "$root\inputs\DSH-Desktop-2.0.13-x64-Setup.exe" -SevenZip 'C:\Program Files\7-Zip\7z.exe' -OutputPayload "$root\inputs\online-payload.7z" -WorkDirectory "$root\payload-work"
 
       - name: Build Setup
         run: |

@@ -14,8 +14,16 @@ $stage = Join-Path $root 'stage'
 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $extract,$stage | Out-Null
 
+# The upstream Setup is an electron-builder NSIS installer; the application files are
+# in $PLUGINSDIR/app-64.7z. Reading NSIS needs the full 7z.exe, not the standalone 7za.exe.
 Write-Host "Extracting Desktop setup..."
-& $SevenZip x $DesktopSetup "-o$extract" -y | Out-Null
+$setupFiles = Join-Path $root 'setup'
+& $SevenZip x $DesktopSetup "-o$setupFiles" -y | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to extract Desktop setup (7-Zip exit $LASTEXITCODE)" }
+$appArchive = Join-Path $setupFiles '$PLUGINSDIR\app-64.7z'
+if (-not (Test-Path -LiteralPath $appArchive)) { throw 'Desktop setup did not contain $PLUGINSDIR/app-64.7z' }
+& $SevenZip x $appArchive "-o$extract" -y | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to extract Desktop application archive (7-Zip exit $LASTEXITCODE)" }
 if (-not (Test-Path -LiteralPath (Join-Path $extract 'DSH Desktop.exe'))) { throw 'Desktop setup did not contain DSH Desktop.exe' }
 $app = Join-Path $extract 'resources\app'
 if (-not (Test-Path -LiteralPath (Join-Path $app 'package.json'))) { throw 'Desktop 2.0.13 layout expected resources/app/package.json' }

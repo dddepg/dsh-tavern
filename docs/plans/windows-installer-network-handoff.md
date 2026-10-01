@@ -88,7 +88,8 @@ Windows 一键安装（Setup EXE）反复弹出：
 
 ## 任务 3：发布
 
-- 修改内嵌脚本后必须升级 `Launcher.cs` 的 `Version`（下一版为 setup5）。在 Windows 上用 `packaging/windows/build.ps1` 打包，上传到 release，再把 README 第 82 行的下载链接改过去。
+- 打包用 GitHub Actions 的 `Windows Setup` 工作流（`.github/workflows/windows-setup.yml`）：从上游 Desktop 2.0.13 Setup 构建 payload，`build.ps1` 自动注入 payload 哈希，产出的 EXE 在 Actions 产物里下载。之后上传到 release，再把 README 第 82 行的下载链接改过去。
+- 同一工作流里的 `Probe pnpm under Desktop Electron` 步骤就是任务 1 的 Windows 验证，看它的输出即可。
 - 上传 release 是对外发布，必须先得到用户确认。
 - 防止再犯：在 CI 里加检查，`Launcher.cs` 的 `Version` 与 README 链接指向的安装包不一致时报错；或者让 CI 在发布时自动构建并上传 EXE。
 

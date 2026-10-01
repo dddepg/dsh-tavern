@@ -4,25 +4,26 @@
 
 ## 构建
 
-需要 Windows x64 和系统 .NET Framework C# 编译器，不需要安装 SDK。所有输入、测试和输出建议放在 D 盘独立目录。
+安装包 = 上游 DSH Desktop 2.0.13 + 外层启动器（自动安装 Tavern）。推荐用 GitHub Actions 的 `Windows Setup` 工作流（`.github/workflows/windows-setup.yml`）构建：它下载上游 `DSH-Desktop-2.0.13-x64-Setup.exe` 和 7-Zip extra 包并按 SHA-256 校验，生成 payload、编译启动器、运行 `test.ps1`，并把 EXE 作为 Actions 产物上传。可在 Actions 页面手动触发。
 
-从上游 Desktop Setup 生成在线安装 payload，再编译外层启动器：
+本地构建需要 Windows x64、完整版 7-Zip（读取 NSIS 安装包）和系统自带的 .NET Framework C# 编译器：
 
 ```powershell
-# 1) 下载 DSH-Desktop-2.0.13-x64-Setup.exe，并准备 7za.exe（可从旧 Portable 抽出）
+# 1) 由上游 Desktop Setup 生成 payload（-SevenZip 需完整版 7z.exe）
 ./packaging/windows/build-payload.ps1 `
   -DesktopSetup D:/build/DSH-Desktop-2.0.13-x64-Setup.exe `
-  -SevenZip D:/build/inputs/7za.exe `
+  -SevenZip 'C:/Program Files/7-Zip/7z.exe' `
   -OutputPayload D:/build/inputs/online-payload.7z `
   -WorkDirectory D:/build/payload-work
 
-# 2) 将上一步输出的 SHA256 写入 build.ps1 / extract-build-inputs.ps1 / Launcher.cs
-# 3) 编译 Setup.exe
+# 2) 编译 Setup.exe（-SevenZip 为嵌入 EXE 的独立 7za.exe，取自 7-Zip extra 包 x64/7za.exe）
 ./packaging/windows/build.ps1 -Payload D:/build/inputs/online-payload.7z -SevenZip D:/build/inputs/7za.exe -Output D:/build/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe
 ./packaging/windows/test.ps1 -Launcher D:/build/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe -TestDirectory D:/build/new-test-directory
 ```
 
-也可继续从已发布的 Portable/Setup 中抽取 `online-payload.7z` 与 `7za.exe`：
+`build.ps1` 会把实际嵌入 payload 的 SHA-256 写入编译用的 `Launcher.cs` 副本（`PayloadSha256` 与 `Version` 前缀），无需手工同步哈希。payload 每次构建哈希都会变，因此新安装包总会使用新的运行时目录；`Launcher.cs` 中的值只是最近一次发布的默认值。
+
+旧方式仍可用：从已发布的 Setup 中抽取 `online-payload.7z` 与 `7za.exe`（只适用于哈希 `a272f20b…` 的旧 payload）：
 
 ```powershell
 ./packaging/windows/extract-build-inputs.ps1 -Launcher D:/build/Setup.exe -Destination D:/build/inputs

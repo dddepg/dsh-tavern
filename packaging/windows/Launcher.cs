@@ -15,7 +15,9 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
 class Launcher : Form {
- // Bump for any embedded runtime/bootstrap change; never patch a running installation.
+ // build.ps1 rewrites both payload values for the payload it embeds; the defaults here are the last published payload.
+ const string PayloadSha256="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4";
+ // Bump the suffix for any embedded runtime/bootstrap change; never patch a running installation.
  const string Version="a272f20b3f1f5b15-setup4";
  Label label=new Label(), activity=new Label(); ProgressBar bar=new ProgressBar();
  Button logs=new Button(); System.Windows.Forms.Timer progressTimer=new System.Windows.Forms.Timer();
@@ -192,7 +194,7 @@ class Launcher : Form {
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
-      if(h!="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4")throw new Exception("运行包校验失败");
+      if(h!=PayloadSha256)throw new Exception("运行包校验失败");
      }
      var pi=new ProcessStartInfo(seven,"x "+Quote(archive)+" -o"+Quote(app)+" -y -bsp1 -bso0");
      pi.UseShellExecute=false;pi.CreateNoWindow=true;pi.RedirectStandardOutput=true;
