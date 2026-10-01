@@ -15701,8 +15701,18 @@ window.__ModuleLoader__.load({
 					if (frame === null) frame = window.requestAnimationFrame(applyProjectionState);
 				}
 				scheduleProjection();
-				const observer = new window.MutationObserver(scheduleProjection);
-				observer.observe(document.body, { childList: true, subtree: true });
+				// Only chat-row mounts and ownership changes matter; streamed prose and
+				// composer edits mutate the page every frame and must not re-scan history.
+				const rowSelector = "[data-chat-flow-kind], [data-chat-turn], [data-turn-tail]";
+				function touchesRows(node) {
+					return node.nodeType === 1 && (node.matches(rowSelector) || !!node.querySelector(rowSelector));
+				}
+				const observer = new window.MutationObserver(function (records) {
+					if (records.some(function (record) {
+						return record.type === "attributes" || Array.from(record.addedNodes).some(touchesRows) || Array.from(record.removedNodes).some(touchesRows);
+					})) scheduleProjection();
+				});
+				observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-chat-flow-kind", "data-chat-turn", "data-turn-tail"] });
 				return function () { observer.disconnect(); if (frame !== null) window.cancelAnimationFrame(frame); };
 			}, [props.sessionId, latestMessageId, running, suppressedDshTurnsRevision, regeneratedDshTurnsRevision]);
 			return null;
