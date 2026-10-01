@@ -287,11 +287,18 @@ function runtimeFiles(metadata) {
 // Download the runtime files listed by a jsDelivr manifest into `destination`.
 // Files whose bytes already match in `installed` are reused instead of downloaded.
 async function downloadRuntime({ metadataUrl, rootUrl, destination, installed, concurrency = 6, stallMs = 30000,
-  budgetMs = 300000, attempts = 2, status = () => {}, fetch: request } = {}) {
+  budgetMs = 300000, attempts = 2, status = () => {}, fetch: request, targetCommit = '' } = {}) {
   const source = hostOf(rootUrl)
   const { bytes } = await download([metadataUrl], { label: '运行清单', stallMs: Math.min(stallMs, 15000), attempts, fetch: request })
   const metadata = JSON.parse(bytes.toString('utf8'))
   const files = runtimeFiles(metadata)
+  // The @main manifest can lag (CDN cache, or CI not yet published). When the app
+  // asked for a specific commit, refuse a different one rather than silently
+  // installing an older build; the caller falls back to another source.
+  const target = String(targetCommit || '').trim().toLowerCase()
+  if (/^[0-9a-f]{40}$/.test(target) && String(metadata.revision).toLowerCase() !== target) {
+    throw new Error(`jsDelivr 运行清单（${String(metadata.revision).slice(0, 12)}）与目标版本（${target.slice(0, 12)}）不一致，可能尚未同步`)
+  }
   const controller = new AbortController()
   const budget = AbortSignal.timeout(budgetMs)
   const signal = AbortSignal.any([controller.signal, budget])
@@ -435,7 +442,8 @@ async function main(argv) {
     const [metadataUrl, rootUrl, destination, installed] = rest
     if (!metadataUrl || !rootUrl || !destination) throw new Error('用法：download.cjs runtime <清单 URL> <CDN 根 URL> <目标目录> [已安装目录]')
     const metadata = await downloadRuntime({ metadataUrl, rootUrl: rootUrl.replace(/\/+$/, ''), destination, installed,
-      stallMs: seconds(options.stall, 30000), budgetMs: seconds(options.budget, 300000), status })
+      stallMs: seconds(options.stall, 30000), budgetMs: seconds(options.budget, 300000), status,
+      targetCommit: process.env.DSH_TAVERN_TARGET_COMMIT })
     status(`下载代码完成：${metadata.revision.slice(0, 12)}`)
     return
   }

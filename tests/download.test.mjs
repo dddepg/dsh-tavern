@@ -172,6 +172,16 @@ test('runtime download rejects unsafe manifest entries before writing', async t 
   await assert.rejects(readdir(path.join(root, 'out')), { code: 'ENOENT' })
 })
 
+test('runtime download refuses a manifest that is not the requested target commit', async t => {
+  const files = new Map([['bin/a.js', Buffer.from('a')]])
+  const { root, metadata, hits, args } = await runtimeFixture(t, files)
+  const other = 'f'.repeat(40)
+  await assert.rejects(downloadRuntime({ ...args, destination: path.join(root, 'out'), targetCommit: other }), /与目标版本（ffffffffffff）不一致/)
+  assert.ok(![...hits.keys()].some(url => url.includes('/bin/')), 'no files are downloaded for a mismatched manifest')
+  await downloadRuntime({ ...args, destination: path.join(root, 'out'), targetCommit: metadata.revision.toUpperCase() })
+  assert.deepEqual(await readFile(path.join(root, 'out/bin/a.js')), Buffer.from('a'))
+})
+
 test('CLI reports failures in Chinese with a nonzero exit code', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'download-cli-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
