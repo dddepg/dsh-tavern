@@ -8,10 +8,11 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const { download, downloadFile, downloadRuntime, DownloadError } = require('../bin/download.cjs')
-const moduleFile = new URL('../bin/download.cjs', import.meta.url).pathname
+const moduleFile = fileURLToPath(new URL('../bin/download.cjs', import.meta.url))
 const execute = promisify(execFile)
 const sha = bytes => createHash('sha256').update(bytes).digest('hex')
 
