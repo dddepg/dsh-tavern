@@ -574,6 +574,8 @@ window.__ModuleLoader__.load({
 
 // @include ui/error-center.js
 
+// @include ui/lazy-details.js
+
 
 // @include runtime/host-artifacts.js
 

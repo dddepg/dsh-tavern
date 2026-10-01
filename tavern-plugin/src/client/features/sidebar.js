@@ -2,23 +2,6 @@
 		// @include modules/host-compatibility.js
 		function TavernSidebar(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
-			function TavernCardListContent(props) {
-				const card = props.card;
-				const image = card && card.hasImage ? React.createElement("img", {
-					className: "dsh-tavern-card-thumb",
-					src: "/api/dsh-tavern/card-image?path=" + encodeURIComponent(card.path),
-					alt: "",
-					loading: "lazy",
-					onError: function (event) { event.currentTarget.hidden = true; }
-				}) : React.createElement("span", { className: "dsh-tavern-card-thumb placeholder", "aria-hidden": "true" }, Array.from(String(card && card.name || "?").replace(/^[^\p{L}\p{N}]+/u, ""))[0] || "?");
-				return React.createElement(React.Fragment, null, image, React.createElement("span", { className: "dsh-tavern-card-list-copy" },
-					React.createElement("b", null, card.name),
-					card.path ? React.createElement("span", { title: card.path, style: { overflowWrap: "anywhere" } }, "文件：" + String(card.path).replace(/\\/g, "/").split("/").pop()) : null,
-					React.createElement("span", { className: card.readError ? "dsh-tavern-dock-error" : undefined }, card.readError || props.detail),
-					props.extra ? React.createElement("span", null, props.extra) : null
-				));
-			}
-
 			const collapsed = props.collapsed;
 			const current = props.useSessions(function (state) { return state.current; });
 			const summaries = props.useSessions(function (state) { return state.byId; });
@@ -880,15 +863,15 @@
 				organization.toolbar(),
 				organization.visible.length ? h(React.Fragment, null, h("div", { className: "dsh-tavern-side-empty", style: { padding: "4px 6px" } }, "已绑定剧本的人物卡将自动按剧本推进；未绑定的按自由故事推进。剧本绑定在“卡片模式”中管理。"), organization.renderCards(function (card) { return h("div", { key: card.path, className: "dsh-tavern-card-pick-wrap" },
 					cardBatch.checkbox(card),
-					h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : "") + (cardBatch.managing && cardBatch.isSelected(card.path) ? " selected" : ""), disabled: busy || (!cardBatch.managing && Boolean(card.readError)), onClick: function () { if (cardBatch.managing) cardBatch.toggle(card.path); else preparePlayConversation(card); } }, h(TavernCardListContent, { card: card, detail: card.script ? ("剧本：" + card.script.title) : "自由故事（未绑定剧本）" }))
+					h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : "") + (cardBatch.managing && cardBatch.isSelected(card.path) ? " selected" : ""), disabled: busy || (!cardBatch.managing && Boolean(card.readError)), onClick: function () { if (cardBatch.managing) cardBatch.toggle(card.path); else preparePlayConversation(card); } }, h(TavernCardListContent, { showPath: true, card: card, detail: card.script ? ("剧本：" + card.script.title) : "自由故事（未绑定剧本）" }))
 				); })) : h("div", { className: "dsh-tavern-empty" }, cards.length ? "没有匹配的人物卡" : "还没有人物卡。\n点“导入人物卡”添加 PNG/JSON 卡片。")
 			));
 
 			const cardEditRows = cards.length ? cards.map(function (card) { return h("div", { key: card.path, className: "dsh-tavern-card-pick-wrap" },
-				h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : ""), disabled: busy, onClick: function () { newCardConversation(card, cardEntry === "gentle" ? "gentle" : "edit", cardEntry === "gentle" ? "人物卡温和改写" : "修改人物卡"); } }, h(TavernCardListContent, { card: card, detail: cardEntry === "gentle" ? "另存温和副本，再配置试玩案例" : "选择这张人物卡开始修改" }))
+				h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : ""), disabled: busy, onClick: function () { newCardConversation(card, cardEntry === "gentle" ? "gentle" : "edit", cardEntry === "gentle" ? "人物卡温和改写" : "修改人物卡"); } }, h(TavernCardListContent, { showPath: true, card: card, detail: cardEntry === "gentle" ? "另存温和副本，再配置试玩案例" : "选择这张人物卡开始修改" }))
 			); }) : h("div", { className: "dsh-tavern-empty" }, "还没有人物卡，可先在空白工作台中创建。");
 			const cardMvuRows = cards.length ? cards.map(function (card) { return h("div", { key: card.path, className: "dsh-tavern-card-pick-wrap" },
-				h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : ""), disabled: busy, onClick: function () { newCardConversation(card, "mvu", "把人物卡转成 MVU 版"); } }, h(TavernCardListContent, { card: card, detail: "转换为 MVU 后，状态栏绝对不会掉格式" }))
+				h("button", { className: "dsh-tavern-card-pick" + (card.hasImage ? " with-image" : ""), disabled: busy, onClick: function () { newCardConversation(card, "mvu", "把人物卡转成 MVU 版"); } }, h(TavernCardListContent, { showPath: true, card: card, detail: "转换为 MVU 后，状态栏绝对不会掉格式" }))
 			); }) : h("div", { className: "dsh-tavern-empty" }, "还没有人物卡，可先导入一张需要转换的卡。");
 			const chosenInitialResources = Object.keys(selectedInitialResources).map(function (key) { return selectedInitialResources[key]; });
 			function initialResourceGroup(title, items) {

@@ -1,21 +1,6 @@
 		function createCardLibraryFeatureModule() {
 		function CardLibraryTab(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
-			function TavernCardListContent(props) {
-				const card = props.card;
-				const image = card && card.hasImage ? React.createElement("img", {
-					className: "dsh-tavern-card-thumb",
-					src: "/api/dsh-tavern/card-image?path=" + encodeURIComponent(card.path),
-					alt: "",
-					loading: "lazy",
-					onError: function (event) { event.currentTarget.hidden = true; }
-				}) : React.createElement("span", { className: "dsh-tavern-card-thumb placeholder", "aria-hidden": "true" }, Array.from(String(card && card.name || "?").replace(/^[^\p{L}\p{N}]+/u, ""))[0] || "?");
-				return React.createElement(React.Fragment, null, image, React.createElement("span", { className: "dsh-tavern-card-list-copy" },
-					React.createElement("b", null, card.name),
-					React.createElement("span", { className: card.readError ? "dsh-tavern-dock-error" : undefined }, card.readError || props.detail),
-					props.extra ? React.createElement("span", null, props.extra) : null
-				));
-			}
 
 			const [cards, setCards] = React.useState([]);
 			const [selectedPath, setSelectedPath] = React.useState("");
@@ -377,60 +362,60 @@
 			}
 			function regexExtensionRow(item, index) {
 				const placement = item.placement && item.placement.length ? item.placement.join(", ") : "未设置";
-				const snippet = String(item.findRegex || "").replace(/\s+/g, " ").trim() || "空查找规则";
+				const snippet = String(item.findRegex || "").slice(0, 400).replace(/\s+/g, " ").trim() || "空查找规则";
 				const metadata = [
 					"placement: [" + placement + "]", "promptOnly: " + Boolean(item.promptOnly), "markdownOnly: " + Boolean(item.markdownOnly),
 					"runOnEdit: " + Boolean(item.runOnEdit), "substituteRegex: " + String(item.substituteRegex === null ? "null" : item.substituteRegex),
 					"minDepth: " + String(item.minDepth === null ? "null" : item.minDepth), "maxDepth: " + String(item.maxDepth === null ? "null" : item.maxDepth),
 					"trimStrings: " + JSON.stringify(item.trimStrings || [])
 				].join("\n");
-				return h("details", { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-regex" },
-					h("summary", { className: "dsh-tavern-prompt-head" },
+				return h(TavernLazyDetails, { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-regex",
+					summary: h("summary", { className: "dsh-tavern-prompt-head" },
 						h("span", { className: "dsh-tavern-prompt-role" }, "REGEX"),
 						h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, item.name), h("span", null, snippet), extensionTags(["位置 " + placement, item.promptOnly ? "仅提示词" : "", item.markdownOnly ? "仅 Markdown" : "", item.runOnEdit ? "编辑时运行" : ""])),
 						h("span", { className: "dsh-tavern-prompt-state" + (item.enabled ? "" : " off") }, item.enabled ? "已启用" : "已关闭")
 					),
-					h("div", { className: "dsh-tavern-regex-body" },
+					render: function () { return h("div", { className: "dsh-tavern-regex-body" },
 						h("div", { className: "dsh-tavern-regex-label" }, "查找正则"), h("pre", { className: "dsh-tavern-regex-code" }, item.findRegex || "（空）"),
 						h("div", { className: "dsh-tavern-regex-label" }, "替换内容"), h("pre", { className: "dsh-tavern-regex-code" }, item.replaceString || "（空）"),
 						h("div", { className: "dsh-tavern-regex-meta" }, metadata)
-					)
-				);
+					); }
+				});
 			}
 			function scriptCode(label, value) {
 				const content = String(value || "（空）");
-				const lines = content.split(/\r\n|\r|\n/);
-				return h("details", { className: "dsh-tavern-script-code" },
-					h("summary", null, label, h("span", { className: "dsh-tavern-script-code-count" }, lines.length + " 行 · 只读")),
-					h("div", { className: "dsh-tavern-script-code-scroll", tabIndex: 0, role: "region", "aria-label": label },
-						h("div", { className: "dsh-tavern-script-code-lines", "aria-hidden": true }, lines.map(function (_, index) { return h("div", { key: index }, index + 1); })),
+				const lineCount = content.split(/\r\n|\r|\n/).length;
+				return h(TavernLazyDetails, { className: "dsh-tavern-script-code",
+					summary: h("summary", null, label, h("span", { className: "dsh-tavern-script-code-count" }, lineCount + " 行 · 只读")),
+					render: function () { return h("div", { className: "dsh-tavern-script-code-scroll", tabIndex: 0, role: "region", "aria-label": label },
+						h("div", { className: "dsh-tavern-script-code-lines", "aria-hidden": true }, Array.from({ length: lineCount }, function (_, index) { return index + 1; }).join("\n")),
 						h("pre", null, h("code", null, content))
-					)
-				);
+					); }
+				});
 			}
 			function helperScriptRow(item, index) {
-				const snippet = String(item.content || "").replace(/\s+/g, " ").trim() || "空脚本";
-				return h("details", { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-script" },
-					h("summary", { className: "dsh-tavern-prompt-head" },
+				const snippet = String(item.content || "").slice(0, 400).replace(/\s+/g, " ").trim() || "空脚本";
+				return h(TavernLazyDetails, { key: item.ref || item.id || index, className: "dsh-tavern-prompt-row role-script",
+					summary: h("summary", { className: "dsh-tavern-prompt-head" },
 						h("span", { className: "dsh-tavern-prompt-role" }, "SCRIPT"),
 						h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, item.name), h("span", null, snippet), extensionTags([item.type, item.buttonCount ? item.buttonCount + " 个按钮" : "", item.chars + " 字"])),
 						h("span", { className: "dsh-tavern-prompt-state" + (item.enabled ? "" : " off") }, item.enabled ? "已启用" : "已关闭")
 					),
-					h("div", { className: "dsh-tavern-regex-body" },
+					render: function () { return h("div", { className: "dsh-tavern-regex-body" },
 						scriptCode("脚本内容", item.content),
 						item.dataText ? scriptCode("脚本配置", item.dataText) : null,
 						item.info ? h("div", null, h("div", { className: "dsh-tavern-regex-label" }, "说明"), h("pre", { className: "dsh-tavern-regex-code" }, item.info)) : null,
 						item.exportWith !== null ? h("div", { className: "dsh-tavern-regex-meta" }, "export_with: " + JSON.stringify(item.exportWith)) : null
-					)
-				);
+					); }
+				});
 			}
 			function otherExtensionRow(item, index) {
-				return h("details", { key: item.ref || item.name || index, className: "dsh-tavern-prompt-row role-extension" },
-					h("summary", { className: "dsh-tavern-prompt-head" }, h("span", { className: "dsh-tavern-prompt-role" }, "EXT"), h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, item.name), h("span", null, item.type + " · " + item.chars + " 字")), h("span", { className: "dsh-tavern-mvu-state" }, "只读")),
-					h("pre", { className: "dsh-tavern-prompt-content" }, item.text || "（空）")
-				);
+				return h(TavernLazyDetails, { key: item.ref || item.name || index, className: "dsh-tavern-prompt-row role-extension",
+					summary: h("summary", { className: "dsh-tavern-prompt-head" }, h("span", { className: "dsh-tavern-prompt-role" }, "EXT"), h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, item.name), h("span", null, item.type + " · " + item.chars + " 字")), h("span", { className: "dsh-tavern-mvu-state" }, "只读")),
+					render: function () { return h("pre", { className: "dsh-tavern-prompt-content" }, item.text || "（空）"); }
+				});
 			}
-			const extensionPanel = h("div", { className: "dsh-tavern-card-extensions" },
+			const extensionPanel = () => h("div", { className: "dsh-tavern-card-extensions" },
 				h("div", { className: "dsh-tavern-extension-note" }, "这里只读取人物卡工作区中的完整扩展数据，不执行任何卡内脚本。MVU 按名称和内容识别，用于帮助定位相关资源，不代表已经完整解析其运行逻辑。"),
 				extensionSectionTitle("正则脚本", cardRegexScripts.length), cardRegexScripts.map(regexExtensionRow),
 				extensionSectionTitle("Tavern Helper 脚本", helperScripts.length), helperScripts.map(helperScriptRow),
@@ -497,7 +482,7 @@
 				h("div", { className: "dsh-tavern-card-fields" },
 					h("details", { ref: worldBookDetailsRef, open: true, className: "dsh-tavern-card-advanced dsh-tavern-card-worldbook", onToggle: function (event) { if (event.currentTarget.open) loadWorldBookCatalog(); } }, h("summary", null, "世界书 · " + boundWorldBooks.length + " 本"), worldBookPanel),
 					h("details", { className: "dsh-tavern-card-advanced", open: true }, h("summary", null, "基本信息"), F("name", "角色名称"), F("tags", "标签"), F("description", "角色描述", true), F("personality", "性格"), F("scenario", "场景设定"), F("first_mes", "开场白", true), F("alternate_greetings", "备选开场白（--- 分隔）"), F("system_prompt", "系统提示"), F("post_history_instructions", "历史后指令"), F("mes_example", "对话示例", true), F("creator_notes", "创作者备注")),
-					h("details", { className: "dsh-tavern-card-advanced" }, h("summary", null, "扩展内容 · " + extensionCount + " 项"), extensionPanel),
+					h(TavernLazyDetails, { className: "dsh-tavern-card-advanced", summary: h("summary", null, "扩展内容 · " + extensionCount + " 项"), render: extensionPanel }),
 					error ? h("div", { className: "dsh-card-error" }, error) : null,
 					h("div", { className: "dsh-tavern-card-save" }, h("button", { className: "dsh-card-primary", disabled: busy, onClick: save }, busy ? "保存中…" : "保存字段"))
 				)

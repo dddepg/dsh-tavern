@@ -52,6 +52,8 @@ function useCardOrganization(cards, busy, refresh, onError, batch) {
   const h = React.createElement;
   const [groups, setGroups] = React.useState([]);
   const [query, setQuery] = React.useState('');
+  // Filtering hundreds of rows must not block typing in the search box.
+  const deferredQuery = React.useDeferredValue(query);
   const [filter, setFilter] = React.useState('*');
   const [managing, setManaging] = React.useState(false);
   const [addingGroup, setAddingGroup] = React.useState(null);
@@ -102,7 +104,7 @@ function useCardOrganization(cards, busy, refresh, onError, batch) {
     });
   }
   const disabled = busy || saving;
-  const visible = filterOrganizedCards(cards, filter, query);
+  const visible = filterOrganizedCards(cards, filter, deferredQuery);
   function options() {
     return [h('option', { key: '', value: 'group:' }, '未分组'), ...groups.map(group => h('option', { key: group, value: 'group:' + group }, group))];
   }
