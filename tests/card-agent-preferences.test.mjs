@@ -37,8 +37,8 @@ test('所有卡片入口以默认偏好建立 system 快照，管理工具仍指
     if (cardTask === 'user-profile') {
       assert.equal(chat.cardContextSnapshot, chat.userProfileContextSnapshot)
       assert.equal(chat.cardReferenceContext, undefined)
-    } else if (cardTask !== 'edit') {
-      // Card-bound card Agents get the foreground card + constant-worldbook reference, frozen at start.
+    } else {
+      // Card-bound card Agents, including the edit task, get the foreground card + constant-worldbook reference, frozen at start.
       assert.deepEqual(chat.cardReferenceContext, { version: 1 })
       assert.equal(chat.cardEditContext, undefined)
       assert.ok(chat.cardContextSnapshot.startsWith(chat.userProfileContextSnapshot + '\n\n'))

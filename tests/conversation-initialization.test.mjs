@@ -6,25 +6,25 @@ import { createUserPreferenceProfile } from '../tavern-plugin/lib/domain/user-pr
 
 const messages = session => session.events.filter(event => event.type === 'assistant/message' && event.data?.message?.source?.model === 'character-card')
 
-test('只有新建修改人物卡任务保存实验快照，重入不重新读取素材', async () => {
+test('带卡的卡片任务（含修改人物卡）沿用卡片 Agent 人设，并冻结与前台相同的人物卡快照', async () => {
   const h = initializationFixture()
   const foreground = await h.make().start({ ...h.input, sessionId: 'foreground' })
   const input = { ...h.input, mode: 'card', cardTask: 'edit' }
   const chat = await h.make().start(input)
-  assert.deepEqual(chat.cardEditContext, { version: 1 })
-  assert.equal(messages(h.session()).length, 0)
-  assert.equal(chat.openingText, '')
-  assert.equal(h.session().events.at(-1).data.source.workspaceContextVersion, 1)
-  assert.equal(h.session().events.at(-1).data.role, 'user')
+  // The retired edit experiment no longer applies to new sessions.
+  assert.equal(chat.cardEditContext, undefined)
+  assert.deepEqual(chat.cardReferenceContext, { version: 1 })
+  assert.notEqual(chat.openingText, '')
   assert.equal(h.session().prefix, foreground.cardContextSnapshot)
-  assert.deepEqual(seedMessages(h.session()).map(e => e.type === 'user/message' ? e.data.content[0].text : e.data.message.content[0].text), sessionSeedTrajectoryMessages(h.session().id, 'story').map(s => s.text))
-  assert.ok(h.trace.indexOf('prefix') < h.trace.indexOf('opening.native-append'))
+  assert.equal(h.session().events.some(event => event.data?.source?.workspaceContextVersion), false)
+  assert.deepEqual(seedMessages(h.session()).map(e => e.type === 'user/message' ? e.data.content[0].text : e.data.message.content[0].text), sessionSeedTrajectoryMessages(h.session().id, 'card').map(s => s.text))
   h.card.description = '后续修改不重建开局快照'
   const reopened = await h.make().start(input)
   assert.equal(reopened.cardContextSnapshot, foreground.cardContextSnapshot)
   for (const cardTask of ['mvu', 'extract', undefined]) {
     const other = await h.make().start({ ...input, sessionId: 'other-' + cardTask, cardTask })
     assert.equal(other.cardEditContext, undefined)
+    assert.deepEqual(other.cardReferenceContext, { version: 1 })
   }
 })
 const seedMessages = session => session.events.filter(event => {

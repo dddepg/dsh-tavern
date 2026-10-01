@@ -118,6 +118,6 @@ system 附加指令在请求组装时读取，启用且非空时放在最前面�
 
 ## 卡片 Agent 的人物卡参考
 
-绑定了人物卡的新卡片会话（`cardTask: edit` 除外）标记 `cardReferenceContext.version = 1`，开局时与前台一样构建人物卡快照：人物卡基本信息、人物卡自带系统提示与常驻世界书，排在长期偏好之后一并冻结，不逐轮刷新。卡片 Agent 会修改这张卡，所以只保存参考文本，不保存 `cardDefinitionSnapshot`、内容摘要或场景世界书，后续读取始终使用当前文件。后置指令和关键词条目不注入。
+绑定了人物卡的新卡片会话（包括“修改人物卡”任务）标记 `cardReferenceContext.version = 1`，开局时与前台一样构建人物卡快照：人物卡基本信息、人物卡自带系统提示与常驻世界书，排在长期偏好之后一并冻结，不逐轮刷新。卡片 Agent 会修改这张卡，所以只保存参考文本，不保存 `cardDefinitionSnapshot`、内容摘要或场景世界书，后续读取始终使用当前文件。后置指令和关键词条目不注入。
 
-system 顺序为：system 附加指令、长期偏好、卡片 Agent 职责、参考资料说明（[card-reference.md](../../tavern-plugin/prompts/card-reference.md)）、人物卡、人物卡系统提示、常驻世界书、资源工作区。卡片 Agent 人设保持不变；说明段提醒这些资料只是开局参考，不是要扮演的角色，修改后以工具读取为准。未绑卡的工作台和已有旧会话保持只有偏好。
+system 顺序为：system 附加指令、长期偏好、卡片 Agent 职责、参考资料说明（[card-reference.md](../../tavern-plugin/prompts/card-reference.md)）、人物卡、人物卡系统提示、常驻世界书、资源工作区。卡片 Agent 人设保持不变；说明段提醒这些资料只是开局参考，不是要扮演的角色，修改后以工具读取为准。未绑卡的工作台和已有旧会话保持只有偏好；此前“修改人物卡”实验创建的 `cardEditContext.version = 1` 会话仍沿用前台人设与种子轨迹，新会话不再创建该标记。

@@ -1,5 +1,7 @@
 # 修改人物卡起始上下文实验
 
+> 2026-10-01 已停用：新建“修改人物卡”任务不再标记 `cardEditContext`，与其他带卡的卡片会话统一保留卡片 Agent 人设，只在 system 中附带人物卡与常驻世界书参考（见 [foreground-story-prompt.md](../design/foreground-story-prompt.md#卡片-agent-的人物卡参考)）。已带 `cardEditContext.version = 1` 的旧会话继续按下文方式运行。
+
 分支：`experiment/card-edit-system-context`。基线：`3ea3ee8`。
 
 仅新建“修改人物卡”任务（`cardTask: edit`，且已选择人物卡）启用。其他任务不迁移。已带实验标记的会话若残留旧版自动生成的工作区草稿，会在打开时补入工作区消息；只有说明完全匹配时才从草稿移除，保留任务和用户补充。

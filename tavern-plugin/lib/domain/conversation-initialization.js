@@ -109,8 +109,7 @@ export function createConversationInitialization(options) {
     }
     const macroState = { userName: str(userName).trim().slice(0, 80) || defaults.playerName, local: {}, global: {} }
     const runtimePresetSnapshot = groupOfMode(chatMode) === 'play' ? await playPresetSnapshot() : null
-    const cardEditExperiment = chatMode === 'card' && cardTask === 'edit' && card !== null
-    let openingSourceText = chatMode === 'card' ? (cardEditExperiment ? '' : cardGreeting()) : resolveCardOpening(card, openingId)
+    let openingSourceText = chatMode === 'card' ? cardGreeting() : resolveCardOpening(card, openingId)
     const openingExtensions = chatMode === 'card' ? null : await cards.extensions(cardPath)
     const openingChoices = chatMode === 'card' ? [] : cardOpeningChoices(card)
     const selectedOpeningIndex = str(openingId) === '' ? 0 : Math.max(0, openingChoices.findIndex(function (choice) { return choice.id === str(openingId) }))
@@ -150,10 +149,10 @@ export function createConversationInitialization(options) {
     chat.runtimePresetSnapshot = runtimePresetSnapshot
     chat.runtimePresetPath = str(runtimePresetSnapshot && runtimePresetSnapshot.presetPath)
     chat.macroState = macroState
-    if (cardEditExperiment) chat.cardEditContext = { version: 1 }
-    // Other card-bound card sessions keep the card Agent persona but receive the
-    // same card + constant-worldbook snapshot as the foreground, frozen at start.
-    else if (chatMode === 'card' && card !== null) chat.cardReferenceContext = { version: 1 }
+    // Card-bound card sessions, including the edit task, keep the card Agent persona
+    // and receive the foreground card + constant-worldbook snapshot, frozen at start.
+    // Sessions created by the retired edit experiment keep their cardEditContext.
+    if (chatMode === 'card' && card !== null) chat.cardReferenceContext = { version: 1 }
     if (preparation && groupOfMode(chatMode) === 'play') chat.openingWorldbookSnapshot = structuredClone(preparation.worldbookSnapshot)
     // The sidebar setting is the sole opt-in; opening previews and legacy clients cannot override it.
     const selectedProfile = options.userPreferenceProfile
