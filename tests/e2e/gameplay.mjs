@@ -439,7 +439,7 @@ try {
       await page.getByText('5 个候选项', { exact: true }).waitFor()
       assert.deepEqual(inspectSaved(await savedChat()), report.afterReload, '生成候选不能修改正文或金币')
       const candidates = page.locator('.dsh-tavern-candidate-question')
-      if (await candidates.getByTitle('展开', { exact: true }).isVisible()) await candidates.getByTitle('展开', { exact: true }).click()
+      if (await candidates.getByTitle('展开行动列表', { exact: true }).isVisible()) await candidates.getByTitle('展开行动列表', { exact: true }).click()
       await page.getByRole('button', { name: /再次领取奖励/ }).click()
       assert.equal(await candidates.locator('.dsh-tavern-question-option').count(), 5)
       await page.getByRole('button', { name: '追加到输入框', exact: true }).click()
