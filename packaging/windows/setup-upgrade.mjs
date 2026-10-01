@@ -41,19 +41,24 @@ try {
   const pathKey=Object.keys(env).find(key=>key.toUpperCase()==='PATH')||'PATH';
   env[pathKey]=[pnpm.nodeBinDir,env[pathKey]].join(path.delimiter);
   for(const key of Object.keys(env))if(key.toUpperCase()==='ELECTRON_RUN_AS_NODE')delete env[key];
-  // EncodedCommand avoids shell quoting and Windows PowerShell's ANSI script decoding.
-  // Do not merge streams with *>&1 under ErrorAction Stop: native stderr (for example
-  // Node's EnvHttpProxyAgent warning when NODE_USE_ENV_PROXY=1) becomes a terminating
-  // ErrorRecord and aborts install. Node already redirects both powershell stdout and
-  // stderr to the log; Write-Host still reaches that stdout when the console is redirected.
-  env.DSH_SETUP_INSTALLER=path.join(resources,'install.ps1');
-  const command="$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; try { Invoke-Expression ([IO.File]::ReadAllText($env:DSH_SETUP_INSTALLER,[Text.Encoding]::UTF8)) } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }";
   stage='下载并安装酒馆';
+  // Run install.ps1 through a small -File wrapper. -EncodedCommand made Windows PowerShell 5.1
+  // serialise every Write-Host/warning record as CLIXML into the log; -File keeps plain text.
+  // The wrapper is UTF-8 with BOM so 5.1 does not decode it as ANSI, and install.ps1 itself is
+  // read explicitly as UTF-8. Do not merge streams with *>&1 under ErrorAction Stop: native
+  // stderr (for example Node's EnvHttpProxyAgent warning when NODE_USE_ENV_PROXY=1) becomes a
+  // terminating ErrorRecord and aborts install.
+  env.DSH_SETUP_INSTALLER=path.join(resources,'install.ps1');
+  const wrapper=path.join(data,'setup-installer.ps1');
+  fs.writeFileSync(wrapper,'\ufeff'+["$ErrorActionPreference='Stop'","$ProgressPreference='SilentlyContinue'",
+    '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)','$OutputEncoding=[Console]::OutputEncoding',
+    'try { Invoke-Expression ([IO.File]::ReadAllText($env:DSH_SETUP_INSTALLER,[Text.Encoding]::UTF8)) }',
+    'catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }',''].join('\r\n'));
   console.log('DSH_STATUS 正在检查更新与下载源…');
   const output=fs.openSync(log,'a');
   let code,installerFailure='';
   try {
-    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-OutputFormat','Text','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],
+    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',wrapper],
       {env,windowsHide:true,stdio:['ignore','pipe','pipe']});
     // Preserve diagnostics, but only forward structured status and package counts.
     // Arbitrary command output can contain private paths or registry credentials.
@@ -69,7 +74,7 @@ try {
       });
     }
     code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)});
-  } finally {fs.closeSync(output)}
+  } finally {fs.closeSync(output);fs.rmSync(wrapper,{force:true})}
   if(code!==0)throw Error(installerFailure
     ? installerFailure.replace(/步骤 ([a-z.-]+) 失败/,(match,step)=>INSTALLER_STEPS[step]?`${INSTALLER_STEPS[step]}（${step}）失败`:match).replace(/\/\/[^\s/@]+@/g,'//')
     : '安装或更新失败');
