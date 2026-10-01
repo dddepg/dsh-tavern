@@ -74,6 +74,7 @@ function sourceSections(text) {
   const boundaries = [
     { marker: '【用户已确认的长期偏好】', name: 'tavern:user-preference' },
     { marker: '【故事设定 · 人物卡】', name: 'tavern:character-card' },
+    { marker: '【人物卡系统提示】', name: 'tavern:card-system-prompt' },
     { marker: '【常驻世界书】', name: 'tavern:constant-worldbook' }
   ]
   const starts = boundaries.map(function (boundary) {
@@ -169,9 +170,10 @@ export async function ensureSessionStablePrefix(session, text, storage, revision
 }
 
 /** Native system assembly is the only model-visible owner of fixed background. */
-export function sessionStablePrefixSections(session) {
+export function sessionStablePrefixSections(session, openingText = '') {
   const prefix = readSessionStablePrefix(session)
-  const sections = prefix ? sourceSections(prefix.text) : []
+  // Imports prepare their events before a native Session is published.
+  const sections = prefix ? sourceSections(prefix.text) : openingText ? sourceSections(openingText) : []
   const directory = sessionVariableDirectorySection(session)
   return directory ? [...sections, directory] : sections
 }

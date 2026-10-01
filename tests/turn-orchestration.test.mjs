@@ -200,10 +200,13 @@ test('连续正文回合的实际 Frame 消息不重复基本信息和常驻世�
       const prepared = await run.orchestrator.prepare(input)
       const text = foregroundFrameText(prepared.frame)
       assert.equal(prepared.frame.context.cardContext, '')
-      assert.match(text, /逐轮系统指令/)
+      assert.doesNotMatch(text, /逐轮系统指令/)
       assert.match(text, /逐轮历史后指令/)
       assert.match(text, /本轮动态世界书/)
-      messages = adapter.append({ messages, frame: prepared.frame, step: 1 }).messages
+      // The production Session already owns the opening system snapshot.
+      const session = { events: [{ type: 'user/message', data: { id: 'tavern-session-prefix:test', role: 'user', content: [],
+        source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot', sections: [{ name: 'tavern:session-context', text: prefix.text }] } } }] }
+      messages = adapter.append({ session, messages, frame: prepared.frame, step: 1 }).messages
       await run.orchestrator.finalize({ ...input, assistantText: '雨水敲着窗。' })
     }
     const historyText = messages.map(message => message.content[0].text).join('\n')
@@ -212,7 +215,8 @@ test('连续正文回合的实际 Frame 消息不重复基本信息和常驻世�
       assert.equal(requestText.split(fixed).length - 1, 1)
       assert.ok(!historyText.includes(fixed))
     }
-    assert.equal(historyText.split('逐轮系统指令').length - 1, 2)
+    assert.equal(requestText.split('逐轮系统指令').length - 1, 1)
+    assert.doesNotMatch(historyText, /逐轮系统指令/)
     assert.equal(historyText.split('逐轮历史后指令').length - 1, 2)
   }
 })
