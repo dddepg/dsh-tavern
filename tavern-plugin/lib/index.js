@@ -1843,9 +1843,10 @@ export async function apply(ctx) {
   async function ensureNativeSystemPrefix(session, chat) {
     const before = readSessionStablePrefix(session)
     const revision = Number(chat.cardContextRevision) || 0
-    const text = before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
+    const preferenceOnly = chat.mode === 'card' && chat.cardEditContext?.version !== 1
+    const text = !preferenceOnly && before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
     const prefix = await ensureSessionStablePrefix(session, text, stablePrefixStorage, revision)
-    const directory = ensureSessionVariableDirectory(session, chat)
+    const directory = preferenceOnly ? false : ensureSessionVariableDirectory(session, chat)
     if (directory || prefix && prefix.event !== before?.event) await sessionStore.flush(session)
     return prefix
   }

@@ -19,7 +19,7 @@ import { createProfileDataStore } from '../../tavern-plugin/lib/profile-data-sto
 import { createSessionStablePrefixStorage, ensureSessionStablePrefix, sessionStablePrefixSections } from '../../tavern-plugin/lib/domain/session-stable-prefix.js'
 import { createStoryTimeline } from '../../tavern-plugin/lib/domain/story-timeline.js'
 
-export async function createInitializationNative(bootPath, { preset, contextWindow = 2000, modelStream, cardOverrides } = {}) {
+export async function createInitializationNative(bootPath, { preset, contextWindow = 2000, modelStream, cardOverrides, userPreferenceProfile, assembleStablePrefix = true } = {}) {
   const bootUrl = pathToFileURL(bootPath)
   const { boot } = await import(bootUrl.href)
   const { LlmAdapter } = await import(new URL('../../dsh-llm/lib/index.js', bootUrl))
@@ -38,7 +38,7 @@ export async function createInitializationNative(bootPath, { preset, contextWind
       return ctx.llm.stream(adapted)
     })
   }
-  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+  if (assembleStablePrefix) ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const assembly = await next()
     assembly.sections = sessionStablePrefixSections(context.agent.session)
     return assembly
@@ -90,11 +90,11 @@ export async function createInitializationNative(bootPath, { preset, contextWind
       if (state.failMarker && metadata.source === 'opening.native-append') throw Error('marker failure')
       return persistence.write(chat, metadata)
     }
-    const snapshots = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }), readCard: async () => card, writeChat: write })
+    const snapshots = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }), readCard: async () => card, writeChat: write, userPreferenceProfile })
     const timeline = createStoryTimeline({ id: () => randomUUID() })
     const initialization = createConversationInitialization({
       cards: { read: async () => card, readChat: async () => card, script: async () => undefined, extensions: async () => ({}) },
-      chats: { resolve: registry.resolve, publish: registry.publish, write }, snapshots, timeline,
+      chats: { resolve: registry.resolve, publish: registry.publish, write }, snapshots, timeline, userPreferenceProfile,
       presets: { fullSnapshot: async () => null }, settings: async () => ({}),
       logger: { warn() {} }, cardGreeting: () => '工作台', emptyCardWorkspace: () => ({}), id: () => randomUUID(), present: async chat => structuredClone(chat),
       native: { wait: async () => target, selection: () => selection, ensurePrefix: (session, text) => ensureSessionStablePrefix(session, text, storage),

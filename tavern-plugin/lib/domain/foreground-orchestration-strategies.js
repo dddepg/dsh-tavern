@@ -321,7 +321,8 @@ export function createNativePlayOrchestrationStrategy(options) {
     // Play rules arrive in the foreground frame. Still replace the inherited
     // sections explicitly so removing play-mode cannot restore DSH's persona.
     const cardEdit = mode === 'card' && input.chat?.cardEditContext?.version === 1
-    const sections = mode === 'card' && !cardEdit ? [] : (input.fixedSystemSections || []).slice()
+    const fixed = input.fixedSystemSections || []
+    const sections = mode === 'card' && !cardEdit ? fixed.filter(section => section.name === 'tavern:user-preference') : fixed.slice()
     if (mode === 'card' && !cardEdit) {
       const text = typeof options.cardSystemPrompt === 'function' ? options.cardSystemPrompt().trim() : ''
       if (text) sections.push({ name: 'tavern:card-system', text })

@@ -29,7 +29,7 @@ export function registerUserProfileTools({
       const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
       const chat = await chatForSession(sessionId)
       if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-      const value = await userPreferenceProfile.read(chat.userProfileId || 'default')
+      const value = await userPreferenceProfile.read(chat.userProfileManagementId || chat.userProfileId || 'default')
       return {
         profileName: value.name,
         hasDraft: value.hasDraft,
@@ -61,7 +61,7 @@ export function registerUserProfileTools({
       const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
       const chat = await chatForSession(sessionId)
       if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-      const value = await userPreferenceProfile.save({ content: args.content, profileId: chat.userProfileId || 'default' })
+      const value = await userPreferenceProfile.save({ content: args.content, profileId: chat.userProfileManagementId || chat.userProfileId || 'default' })
       return { saved: true, hasConfirmed: value.hasConfirmed }
     }
   }))
@@ -85,7 +85,7 @@ export function registerUserProfileTools({
       const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
       const chat = await chatForSession(sessionId)
       if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-      const value = await userPreferenceProfile.confirm({ ...args, profileId: chat.userProfileId || 'default' })
+      const value = await userPreferenceProfile.confirm({ ...args, profileId: chat.userProfileManagementId || chat.userProfileId || 'default' })
       return { confirmedRevision: Number(value.confirmed.profileRevision) || 0 }
     }
   }))

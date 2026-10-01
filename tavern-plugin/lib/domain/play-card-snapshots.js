@@ -2,12 +2,14 @@ import { worldbookContentDigest } from './worldbook-version.js'
 import { createHash } from 'node:crypto'
 import { constantWorldBookContext } from './worldbook-recall.js'
 import { sanitizeAgentProjectionText } from './runtime-content-projection.js'
+import { defaultUserPreferenceProfile } from './user-preference-profile.js'
 
 export function cardContentDigest(card) { return createHash('sha256').update(JSON.stringify(card ?? null)).digest('hex') }
 
 const VERSION = 7
 function str(value) { return value === undefined || value === null ? '' : String(value) }
-function usesFixedContext(chat) { return chat && (!chat.mode || chat.mode === 'story' || chat.mode === 'script' || (chat.mode === 'card' && chat.cardEditContext?.version === 1)) }
+function usesFixedContext(chat) { return chat && (!chat.mode || ['story', 'script', 'card'].includes(chat.mode)) }
+function preferenceOnly(chat) { return chat.mode === 'card' && chat.cardEditContext?.version !== 1 }
 
 /** Owns snapshot preparation, migration, persistence and concurrent build sharing. */
 export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeChat, captureSceneWorldbook, userPreferenceProfile, logger = console }) {
@@ -21,10 +23,10 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
 
   async function build(chat, card, preservePreferences = false, resolvedWorldBook) {
     let worldBook = resolvedWorldBook ?? null
-    try { if (resolvedWorldBook === undefined) worldBook = await worldBooks.bound(chat.cardPath, card, chat) }
+    try { if (!preferenceOnly(chat) && resolvedWorldBook === undefined) worldBook = await worldBooks.bound(chat.cardPath, card, chat) }
     catch (error) { logger.warn('dsh-tavern: 常驻世界书读取失败，已跳过:', str(error && error.message || error)) }
     const worldBookContext = constantWorldBookContext({ worldBook }).context
-    const planned = sanitizeAgentProjectionText((await planner.plan({ purpose: 'play-card-snapshot', card, chat, worldBookContext, worldBookLabel: '常驻世界书' })).text)
+    const planned = preferenceOnly(chat) ? '' : sanitizeAgentProjectionText((await planner.plan({ purpose: 'play-card-snapshot', card, chat, worldBookContext, worldBookLabel: '常驻世界书' })).text)
     let preference = null
     if (preservePreferences) {
       if (chat.userProfileContextSnapshot) preference = { text: chat.userProfileContextSnapshot, revision: chat.userProfileRevision, profileId: chat.userProfileId }
@@ -34,14 +36,17 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
     const text = preference === null ? planned : sanitizeAgentProjectionText([preference.text, planned].filter(Boolean).join('\n\n'))
     const patch = {
       cardContextSnapshot: text,
-      cardDefinitionSnapshot: structuredClone(card),
-      cardContentDigest: cardContentDigest(card),
-      worldbookLibraryDigest: chat.openingWorldbookSnapshot ? chat.openingWorldbookSnapshot.libraryDigest : worldbookContentDigest(worldBook),
       cardContextSnapshotVersion: VERSION,
       userProfileId: preference?.profileId || chat.userProfileId || 'default',
       userProfileRevision: preference === null ? 0 : preference.revision,
       userProfileContextSnapshot: preference === null ? '' : preference.text
     }
+    if (preferenceOnly(chat)) return patch
+    Object.assign(patch, {
+      cardDefinitionSnapshot: structuredClone(card),
+      cardContentDigest: cardContentDigest(card),
+      worldbookLibraryDigest: chat.openingWorldbookSnapshot ? chat.openingWorldbookSnapshot.libraryDigest : worldbookContentDigest(worldBook)
+    })
     // Only new, unpublished openings: migration cannot manufacture their past.
     if (!(chat.messages || []).length && typeof captureSceneWorldbook === 'function') {
       patch.sceneOpeningWorldbook = await captureSceneWorldbook(chat, card, worldBook)
@@ -52,7 +57,7 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
   // A new chat is not published yet; preparation must not create a partial save.
   async function prepare(chat, card) {
     if (!usesFixedContext(chat)) return ''
-    const patch = await build(chat, card === undefined ? await readCard(chat) : card)
+    const patch = await build(chat, preferenceOnly(chat) ? null : card === undefined ? await readCard(chat) : card)
     Object.assign(chat, patch)
     return patch.cardContextSnapshot
   }
@@ -69,13 +74,22 @@ export function createPlayCardSnapshots({ worldBooks, planner, readCard, writeCh
     const operation = (async function () {
       const existing = str(chat.cardContextSnapshot)
       let patch, source
-      if (existing !== '' && Number(chat.cardContextSnapshotVersion) >= VERSION) {
+      if ((existing !== '' || preferenceOnly(chat)) && Number(chat.cardContextSnapshotVersion) >= VERSION) {
         const sanitized = sanitizeAgentProjectionText(existing)
         patch = { cardContextSnapshot: sanitized, cardContextSnapshotVersion: chat.cardContextSnapshotVersion }
         if (sanitized === existing) return patch
         source = 'card-context.sanitize'
       } else {
-        patch = await build(chat, card === undefined ? await readCard(chat) : card)
+        let preparation = chat
+        if (preferenceOnly(chat)) {
+          // Old card workspaces had no preference snapshot. Freeze the current
+          // default once, including disabled state, without changing their tool target.
+          const profile = await defaultUserPreferenceProfile(userPreferenceProfile)
+          preparation = { ...chat, userProfileEnabled: profile?.hasConfirmed === true && profile.defaultEnabled === true,
+            userProfileId: profile?.profileId || 'default', userProfileManagementId: chat.userProfileManagementId || chat.userProfileId || 'default' }
+        }
+        patch = await build(preparation, preferenceOnly(chat) ? null : card === undefined ? await readCard(chat) : card)
+        if (preferenceOnly(chat)) Object.assign(patch, { userProfileEnabled: preparation.userProfileEnabled, userProfileManagementId: preparation.userProfileManagementId })
         source = 'card-context.snapshot'
       }
       const draft = Object.assign({}, chat, patch)

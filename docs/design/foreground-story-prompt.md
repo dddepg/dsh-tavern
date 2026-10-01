@@ -103,3 +103,15 @@
 2026-09-12 验证：后台 runner、稳定前缀、生图提示词及历史参考资料相关测试共 45 项通过。新增测试覆盖生图连续两次任务的 system 稳定性、三个背景段落的注入，以及不在任务正文中重复背景。此为本地模拟请求验证，未调用真实模型或图片服务。
 
 2026-10-01 验证：人物卡系统指令、正文与后台候选、开局快照、历史导入和动态世界书相关测试共 93 项通过。真实 DSH Agent 配合本地脚本模型验证前台连续五轮的 system 与已有消息逐字稳定、宏变化后追加、候选后台重启后的去重、任务切换，以及生图和手机私聊的隔离；另覆盖清空、回退、压缩和旧会话补入。未调用付费模型，未测量供应商缓存命中率。
+
+## 卡片 Agent 的长期偏好
+
+卡片工作台也将默认启用、已确认的长期偏好注入 system。新会话保存一次偏好快照；已有普通卡片会话在下次请求时补入一次。默认关闭或只有草案时不注入，关闭状态同样保存，后续修改偏好库不会自动替换已有会话的 system 快照。
+
+普通卡片工作台的 system 顺序为：system 附加指令、长期偏好、卡片 Agent 职责、资源工作区。普通工作台只保存偏好上下文；`cardTask: edit` 仍沿用其原有的故事上下文实验。默认注入的偏好与面板正在编辑的条目分别保存，长期偏好的读取、保存和确认工具继续操作会话建立时选中的管理条目。
+
+system 附加指令在请求组装时读取，启用且非空时放在最前面，卡片 Agent 同样适用。修改或清空在下一次请求生效，因此修改它会改变请求前缀。
+
+来源：[conversation-initialization.js](../../tavern-plugin/lib/domain/conversation-initialization.js)、[play-card-snapshots.js](../../tavern-plugin/lib/domain/play-card-snapshots.js)、[foreground-orchestration-strategies.js](../../tavern-plugin/lib/domain/foreground-orchestration-strategies.js)、[user-profile.js](../../tavern-plugin/lib/tools/user-profile.js)、[system-append.js](../../tavern-plugin/lib/domain/system-append.js)。
+
+2026-10-01 验证：相关测试共 71 项通过，客户端构建检查通过。真实 DSH Agent 配合本地脚本模型验证连续三次请求：偏好只进入 system 且保持快照，system 附加指令修改、清空在下一次请求生效。另覆盖各卡片入口、旧会话补入、默认关闭、草案排除，以及管理工具与默认注入条目的分离；未调用付费模型。

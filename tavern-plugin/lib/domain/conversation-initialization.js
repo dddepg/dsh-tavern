@@ -9,6 +9,7 @@ import { bindSceneWorldbook } from './scene-worldbook.js'
 import { normalizeBackgroundModel } from './background-model-selection.js'
 import { normalizeBackgroundTasks, normalizePlayDefaults } from './tavern-settings.js'
 import { ensureSessionSeedTrajectory } from './session-seed-trajectory.js'
+import { defaultUserPreferenceProfile } from './user-preference-profile.js'
 
 function str(value) { return value === undefined || value === null ? '' : String(value) }
 function groupOfMode(mode) { return !mode || mode === 'story' || mode === 'script' ? 'play' : 'card' }
@@ -152,14 +153,13 @@ export function createConversationInitialization(options) {
     if (cardEditExperiment) chat.cardEditContext = { version: 1 }
     if (preparation && groupOfMode(chatMode) === 'play') chat.openingWorldbookSnapshot = structuredClone(preparation.worldbookSnapshot)
     // The sidebar setting is the sole opt-in; opening previews and legacy clients cannot override it.
-    let profile = (groupOfMode(chat.mode) === 'play' || chat.mode === 'card') && options.userPreferenceProfile
+    const selectedProfile = options.userPreferenceProfile
       ? await options.userPreferenceProfile.read()
       : null
-    if (profile && groupOfMode(chat.mode) === 'play' && Object.hasOwn(profile, 'defaultProfileId')) {
-      profile = profile.defaultProfileId ? { ...await options.userPreferenceProfile.read(profile.defaultProfileId), defaultEnabled: true } : null
-    }
+    const profile = await defaultUserPreferenceProfile(options.userPreferenceProfile, selectedProfile)
+    if (chat.mode === 'card') chat.userProfileManagementId = selectedProfile?.profileId || 'default'
     chat.userProfileId = profile?.profileId || 'default'
-    chat.userProfileEnabled = (groupOfMode(chat.mode) === 'play' || chat.cardEditContext?.version === 1) && profile?.hasConfirmed === true && profile.defaultEnabled === true
+    chat.userProfileEnabled = profile?.hasConfirmed === true && profile.defaultEnabled === true
     chat.webSearchEnabled = groupOfMode(chat.mode) === 'play' && defaults.webSearchEnabled
     chat.sceneImagesEnabled = groupOfMode(chat.mode) === 'play' && defaults.sceneImagesEnabled
     chat.statusBarPlacement = defaults.statusBarPlacement
@@ -179,9 +179,7 @@ export function createConversationInitialization(options) {
         status: 'pending'
       }
     } : { enabled: false }
-    if (groupOfMode(chat.mode) === 'play' || chat.cardEditContext?.version === 1) {
-      await snapshots.prepare(chat, card)
-    }
+    await snapshots.prepare(chat, card)
     chat.openingText = greeting
     chat.presentationWarnings = openingProjection.warnings
     if (chat.mode === 'script') {
@@ -317,7 +315,7 @@ export function createConversationInitialization(options) {
       await native.flush(target.session)
     }
     if (groupOfMode(chat.mode) === 'card') {
-      if (chat.cardEditContext?.version === 1) await native.ensurePrefix(target.session, await snapshots.ensure(chat, card))
+      await native.ensurePrefix(target.session, await snapshots.ensure(chat, card))
       await ensureSessionSeedTrajectory(target.session, chat.cardEditContext?.version === 1 ? 'story' : 'card')
       if (chat.cardEditContext?.version === 1) await native.ensureCardWorkspace(target.session, chat)
       await native.flush(target.session)

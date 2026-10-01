@@ -216,6 +216,14 @@ function createSingleProfile({ store, now = Date.now }) {
 
 export const USER_PREFERENCE_PROFILE_PATH = PROFILE_PATH
 
+/** Resolve the configured default, independently of the profile being edited. */
+export async function defaultUserPreferenceProfile(profiles, selected) {
+  if (!profiles) return null
+  selected ??= await profiles.read()
+  if (!selected || !Object.hasOwn(selected, 'defaultProfileId')) return selected
+  return selected.defaultProfileId ? { ...await profiles.read(selected.defaultProfileId), defaultEnabled: true } : null
+}
+
 
 // Keep the existing draft/confirmation rules inside each independently named profile.
 export function createUserPreferenceProfile({ store, now = Date.now }) {
