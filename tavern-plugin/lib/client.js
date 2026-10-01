@@ -9122,11 +9122,11 @@ window.__ModuleLoader__.load({
 		    React.useLayoutEffect(function () { if (lease.current) lease.current.update(frameProps); });
 		    const movable = !props.persistent && /<(?:script|iframe|object|embed)\b/i.test(String(props.content || ""));
 		    return React.createElement("div", null,
-		        movable ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
+		        movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
 		            if (!activated) { setActivated(true); return; }
-		            try { tavernPanelRegistry.pin(panelId, !pinned); }
+		            try { tavernPanelRegistry.pin(panelId, true); }
 		            catch (error) { tavernErrorHub.report("固定面板", error); }
-		        } }, pinned ? "返回原消息" : "固定到右侧") : null,
+		        } }, "固定到右侧") : null,
 		        tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { if (!activated) { setActivated(true); return; } return lease.current?.expand(); } }, "展开大屏") : null,
 		        React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
 		}
@@ -9535,10 +9535,10 @@ window.__ModuleLoader__.load({
 			}, [movable, props.sessionId, props.content]);
 			const frames = activated ? [renderFrame(visibleDocument, false), renderFrame(pendingDocument, true)] : null;
 			return React.createElement("div", null,
-				movable ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
-					try { setActivated(true); tavernPanelRegistry.pin(panelKey.current, !pinned); }
+				movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
+					try { setActivated(true); tavernPanelRegistry.pin(panelKey.current, true); }
 					catch (error) { tavernErrorHub.report("固定面板", error); }
-				} }, pinned ? "返回原消息" : "固定到右侧") : null,
+				} }, "固定到右侧") : null,
                 visibleDocument.sizing ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { setActivated(true); return expandTavernFrame(slotRef.current); } }, "展开大屏") : null,
 				React.createElement("div", { ref: homeRef },
 					React.createElement("div", { ref: slotRef, className: "dsh-tavern-message-frame-slot", style: { position: "relative", height: height + "px" } }, frames)));
@@ -14060,7 +14060,7 @@ window.__ModuleLoader__.load({
 					observeMvuView: false, runtimeReporting: true
 				})); }),
 				manual.map(function (entry) { return h("div", { key: entry.id, role: "tabpanel", hidden: active !== entry.id },
-					h("button", { type: "button", className: "dsh-tavern-btn", onClick: function () { tavernPanelRegistry.pin(entry.id, false); } }, "返回原消息"),
+					h("button", { type: "button", className: "dsh-tavern-btn", onClick: function () { tavernPanelRegistry.pin(entry.id, false); } }, "返回正文栏"),
 					h(TavernDockedPanel, { id: entry.id })); })
 			);
 		}

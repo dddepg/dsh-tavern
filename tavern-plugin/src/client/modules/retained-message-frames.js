@@ -152,11 +152,11 @@ function TavernRetainedMessageFrame(props) {
     React.useLayoutEffect(function () { if (lease.current) lease.current.update(frameProps); });
     const movable = !props.persistent && /<(?:script|iframe|object|embed)\b/i.test(String(props.content || ""));
     return React.createElement("div", null,
-        movable ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
+        movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
             if (!activated) { setActivated(true); return; }
-            try { tavernPanelRegistry.pin(panelId, !pinned); }
+            try { tavernPanelRegistry.pin(panelId, true); }
             catch (error) { tavernErrorHub.report("固定面板", error); }
-        } }, pinned ? "返回原消息" : "固定到右侧") : null,
+        } }, "固定到右侧") : null,
         tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { if (!activated) { setActivated(true); return; } return lease.current?.expand(); } }, "展开大屏") : null,
         React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
 }

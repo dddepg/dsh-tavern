@@ -39,7 +39,7 @@
 					observeMvuView: false, runtimeReporting: true
 				})); }),
 				manual.map(function (entry) { return h("div", { key: entry.id, role: "tabpanel", hidden: active !== entry.id },
-					h("button", { type: "button", className: "dsh-tavern-btn", onClick: function () { tavernPanelRegistry.pin(entry.id, false); } }, "返回原消息"),
+					h("button", { type: "button", className: "dsh-tavern-btn", onClick: function () { tavernPanelRegistry.pin(entry.id, false); } }, "返回正文栏"),
 					h(TavernDockedPanel, { id: entry.id })); })
 			);
 		}
