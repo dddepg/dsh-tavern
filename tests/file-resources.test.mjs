@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createFileResourceStore, normalizeResourcePath, resourceUri, safeResourceName } from '../tavern-plugin/lib/domain/file-resources.js'
+import { createFileResourceStore, normalizeResourcePath, resourceUri, safeResourceName, stripPngTextChunks } from '../tavern-plugin/lib/domain/file-resources.js'
 
 function pngCardBuffer(card) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -147,6 +147,13 @@ test('人物卡副本保留当前工作数据和大写 PNG，独立 ID 且重名
   const copied = await store.copyCard('cards/source.json', 'copy')
   assert.equal(copied.imageCopied, true)
   assert.deepEqual(await store.readCardImage(copied.path), image)
+  const preview = await store.cardImagePreview(copied.path)
+  assert.match(preview.revision, /^"[0-9a-z]+-[0-9a-z]+"$/)
+  const thumbnail = await preview.read()
+  assert.deepEqual(thumbnail, stripPngTextChunks(image))
+  assert.ok(thumbnail.length < image.length)
+  assert.equal(thumbnail.includes(Buffer.from('chara')), false)
+  assert.equal(thumbnail.subarray(-8, -4).toString('ascii'), 'IEND')
   const saved = await store.readCard(copied.path)
   assert.notEqual(saved.meta.id, card.meta.id)
   assert.equal(saved.raw.data.name, 'copy')

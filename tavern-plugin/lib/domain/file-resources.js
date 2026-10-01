@@ -77,6 +77,25 @@ function originalCard(record, card, workingName) {
   return { name: workingName, data: JSON.stringify(snapshot, null, 2) }
 }
 
+// Card PNGs embed the whole card (often several MB of worldbook/scripts) in text
+// chunks. Thumbnails only need the pixels, so drop tEXt/zTXt/iTXt.
+export function stripPngTextChunks(buffer) {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (!Buffer.isBuffer(buffer) || buffer.length <= signature.length || !buffer.subarray(0, signature.length).equals(signature)) return buffer
+  const parts = [signature]
+  let offset = signature.length
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const end = offset + 12 + length
+    if (end > buffer.length) return buffer
+    if (type !== 'tEXt' && type !== 'zTXt' && type !== 'iTXt') parts.push(buffer.subarray(offset, end))
+    offset = end
+    if (type === 'IEND') return Buffer.concat(parts)
+  }
+  return buffer
+}
+
 function pngCardPayload(buffer, name) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   if (!Buffer.isBuffer(buffer) || buffer.length <= signature.length || !buffer.subarray(0, signature.length).equals(signature)) {
@@ -234,6 +253,18 @@ export function createFileResourceStore(options = {}) {
     const originalName = await originalCardName(normalized)
     if (originalName === null || path.extname(originalName).toLowerCase() !== '.png') return undefined
     return await readFile(path.join(path.dirname(absolute(normalized, true)), originalName))
+  }
+
+  async function cardImagePreview(relative) {
+    const normalized = normalizeResourcePath(relative, 'card')
+    const originalName = await originalCardName(normalized)
+    if (originalName === null || path.extname(originalName).toLowerCase() !== '.png') return undefined
+    const file = path.join(path.dirname(absolute(normalized, true)), originalName)
+    const info = await stat(file)
+    return {
+      revision: '"' + info.size.toString(36) + '-' + Math.trunc(info.mtimeMs).toString(36) + '"',
+      read: async function () { return stripPngTextChunks(await readFile(file)) }
+    }
   }
 
   async function ensureCardWorkspace(relative, migrate) {
@@ -1045,5 +1076,5 @@ export function createFileResourceStore(options = {}) {
     return result
   }
 
-  return Object.freeze({ globalWorldBookSources, setGlobalWorldBook: serializeWorldBookMutation(setGlobalWorldBook), readMvuDraftSession, updateMvuDraftSession, readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard: serializeWorldBookMutation(saveMvuCard), inspectMvuDestination, bindMaterial, bindWorldBook: serializeWorldBookMutation(bindWorldBook), bindWorldBooks: serializeWorldBookMutation(bindWorldBooks), cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove: serializeWorldBookMutation(remove), rename: serializeWorldBookMutation(renameResource), replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook: serializeWorldBookMutation(unbindWorldBook), worldBookBindingForCard, writeWorking })
+  return Object.freeze({ globalWorldBookSources, setGlobalWorldBook: serializeWorldBookMutation(setGlobalWorldBook), readMvuDraftSession, updateMvuDraftSession, readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard: serializeWorldBookMutation(saveMvuCard), inspectMvuDestination, bindMaterial, bindWorldBook: serializeWorldBookMutation(bindWorldBook), bindWorldBooks: serializeWorldBookMutation(bindWorldBooks), cardsForMaterial, cardImagePreview, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove: serializeWorldBookMutation(remove), rename: serializeWorldBookMutation(renameResource), replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook: serializeWorldBookMutation(unbindWorldBook), worldBookBindingForCard, writeWorking })
 }

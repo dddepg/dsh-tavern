@@ -145,13 +145,20 @@ export function registerTavernHttpRoutes({
           if (!readiness.ok) throw readiness.error
           if (req.method === 'GET' && pathname === '/api/dsh-tavern/card-image') {
             const query = new URL(req.url, 'http://x').searchParams
-            const body = await fileResources.readCardImage(query.get('path'))
-            if (body === undefined) {
+            const image = await fileResources.cardImagePreview(query.get('path'))
+            if (image === undefined) {
               res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' })
               res.end('not found')
               return
             }
-            res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': body.byteLength, 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' })
+            // Revalidate instead of re-sending: the list mounts every thumbnail on each visit.
+            if (req.headers['if-none-match'] === image.revision) {
+              res.writeHead(304, { ETag: image.revision, 'Cache-Control': 'private, no-cache' })
+              res.end()
+              return
+            }
+            const body = await image.read()
+            res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': body.byteLength, 'Cache-Control': 'private, no-cache', ETag: image.revision, 'X-Content-Type-Options': 'nosniff' })
             res.end(body)
             return
           }
