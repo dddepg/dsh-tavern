@@ -14,6 +14,10 @@ const source=path.join(home,'apps','dsh-tavern');
 const hostRoot=path.join(resources,'app');
 const log=path.join(data,'setup-upgrade.log');
 fs.mkdirSync(data,{recursive:true});
+// The launcher shows stderr in its error dialog: name the failed stage, a short reason and the log.
+let stage='准备安装';
+const INSTALLER_STEPS={'desktop.package-manager':'准备包管理环境','dependencies.install':'安装依赖','profile.install':'注册 Tavern','source.files':'下载代码','service.start':'启动服务'};
+const download=createRequire(import.meta.url)('./download.cjs');
 try {
   if(process.env.DSH_ONLINE_TEST_OFFLINE==='1')throw Error('测试：网络不可用');
   const env={...process.env,DSH_HOME:home,DSH_TAVERN_HOST:'desktop',DSH_TAVERN_RUNTIME_HOST:'desktop',
@@ -23,11 +27,13 @@ try {
     CI:'true',pnpm_config_frozen_lockfile:'false',
     npm_config_cache:path.join(data,'cache','npm'),pnpm_config_store_dir:path.join(data,'cache','pnpm')};
   // Translate the Windows system proxy for this process and every child (powershell, curl, git, pnpm).
-  const proxy=createRequire(import.meta.url)('./download.cjs').applyProxyEnvironment(env);
+  const proxy=download.applyProxyEnvironment(env);
   if(proxy.summary){const text=(proxy.source==='system'?'使用系统代理：':'')+proxy.summary;console.log('DSH_STATUS '+text);fs.appendFileSync(log,text+'\n');}
+  stage='配置 DSH 运行环境';
   const {installDesktopDshRuntime}=await import(pathToFileURL(path.join(hostRoot,'lib','desktop-runtime-environment.js')));
   installDesktopDshRuntime({platform:'win32',appExecutable:process.execPath,dshBootstrapPath:env.DSH_DESKTOP_DSH_BOOTSTRAP,
     profileName:'tavern',homeDir:home,stateDir:path.join(data,'desktop','host-commands','tavern'),environment:env});
+  stage='准备 Windows 包管理环境';
   const {prepareDesktopPackageManager}=await import('./desktop-package-manager.mjs');
   const manager=await prepareDesktopPackageManager({host:'desktop',home,env,onProgress:message=>console.log('DSH_STATUS '+message)});
   const pathKey=Object.keys(env).find(key=>key.toUpperCase()==='PATH')||'PATH';
@@ -40,9 +46,10 @@ try {
   // stderr to the log; Write-Host still reaches that stdout when the console is redirected.
   env.DSH_SETUP_INSTALLER=path.join(resources,'install.ps1');
   const command="$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; try { Invoke-Expression ([IO.File]::ReadAllText($env:DSH_SETUP_INSTALLER,[Text.Encoding]::UTF8)) } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }";
+  stage='下载并安装酒馆';
   console.log('DSH_STATUS 正在检查更新与下载源…');
   const output=fs.openSync(log,'a');
-  let code;
+  let code,installerFailure='';
   try {
     const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-OutputFormat','Text','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],
       {env,windowsHide:true,stdio:['ignore','pipe','pipe']});
@@ -52,6 +59,8 @@ try {
       stream.on('data',chunk=>fs.writeSync(output,chunk));
       createInterface({input:stream,crlfDelay:Infinity}).on('line',line=>{
         if(line.startsWith('DSH_STATUS '))console.log(line);
+        // install.ps1 ends with one curated summary line; later output never replaces it.
+        if(!installerFailure&&line.startsWith('安装失败：'))installerFailure=line.slice(5);
         const progress=line.match(/Progress: resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/);
         if(progress)console.log(`DSH_STATUS 安装依赖：已下载 ${progress[3]}，复用 ${progress[2]}，已安装 ${progress[4]}（已解析 ${progress[1]}）`);
         if(/WARN.*(?:retry|ETIMEDOUT|ECONNRESET|ENOTFOUND|ERR_SOCKET)/i.test(line))console.log('DSH_STATUS 依赖下载遇到网络错误，包管理器正在重试；详细原因见日志。');
@@ -59,12 +68,16 @@ try {
     }
     code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve)});
   } finally {fs.closeSync(output)}
-  if(code!==0)throw Error('安装或更新失败，请查看日志：'+log);
+  if(code!==0)throw Error(installerFailure
+    ? installerFailure.replace(/步骤 ([a-z.-]+) 失败/,(match,step)=>INSTALLER_STEPS[step]?`${INSTALLER_STEPS[step]}（${step}）失败`:match).replace(/\/\/[^\s/@]+@/g,'//')
+    : '安装或更新失败');
   // Older online installers may have left a pending first-install marker.
   fs.rmSync(path.join(source,'.portable-install-pending.json'),{force:true});
   console.log('DSH_STATUS Tavern 安装或更新完成');
 } catch(error) {
-  fs.appendFileSync(log,String(error.stack||error)+'\n');
-  console.error(error.message);
+  const chain=[];for(let item=error,depth=0;item&&depth<5;item=item.cause,depth++)chain.push(depth?'Caused by: '+String(item.stack||item):String(item.stack||item));
+  fs.appendFileSync(log,`[${stage}] `+chain.join('\n')+'\n');
+  const reason=/[\u4e00-\u9fff]/.test(error.message)?error.message:download.describeFailure(error);
+  console.error(`${stage}失败：${reason.length>400?reason.slice(0,400)+'…':reason}\n详细日志：${log}`);
   process.exitCode=1;
 }

@@ -40,6 +40,8 @@ const NETWORK_REASONS = [
 function describeFailure(error) {
   if (!error) return '未知错误'
   if (error.code === 'STALLED' || error.code === 'DEADLINE' || error.code === 'HTTP' || error.code === 'CHECKSUM') return error.message
+  if (error.name === 'TimeoutError') return '请求超时'
+  if (error.name === 'AbortError') return '请求被中止'
   let current = error
   for (let depth = 0; current && depth < 4; depth++, current = current.cause) {
     const code = String(current.code || '')
