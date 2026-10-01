@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "61541c63fd7519786d710f7b8d3ff92f9e321c78",
-  "releaseSequence": 459,
+  "revision": "027bf70b2507795678b9f6974bd69efc7bfa79d4",
+  "releaseSequence": 460,
   "version": "2.4.0",
   "files": [
     {
@@ -48,6 +48,11 @@
       "path": "bin/desktop-host-paths.mjs",
       "sha256": "860fe5bb361d4ff7694488a734c5a4e4df067aed1e856727b906b33bc0d1326b",
       "size": 1200
+    },
+    {
+      "path": "bin/desktop-package-manager.mjs",
+      "sha256": "ba70eebf943e8a341cdbb42eb8a5acfeb8972cf78806ba4b3154c2b33534b650",
+      "size": 7628
     },
     {
       "path": "bin/download.cjs",
