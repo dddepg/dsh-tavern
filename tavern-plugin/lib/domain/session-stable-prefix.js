@@ -1,3 +1,4 @@
+import { sessionVariableDirectorySection } from './session-variable-directory.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { ensureSessionSystemHead, sessionEvents, appendSessionEvent } from './session-events.js'
 import { readFile } from 'node:fs/promises'
@@ -170,7 +171,9 @@ export async function ensureSessionStablePrefix(session, text, storage, revision
 /** Native system assembly is the only model-visible owner of fixed background. */
 export function sessionStablePrefixSections(session) {
   const prefix = readSessionStablePrefix(session)
-  return prefix ? sourceSections(prefix.text) : []
+  const sections = prefix ? sourceSections(prefix.text) : []
+  const directory = sessionVariableDirectorySection(session)
+  return directory ? [...sections, directory] : sections
 }
 
 /** Replace only the request projection; persisted opening events remain immutable. */

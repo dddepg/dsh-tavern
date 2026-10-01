@@ -1,3 +1,4 @@
+import { ensureSessionVariableDirectory } from './domain/session-variable-directory.js'
 import { createCompatibilityTurnCompiler } from './domain/compatibility-turn.js'
 import { registerTavernHttpRoutes } from './http/routes.js'
 import { registerRequestHooks } from './hooks/request.js'
@@ -1844,7 +1845,8 @@ export async function apply(ctx) {
     const revision = Number(chat.cardContextRevision) || 0
     const text = before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
     const prefix = await ensureSessionStablePrefix(session, text, stablePrefixStorage, revision)
-    if (prefix && prefix.event !== before?.event) await sessionStore.flush(session)
+    const directory = ensureSessionVariableDirectory(session, chat)
+    if (directory || prefix && prefix.event !== before?.event) await sessionStore.flush(session)
     return prefix
   }
   async function ensureNativeCardWorkspace(session, chat) {

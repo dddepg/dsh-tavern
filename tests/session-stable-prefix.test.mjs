@@ -1,3 +1,4 @@
+import { ensureSessionVariableDirectory } from '../tavern-plugin/lib/domain/session-variable-directory.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
@@ -18,7 +19,7 @@ test('前台确认更新后同版本复用背景，重开 Session 后仍复用',
   const implementation = source.slice(source.indexOf('  async function ensureNativeSystemPrefix('), source.indexOf('  async function ensureNativeCardWorkspace('))
   let reads = 0, flushes = 0
   const run = vm.runInNewContext(`(${implementation.trim()})`, {
-    readSessionStablePrefix, ensureSessionStablePrefix,
+    readSessionStablePrefix, ensureSessionStablePrefix, ensureSessionVariableDirectory,
     ensurePlayCardSnapshot: async chat => { reads++; return '背景版本 ' + chat.cardContextRevision },
     stablePrefixStorage: undefined, sessionStore: { flush: async () => { flushes++ } }
   })
