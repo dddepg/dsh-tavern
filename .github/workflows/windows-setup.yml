@@ -11,12 +11,14 @@ on:
       - packaging/windows/**
       - install.ps1
       - bin/desktop-package-manager.mjs
+      - bin/download.cjs
       - .github/workflows/windows-setup.yml
   pull_request:
     paths:
       - packaging/windows/**
       - install.ps1
       - bin/desktop-package-manager.mjs
+      - bin/download.cjs
       - .github/workflows/windows-setup.yml
 
 env:

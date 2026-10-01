@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url'
 export const PACKAGE_NODE_VERSION = '22.22.3'
 // Official https://nodejs.org/dist/v22.22.3/SHASUMS256.txt
 const hashes = { x64: '780f44f2c53c108bae261ada21a525b4bfe733c020ac85e41bfe94479090ac9b', arm64: '65044d409333b941086486545992141d1145198d7f0e0fc0c3bf62080fd8ee51' }
+// Sibling file both in the repository bin/ and beside the Windows runtime copy.
+const { download } = createRequire(import.meta.url)('./download.cjs')
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
 export async function prepareDesktopPackageManager(options = {}) {
   const platform = options.platform || process.platform
@@ -67,29 +69,23 @@ export async function prepareDesktopPackageManager(options = {}) {
         break
       } catch {}
     }
+    // The mirror is usually much faster from mainland China; SHA-256 makes either source safe.
     const urls = [
-      `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
       `https://npmmirror.com/mirrors/node/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
+      `https://nodejs.org/dist/v${PACKAGE_NODE_VERSION}/win-${arch}/node.exe`,
     ]
-    for (let attempt = 1; !bytes && attempt <= 3; attempt++) {
-      const url = urls[Math.min(attempt - 1, urls.length - 1)]
-      options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/3）：${new URL(url).hostname}`)
-      try {
-        const response = await (options.fetch || fetch)(url, { signal: AbortSignal.timeout(120000) })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const chunks=[]; let received=0,reportedAt=0
-        const total=Number(response.headers.get('content-length'))
-        const report=()=>options.onProgress?.(`下载更新运行环境（${new URL(url).hostname}）：已下载 ${(received/1048576).toFixed(1)}${total>0?' / '+(total/1048576).toFixed(1):''} MB`)
-        if(response.body)for await(const chunk of response.body){
-          chunks.push(chunk);received+=chunk.length
-          if(Date.now()-reportedAt>=500){report();reportedAt=Date.now()}
-        }
-        report();bytes=Buffer.concat(chunks)
-        break
-      } catch (cause) {
-        options.onProgress?.(`更新运行环境下载失败（${new URL(url).hostname}）：${cause.name==='TimeoutError'?'请求超过 120 秒未完成':cause.cause?.code||cause.message}；${attempt<3?'正在切换或重试下载源':'已停止，请检查网络后重试'}。`)
-        if (attempt === 3) throw new Error(`Windows 更新运行环境下载失败（已尝试 3 次）：${url}`, { cause })
-      }
+    if (!bytes) {
+      let reportedAt = 0
+      bytes = (await download(urls, {
+        label: 'Windows 更新运行环境', sha256: hashes[arch], attempts: 3, stallMs: 30000, deadlineMs: 30 * 60000, fetch: options.fetch,
+        onAttempt: ({ host, attempt, attempts }) => options.onProgress?.(`正在下载 Windows 更新运行环境（${attempt}/${attempts}）：${host}`),
+        onProgress: ({ host, received, total }) => {
+          if (Date.now() - reportedAt < 500 && received !== total) return
+          reportedAt = Date.now()
+          options.onProgress?.(`下载更新运行环境（${host}）：已下载 ${(received / 1048576).toFixed(1)}${total > 0 ? ' / ' + (total / 1048576).toFixed(1) : ''} MB`)
+        },
+        onRetry: ({ host, reason, willRetry }) => options.onProgress?.(`更新运行环境下载失败（${host}）：${reason}；${willRetry ? '正在切换或重试下载源' : '已停止，请检查网络后重试'}。`),
+      })).bytes
     }
     if (digest(bytes) !== hashes[arch]) throw new Error('Windows 更新运行环境 SHA-256 校验失败，已停止安装')
     const temporary = node + '.' + randomUUID() + '.tmp'

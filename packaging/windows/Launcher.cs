@@ -205,6 +205,7 @@ class Launcher : Form {
      var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
      var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
      Resource("setupUpgrade",Path.Combine(app,@"resources\setup-upgrade.mjs"));
+     Resource("downloadModule",Path.Combine(app,@"resources\download.cjs"));
      Resource("powershellInstaller",Path.Combine(app,@"resources\install.ps1"));
      var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app)+" "+Quote(packageHelper));
      patchStart.UseShellExecute=false;patchStart.CreateNoWindow=true;patchStart.RedirectStandardError=true;

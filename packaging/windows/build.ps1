@@ -30,7 +30,7 @@ try {
     $launcherFile = Join-Path $buildTemp 'Launcher.cs'
     # BOM keeps the .NET Framework compiler from reading the Chinese UI strings as ANSI.
     [IO.File]::WriteAllText($launcherFile, $launcherSource, [Text.UTF8Encoding]::new($true))
-    & $compiler /nologo /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.Linq.dll "/out:$Output" "/resource:$Payload,payload" "/resource:$SevenZip,seven" "/resource:$patch,runtimePatch" "/resource:$packageHelper,packageHelper" "/resource:$PSScriptRoot/setup-upgrade.mjs,setupUpgrade" "/resource:$PSScriptRoot/../../install.ps1,powershellInstaller" $launcherFile (Join-Path $PSScriptRoot 'SetupDialog.cs')
+    & $compiler /nologo /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.Linq.dll "/out:$Output" "/resource:$Payload,payload" "/resource:$SevenZip,seven" "/resource:$patch,runtimePatch" "/resource:$packageHelper,packageHelper" "/resource:$PSScriptRoot/../../bin/download.cjs,downloadModule" "/resource:$PSScriptRoot/setup-upgrade.mjs,setupUpgrade" "/resource:$PSScriptRoot/../../install.ps1,powershellInstaller" $launcherFile (Join-Path $PSScriptRoot 'SetupDialog.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed' }
     Write-Output "PayloadSHA256=$payloadHash"
     Get-FileHash -LiteralPath $Output -Algorithm SHA256
