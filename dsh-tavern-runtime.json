@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "8d08bb56b81fb5225970559d1d6552a62a9c82ff",
-  "releaseSequence": 449,
+  "revision": "927cd4a635dd4592cdacec126939986511186919",
+  "releaseSequence": 450,
   "version": "2.4.0",
   "files": [
     {
@@ -13,6 +13,11 @@
       "path": "bin/benchmark-chat-snapshots.mjs",
       "sha256": "2a3a0fb9b154ec6f87b5c3a32403b2c460aa40865450180f0e491b6e037f01f9",
       "size": 4704
+    },
+    {
+      "path": "bin/build-installer-scripts.mjs",
+      "sha256": "885fde70fe1ff697c1592fc8aa60cb2b9037e9246d864d0762651faf596887d5",
+      "size": 1791
     },
     {
       "path": "bin/build-mvu-schema.mjs",
@@ -46,8 +51,13 @@
     },
     {
       "path": "bin/desktop-package-manager.mjs",
-      "sha256": "8c8961fcc15498057b3d0ea5cdbefb16cb49e1b14707aa94af2c823ada3a77ea",
-      "size": 7559
+      "sha256": "01d60785c0a8f6e9805189decf66d64a2bd4e13efc61623e44a7303e542b375b",
+      "size": 7334
+    },
+    {
+      "path": "bin/download.cjs",
+      "sha256": "a42aea228c61d218a30f5ba605302da614989e3246e1564bfe636dc2e30c354e",
+      "size": 16276
     },
     {
       "path": "bin/dsh-compatibility.mjs",
@@ -201,13 +211,13 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "977886fe8744c445ae03ed2946de184794578925eed0a31ecbe6d023c5a15762",
-      "size": 33165
+      "sha256": "977dbc44a9d48671c71ec48cb2dd439f5612f7319e766620866168412a08a496",
+      "size": 46357
     },
     {
       "path": "install.sh",
-      "sha256": "b97ec39756ac7606ed3a79c9f99e3b7d6c79615c9d46db64be87d081f741cbb9",
-      "size": 16012
+      "sha256": "75882192f50ee7015dc630a2705e82a2c05334e23426b6727c13f171f8759cfd",
+      "size": 30639
     },
     {
       "path": "package.json",
@@ -1441,8 +1451,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/session-stable-prefix.js",
-      "sha256": "5cf0ac0130fe4e34ef172c40a38c4309a9c8c21f1f16576190b6406cb2aa070e",
-      "size": 8581
+      "sha256": "ce93f75566387e3a9b0203926242636d42b0053607f7db04b4e960c42af7d5f6",
+      "size": 8791
     },
     {
       "path": "tavern-plugin/lib/domain/session-surface-mutations.js",
@@ -1453,6 +1463,11 @@
       "path": "tavern-plugin/lib/domain/session-turn-result.js",
       "sha256": "70441636c932daaf334cd50a6fcd1f7999425a7433039b93ef46690230550ded",
       "size": 1573
+    },
+    {
+      "path": "tavern-plugin/lib/domain/session-variable-directory.js",
+      "sha256": "c0871beb4960864479c074a34a2ef4069ad67bcfb13d7864a086e74cc68d3ca0",
+      "size": 2455
     },
     {
       "path": "tavern-plugin/lib/domain/session-view-reader.js",
@@ -1851,8 +1866,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "817e2aaab53cbc97cbeb41fd8f81c6ab4d10b9400a4e9177c38f913e0611d12d",
-      "size": 254178
+      "sha256": "c7496f155cf1a192a34fccf8b09e34a329e8e63a576b345e27c5be8994e8b270",
+      "size": 254347
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
