@@ -562,7 +562,7 @@ try {
     } catch { Write-Warning "诊断日志写入失败：$($_.Exception.Message)" }
   }
   function Assert-InstallFiles([string]$Root) {
-    foreach ($Relative in @('package.json', 'pnpm-lock.yaml', 'bin\dsh-compatibility.mjs', 'bin\dsh-tavern.mjs', 'bin\desktop-package-manager.mjs', 'config\dsh-compatibility.json')) {
+    foreach ($Relative in @('package.json', 'pnpm-lock.yaml', 'bin\dsh-compatibility.mjs', 'bin\dsh-tavern.mjs', 'config\dsh-compatibility.json')) {
       $Required = Join-Path $Root $Relative
       if (-not (Test-Path -LiteralPath $Required -PathType Leaf)) { throw "安装文件不完整，缺少：$Required" }
     }
@@ -787,14 +787,6 @@ try {
     [IO.File]::WriteAllText((Join-Path $AppDir '.dsh-tavern-release.json'), $ReleaseJson, (New-Object Text.UTF8Encoding($false)))
   }
 
-  if ($InstallHost -eq 'desktop') {
-    Write-InstallStatus '准备依赖：正在检查 Windows Desktop 包管理环境…'
-    $PackageManagerBin = Invoke-InstallCommand 'desktop.package-manager' 'node' @((Join-Path $AppDir 'bin\desktop-package-manager.mjs')) -CaptureOutput
-    $PackageManagerBin = ($PackageManagerBin -join "`n").Trim()
-    if (-not (Test-Path -LiteralPath (Join-Path $PackageManagerBin 'pnpm.cmd'))) { throw 'Desktop 包管理入口未生成。' }
-    $env:Path = "$PackageManagerBin;$env:Path"
-    $PnpmCommand = Join-Path $PackageManagerBin 'pnpm.cmd'
-  }
   Write-InstallStatus '安装依赖：正在连接软件包仓库，已有缓存将直接复用…'
   Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
 

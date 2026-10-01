@@ -10,14 +10,12 @@ on:
     paths:
       - packaging/windows/**
       - install.ps1
-      - bin/desktop-package-manager.mjs
       - bin/download.cjs
       - .github/workflows/windows-setup.yml
   pull_request:
     paths:
       - packaging/windows/**
       - install.ps1
-      - bin/desktop-package-manager.mjs
       - bin/download.cjs
       - .github/workflows/windows-setup.yml
 
@@ -69,18 +67,16 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'build'
           ./packaging/windows/test.ps1 -Launcher "$root\out\DSH-Tavern-Desktop-2.0.13-x64-Setup.exe" -TestDirectory "$root\launcher-test"
 
-      # Evidence for docs/plans/windows-installer-network-handoff.md task 1:
-      # can Desktop's own pnpm run under Electron (ELECTRON_RUN_AS_NODE) on Windows
-      # without the separately downloaded Node? Informational until decided.
-      - name: Probe pnpm under Desktop Electron
-        continue-on-error: true
+      # The Setup installs dependencies with Desktop's own pnpm under Electron
+      # (ELECTRON_RUN_AS_NODE). Exercise exactly that with the real lockfile.
+      - name: pnpm install under Desktop Electron
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'build'
           # Avoid non-ASCII literals here: Windows PowerShell may read the step script as ANSI.
           $runtime = (Get-ChildItem -LiteralPath (Join-Path $root 'launcher-test') -Directory -Recurse -Filter 'runtime-*' | Select-Object -First 1).FullName
           if (-not $runtime) { throw 'Prepared runtime not found' }
           $electron = Join-Path $runtime 'DSH Desktop.exe'
-          $pnpm = Join-Path $runtime 'resources\app\node_modules\pnpm\bin\pnpm-desktop-original.mjs'
+          $pnpm = Join-Path $runtime 'resources\app\node_modules\pnpm\bin\pnpm.mjs'
           if (-not (Test-Path -LiteralPath $pnpm)) { throw "Desktop pnpm entry not found: $pnpm" }
           $app = Join-Path $root 'pnpm-probe\app'
           New-Item -ItemType Directory -Force $app | Out-Null

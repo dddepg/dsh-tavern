@@ -204,16 +204,10 @@ class Launcher : Form {
      using(var p=Process.Start(pi)) {char[] buf=new char[256];int n;while((n=p.StandardOutput.Read(buf,0,buf.Length))>0){var m=Regex.Match(new string(buf,0,n),@"(\d{1,3})%");if(m.Success)Status("首次准备运行环境："+m.Value,int.Parse(m.Groups[1].Value));}p.WaitForExit();if(p.ExitCode!=0)throw new Exception("解压失败，代码 "+p.ExitCode);}
      if(!File.Exists(Path.Combine(app,"DSH Desktop.exe")))throw new Exception("运行环境不完整");
      Status("本地处理：解压完成，正在配置运行环境…");
-     var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
-     var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
+     // Desktop's own pnpm runs under Electron; the runtime itself is used unmodified.
      Resource("setupUpgrade",Path.Combine(app,@"resources\setup-upgrade.mjs"));
      Resource("downloadModule",Path.Combine(app,@"resources\download.cjs"));
      Resource("powershellInstaller",Path.Combine(app,@"resources\install.ps1"));
-     var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app)+" "+Quote(packageHelper));
-     patchStart.UseShellExecute=false;patchStart.CreateNoWindow=true;patchStart.RedirectStandardError=true;
-     patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
-     patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
-     using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
      });
      // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
      // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.

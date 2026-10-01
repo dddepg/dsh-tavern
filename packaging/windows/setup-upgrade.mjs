@@ -16,7 +16,7 @@ const log=path.join(data,'setup-upgrade.log');
 fs.mkdirSync(data,{recursive:true});
 // The launcher shows stderr in its error dialog: name the failed stage, a short reason and the log.
 let stage='准备安装';
-const INSTALLER_STEPS={'desktop.package-manager':'准备包管理环境','dependencies.install':'安装依赖','profile.install':'注册 Tavern','source.files':'下载代码','service.start':'启动服务'};
+const INSTALLER_STEPS={'dependencies.install':'安装依赖','profile.install':'注册 Tavern','source.files':'下载代码','service.start':'启动服务'};
 const download=createRequire(import.meta.url)('./download.cjs');
 try {
   if(process.env.DSH_ONLINE_TEST_OFFLINE==='1')throw Error('测试：网络不可用');
@@ -30,14 +30,16 @@ try {
   const proxy=download.applyProxyEnvironment(env);
   if(proxy.summary){const text=(proxy.source==='system'?'使用系统代理：':'')+proxy.summary;console.log('DSH_STATUS '+text);fs.appendFileSync(log,text+'\n');}
   stage='配置 DSH 运行环境';
-  const {installDesktopDshRuntime}=await import(pathToFileURL(path.join(hostRoot,'lib','desktop-runtime-environment.js')));
+  const {installDesktopDshRuntime,installDesktopPnpmRuntime}=await import(pathToFileURL(path.join(hostRoot,'lib','desktop-runtime-environment.js')));
   installDesktopDshRuntime({platform:'win32',appExecutable:process.execPath,dshBootstrapPath:env.DSH_DESKTOP_DSH_BOOTSTRAP,
     profileName:'tavern',homeDir:home,stateDir:path.join(data,'desktop','host-commands','tavern'),environment:env});
-  stage='准备 Windows 包管理环境';
-  const {prepareDesktopPackageManager}=await import('./desktop-package-manager.mjs');
-  const manager=await prepareDesktopPackageManager({host:'desktop',home,env,onProgress:message=>console.log('DSH_STATUS '+message)});
+  // Desktop's own pnpm and node commands run this Electron as Node, exactly as in the Desktop
+  // terminal (verified on Windows by the Windows Setup workflow); no separate Node is downloaded.
+  stage='准备 pnpm 运行环境';
+  const pnpm=installDesktopPnpmRuntime({platform:'win32',appExecutable:process.execPath,pnpmBinPath:path.join(hostRoot,'node_modules','pnpm','bin','pnpm.mjs'),
+    electronVersion:process.versions.electron,stateDir:path.join(data,'desktop','runtime-commands'),environment:env});
   const pathKey=Object.keys(env).find(key=>key.toUpperCase()==='PATH')||'PATH';
-  env[pathKey]=[path.dirname(manager.node),manager.bin,env[pathKey]].join(path.delimiter);
+  env[pathKey]=[pnpm.nodeBinDir,env[pathKey]].join(path.delimiter);
   for(const key of Object.keys(env))if(key.toUpperCase()==='ELECTRON_RUN_AS_NODE')delete env[key];
   // EncodedCommand avoids shell quoting and Windows PowerShell's ANSI script decoding.
   // Do not merge streams with *>&1 under ErrorAction Stop: native stderr (for example

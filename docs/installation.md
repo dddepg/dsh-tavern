@@ -28,7 +28,7 @@
 - **断网或失败：** 已建立的桌面、开始菜单入口仍可用于重试。错误窗口显示文件位置，安装目录的 `launcher-error.txt` 记录启动问题，数据目录的 `first-install.log` 记录首次联网安装问题。
 - **重装与备份：** 再次运行安装包会沿用已记录的位置。新安装备份整个 `data` 目录；旧版请按完成提示中的实际数据位置备份。不要只移动 `runtime-…` 或修改 `launcher-settings.xml` 来迁移数据，现有依赖可能包含绝对路径。原安装位置失效时，安装器会提供「使用原目录」「重新安装」和「取消」。需要保留数据时，连接原磁盘或选择原安装文件夹；确认已卸载并希望重新开始时，点击「重新安装」并选择位置，无需手动清理注册表。重新安装不会删除旧文件，也不能恢复已删除的数据。
 
-Windows Desktop 更新会在数据根目录的 `harness/tools/desktop-package-manager`（普通 Desktop 为 `DSH_HOME/tools/desktop-package-manager`）准备经过 SHA-256 校验的 Node 22.22.3，仅用于包管理。首次需要联网下载，之后复用；不依赖电脑上其他软件附带的 Node，不更换 DSH。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
+Windows Desktop 安装和更新使用 Desktop 自带的 pnpm 与 Node（即 Desktop 程序本身），不再另外下载 Node；旧版留下的 `tools/desktop-package-manager` 目录不再使用，可以删除。安装器会自动使用 Windows 系统代理（PAC 自动配置除外）。若旧版一直卡在“正在更新”，先关闭旧更新任务，再使用新版安装器修复入口；普通 Desktop 从 DSH 终端重新运行本文安装命令。命令行版继续使用独立 Node，macOS/Linux 不应用这项 Windows 修复。
 
 Desktop 固定为 **2.0.13**；以后在酒馆界面更新插件。仅 Desktop 安装和更新内置 **`dsh-pocket 2.10.6`**（固定版本），并移除冲突的 `dsh-web-mobile`；手机扫码入口在 **设置 → 手机访问**，无需自行安装插件。CLI 不安装 Pocket，升级时会移除旧版 Pocket。Android / DSHA 不安装 Pocket，继续使用 `dsh-web-mobile`。切换到下面的 CLI 安装方式不会自动同步这份数据。
 
