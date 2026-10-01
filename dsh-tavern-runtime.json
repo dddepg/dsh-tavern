@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "ffebb5e2d4f3f6d19cbe6a46d14375a11f44c0ea",
-  "releaseSequence": 453,
+  "revision": "1d7344822f1acc2661153cd6d739ef235af463de",
+  "releaseSequence": 454,
   "version": "2.4.0",
   "files": [
     {
@@ -371,8 +371,8 @@
     },
     {
       "path": "tavern-plugin/lib/background-agent-task.js",
-      "sha256": "57503c2cdba5ee8a4b29153d5c7cd7dfd4735d4e8e6d1509a7fd312128802784",
-      "size": 25503
+      "sha256": "767a2455665af78b562b098e9d1f11951c1dc366d673f453fe465496ce055935",
+      "size": 26292
     },
     {
       "path": "tavern-plugin/lib/client-assets/lockup-dark.svg",
@@ -560,6 +560,11 @@
       "size": 1259
     },
     {
+      "path": "tavern-plugin/lib/domain/card-system-prompt.js",
+      "sha256": "6ea68c26d8cc7231faa83000385cc13c5a70b3a1e8078df6408f8c33e7e9fb5e",
+      "size": 2200
+    },
+    {
       "path": "tavern-plugin/lib/domain/card-validation.js",
       "sha256": "681430080f5fc897394e58d0ba2cc1f790e6afbf574b1a920a38bf000cc54eb5",
       "size": 4495
@@ -601,8 +606,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/chat-history-session.js",
-      "sha256": "c43395d2187394322ed5266199afb62ef849ba9cbc4f2fadf83311972ee5ac6b",
-      "size": 7140
+      "sha256": "3e2235295d5675e8497cf287941afd67579594288bda27b9c9d38863ce5382eb",
+      "size": 7230
     },
     {
       "path": "tavern-plugin/lib/domain/chat-journal-store.js",
@@ -646,8 +651,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/context-planner.js",
-      "sha256": "4c2b116cb6f6ee6eef10950d1aec994920756b4cafdca78eed4bcdcc230c96bc",
-      "size": 10984
+      "sha256": "7934d6901a16c2b742f619f4347e6fc5bf70a4d5dc061ed703def18bfff0cf99",
+      "size": 11282
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-background.js",
@@ -751,8 +756,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-frame-session-adapter.js",
-      "sha256": "33838e16c29a043bbb47e1a728057298eb475f551acc5e0d7580a2a8c0ec6cdc",
-      "size": 3039
+      "sha256": "cf66f011f169dc417301cb33b067243e274e227c53fcf2cd84e04c29106f1dcf",
+      "size": 3741
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-handoff.js",
@@ -1446,8 +1451,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/session-stable-prefix.js",
-      "sha256": "ce93f75566387e3a9b0203926242636d42b0053607f7db04b4e960c42af7d5f6",
-      "size": 8791
+      "sha256": "18bbabc624d875a0841e8d326b0f470bfcd7401227f2f0137cc7571226d2df1b",
+      "size": 9007
     },
     {
       "path": "tavern-plugin/lib/domain/session-surface-mutations.js",
@@ -1726,8 +1731,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/turn-orchestration.js",
-      "sha256": "baaa443a4d2ab2f2b6035f1b4bc2451f51e823c80a1fbcbd7abc3d0e8aea424e",
-      "size": 40228
+      "sha256": "7f54bba3349b77c95d756c7c9ab5c9d7cb546671449f5e8ce33e474208996d56",
+      "size": 40285
     },
     {
       "path": "tavern-plugin/lib/domain/user-extensions.js",
