@@ -1,0 +1,112 @@
+name: Windows Setup
+
+# Builds the one-click Setup EXE from the pinned Desktop 2.0.13 payload and
+# runs the launcher integration checks. The payload and 7za.exe are extracted
+# from the last published Setup and verified by SHA-256 in extract-build-inputs.ps1.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - packaging/windows/**
+      - install.ps1
+      - bin/desktop-package-manager.mjs
+      - .github/workflows/windows-setup.yml
+  pull_request:
+    paths:
+      - packaging/windows/**
+      - install.ps1
+      - bin/desktop-package-manager.mjs
+      - .github/workflows/windows-setup.yml
+
+env:
+  INPUT_SETUP_URL: https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        # Windows PowerShell 5.1 (.NET Framework) loads the launcher assembly resources.
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned build inputs
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'build'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          curl.exe --fail --location --retry 3 --output "$root\input-setup.exe" $env:INPUT_SETUP_URL
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download input Setup' }
+          ./packaging/windows/extract-build-inputs.ps1 -Launcher "$root\input-setup.exe" -Destination "$root\inputs"
+
+      - name: Build Setup
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'build'
+          ./packaging/windows/build.ps1 -Payload "$root\inputs\online-payload.7z" -SevenZip "$root\inputs\7za.exe" -Output "$root\out\DSH-Tavern-Desktop-2.0.13-x64-Setup.exe"
+
+      - name: Launcher integration checks
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'build'
+          ./packaging/windows/test.ps1 -Launcher "$root\out\DSH-Tavern-Desktop-2.0.13-x64-Setup.exe" -TestDirectory "$root\launcher-test"
+
+      # Evidence for docs/plans/windows-installer-network-handoff.md task 1:
+      # can Desktop's own pnpm run under Electron (ELECTRON_RUN_AS_NODE) on Windows
+      # without the separately downloaded Node? Informational until decided.
+      - name: Probe pnpm under Desktop Electron
+        continue-on-error: true
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'build'
+          # Avoid non-ASCII literals here: Windows PowerShell may read the step script as ANSI.
+          $runtime = (Get-ChildItem -LiteralPath (Join-Path $root 'launcher-test') -Directory -Recurse -Filter 'runtime-*' | Select-Object -First 1).FullName
+          if (-not $runtime) { throw 'Prepared runtime not found' }
+          $electron = Join-Path $runtime 'DSH Desktop.exe'
+          $pnpm = Join-Path $runtime 'resources\app\node_modules\pnpm\bin\pnpm-desktop-original.mjs'
+          if (-not (Test-Path -LiteralPath $pnpm)) { throw "Desktop pnpm entry not found: $pnpm" }
+          $app = Join-Path $root 'pnpm-probe\app'
+          New-Item -ItemType Directory -Force $app | Out-Null
+          git archive --format=zip --output "$root\pnpm-probe\app.zip" HEAD -- package.json pnpm-lock.yaml pnpm-workspace.yaml cordis.patch.yml bin config presets patches tavern-plugin
+          Expand-Archive -LiteralPath "$root\pnpm-probe\app.zip" -DestinationPath $app
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          $env:pnpm_config_update_notifier = 'false'
+          $env:pnpm_config_store_dir = Join-Path $root 'pnpm-probe\store'
+          $env:npm_config_cache = Join-Path $root 'pnpm-probe\npm-cache'
+          $failures = 0
+          foreach ($round in 1..3) {
+            Remove-Item -LiteralPath (Join-Path $app 'node_modules') -Recurse -Force -ErrorAction SilentlyContinue
+            $label = if ($round -eq 1) { 'cold store' } else { 'warm store' }
+            $out = Join-Path $root "pnpm-probe\round$round.out.txt"; $err = Join-Path $root "pnpm-probe\round$round.err.txt"
+            $started = Get-Date
+            $p = Start-Process -FilePath $electron -ArgumentList @("`"$pnpm`"", '--dir', "`"$app`"", 'install', '--frozen-lockfile', '--reporter=append-only') -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+            $null = $p.Handle
+            if (-not $p.WaitForExit(900000)) {
+              $p.Kill(); $failures++
+              Write-Output "FAIL round $round ($label): did not exit within 15 minutes"
+            } else {
+              $seconds = [int]((Get-Date) - $started).TotalSeconds
+              if ($p.ExitCode -eq 0) { Write-Output "PASS round $round ($label): exit 0 in $seconds s" }
+              else { $failures++; Write-Output "FAIL round $round ($label): exit $($p.ExitCode) in $seconds s" }
+            }
+            Write-Output '--- stdout (tail) ---'; Get-Content -LiteralPath $out -Tail 15
+            Write-Output '--- stderr (tail) ---'; Get-Content -LiteralPath $err -Tail 30
+          }
+          if ($failures -gt 0) { throw "$failures of 3 pnpm rounds failed under Electron" }
+
+      - name: Hash
+        run: Get-FileHash -Algorithm SHA256 "$env:RUNNER_TEMP\build\out\DSH-Tavern-Desktop-2.0.13-x64-Setup.exe" | Format-List
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DSH-Tavern-Windows-Setup
+          path: ${{ runner.temp }}/build/out/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-setup-logs
+          path: |
+            ${{ runner.temp }}/build/launcher-test/**/launcher-error.txt
+            ${{ runner.temp }}/build/launcher-test/**/*.log
+            ${{ runner.temp }}/build/pnpm-probe/*.txt
+          if-no-files-found: ignore
