@@ -9,7 +9,31 @@ if (Test-Path -LiteralPath $TestDirectory) { throw 'Use a new, empty test direct
 New-Item -ItemType Directory $TestDirectory | Out-Null
 $originalTestRoot = $env:DSH_LAUNCHER_TEST_ROOT
 $originalOffline = $env:DSH_ONLINE_TEST_OFFLINE
-$shell = New-Object -ComObject WScript.Shell
+# Read shortcuts through Unicode IShellLinkW: WScript.Shell mangles non-ANSI paths
+# on a non-Chinese system code page (for example GitHub's en-US Windows runners).
+Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class ShortcutReader {
+ [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class ShellLink {}
+ [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+ interface IShellLinkW {
+  void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int size, IntPtr data, int flags);
+  void GetIDList(out IntPtr list); void SetIDList(IntPtr list);
+  void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int size);
+  void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+  void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder directory, int size);
+ }
+ public static string[] Read(string file) {
+  var link = (IShellLinkW)new ShellLink();
+  try {
+   ((System.Runtime.InteropServices.ComTypes.IPersistFile)link).Load(file, 0);
+   var target = new StringBuilder(32768); link.GetPath(target, target.Capacity, IntPtr.Zero, 4);
+   var directory = new StringBuilder(32768); link.GetWorkingDirectory(directory, directory.Capacity);
+   return new[] { target.ToString(), directory.ToString() };
+  } finally { Marshal.FinalReleaseComObject(link); }
+ }
+}
+'@
 function Assert-True($condition, $message) {
     if (!$condition) { throw "FAIL: $message" }
     Write-Output "PASS: $message"
@@ -44,10 +68,9 @@ try {
     foreach ($folder in @('Desktop','StartMenu')) {
         $linkPath = Join-Path $install "$folder/DSH Tavern.lnk"
         Assert-True (Test-Path -LiteralPath $linkPath) "$folder shortcut exists"
-        $link = $shell.CreateShortcut($linkPath)
-        Assert-True ($link.TargetPath -eq $stable) "$folder targets stable launcher"
-        Assert-True ($link.WorkingDirectory -eq $install) "$folder has correct working directory"
-        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) | Out-Null
+        $link = [ShortcutReader]::Read($linkPath)
+        Assert-True ($link[0] -eq $stable) "$folder targets stable launcher"
+        Assert-True ($link[1] -eq $install) "$folder has correct working directory"
     }
     $sentinel = Join-Path $install 'data/用户存档.txt'
     Set-Content -LiteralPath $sentinel -Value 'Existing card and chat sentinel'
@@ -90,5 +113,4 @@ try {
 } finally {
     $env:DSH_LAUNCHER_TEST_ROOT = $originalTestRoot
     $env:DSH_ONLINE_TEST_OFFLINE = $originalOffline
-    [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null
 }

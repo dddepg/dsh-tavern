@@ -161,17 +161,19 @@ class Launcher : Form {
   CreateShortcut(TestRoot==null?Environment.GetFolderPath(Environment.SpecialFolder.Programs):Path.Combine(TestRoot,"StartMenu"));
   File.WriteAllText(Path.Combine(root,"如何启动.txt"),"以后请从桌面或开始菜单打开 DSH Tavern，也可双击本目录的 DSH Tavern.exe。\r\n程序位置："+root+"\r\n数据位置："+data+"\r\n请保留数据目录；不要单独运行 runtime 文件夹中的 DSH Desktop.exe。\r\n",Encoding.UTF8);
  }
+ // WScript.Shell converts paths to the ANSI code page: on a non-Chinese Windows a Chinese
+ // install path or user name becomes '?' and Save fails with E_INVALIDARG. IShellLinkW is Unicode.
  void CreateShortcut(string folder) {
   if(string.IsNullOrWhiteSpace(folder))throw new Exception("无法找到系统快捷方式目录；可从 "+installedLauncher+" 启动。");
   Directory.CreateDirectory(folder);
-  object shell=null,link=null;
+  var link=(IShellLinkW)new ShellLink();
   try {
-   shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell",true));
-   link=shell.GetType().InvokeMember("CreateShortcut",BindingFlags.InvokeMethod,null,shell,new object[]{Path.Combine(folder,"DSH Tavern.lnk")});
-   foreach(var pair in new[]{new[]{"TargetPath",installedLauncher},new[]{"WorkingDirectory",root},new[]{"Description","打开 DSH Tavern 酒馆"},new[]{"IconLocation",Path.Combine(runtime,"DSH Desktop.exe")+",0"}})
-    link.GetType().InvokeMember(pair[0],BindingFlags.SetProperty,null,link,new object[]{pair[1]});
-   link.GetType().InvokeMember("Save",BindingFlags.InvokeMethod,null,link,null);
-  } finally {if(link!=null)Marshal.FinalReleaseComObject(link);if(shell!=null)Marshal.FinalReleaseComObject(shell);}
+   link.SetPath(installedLauncher);
+   link.SetWorkingDirectory(root);
+   link.SetDescription("打开 DSH Tavern 酒馆");
+   link.SetIconLocation(Path.Combine(runtime,"DSH Desktop.exe"),0);
+   ((System.Runtime.InteropServices.ComTypes.IPersistFile)link).Save(Path.Combine(folder,"DSH Tavern.lnk"),true);
+  } finally {Marshal.FinalReleaseComObject(link);}
  }
  void Status(string text,int percent=-1) { BeginInvoke((Action)(()=>{if(text!=lastStatus){lastProgress=elapsed.Elapsed;lastStatus=text;}label.Text=text;bar.Style=percent<0?ProgressBarStyle.Marquee:ProgressBarStyle.Continuous;if(percent>=0)bar.Value=Math.Min(100,percent);})); }
  void Resource(string name,string path) {using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var f=File.Create(path))s.CopyTo(f);}
@@ -322,4 +324,27 @@ class Launcher : Form {
    Directory.Delete(path,true);
   } catch {}
  }
+}
+
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")] class ShellLink {}
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+interface IShellLinkW {
+ void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int size, IntPtr data, int flags);
+ void GetIDList(out IntPtr list);
+ void SetIDList(IntPtr list);
+ void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int size);
+ void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+ void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder directory, int size);
+ void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string directory);
+ void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder arguments, int size);
+ void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string arguments);
+ void GetHotkey(out short hotkey);
+ void SetHotkey(short hotkey);
+ void GetShowCmd(out int command);
+ void SetShowCmd(int command);
+ void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int size, out int index);
+ void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+ void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
+ void Resolve(IntPtr window, int flags);
+ void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
 }
