@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
+import {createRequire} from 'node:module';
 import {createInterface} from 'node:readline';
 
 // Bundled bootstrap for both first installation and an explicit Setup upgrade.
@@ -21,6 +22,9 @@ try {
     DSH_TAVERN_HOST_DEPENDENCY_ANCHOR:path.join(hostRoot,'package.json'),
     CI:'true',pnpm_config_frozen_lockfile:'false',
     npm_config_cache:path.join(data,'cache','npm'),pnpm_config_store_dir:path.join(data,'cache','pnpm')};
+  // Translate the Windows system proxy for this process and every child (powershell, curl, git, pnpm).
+  const proxy=createRequire(import.meta.url)('./download.cjs').applyProxyEnvironment(env);
+  if(proxy.summary){const text=(proxy.source==='system'?'使用系统代理：':'')+proxy.summary;console.log('DSH_STATUS '+text);fs.appendFileSync(log,text+'\n');}
   const {installDesktopDshRuntime}=await import(pathToFileURL(path.join(hostRoot,'lib','desktop-runtime-environment.js')));
   installDesktopDshRuntime({platform:'win32',appExecutable:process.execPath,dshBootstrapPath:env.DSH_DESKTOP_DSH_BOOTSTRAP,
     profileName:'tavern',homeDir:home,stateDir:path.join(data,'desktop','host-commands','tavern'),environment:env});

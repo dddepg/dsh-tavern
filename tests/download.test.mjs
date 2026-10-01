@@ -195,3 +195,53 @@ test('runtime download bounds parallel requests and never writes corrupt files',
   await assert.rejects(readFile(path.join(root, 'out/bin/p7.js')), { code: 'ENOENT' })
   await assert.rejects(readFile(path.join(root, 'out/dsh-tavern-runtime.json')), { code: 'ENOENT' })
 })
+
+test('Windows system proxy becomes standard proxy variables', () => {
+  const { proxyEnvironment, applyProxyEnvironment } = require('../bin/download.cjs')
+  const windows = settings => ({ platform: 'win32', readSettings: () => settings })
+  assert.deepEqual(proxyEnvironment({}, windows({ ProxyEnable: '0x1', ProxyServer: '127.0.0.1:7890', ProxyOverride: 'localhost;127.*;*.lan;intranet;<local>' })), {
+    added: { HTTP_PROXY: 'http://127.0.0.1:7890', HTTPS_PROXY: 'http://127.0.0.1:7890', NO_PROXY: 'localhost,127.0.0.1,::1,.lan,intranet', NODE_USE_ENV_PROXY: '1' },
+    source: 'system', summary: '127.0.0.1:7890',
+  })
+  const perScheme = proxyEnvironment({ no_proxy: 'corp' }, windows({ ProxyEnable: '0x1', ProxyServer: 'http=127.0.0.1:8080;https=http://user:pw@10.0.0.2:8443;socks=127.0.0.1:1080' }))
+  assert.equal(perScheme.added.HTTP_PROXY, 'http://127.0.0.1:8080')
+  assert.equal(perScheme.added.HTTPS_PROXY, 'http://user:pw@10.0.0.2:8443')
+  assert.equal(perScheme.added.NO_PROXY, undefined, 'existing NO_PROXY in any case is kept')
+  assert.equal(perScheme.summary, '10.0.0.2:8443', 'summary never shows credentials')
+  assert.equal(proxyEnvironment({}, windows({ ProxyEnable: '0x1', ProxyServer: 'socks=127.0.0.1:1080' })).source, 'unsupported')
+  assert.equal(proxyEnvironment({}, windows({ ProxyEnable: '0x0', ProxyServer: '127.0.0.1:7890', AutoConfigURL: 'http://127.0.0.1/pac' })).source, 'pac')
+  assert.deepEqual(proxyEnvironment({}, windows({ ProxyEnable: '0x0', ProxyServer: '127.0.0.1:7890' })), { added: {}, source: null })
+  assert.deepEqual(proxyEnvironment({}, { platform: 'win32', readSettings: () => { throw new Error('no reg') } }), { added: {}, source: null })
+  assert.deepEqual(proxyEnvironment({}, { platform: 'darwin', readSettings: () => assert.fail('registry is Windows only') }), { added: {}, source: null })
+  // A user-provided proxy wins; only Node's opt-in is added.
+  assert.deepEqual(proxyEnvironment({ https_proxy: 'http://corp:3128' }, windows({ ProxyEnable: '0x1', ProxyServer: '127.0.0.1:7890' })).added, { NODE_USE_ENV_PROXY: '1' })
+  assert.deepEqual(proxyEnvironment({ HTTPS_PROXY: 'http://corp:3128', node_use_env_proxy: '1' }).added, {})
+  const env = {}
+  applyProxyEnvironment(env, windows({ ProxyEnable: '0x1', ProxyServer: '127.0.0.1:7890' }))
+  assert.equal(env.HTTPS_PROXY, 'http://127.0.0.1:7890')
+})
+
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number)
+// NODE_USE_ENV_PROXY exists since Node 22.21 / 24.0; older Node ignores it (curl and git still use the variables).
+test('downloads honour proxy variables through NODE_USE_ENV_PROXY', { skip: nodeMajor === 22 && nodeMinor < 21 }, async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'download-proxy-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const seen = []
+  const proxy = createServer((req, res) => { seen.push(req.url); res.end('via proxy') })
+  // undici tunnels plain HTTP through CONNECT as well; answer with a tiny upstream.
+  const upstream = createServer((req, res) => { seen.push(`upstream ${req.url}`); res.end('via proxy') })
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve))
+  proxy.on('connect', (req, socket) => {
+    seen.push(`CONNECT ${req.url}`)
+    const target = require('node:net').connect(upstream.address().port, '127.0.0.1', () => {
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); target.pipe(socket); socket.pipe(target)
+    })
+  })
+  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve))
+  t.after(() => { proxy.closeAllConnections(); proxy.close(); upstream.closeAllConnections(); upstream.close() })
+  const env = { ...process.env, NODE_USE_ENV_PROXY: '1', HTTP_PROXY: `http://127.0.0.1:${proxy.address().port}`, NO_PROXY: '' }
+  // An unroutable host proves the request never left through a direct connection.
+  await execute(process.execPath, [moduleFile, 'file', path.join(directory, 'out'), '--stall', '5', '--attempts', '1', 'http://unreachable.test/file'], { env })
+  assert.equal(await readFile(path.join(directory, 'out'), 'utf8'), 'via proxy')
+  assert.ok(seen.some(entry => entry.includes('unreachable.test')), seen.join('\n'))
+})

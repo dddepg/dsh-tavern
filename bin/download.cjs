@@ -203,6 +203,74 @@ async function downloadRuntime({ metadataUrl, rootUrl, destination, installed, c
   return metadata
 }
 
+const PROXY_KEYS = ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY']
+const INTERNET_SETTINGS = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+const envValue = (env, name) => Object.entries(env).find(([key]) => key.toUpperCase() === name)?.[1]
+
+function readInternetSettings() {
+  const output = require('node:child_process').execFileSync('reg', ['query', INTERNET_SETTINGS], { encoding: 'utf8', windowsHide: true, timeout: 10000 })
+  const values = {}
+  for (const line of output.split(/\r?\n/)) {
+    const match = /^\s+(\S+)\s+REG_\w+\s+(.*?)\s*$/.exec(line)
+    if (match) values[match[1]] = match[2]
+  }
+  return values
+}
+
+function proxyUrl(value) {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `http://${value}`
+}
+
+// Windows "system proxy" (WinINET) is invisible to Node fetch, curl, git and pnpm,
+// which only read HTTP(S)_PROXY. Translate it into those variables when none is set.
+// Returns the variables to add plus a display summary without credentials.
+function proxyEnvironment(env = process.env, { platform = process.platform, readSettings = readInternetSettings } = {}) {
+  const added = {}
+  const useEnvProxy = () => { if (envValue(env, 'NODE_USE_ENV_PROXY') === undefined) added.NODE_USE_ENV_PROXY = '1' }
+  if (PROXY_KEYS.some(key => envValue(env, key))) {
+    useEnvProxy()
+    return { added, source: 'environment' }
+  }
+  if (platform !== 'win32') return { added, source: null }
+  let settings
+  try { settings = readSettings() } catch { return { added, source: null } }
+  if (Number(settings.ProxyEnable) === 1 && settings.ProxyServer) {
+    const entries = {}
+    for (const part of settings.ProxyServer.split(';').map(item => item.trim()).filter(Boolean)) {
+      const [scheme, address] = part.includes('=') ? part.split('=', 2) : ['*', part]
+      entries[scheme.toLowerCase()] = address
+    }
+    const http = entries.http || entries['*']
+    const https = entries.https || http
+    if (http || https) {
+      if (http) added.HTTP_PROXY = proxyUrl(http)
+      if (https) added.HTTPS_PROXY = proxyUrl(https)
+      if (envValue(env, 'NO_PROXY') === undefined) {
+        const bypass = String(settings.ProxyOverride || '').split(';').map(item => item.trim())
+          .filter(item => item && item !== '<local>' && !item.slice(1).includes('*'))
+          .map(item => item.replace(/^\*/, ''))
+        added.NO_PROXY = [...new Set(['localhost', '127.0.0.1', '::1', ...bypass])].join(',')
+      }
+      useEnvProxy()
+      return { added, source: 'system', summary: new URL(added.HTTPS_PROXY || added.HTTP_PROXY).host }
+    }
+    if (entries.socks) return { added, source: 'unsupported', summary: '系统代理只提供 SOCKS，安装程序无法使用；请在代理软件中开启 HTTP 代理或 TUN 模式' }
+  }
+  if (settings.AutoConfigURL) return { added, source: 'pac', summary: '系统代理使用 PAC 自动配置脚本，安装程序无法读取；如下载失败，请在代理软件中开启 TUN 模式或设置 HTTPS_PROXY' }
+  return { added, source: null }
+}
+
+// Apply proxyEnvironment() to `env` and, when env is this process's environment,
+// to this process's own fetch (Node >= 24.5 can switch the global proxy at runtime).
+function applyProxyEnvironment(env = process.env, options) {
+  const result = proxyEnvironment(env, options)
+  Object.assign(env, result.added)
+  if (result.added.HTTPS_PROXY || result.added.HTTP_PROXY) {
+    try { require('node:http').setGlobalProxyFromEnv?.(env) } catch {}
+  }
+  return result
+}
+
 function parseOptions(args) {
   const options = {}, rest = []
   for (let index = 0; index < args.length; index++) {
@@ -218,6 +286,7 @@ const seconds = (value, fallback) => (value === undefined ? fallback : Number(va
 // CLI used by the installer scripts:
 //   node download.cjs file <destination> [--sha256 H] [--stall S] [--deadline S] [--attempts N] <url>...
 //   node download.cjs runtime <metadata-url> <root-url> <destination> [<installed-dir>] [--stall S] [--budget S]
+//   node download.cjs proxy-env   prints KEY=VALUE lines to add (Windows system proxy)
 async function main(argv) {
   const [command, ...args] = argv
   const { options, rest } = parseOptions(args)
@@ -237,10 +306,16 @@ async function main(argv) {
     status(`下载代码完成：${metadata.revision.slice(0, 12)}`)
     return
   }
+  if (command === 'proxy-env') {
+    const { added, summary } = proxyEnvironment(process.env)
+    for (const [key, value] of Object.entries(added)) console.log(`${key}=${value}`)
+    if (summary) status(added.HTTPS_PROXY || added.HTTP_PROXY ? `使用系统代理：${summary}` : summary)
+    return
+  }
   throw new Error(`未知命令：${command || '(空)'}`)
 }
 
-module.exports = { download, downloadFile, downloadRuntime, describeFailure, runtimeFiles, DownloadError, RUNTIME_PATH }
+module.exports = { download, downloadFile, downloadRuntime, describeFailure, runtimeFiles, proxyEnvironment, applyProxyEnvironment, DownloadError, RUNTIME_PATH }
 
 if (require.main === module) {
   main(process.argv.slice(2)).catch(error => { console.error(error.message); process.exitCode = 1 })

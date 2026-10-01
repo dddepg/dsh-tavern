@@ -13,6 +13,8 @@ test('Setup streams installer progress before exit, preserves logs and reports f
   t.after(()=>rm(root,{recursive:true,force:true}))
   await mkdir(path.join(root,'app/lib'),{recursive:true})
   await copyFile(new URL('../packaging/windows/setup-upgrade.mjs',import.meta.url),path.join(root,'setup-upgrade.mjs'))
+  // The Setup writes bin/download.cjs beside setup-upgrade.mjs in the runtime resources.
+  await copyFile(new URL('../bin/download.cjs',import.meta.url),path.join(root,'download.cjs'))
   await writeFile(path.join(root,'app/lib/desktop-runtime-environment.js'),'exports.installDesktopDshRuntime=()=>{}')
   await writeFile(path.join(root,'desktop-package-manager.mjs'),`export async function prepareDesktopPackageManager(){return {node:${JSON.stringify(process.execPath)},bin:${JSON.stringify(root)}}}`)
   await writeFile(path.join(root,'powershell.exe'),`#!${process.execPath}
