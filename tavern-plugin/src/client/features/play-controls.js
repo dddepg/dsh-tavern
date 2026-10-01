@@ -361,21 +361,21 @@
 							(view.characterDesigns && view.characterDesigns.characters || []).length ? view.characterDesigns.characters.map(function (character, index) {
 								const summary = character.identity || character.narrativeRole || "已建立完整人物设计";
 								const aliases = Array.isArray(character.aliases) && character.aliases.length ? character.aliases.join("、") : "";
-								return h("details", { key: character.name || index, className: "dsh-tavern-character-design" },
-									h("summary", null,
+								return h(TavernLazyDetails, { key: character.name || index, className: "dsh-tavern-character-design",
+									summary: h("summary", null,
 										h("span", null,
 											h("span", { className: "dsh-tavern-character-design-name" }, character.name),
 											h("span", { className: "dsh-tavern-character-design-summary", title: summary }, summary)
 									),
 									character.updatedAt ? h("time", { className: "dsh-tavern-character-design-meta", dateTime: new Date(character.updatedAt).toISOString() }, characterDesignTime(character.updatedAt)) : h("span", { className: "dsh-tavern-character-design-meta" }, "查看")
 								),
-									h("div", { className: "dsh-tavern-character-design-body" },
+									render: function () { return h("div", { className: "dsh-tavern-character-design-body" },
 										aliases ? h("div", { className: "dsh-tavern-character-design-row" }, h("b", null, "别名"), h("p", null, aliases)) : null,
 										(character.sections || []).map(function (section) {
 											return h("div", { key: section.key, className: "dsh-tavern-character-design-row" }, h("b", null, section.label), h("p", null, section.text));
 										})
-									)
-								);
+									); }
+								});
 							}) : h("div", { className: "dsh-tavern-status-empty" }, "点击“设计人物”，按你的要求创建或补充档案。")
 						)
 					),
