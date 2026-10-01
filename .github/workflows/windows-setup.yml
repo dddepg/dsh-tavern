@@ -121,6 +121,7 @@ jobs:
           Remove-Item Env:DSH_LAUNCHER_TEST_ROOT
           ./packaging/windows/test-online-upgrade.ps1 -InstallDirectory $install -Registry 'https://registry.npmjs.org'
 
+      - name: Hash
         run: Get-FileHash -Algorithm SHA256 "$env:RUNNER_TEMP\build\out\DSH-Tavern-Desktop-2.0.13-x64-Setup.exe" | Format-List
 
       - uses: actions/upload-artifact@v4
