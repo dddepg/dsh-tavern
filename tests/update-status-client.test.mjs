@@ -31,7 +31,7 @@ function pollHarness(fetch) {
   new Function('React', 'window', 'call', 'setUpdateStatus', 'tavernErrorHub', 'updateStartedAtRef', 'isMissingUpdateApiError', source.slice(start, end))(
     { useEffect(fn) { cleanup = fn() } },
     { setInterval(fn) { poll = fn; return 1 }, clearInterval() {} },
-    rpc, state => states.push(state), { report: (label, error) => reports.push({ label, error }), resolve: label => cleared.push(label) },
+    rpc, state => states.push(typeof state === 'function' ? state(states.at(-1)) : state), { report: (label, error) => reports.push({ label, error }), resolve: label => cleared.push(label) },
     { current: 0 }, () => false)
   return { reports, cleared, states, poll: () => poll(), stop: () => cleanup() }
 }

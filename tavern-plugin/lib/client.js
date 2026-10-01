@@ -10804,7 +10804,9 @@ window.__ModuleLoader__.load({
 							tavernErrorHub.resolve("更新状态");
 							const status = result.status;
 							const completedInThisPage = status.phase === "completed" && updateStartedAtRef.current > 0 && Number(status.completedAt || 0) >= updateStartedAtRef.current;
-							setUpdateStatus(status.phase === "completed" && !completedInThisPage ? { ...status, phase: "idle", host: status.host || "cli" } : status);
+							const next = status.phase === "completed" && !completedInThisPage ? { ...status, phase: "idle", host: status.host || "cli" } : status;
+							// The poll returns a fresh object every 2.5s; keep the old one when nothing changed so the sidebar does not re-render.
+							setUpdateStatus(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
 						}
 					} catch (err) {
 							if (stopped) return;
