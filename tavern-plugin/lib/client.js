@@ -12864,6 +12864,20 @@ window.__ModuleLoader__.load({
 				const [regexDrafts, setRegexDrafts] = React.useState({});
 				const [busy, setBusy] = React.useState(false);
 				const importInput = React.useRef(null);
+				const presetGroups = React.useMemo(function () { return groupPresetEntriesByPhase(preset); }, [preset]);
+				// Rows mount their editor only while expanded; closed <details> would still build every form.
+				const [openRows, setOpenRows] = React.useState(function () { return new Set(); });
+				function rowToggle(key) {
+					return { open: openRows.has(key), onToggle: function (event) {
+						const open = event.currentTarget.open;
+						setOpenRows(function (current) {
+							if (current.has(key) === open) return current;
+							const next = new Set(current);
+							if (open) next.add(key); else next.delete(key);
+							return next;
+						});
+					} };
+				}
 				const h = React.createElement;
 				async function importFile(file) {
 					if (!file) return; setBusy(true); setError("");
@@ -12964,7 +12978,7 @@ window.__ModuleLoader__.load({
 				}
 				const inCardMode = catalog.sessionMode === "card";
 				function entryRow(entry) {
-					const groups = groupPresetEntriesByPhase(preset);
+					const groups = presetGroups;
 					const phase = ["front", "middle", "back"].find(phase => groups[phase].some(item => item.entryKey === entry.entryKey));
 					const index = phase ? groups[phase].findIndex(item => item.entryKey === entry.entryKey) : -1;
 					const handle = phase ? h("button", { type: "button", className: "dsh-tavern-preset-drag", disabled: busy, draggable: !busy, "aria-label": "拖动条目：" + entry.name, title: "拖动排序或移到其他分段",
@@ -12974,9 +12988,10 @@ window.__ModuleLoader__.load({
 					}, "⠿") : null;
 					const draft = entryDraft(entry); const editable = entry.marker !== true && entry.edit && entry.edit.promptPath; const toggleable = entry.marker !== true && entry.edit && Array.isArray(entry.edit.enabledPaths) && entry.edit.enabledPaths.length > 0; const dirty = JSON.stringify(draft) !== JSON.stringify(entryValue(entry));
 					const state = toggleable ? h("button", { type: "button", role: "switch", className: "dsh-tavern-prompt-state is-toggle " + (entry.enabled ? "on" : "off"), disabled: busy, title: entry.enabled ? "点击停用此条目" : "点击启用此条目", "aria-label": entry.name + "启用状态", "aria-checked": entry.enabled === true, onClick: function (event) { event.preventDefault(); event.stopPropagation(); togglePresetEntry(entry); } }) : h("span", { className: "dsh-tavern-prompt-state " + (entry.enabled ? "on" : "off"), title: "系统占位状态只读" }, entry.enabled ? "启用" : "停用");
-					return h("details", { key: entry.entryKey, className: "dsh-tavern-prompt-row role-" + String(entry.role || "system"), ...(phase ? presetDropHandlers(phase, entry.entryKey) : {}) },
-						h("summary", { className: "dsh-tavern-prompt-head dsh-tavern-preset-entry-head" + (phase ? " has-drag" : "") }, handle, h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, entry.name), h("span", null, String(entry.content || "").replace(/\s+/g, " ").trim() || (entry.marker ? "系统占位" : "空条目"))), state),
-						editable ? h("div", { className: "dsh-tavern-prompt-editor" },
+					const rowKey = "entry:" + entry.entryKey;
+					return h("details", { key: entry.entryKey, className: "dsh-tavern-prompt-row role-" + String(entry.role || "system"), ...rowToggle(rowKey), ...(phase ? presetDropHandlers(phase, entry.entryKey) : {}) },
+						h("summary", { className: "dsh-tavern-prompt-head dsh-tavern-preset-entry-head" + (phase ? " has-drag" : "") }, handle, h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, entry.name), h("span", null, String(entry.content || "").slice(0, 400).replace(/\s+/g, " ").trim() || (entry.marker ? "系统占位" : "空条目"))), state),
+						!openRows.has(rowKey) ? null : editable ? h("div", { className: "dsh-tavern-prompt-editor" },
 							phase ? h("div", { className: "dsh-tavern-prompt-editor-actions" },
 								h("label", null, "移动到", h("select", { value: phase, disabled: busy, "aria-label": entry.name + "所在分段", onChange: event => movePresetEntry(entry.entryKey, event.target.value) }, h("option", { value: "front" }, "前段"), h("option", { value: "middle" }, "中段"), h("option", { value: "back" }, "后段"))),
 								h("button", { disabled: busy || index === 0, onClick: () => movePresetEntry(entry.entryKey, phase, groups[phase][index - 1].entryKey) }, "上移"),
@@ -12991,9 +13006,10 @@ window.__ModuleLoader__.load({
 				function regexRow(script) {
 					const draft = regexDraft(script); const dirty = JSON.stringify(draft) !== JSON.stringify(regexValue(script));
 					const state = h("button", { type: "button", role: "switch", className: "dsh-tavern-prompt-state is-toggle " + (script.enabled ? "on" : "off"), disabled: busy, title: script.enabled ? "点击停用此正则" : "点击启用此正则", "aria-label": script.name + "启用状态", "aria-checked": script.enabled === true, onClick: function (event) { event.preventDefault(); event.stopPropagation(); togglePresetRegex(script); } });
-					return h("details", { key: script.regexKey, className: "dsh-tavern-prompt-row role-regex" },
+					const rowKey = "regex:" + script.regexKey;
+					return h("details", { key: script.regexKey, className: "dsh-tavern-prompt-row role-regex", ...rowToggle(rowKey) },
 						h("summary", { className: "dsh-tavern-prompt-head dsh-tavern-preset-regex-head" }, h("span", { className: "dsh-tavern-prompt-role" }, "REGEX"), h("span", { className: "dsh-tavern-prompt-title" }, h("b", null, script.name), h("span", null, script.findRegex || "空查找规则")), state),
-						h("div", { className: "dsh-tavern-prompt-editor" },
+						!openRows.has(rowKey) ? null : h("div", { className: "dsh-tavern-prompt-editor" },
 							h("label", { className: "dsh-tavern-prompt-editor-field full" }, "名称", h("input", { type: "text", value: draft.name, disabled: busy, onChange: function (event) { updateRegexDraft(script, { name: event.target.value }); } })),
 							h("label", { className: "dsh-tavern-prompt-editor-field full" }, "查找规则", h("textarea", { value: draft.findRegex, disabled: busy, onChange: function (event) { updateRegexDraft(script, { findRegex: event.target.value }); } })),
 							h("label", { className: "dsh-tavern-prompt-editor-field full" }, "替换内容", h("textarea", { value: draft.replaceString, disabled: busy, onChange: function (event) { updateRegexDraft(script, { replaceString: event.target.value }); } })),
@@ -13006,7 +13022,7 @@ window.__ModuleLoader__.load({
 						entries.map(entry => h(React.Fragment, { key: entry.entryKey }, dropZone(phase, entry.entryKey), entryRow(entry))), dropZone(phase), entries.length ? null : h("div", { className: "dsh-tavern-preset-phase-empty" }, "此段暂无提示词，可将条目拖到这里"));
 				}
 				if (preset && preset.path === detailPath) {
-					const entryGroups = groupPresetEntriesByPhase(preset);
+					const entryGroups = presetGroups;
 					return h("div", { className: "dsh-tavern-presets" + (dragging ? " is-dragging" : "") },
 					h("div", { className: "dsh-tavern-status-head" }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { setDetailPath(""); setPreset(null); } }, "← 返回预设库"), h("div", { className: "dsh-tavern-status-title" }, preset.title)),
 					h("div", { className: "dsh-tavern-preset-detail" }, error ? h("div", { className: "dsh-tavern-dock-error" }, error) : null,
