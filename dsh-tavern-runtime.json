@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "970d90e7eb62f900240d3fe29b1e4e05ed24d8f0",
-  "releaseSequence": 463,
+  "revision": "5390fffd61ad0d0e888b20e7747548506c06045b",
+  "releaseSequence": 464,
   "version": "2.4.0",
   "files": [
     {
@@ -406,8 +406,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "1bd9683207d9b6433c9a653cae90f253c39fe48cb56fc3638706c27cc51fbad7",
-      "size": 1429988
+      "sha256": "6e056330a1ae040566e20e101010ae910bd8cf07ab16c87a551c077463eae43d",
+      "size": 1430545
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -686,8 +686,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-initialization.js",
-      "sha256": "dc06afcae2c37399411040f38efce2cb8c4154c7cdf88baf0e3665c89d64210a",
-      "size": 20462
+      "sha256": "0124d5efde783791bbe7fc1e2921d9d761d05c69e42036950595182aebdcb8d8",
+      "size": 20680
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-migration.js",
@@ -1686,8 +1686,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-settings.js",
-      "sha256": "68d2fc24e62e2cb6f339c4a4d0fc8834b588a950c3dcebb858dcd85dbf3534db",
-      "size": 9092
+      "sha256": "16435bbf8abe42c848b9b3f27802f0c73e554f66392a5d02e09794f9881fd553",
+      "size": 9210
     },
     {
       "path": "tavern-plugin/lib/domain/tavern-skill-provider.js",
@@ -1876,8 +1876,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "38dda6d699c67d6e60d84aba81557a177217067e63e2e7e49cbaddf3b8eee0c5",
-      "size": 255069
+      "sha256": "06e2dafee1ddedf76dca0ae7d7cf7c3bb3840a75bfb9494eb30402db8e279f7e",
+      "size": 255094
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -4506,8 +4506,8 @@
     },
     {
       "path": "tavern-plugin/src/client/modules/global-settings.js",
-      "sha256": "a50107bbccbfb8490dbf705990412f131d3d717df70e68b09d7baa775992e387",
-      "size": 9107
+      "sha256": "7b85cbe4ac01b7dd201a0d9c2ee9cbcb5c9868d9e6ad8df3865d316782d608bd",
+      "size": 9656
     },
     {
       "path": "tavern-plugin/src/client/modules/history-viewport.js",
