@@ -31,6 +31,8 @@ test('字号重测不读取 CSS transition 保留的上一次放大值', () => {
     addEventListener(name, fn) { if (name === 'message') receive = fn }, removeEventListener() {},
     getComputedStyle() { return { fontSize: String(transitionDisabled ? parseFloat(props.get('font-size') || '20') : visibleSize), lineHeight: 'normal' } }
   }
+  body.ownerDocument = context.document
+  context.document.defaultView = context
   vm.runInNewContext(script, context)
   receive({ source: parent, data: { type: 'dsh-tavern-font-size', token: 'font', fontSize: 21 } })
   for (let i = 0; i < 4; i++) {

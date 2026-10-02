@@ -47,3 +47,29 @@ test('untrusted fragments, previews, active HTML and full documents retain ifram
     }
   }finally{h.dom.window.close()}
 })
+
+test('trusted fragments follow the DSH font preference with text-only scaling and restore on unmount',async()=>{
+  const {chromium}=await import('playwright')
+  const browser=await chromium.launch()
+  try{
+    const page=await browser.newPage()
+    await page.setContent('<style>body{--dsh-content-font-size:14px}.card span{font-size:20px}.badge{width:60px;height:20px}</style><main></main>')
+    await page.addScriptTag({content:`let effect;const root=document.querySelector('main');
+      const React={createElement:(type,props,...children)=>({type,props,children}),useRef:()=>({current:root}),useLayoutEffect:run=>{effect=run}};
+      window.__ModuleLoader__={load:value=>{window.client=value.factory(name=>name==='react'?React:{})}};
+      window.mountFragment=content=>{const [part]=client.renderTavernProjection({parts:[{kind:'html',content}]},{trustedCardMode:true});part.type(part.props);return effect()};`})
+    await page.addScriptTag({content:await readFile(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')})
+    const size=()=>page.evaluate(()=>getComputedStyle(document.querySelector('.card span')).fontSize)
+    await page.evaluate(()=>{window.cleanup=mountFragment('<div class="card"><span>正文</span><div class="badge">LV1</div></div>')})
+    assert.equal(await size(),'20px')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','21px'))
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.card span')).fontSize==='30px')
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('.badge')).width),'60px','盒子尺寸不变')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','14px'))
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.card span')).fontSize==='20px')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','21px'))
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.card span')).fontSize==='30px')
+    const after=await page.evaluate(()=>{const span=document.querySelector('.card span');cleanup();return {attr:document.querySelector('main').hasAttribute('data-dsh-tavern-font-root'),children:document.querySelector('main').children.length,inline:span.getAttribute('style')}})
+    assert.deepEqual(after,{attr:false,children:0,inline:null})
+  }finally{await browser.close()}
+})
