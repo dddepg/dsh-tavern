@@ -61,3 +61,14 @@ test('saving opening defaults preserves sibling values without reloading catalog
   await page.getByText('保存失败：保存失败测试', { exact: true }).waitFor()
   assert.equal(await toggle.isChecked(), true)
 })
+
+test('卡片工作台默认模型可单独保存，留空表示跟随前台', async t => {
+  const backend = fixture()
+  const { page, calls } = await openTavernSettings(t, { sceneImages: false, respond: backend.respond })
+  const model = page.getByLabel('卡片工作台默认模型', { exact: true })
+  await page.waitForFunction(() => document.querySelector('[aria-label="卡片工作台默认模型"]')?.disabled === false)
+  assert.equal(await model.locator('option[value=""]').textContent(), '跟随前台')
+  await model.selectOption(JSON.stringify({ provider: 'p', model: 'm' }))
+  await page.getByText('已保存，下次新建工作台对话生效', { exact: true }).waitFor()
+  assert.deepEqual(calls.filter(c => c.method === 'updateTavernSettings').at(-1).args.patch, { defaultWorkbenchModel: { provider: 'p', model: 'm' } })
+})

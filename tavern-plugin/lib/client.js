@@ -12125,11 +12125,11 @@ function subscribeTavernHostTheme(win, listener) {
             }
 
             function TavernSettingsSection() {
-                const [state, setState] = React.useState({ loading: true, busy: false, defaultForegroundModel: null, defaultBackgroundModel: null, notice: "", settings: null, modelCatalog: [], sceneImages: false, error: "" });
+                const [state, setState] = React.useState({ loading: true, busy: false, defaultForegroundModel: null, defaultBackgroundModel: null, defaultWorkbenchModel: null, notice: "", settings: null, modelCatalog: [], sceneImages: false, error: "" });
                 React.useEffect(function () {
                     let active = true;
                     rpc("getTavernSettings").then(function (result) {
-                        if (active) setState({ loading: false, busy: false, defaultForegroundModel: result.settings?.defaultForegroundModel || null, defaultBackgroundModel: result.settings?.defaultBackgroundModel || null, notice: "", settings: result.settings, modelCatalog: Array.isArray(result.modelCatalog) ? result.modelCatalog : [], sceneImages: Boolean(result.releaseCapabilities && result.releaseCapabilities.sceneImages), error: "" });
+                        if (active) setState({ loading: false, busy: false, defaultForegroundModel: result.settings?.defaultForegroundModel || null, defaultBackgroundModel: result.settings?.defaultBackgroundModel || null, defaultWorkbenchModel: result.settings?.defaultWorkbenchModel || null, notice: "", settings: result.settings, modelCatalog: Array.isArray(result.modelCatalog) ? result.modelCatalog : [], sceneImages: Boolean(result.releaseCapabilities && result.releaseCapabilities.sceneImages), error: "" });
                     }, function (error) {
                         if (active) setState(function (current) { return Object.assign({}, current, { loading: false, busy: false, error: String(error && error.message || error) }); });
                     });
@@ -12141,7 +12141,7 @@ function subscribeTavernHostTheme(win, listener) {
                     try {
                         const result = await rpc("updateTavernSettings", { patch: { [name]: selection } });
                         notifySettingsChanged();
-                        setState(current => ({ ...current, [name]: result.settings[name], busy: false, notice: "已保存，下次新游戏生效" }));
+                        setState(current => ({ ...current, [name]: result.settings[name], busy: false, notice: name === "defaultWorkbenchModel" ? "已保存，下次新建工作台对话生效" : "已保存，下次新游戏生效" }));
                     } catch (err) { setState(current => ({ ...current, busy: false, error: String(err.message || err) })); }
                 }
                 const h = React.createElement;
@@ -12151,10 +12151,11 @@ function subscribeTavernHostTheme(win, listener) {
                         ...children);
                 }
                 return h("div", { className: "dsh-tavern-settings-section dsh-tavern-global-settings" },
-                    group("默认模型", "用于新游戏，已有游戏保持当前配置。建议使用 High 推理强度；Max 容易过度思考、增加等待。",
+                    group("默认模型", "用于新游戏和新的卡片工作台对话，已有对话保持当前配置。建议使用 High 推理强度；Max 容易过度思考、增加等待。",
                     h("div", { className: "dsh-tavern-gs-card" },
                     React.createElement(TavernDefaultModelSetting, { label: "默认前台模型", title: "前台模型", fallback: "使用 DSH 默认模型", selection: state.defaultForegroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultForegroundModel", selection) }),
-                    React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", title: "后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) })),
+                    React.createElement(TavernDefaultModelSetting, { label: "默认后台模型", title: "后台模型", fallback: "跟随前台", selection: state.defaultBackgroundModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultBackgroundModel", selection) }),
+                    React.createElement(TavernDefaultModelSetting, { label: "卡片工作台默认模型", title: "工作台模型", fallback: "跟随前台", selection: state.defaultWorkbenchModel, catalog: state.modelCatalog, disabled: state.loading || state.busy, onChange: selection => saveDefault("defaultWorkbenchModel", selection) })),
                     state.notice ? h("p", { className: "dsh-tavern-gs-notice", role: "status" }, state.notice) : null),
                     group("新游戏默认", "开局时继承，开局后可在本局设置中单独修改。",
                         state.settings ? h(GlobalPlayDefaults, { settings: state.settings }) : null,

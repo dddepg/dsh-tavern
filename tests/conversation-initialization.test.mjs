@@ -164,7 +164,7 @@ test('prepared MVU initialization preserves every opening and never marks partia
   }
 })
 
-test('新局采用全局默认模型，重入和卡片工作台不覆盖本局选择', async () => {
+test('新局采用全局默认模型，重入不覆盖本局选择', async () => {
   const h = initializationFixture()
   const foreground = { provider: 'p', model: 'story', reasoningEffort: 'low' }
   const background = { provider: 'p', model: 'fast', reasoningEffort: 'high' }
@@ -182,10 +182,26 @@ test('新局采用全局默认模型，重入和卡片工作台不覆盖本局�
   const next = await h.make().start({ ...h.input, sessionId: 'next-default' })
   assert.equal(h.session('next-default').selectedModel.model, 'new')
   assert.equal(next.backgroundModelSelection, null)
-  const workbench = await h.make().start({ ...h.input, sessionId: 'workbench-default', mode: 'card', cardPath: '' })
-  assert.equal(workbench.backgroundModelSelection, null)
-  assert.equal(h.session('workbench-default').selectedModel, undefined)
   assert.equal(h.trace.filter(x => x === 'model.select').length, 2)
+})
+
+test('卡片工作台默认跟随前台模型，单独设置后改用工作台模型；重入不覆盖', async () => {
+  const h = initializationFixture()
+  h.state.settings.defaultForegroundModel = { provider: 'p', model: 'story' }
+  h.state.settings.defaultBackgroundModel = { provider: 'p', model: 'fast' }
+  const follow = await h.make().start({ ...h.input, sessionId: 'workbench-follow', mode: 'card', cardPath: '' })
+  assert.equal(follow.backgroundModelSelection, null)
+  assert.equal(h.session('workbench-follow').selectedModel.model, 'story')
+  h.state.settings.defaultWorkbenchModel = { provider: 'p', model: 'editor', reasoningEffort: 'high' }
+  await h.make().start({ ...h.input, sessionId: 'workbench-own', mode: 'card', cardPath: '' })
+  assert.deepEqual(h.session('workbench-own').selectedModel, { provider: 'p', model: 'editor', reasoningEffort: 'high' })
+  h.session('workbench-own').selectedModel = { provider: 'p', model: 'manual' }
+  await h.make().start({ ...h.input, sessionId: 'workbench-own', mode: 'card', cardPath: '' })
+  assert.equal(h.session('workbench-own').selectedModel.model, 'manual')
+  h.state.settings.defaultForegroundModel = null
+  h.state.settings.defaultWorkbenchModel = null
+  await h.make().start({ ...h.input, sessionId: 'workbench-dsh', mode: 'card', cardPath: '' })
+  assert.equal(h.session('workbench-dsh').selectedModel, undefined)
 })
 
 test('新游戏复制全局 Skill 开关，本局调整和后续全局修改互不覆盖', async () => {

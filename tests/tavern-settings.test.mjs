@@ -67,7 +67,7 @@ test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词
 
 test('新游戏前后台默认模型分别保存、清除且不触碰旧全局模型版本', () => {
   let settings = { unknown: true, backgroundModelRevision: 7 }
-  for (const name of ['defaultForegroundModel', 'defaultBackgroundModel']) {
+  for (const name of ['defaultForegroundModel', 'defaultBackgroundModel', 'defaultWorkbenchModel']) {
     assert.equal(presentTavernSettings(settings, {})[name], null)
     settings = applyTavernSettingsPatch(settings, { [name]: { provider: ' p ', model: ' m ', reasoningEffort: 'low' } })
     assert.deepEqual(presentTavernSettings(settings, {})[name], { provider: 'p', model: 'm', reasoningEffort: 'low' })

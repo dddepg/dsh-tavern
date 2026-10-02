@@ -233,9 +233,11 @@ export function createConversationInitialization(options) {
       delete chat.sceneOpeningWorldbook
       return chat
     }
-    if (openingTarget && groupOfMode(chat.mode) === 'play' && currentSettings.defaultForegroundModel) {
-      await native.selectModel(openingTarget, currentSettings.defaultForegroundModel)
-    }
+    // The workbench default follows the foreground default unless set on its own.
+    const group = groupOfMode(chat.mode)
+    const defaultModel = group === 'play' ? currentSettings.defaultForegroundModel
+      : group === 'card' ? currentSettings.defaultWorkbenchModel || currentSettings.defaultForegroundModel : null
+    if (openingTarget && defaultModel) await native.selectModel(openingTarget, defaultModel)
     await chats.publish(chat)
     if (hasSession) await appendNativeOpening(sessionId, chat, card, openingTarget)
     return await present(chat, card)
