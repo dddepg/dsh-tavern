@@ -136,21 +136,30 @@
 				storage().setItem(storageKey, JSON.stringify(all));
 			} catch (err) {}
 		}
+		// Rows of the same turn before its tail, nearest first. Every DSH conversation row
+		// carries data-chat-flow-kind; anything without it (pagination, host controls)
+		// is outside the conversation and ends the turn as surely as the previous tail.
+		function turnRowsBefore(tail, owner) {
+			const rows = [];
+			for (let sib = tail.previousElementSibling; sib; sib = sib.previousElementSibling) {
+				const kind = sib.getAttribute("data-chat-flow-kind");
+				if (!kind || kind === "turn-tail") break;
+				const siblingTurn = sib.getAttribute("data-chat-turn");
+				if (owner && siblingTurn && siblingTurn !== owner) break;
+				rows.push(sib);
+			}
+			return rows;
+		}
+		// Rows up to, but not including, the turn's user input.
+		function turnReplyRowsBefore(tail, owner) {
+			const rows = turnRowsBefore(tail, owner);
+			const user = rows.findIndex(function (row) { return row.getAttribute("data-chat-flow-kind") === "user"; });
+			return user === -1 ? rows : rows.slice(0, user);
+		}
 		function hideUserForTurnTail(tail) {
 			if (!tail) return;
-			const turn = tailTurnOf(tail);
-			let sib = tail.previousElementSibling;
-			while (sib) {
-                const siblingTurn = sib.getAttribute("data-chat-turn");
-                if (turn && siblingTurn && siblingTurn !== turn) break;
-				const kind = sib.getAttribute("data-chat-flow-kind");
-				if (kind === "user") {
-					hideRow(sib);
-					break;
-				}
-				if (kind === "turn-tail") break;
-				sib = sib.previousElementSibling;
-			}
+			const user = turnRowsBefore(tail, tailTurnOf(tail)).find(function (row) { return row.getAttribute("data-chat-flow-kind") === "user"; });
+			if (user) hideRow(user);
 		}
 		function applyHiddenRegenUserTurns(sessionId) {
 			try {
@@ -169,46 +178,19 @@
 		function hideTurnTail(el) {
 			if (!el) return;
 			hideRow(el);
-			const turn = tailTurnOf(el);
-			let sib = el.previousElementSibling;
-			while (sib) {
-                const siblingTurn = sib.getAttribute("data-chat-turn");
-                if (turn && siblingTurn && siblingTurn !== turn) break;
-				const kind = sib.getAttribute("data-chat-flow-kind");
-				if (kind === "user" || kind === "turn-tail") break;
-				hideRow(sib);
-				sib = sib.previousElementSibling;
-			}
+			turnReplyRowsBefore(el, tailTurnOf(el)).forEach(hideRow);
 		}
 		function showTurnTail(el) {
 			if (!el) return;
 			el.style.display = "";
-			const turn = tailTurnOf(el);
-			let sib = el.previousElementSibling;
-			while (sib) {
-                const siblingTurn = sib.getAttribute("data-chat-turn");
-                if (turn && siblingTurn && siblingTurn !== turn) break;
-				const kind = sib.getAttribute("data-chat-flow-kind");
-				if (kind === "user" || kind === "turn-tail") break;
-				sib.style.display = "";
-				sib = sib.previousElementSibling;
-			}
+			turnReplyRowsBefore(el, tailTurnOf(el)).forEach(function (row) { row.style.display = ""; });
 		}
 		function hideTurnTailWithUser(el) {
 			if (!el) return;
 			hideRow(el);
-			const turn = el.getAttribute("data-chat-turn");
-			let sib = el.previousElementSibling;
-			while (sib) {
-				const kind = sib.getAttribute("data-chat-flow-kind");
-				if (kind === "turn-tail") break;
-				const siblingTurn = sib.getAttribute("data-chat-turn");
-				if (turn && siblingTurn && siblingTurn !== turn) break;
-				// System prompts precede the user row. Hide through the turn boundary,
-				// not just through its input; alpha also supplies explicit ownership.
-				hideRow(sib);
-				sib = sib.previousElementSibling;
-			}
+			// System prompts precede the user row. Hide through the turn boundary,
+			// not just through its input; alpha also supplies explicit ownership.
+			turnRowsBefore(el, el.getAttribute("data-chat-turn")).forEach(hideRow);
 		}
 		function tailTurnOf(el) {
 			if (!el) return "";
@@ -313,13 +295,7 @@
                 for (const tail of tails) {
                     if (!turns.includes(tailTurnOf(tail))) continue;
                     tail.style.display = "";
-                    const owner = tail.getAttribute("data-chat-turn");
-                    let row = tail.previousElementSibling;
-                    while (row && row.getAttribute("data-chat-flow-kind") !== "turn-tail") {
-                        const rowTurn = row.getAttribute("data-chat-turn");
-                        if (owner && rowTurn && owner !== rowTurn) break;
-                        row.style.display = ""; row = row.previousElementSibling;
-                    }
+                    turnRowsBefore(tail, tail.getAttribute("data-chat-turn")).forEach(function (row) { row.style.display = ""; });
                 }
                 apply(sessionId, view && view.suppressedDshTurns, view && view.regeneratedDshTurns);
             }
