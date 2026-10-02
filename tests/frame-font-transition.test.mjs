@@ -68,3 +68,36 @@ test('font scaling preserves a card transform transition instead of snapping it 
     await frame.waitForFunction(() => getComputedStyle(document.querySelector('span')).fontSize === '36px')
   } finally { await browser.close() }
 })
+
+test('text-only updates do not remeasure; an element that newly holds text is still scaled', async () => {
+  const { chromium } = await import('playwright')
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.route('**/*', route => route.abort())
+    await page.setContent('<iframe style="width:800px;height:600px"></iframe>')
+    const html = helperClient.buildTavernFrameDocument({ token: 'clock',
+      content: '<style>span,div{font-size:20px}</style><span id="clock">00:00</span><div id="empty"><b>x</b></div>' })
+    await page.evaluate(html => { document.querySelector('iframe').srcdoc = html }, html)
+    const frame = page.frames()[1]
+    await frame.locator('#clock').waitFor()
+    await page.evaluate(() => document.querySelector('iframe').contentWindow.postMessage({ type: 'dsh-tavern-font-size', token: 'clock', fontSize: 21 }, '*'))
+    await frame.waitForFunction(() => getComputedStyle(document.querySelector('#clock')).fontSize === '30px')
+    const passes = await frame.evaluate(async () => {
+      let count = 0
+      new MutationObserver(records => { for (const r of records) for (const n of r.addedNodes) if (n.hasAttribute?.('data-dsh-tavern-font-measure')) count++ })
+        .observe(document.head, { childList: true })
+      const clock = document.querySelector('#clock')
+      for (let i = 0; i < 5; i++) {
+        clock.textContent = '00:0' + i
+        clock.firstChild.nodeValue = '01:0' + i
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      }
+      return count
+    })
+    assert.equal(passes, 0, '文本替换不应触发整页重测')
+    assert.equal(await frame.evaluate(() => getComputedStyle(document.querySelector('#clock')).fontSize), '30px')
+    await frame.evaluate(() => document.querySelector('#empty').append('新文字'))
+    await frame.waitForFunction(() => getComputedStyle(document.querySelector('#empty')).fontSize === '30px')
+  } finally { await browser.close() }
+})

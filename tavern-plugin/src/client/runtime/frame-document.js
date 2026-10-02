@@ -154,11 +154,21 @@
 		}
 
 		function installTavernFrameFonts(token, restore) {
-			let fontSize = 14, scheduled = false, disposed = false;
+			let fontSize = 14, scheduled = false, disposed = false, scaledText = new WeakSet();
 			// Mouse-follow effects update transforms every frame. They do not change
 			// typography; remeasuring would cancel the author's running transitions.
 			const paintOnly = new Set(["transform", "transform-origin", "translate", "rotate", "scale", "opacity"]);
+			function hasText(node) {
+				return /^(INPUT|TEXTAREA|SELECT|OPTION)$/.test(node.tagName) || Array.from(node.childNodes).some(function (child) { return child.nodeType === 3 && /\S/.test(child.nodeValue || ""); });
+			}
 			function typographyChanged(record) {
+				// Clocks, counters and streamed text only replace text. Computed sizes stay the
+				// same unless an element starts or stops directly holding text.
+				if (record.type === "characterData" || (record.type === "childList"
+					&& Array.from(record.addedNodes).concat(Array.from(record.removedNodes)).every(function (node) { return node.nodeType === 3; }))) {
+					const owner = record.type === "characterData" ? record.target.parentNode : record.target;
+					return !owner || owner.nodeType !== 1 || hasText(owner) !== scaledText.has(owner);
+				}
 				if (record.type !== "attributes" || record.attributeName !== "style") return true;
 				const before = document.createElement("span").style;
 				before.cssText = record.oldValue || "";
@@ -172,7 +182,8 @@
 				return false;
 			}
 			const observer = new MutationObserver(function (records) {
-				if (!records || records.some(typographyChanged)) schedule();
+				// At the original size there is nothing to keep in sync.
+				if (fontSize !== 14 && (!records || records.some(typographyChanged))) schedule();
 			});
 			function observe() { observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ["style", "class", "hidden"] }); }
 			function schedule() {
@@ -192,6 +203,7 @@
 				document.head.appendChild(measurementStyle);
 				try {
 					restore(document.body);
+					scaledText = new WeakSet();
 					const ratio = fontSize / 14;
 					if (ratio === 1) return;
 					// Measure everything before writing, with our old overrides removed. This prevents
@@ -199,7 +211,8 @@
 					const measured = [document.body].concat(Array.from(document.body.querySelectorAll("*"))).filter(function (node) {
 						return node.style && !/^(SCRIPT|STYLE|LINK|META|NOSCRIPT)$/.test(node.tagName) && (!node.closest("svg") || node.tagName.toLowerCase() === "svg");
 					}).map(function (node) {
-						const text = /^(INPUT|TEXTAREA|SELECT|OPTION)$/.test(node.tagName) || Array.from(node.childNodes).some(function (child) { return child.nodeType === 3 && /\S/.test(child.nodeValue || ""); });
+						const text = hasText(node);
+						if (text) scaledText.add(node);
 						const style = getComputedStyle(node), factor = text ? ratio : 1;
 						return { node: node, size: parseFloat(style.fontSize) * factor, line: parseFloat(style.lineHeight) * factor };
 					});
