@@ -11,7 +11,9 @@
 
 选一张卡自由游玩，或绑定小说、剧本和大纲，让故事沿主线推进。也可以与 Agent 对话，从素材制作新卡，修改人物设定和世界书。
 
-[使用文档](https://flizzywine.github.io/dsh-tavern/) · [入门指南](https://flizzywine.github.io/dsh-tavern/#a02) · [宣传视频](https://www.bilibili.com/video/BV1NAeq6iELC/) · [安装与排错](https://flizzywine.github.io/dsh-tavern/#a02) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)
+[使用文档](https://flizzywine.github.io/dsh-tavern/) · [入门指南](https://flizzywine.github.io/dsh-tavern/#a02) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [安装与排错](https://flizzywine.github.io/dsh-tavern/#a02) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)
+
+[![观看 3 分钟实机演示：兼容酒馆生态，更快、更稳、更鲜活](docs/images/readme/promo-video.jpg)](https://www.bilibili.com/video/BV1MHaU6NE7S/)
 
 ![dsh-tavern：左侧会话、中间游玩、右侧人物状态](docs/images/readme/overview.png)
 
