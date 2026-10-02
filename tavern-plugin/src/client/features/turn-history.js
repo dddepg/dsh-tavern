@@ -35,7 +35,7 @@
 					panelId: statusView.viewId, helperContext: view.tavernHelper,
                     frameSizing: view.tavernRuntimePolicy?.frameSizing,
 					trustedCardMode: Boolean(view.tavernRuntimePolicy && view.tavernRuntimePolicy.trustedCardMode),
-					eager: true, persistent: true, followContentFont: false, executeSlash: props.executeSlash,
+					eager: true, persistent: true, executeSlash: props.executeSlash,
 					observeMvuView: false, runtimeReporting: true
 				})); }),
 				manual.map(function (entry) { return h("div", { key: entry.id, role: "tabpanel", hidden: active !== entry.id },

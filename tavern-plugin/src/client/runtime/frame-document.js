@@ -133,121 +133,6 @@
 			});
 		}
 
-		// Also used on runtime-report clones: presentation preferences must never become saved card styles.
-		function restoreTavernFrameFontStyles(root) {
-			const attribute = "data-dsh-tavern-font-original";
-			const nodes = Array.from(root.querySelectorAll("[" + attribute + "]"));
-			if (root.hasAttribute && root.hasAttribute(attribute)) nodes.unshift(root);
-			nodes.forEach(function (node) {
-				try {
-					const saved = JSON.parse(node.getAttribute(attribute));
-					["font-size", "line-height"].forEach(function (name, index) {
-						if (node.style.getPropertyValue(name) !== saved.applied[index]) return;
-						const original = saved.original[index];
-						if (original[0]) node.style.setProperty(name, original[0], original[1]);
-						else node.style.removeProperty(name);
-					});
-					if (!saved.hadStyle && !node.getAttribute("style")) node.removeAttribute("style");
-				} catch (_) {}
-				node.removeAttribute(attribute);
-			});
-		}
-
-		function installTavernFrameFonts(token, restore) {
-			let fontSize = 14, scheduled = false, disposed = false, scaledText = new WeakSet();
-			// Mouse-follow effects update transforms every frame. They do not change
-			// typography; remeasuring would cancel the author's running transitions.
-			const paintOnly = new Set(["transform", "transform-origin", "translate", "rotate", "scale", "opacity"]);
-			function hasText(node) {
-				return /^(INPUT|TEXTAREA|SELECT|OPTION)$/.test(node.tagName) || Array.from(node.childNodes).some(function (child) { return child.nodeType === 3 && /\S/.test(child.nodeValue || ""); });
-			}
-			function typographyChanged(record) {
-				// Clocks, counters and streamed text only replace text. Computed sizes stay the
-				// same unless an element starts or stops directly holding text.
-				if (record.type === "characterData" || (record.type === "childList"
-					&& Array.from(record.addedNodes).concat(Array.from(record.removedNodes)).every(function (node) { return node.nodeType === 3; }))) {
-					const owner = record.type === "characterData" ? record.target.parentNode : record.target;
-					return !owner || owner.nodeType !== 1 || hasText(owner) !== scaledText.has(owner);
-				}
-				if (record.type !== "attributes" || record.attributeName !== "style") return true;
-				const before = document.createElement("span").style;
-				before.cssText = record.oldValue || "";
-				const after = record.target.style;
-				if (!after) return true;
-				for (const name of new Set([...before, ...after])) {
-					if (paintOnly.has(name)) continue;
-					if (before.getPropertyValue(name) !== after.getPropertyValue(name)
-						|| before.getPropertyPriority(name) !== after.getPropertyPriority(name)) return true;
-				}
-				return false;
-			}
-			const observer = new MutationObserver(function (records) {
-				// At the original size there is nothing to keep in sync.
-				if (fontSize !== 14 && (!records || records.some(typographyChanged))) schedule();
-			});
-			function observe() { observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ["style", "class", "hidden"] }); }
-			function schedule() {
-				if (scheduled || disposed) return;
-				scheduled = true;
-				requestAnimationFrame(apply);
-			}
-			function apply() {
-				scheduled = false;
-				if (disposed || !document.body) return;
-				observer.disconnect();
-				// Cancel author transitions while restoring/measuring; otherwise computed font
-				// sizes can still be the previous scaled frame, which compounds on each update.
-				const measurementStyle = document.createElement("style");
-				measurementStyle.setAttribute("data-dsh-tavern-font-measure", "");
-				measurementStyle.textContent = "*,*::before,*::after{transition:none!important}";
-				document.head.appendChild(measurementStyle);
-				try {
-					restore(document.body);
-					scaledText = new WeakSet();
-					const ratio = fontSize / 14;
-					if (ratio === 1) return;
-					// Measure everything before writing, with our old overrides removed. This prevents
-					// inherited em/rem sizes and repeated preference changes from compounding.
-					const measured = [document.body].concat(Array.from(document.body.querySelectorAll("*"))).filter(function (node) {
-						return node.style && !/^(SCRIPT|STYLE|LINK|META|NOSCRIPT)$/.test(node.tagName) && (!node.closest("svg") || node.tagName.toLowerCase() === "svg");
-					}).map(function (node) {
-						const text = hasText(node);
-						if (text) scaledText.add(node);
-						const style = getComputedStyle(node), factor = text ? ratio : 1;
-						return { node: node, size: parseFloat(style.fontSize) * factor, line: parseFloat(style.lineHeight) * factor };
-					});
-					measured.forEach(function (item) {
-						if (!Number.isFinite(item.size) || item.size <= 0) return;
-						const node = item.node, names = ["font-size", "line-height"];
-						const saved = { hadStyle: node.hasAttribute("style"), original: names.map(function (name) { return [node.style.getPropertyValue(name), node.style.getPropertyPriority(name)]; }), applied: [] };
-						node.style.setProperty("font-size", item.size.toFixed(4) + "px", "important");
-						if (Number.isFinite(item.line)) node.style.setProperty("line-height", item.line.toFixed(4) + "px", "important");
-						saved.applied = names.map(function (name) { return node.style.getPropertyValue(name); });
-						node.setAttribute("data-dsh-tavern-font-original", JSON.stringify(saved));
-					});
-				} finally {
-					// Flush the final values before restoring transitions, so the adapter itself
-					// does not start another interpolation from the temporary unscaled state.
-					void getComputedStyle(document.body).fontSize;
-					measurementStyle.remove();
-					observe();
-				}
-			}
-			function receive(event) {
-				const data = event.data;
-				if (event.source !== parent || !data || data.token !== token || data.type !== "dsh-tavern-font-size") return;
-				const next = Number(data.fontSize);
-				if (!Number.isFinite(next) || next < 8 || next > 48 || next === fontSize) return;
-				fontSize = next;
-				schedule();
-			}
-			observe();
-			addEventListener("message", receive);
-			addEventListener("resize", schedule);
-			document.addEventListener("load", schedule, true);
-			addEventListener("pagehide", function () { disposed = true; observer.disconnect(); removeEventListener("message", receive); removeEventListener("resize", schedule); document.removeEventListener("load", schedule, true); }, { once: true });
-		}
-
 		// @include opening-preview.js
 		// @include modules/frame-lifecycle.js
 		// @include legacy-composer.js
@@ -294,15 +179,14 @@
 			// their authenticated variable channel can start receiving updates.
 			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,deadline=0,reported=false;function report(){if(reported)return;reported=true;clearTimeout(timer);clearTimeout(deadline);observer.disconnect();var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;deadline=setTimeout(report,1000);schedule();});})();<\/script>';
 			const layoutNormalizer = '<script data-dsh-tavern-layout>(function(){if(!document.body)return;function clean(){Array.prototype.slice.call(document.body.childNodes).forEach(function(node){var value=String(node.nodeValue||"");if(node.nodeType===3&&!/\\S/.test(value)&&/[\\r\\n]/.test(value))node.nodeValue="";});}clean();if(typeof MutationObserver!=="undefined"){var observer=new MutationObserver(clean);observer.observe(document.body,{childList:true});addEventListener("pagehide",function(){observer.disconnect();},{once:true});}})();<\/script>';
-			const fontRuntime = '<script data-dsh-tavern-font-runtime>(' + installTavernFrameFonts.toString() + ')(' + token + ',' + restoreTavernFrameFontStyles.toString() + ');<\/script>';
-            const textColorRuntime = '<script data-dsh-tavern-text-colors>(function(){const colors=(' + installTavernTextColors.toString() + ')(document.body,{enabled:false},' + findTavernQuoteRanges.toString() + ');addEventListener("message",function(event){const data=event.data;if(event.source===parent&&data&&data.token===' + token + '&&(data.type==="dsh-tavern-text-colors"||data.type==="dsh-tavern-font-size")){colors.setColors(data.textColorOverrides);colors.setEnabled(data.type==="dsh-tavern-font-size"?data.textColorsEnabled:data.enabled);}});addEventListener("pagehide",()=>colors.dispose(),{once:true});})();<\/script>';
+            const textColorRuntime = '<script data-dsh-tavern-text-colors>(function(){const colors=(' + installTavernTextColors.toString() + ')(document.body,{enabled:false},' + findTavernQuoteRanges.toString() + ');addEventListener("message",function(event){const data=event.data;if(event.source===parent&&data&&data.token===' + token + '&&data.type==="dsh-tavern-text-colors"){colors.setColors(data.textColorOverrides);colors.setEnabled(data.enabled);}});addEventListener("pagehide",()=>colors.dispose(),{once:true});})();<\/script>';
             if (sizing) {
                 if (sizing.mode !== "content") reporter = "";
                 else reporter = reporter.replace("48,viewportFloor()", "48");
             }
             const sizingRuntime = '<script data-dsh-tavern-sizing>(' + installTavernFrameSizing.toString() + ')(' + token + ',' + JSON.stringify(sizing) + ');<\/script>';
             const sizingStyle = !sizing ? "" : '<style data-dsh-tavern-sizing>html[data-dsh-tavern-sizing-scroll]{overflow-y:auto!important}html[data-dsh-tavern-sizing-scroll] body{overflow-y:visible!important}' + (sizing.mode === "content" ? '' : 'html:root,html:root body{height:100%!important;min-height:0!important}html:root body{white-space:normal}') + '</style>';
-			const cleanRuntimeReporter = runtimeReporter.replace('addEventListener("load",schedule);schedule();', 'addEventListener("load",schedule);addEventListener("resize",schedule);schedule();').replace("capturedAt:Date.now(),", "capturedAt:Date.now(),layout:window.__dshTavernFrameLayout?window.__dshTavernFrameLayout():null,").replace('dom=copy.innerHTML;', '(' + restoreTavernFrameFontStyles.toString() + ')(copy);Array.from(copy.querySelectorAll("script[data-dsh-tavern-font-runtime],script[data-dsh-tavern-text-colors],script[data-dsh-tavern-touch]")).forEach(function(node){node.remove();});dom=copy.innerHTML;');
+			const cleanRuntimeReporter = runtimeReporter.replace('addEventListener("load",schedule);schedule();', 'addEventListener("load",schedule);addEventListener("resize",schedule);schedule();').replace("capturedAt:Date.now(),", "capturedAt:Date.now(),layout:window.__dshTavernFrameLayout?window.__dshTavernFrameLayout():null,").replace('dom=copy.innerHTML;', 'Array.from(copy.querySelectorAll("script[data-dsh-tavern-text-colors],script[data-dsh-tavern-touch]")).forEach(function(node){node.remove();});dom=copy.innerHTML;');
 			return '<!doctype html><html><head><meta charset="utf-8">'
                 + '<script data-dsh-tavern-crypto>(' + installTavernCryptoSubtlePolyfill.toString() + ')(window);<\/script>'
 				+ '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -317,7 +201,7 @@
 				// Viewers without the execution lease still receive live variables. Legacy
 				// status panels read parent.Mvu; expose their Helper API below the executor.
 				+ (!preparationRuntime && input && input.helperContext && input.persistent === true && input.trustedCardMode === true ? '<script data-dsh-tavern-status-host>(function(){const release=(' + installTavernTrustedHostFacade.toString() + ')(window.parent,window,-0.5,["Mvu"]);window.addEventListener("pagehide",release,{once:true});window.addEventListener("unload",release,{once:true});})();<\/script>' : '')
-				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + fontRuntime + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
+				+ '</head><body class="no-blur">' + (input && input.helperContext ? '<script data-dsh-tavern-legacy-composer>const createTavernFrameLifecycle=' + createTavernFrameLifecycle.toString() + ';(' + installLegacyTavernComposer.toString() + ')();<\/script>' : '') + (preparationRuntime ? preparationRuntime.body : '') + html + sizingRuntime + layoutNormalizer + (input && input.persistent ? "" : textColorRuntime) + reporter + '<script data-dsh-tavern-touch>(' + installTavernFrameTouch.toString() + ')(' + token + ',' + scrollTavernTouchChain.toString() + ');<\/script>' + readyReporter + '</body></html>';
 		}
 
         function startTavernHelperLoader(source) {

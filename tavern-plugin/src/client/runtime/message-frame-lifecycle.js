@@ -122,7 +122,7 @@
 			let listener = null;
 			let lifetime = 0;
 			let synchronizationKey = "";
-			let lastFontSize = null, lastTextAccent = null;
+			let lastTextAccent = null;
 			let documentInputs = null;
 			let cachedDocumentKey = "";
 			let desired = createDocument();
@@ -225,19 +225,16 @@
 				const channel = document && channels.get(document.token);
 				if (channel) channel.sync(helperContext, props.turn, mode);
 			}
-			function sendFontSize(document) {
+			function sendTextColors(document) {
 				const body = hostWindow.document && hostWindow.document.body;
 				if (!body || typeof hostWindow.getComputedStyle !== "function") return;
-				const value = parseFloat(hostWindow.getComputedStyle(body).getPropertyValue("--dsh-content-font-size"));
-				const fontSize = props.followContentFont !== false && Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
 				const textColorOverrides = tavernTextColorOverrides(hostWindow);
-                if (!document && fontSize === lastFontSize && textColorOverrides.quote === lastTextAccent) return;
+                if (!document && textColorOverrides.quote === lastTextAccent) return;
                 lastTextAccent = textColorOverrides.quote;
-				lastFontSize = fontSize;
 				channels.forEach(function (channel, token) {
 					if (document && token !== document.token) return;
 					const node = channel.element();
-					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-font-size", token: token, fontSize: fontSize, textColorsEnabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: textColorOverrides }, "*");
+					if (node && node.contentWindow) node.contentWindow.postMessage({ type: "dsh-tavern-text-colors", token: token, enabled: tavernTextColorsEnabled(hostWindow), textColorOverrides: textColorOverrides }, "*");
 				});
 			}
 			function reconcile() {
@@ -306,7 +303,7 @@
 				if (data.type === "dsh-tavern-frame-ready") {
                     frameVisibility.get(data.token)?.sync();
                     sizingObservers.get(data.token)?.schedule();
-					sendFontSize(sourceDocument);
+					sendTextColors(sourceDocument);
 					sendContext(sourceDocument, "ready");
 					if (sourceDocument === pending && pending.key === desired.key) {
 						rememberHeight(pending, pending.height || (props.openingPreview ? 160 : restoredTavernFrameHeight(pending.heightKey, pending.content)));
@@ -468,12 +465,12 @@
                             return executeSlash("/send " + text + "|/trigger", props.sessionId);
                         }, function (error) { tavernErrorHub.report("开始旅程", error); }) : function () {};
 
-					let fontObserver = null;
+					let themeObserver = null;
 					if (hostWindow.document && typeof hostWindow.MutationObserver === "function") {
-						fontObserver = new hostWindow.MutationObserver(function () { sendFontSize(); });
+						themeObserver = new hostWindow.MutationObserver(function () { sendTextColors(); });
                         // Theme token overrides are emitted as stylesheets, not only root attributes.
-                        fontObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
-						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { fontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
+                        themeObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
+						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { themeObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
 					}
 					return function () {
                         touchRelay.stop();
@@ -485,7 +482,7 @@
 							}
 							openingArtifacts.dispose();
 						}
-						if (fontObserver) fontObserver.disconnect();
+						if (themeObserver) themeObserver.disconnect();
                         frameSizeObservers.forEach(function (observer) { observer.disconnect(); });
                         frameSizeObservers.clear();
                         sizingObservers.forEach(observer => observer.stop());

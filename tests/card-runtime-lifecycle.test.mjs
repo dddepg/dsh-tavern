@@ -36,11 +36,11 @@ const mvuView = () => {
   return input
 }
 
-test('DSH 字号同步到已就绪 iframe，不替换文档；离开后停止监听', () => {
+test('DSH 主题文字颜色同步到已就绪 iframe，不替换文档；离开后停止监听', () => {
   const h = host(), sent = []
-  let size = '14px', notify, disconnected = false
+  let accent = 'rgb(1, 2, 3)', notify, disconnected = false
   h.window.document = { body: { appendChild() {} }, documentElement: {}, createElement() { return { style: {}, remove() {} } } }
-  h.window.getComputedStyle = () => ({ getPropertyValue: () => size })
+  h.window.getComputedStyle = () => ({ color: accent, getPropertyValue: () => '' })
   h.window.MutationObserver = class {
     constructor(callback) { notify = callback }
     observe() {} disconnect() { disconnected = true }
@@ -53,10 +53,10 @@ test('DSH 字号同步到已就绪 iframe，不替换文档；离开后停止监
   h.deliver(node, { type: 'dsh-tavern-frame-ready', token: doc.token }, {})
   assert.equal(sent.length, 0, '外部来源不能触发同步')
   h.deliver(node, { type: 'dsh-tavern-frame-ready', token: doc.token })
-  assert.equal(sent.at(-1)?.type, 'dsh-tavern-font-size')
-  assert.equal(sent.at(-1)?.fontSize, 14)
-  size = '17px'; notify()
-  assert.equal(sent.at(-1).fontSize, 17)
+  assert.equal(sent.at(-1)?.type, 'dsh-tavern-text-colors')
+  assert.equal(sent.at(-1)?.textColorOverrides.quote, 'rgb(1, 2, 3)')
+  accent = 'rgb(4, 5, 6)'; notify()
+  assert.equal(sent.at(-1).textColorOverrides.quote, 'rgb(4, 5, 6)')
   assert.equal(life.snapshot().visibleDocument, doc)
   assert.equal(life.snapshot().pendingDocument, null)
   const count = sent.length; notify()
@@ -65,11 +65,9 @@ test('DSH 字号同步到已就绪 iframe，不替换文档；离开后停止监
   assert.equal(disconnected, true)
 })
 
-test('正文文档带认证字号通道与原字号恢复逻辑', () => {
+test('卡片 iframe 不改写卡片字号', () => {
   const html = host().client.buildTavernFrameDocument({ content: '<p style="font-size:20px">正文</p>', token: 'font-test' })
-  assert.match(html, /data-dsh-tavern-font-runtime/)
-  assert.match(html, /dsh-tavern-font-size/)
-  assert.match(html, /restoreTavernFrameFontStyles/)
+  assert.doesNotMatch(html, /data-dsh-tavern-font|dsh-tavern-font-size/)
 })
 function execution(options = {}) {
   const h = host(), calls = [], runtimes = [], signalListeners = new Map(), connectionListeners = new Map()
@@ -802,26 +800,6 @@ test('正式卡片页面追加消息走当前 Session 与生命周期校验', as
   assert.equal(h.calls[0].args.sessionId, 'A')
   assert.equal(h.calls[0].args.expectedLifecycleRevision, 1)
   h.stop()
-})
-
-test('右侧状态栏保留卡片原始字号，已有正文设置不改变其缩放比例', () => {
-  const h = host(), sent = []
-  let size = '28px', notify
-  h.window.document = { body: { appendChild() {} }, documentElement: {}, createElement() { return { style: {}, remove() {} } } }
-  h.window.getComputedStyle = () => ({ getPropertyValue: () => size })
-  h.window.MutationObserver = class { constructor(callback) { notify = callback } observe() {} disconnect() {} }
-  const life = h.client.createTavernMessageFrameLifecycle({ content: '<p>状态</p>', eager: true, persistent: true, followContentFont: false }, { window: h.window })
-  const stop = life.start(() => {})
-  const doc = life.snapshot().visibleDocument
-  const node = { contentWindow: { postMessage: value => sent.push(copy(value)) } }
-  doc.ref(node)
-  h.deliver(node, { type: 'dsh-tavern-frame-ready', token: doc.token })
-  assert.equal(sent.at(-1).fontSize, 14, '14 表示原始样式倍率 1，并非强制卡片字号为 14px')
-  size = '32px'; notify()
-  assert.equal(sent.at(-1).fontSize, 14)
-  assert.equal(life.snapshot().visibleDocument, doc)
-  assert.match(source, /persistent: true,\s*followContentFont: false,/)
-  stop()
 })
 
 test('queued prompt operations batch in order and refresh once; reads remain barriers', async () => {
