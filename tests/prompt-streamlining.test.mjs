@@ -50,7 +50,10 @@ test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill �
   assert.match(tavernPresetSource, /@deepseek-ai\/dsh-tool-cordis/)
   assert.match(tavernPresetSource, /text: ''/)
   assert.doesNotMatch(tavernPresetSource, /complete: true/)
-  assert.match(serverSource, /cardSystemPrompt: function \(\) \{ return prompt\('card-system'\) \}/)
+  assert.match(serverSource, /cardSystemPrompt: function \(\) \{ return runtimePrompt\('card-system'\) \}/)
+  // Panel overrides only apply through runtimePrompt(); the raw file catalog is for defaults.
+  assert.doesNotMatch(serverSource, /[^.\w]prompt\(/)
+  assert.equal([...serverSource.matchAll(/\bpromptFile\(/g)].length, 2)
   assert.doesNotMatch(serverSource, /runtimePrompt\('play-mode'\)/)
   assert.match(serverSource, /resourceWorkspaceContext\(cwd, projection, runtimePrompt\('card-workspace'\)\)/)
   assert.doesNotMatch(orchestrationStrategiesSource, /section\.name === 'tool:cordis'/)

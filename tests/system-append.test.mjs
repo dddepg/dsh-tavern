@@ -56,7 +56,7 @@ test('附加指令默认开启，明确关闭的选择与用户覆盖继续保�
   const { presentTavernSettings } = await import('../tavern-plugin/lib/domain/tavern-settings.js')
   const source = readFileSync(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
   const implementation = source.slice(source.indexOf('  function runtimePrompt(name)'), source.indexOf('  function presentSystemPrompts'))
-  const resolve = document => new Function('tavernSettingsDocument', 'resolveSystemPrompt', 'prompt', implementation + '; return runtimePrompt;')(document, resolveSystemPrompt, name => name === 'system-append' ? '默认内容' : '其他提示词')
+  const resolve = document => new Function('tavernSettingsDocument', 'resolveSystemPrompt', 'promptFile', implementation + '; return runtimePrompt;')(document, resolveSystemPrompt, name => name === 'system-append' ? '默认内容' : '其他提示词')
   let document = applyTavernSettingsPatch({}, { systemPrompt: { name: 'system-append', text: '用户内容' } })
   assert.equal(presentTavernSettings(document, {}).systemAppendEnabled, true)
   assert.equal(resolve(document)('system-append'), '用户内容')

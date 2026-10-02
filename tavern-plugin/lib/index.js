@@ -190,7 +190,9 @@ import { createChatPersistence } from './domain/chat-persistence.js'
 import { createChatJournalStore } from './domain/chat-journal-store.js'
 import { createResourceGraph } from './domain/resource-graph.js'
 import { normalizeBackgroundTasks, applyTavernSettingsPatch, presentTavernSettings, resolveSystemPrompt } from './domain/tavern-settings.js'
-import { prompt, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt-catalog.js'
+// Runtime reads go through runtimePrompt() so panel overrides apply; the raw
+// file catalog only supplies built-in defaults.
+import { prompt as promptFile, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt-catalog.js'
 // dsh-tavern 宿主插件（profile 组合行）
 // RPC：同源 HTTP 路由 /api/dsh-tavern/<method>（客户端 fetch 调用）
 // DSH 生命周期负责回合状态；模型工具只处理按需读取和明确修改。
@@ -330,7 +332,7 @@ export async function apply(ctx) {
   const writePromptTemplateGlobalVariables = promptTemplateGlobalVariables.save
   let tavernSettingsDocument = await profileData.readJson(settingsPath)
   function promptDefaults() {
-    return Object.fromEntries(SYSTEM_PROMPT_NAMES.map(function (name) { return [name, prompt(name)] }))
+    return Object.fromEntries(SYSTEM_PROMPT_NAMES.map(function (name) { return [name, promptFile(name)] }))
   }
   async function readTavernSettings() {
     tavernSettingsDocument = await profileData.readJson(settingsPath)
@@ -348,7 +350,7 @@ export async function apply(ctx) {
   }
   function runtimePrompt(name) {
     if (name === 'system-append' && tavernSettingsDocument?.systemAppendEnabled === false) return ''
-    return resolveSystemPrompt(tavernSettingsDocument, name, prompt)
+    return resolveSystemPrompt(tavernSettingsDocument, name, promptFile)
   }
   function presentSystemPrompts(settings) {
     const byName = Object.fromEntries((settings.systemPrompts || []).map(function (item) { return [item.name, item] }))
@@ -357,7 +359,7 @@ export async function apply(ctx) {
       version: 1,
       systemAppendEnabled: settings.systemAppendEnabled === true,
       prompts: SYSTEM_PROMPT_DEFINITIONS.map(function (definition) {
-        return Object.assign({}, definition, byName[definition.name] || { text: prompt(definition.name), customized: false })
+        return Object.assign({}, definition, byName[definition.name] || { text: promptFile(definition.name), customized: false })
       })
     }
   }
@@ -1874,7 +1876,7 @@ export async function apply(ctx) {
     userPreferenceProfile,
     presets: runtimePresets,
     settings: readTavernSettings,
-    cardGreeting: function () { return prompt('card-mode-greeting') },
+    cardGreeting: function () { return runtimePrompt('card-mode-greeting') },
     emptyCardWorkspace,
     id: uid,
     native: {
@@ -3235,7 +3237,7 @@ export async function apply(ctx) {
           const target = await waitForWritableSession({ registry: agentRegistry, sessions: sessionStore, sessionId: chat.sessionId, sleep })
           legacyWorkspaceText = await ensureNativeCardWorkspace(target.session, chat)
         }
-        return { task, text: prompt(promptName), legacyWorkspaceText }
+        return { task, text: runtimePrompt(promptName), legacyWorkspaceText }
       }
       case 'getCardMemory': {
         const chat = await chatForSession(args?.sessionId)
@@ -3996,8 +3998,8 @@ export async function apply(ctx) {
         }))
       },
       visibleTools: async function (sessionId) { return await turnOrchestrator.visibleTools(sessionId) },
-      cardSystemPrompt: function () { return prompt('card-system') },
-      cardReferencePrompt: function () { return prompt('card-reference') },
+      cardSystemPrompt: function () { return runtimePrompt('card-system') },
+      cardReferencePrompt: function () { return runtimePrompt('card-reference') },
       workspaceContext: function (cwd, projection) { return resourceWorkspaceContext(cwd, projection, runtimePrompt('card-workspace')) },
       ensureSessionPrefix: async function (input) {
         return await ensureNativeSystemPrefix(input.payload.agent.session, input.chat)
