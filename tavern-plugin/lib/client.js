@@ -4800,6 +4800,40 @@ window.__ModuleLoader__.load({
             return import(url).finally(release);
         }
 
+// One observer of DSH theme tokens shared by every message frame and inline fragment.
+// DSH emits preferences as CSS variables and stylesheets, so each head/root style
+// mutation is re-read once here instead of once per mounted card.
+const tavernHostThemeListeners = new Set();
+let tavernHostThemeObserver = null, tavernHostTheme = null;
+function readTavernHostTheme(win) {
+    const value = parseFloat(win.getComputedStyle(win.document.body).getPropertyValue("--dsh-content-font-size"));
+    return { fontSize: Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14, textColorOverrides: tavernTextColorOverrides(win) };
+}
+function currentTavernHostTheme(win) {
+    return tavernHostTheme || readTavernHostTheme(win);
+}
+function subscribeTavernHostTheme(win, listener) {
+    if (!tavernHostThemeObserver) {
+        tavernHostTheme = readTavernHostTheme(win);
+        tavernHostThemeObserver = new win.MutationObserver(function () {
+            const next = readTavernHostTheme(win);
+            if (next.fontSize === tavernHostTheme.fontSize && next.textColorOverrides.quote === tavernHostTheme.textColorOverrides.quote) return;
+            tavernHostTheme = next;
+            tavernHostThemeListeners.forEach(function (notify) { notify(next); });
+        });
+        tavernHostThemeObserver.observe(win.document.head, { subtree: true, childList: true, characterData: true });
+        [win.document.documentElement, win.document.body].filter(Boolean).forEach(function (node) { tavernHostThemeObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
+    }
+    tavernHostThemeListeners.add(listener);
+    return function () {
+        tavernHostThemeListeners.delete(listener);
+        if (tavernHostThemeListeners.size || !tavernHostThemeObserver) return;
+        tavernHostThemeObserver.disconnect();
+        tavernHostThemeObserver = null;
+        tavernHostTheme = null;
+    };
+}
+
 		function createTavernHelperTransport(options) {
 			const { parent, token, copy, identity, onContext, onEvent } = options;
 			let nextId = 1;
@@ -8531,10 +8565,10 @@ window.__ModuleLoader__.load({
 				const channel = document && channels.get(document.token);
 				if (channel) channel.sync(helperContext, props.turn, mode);
 			}
-			function sendTextColors(document) {
+			function sendTextColors(document, theme) {
 				const body = hostWindow.document && hostWindow.document.body;
 				if (!body || typeof hostWindow.getComputedStyle !== "function") return;
-				const textColorOverrides = tavernTextColorOverrides(hostWindow);
+				const textColorOverrides = (theme || currentTavernHostTheme(hostWindow)).textColorOverrides;
                 if (!document && textColorOverrides.quote === lastTextAccent) return;
                 lastTextAccent = textColorOverrides.quote;
 				channels.forEach(function (channel, token) {
@@ -8771,13 +8805,8 @@ window.__ModuleLoader__.load({
                             return executeSlash("/send " + text + "|/trigger", props.sessionId);
                         }, function (error) { tavernErrorHub.report("开始旅程", error); }) : function () {};
 
-					let themeObserver = null;
-					if (hostWindow.document && typeof hostWindow.MutationObserver === "function") {
-						themeObserver = new hostWindow.MutationObserver(function () { sendTextColors(); });
-                        // Theme token overrides are emitted as stylesheets, not only root attributes.
-                        themeObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
-						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { themeObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
-					}
+					const unsubscribeTheme = hostWindow.document && typeof hostWindow.MutationObserver === "function"
+						? subscribeTavernHostTheme(hostWindow, function (theme) { sendTextColors(null, theme); }) : null;
 					return function () {
                         touchRelay.stop();
 						releaseComposer();
@@ -8788,7 +8817,7 @@ window.__ModuleLoader__.load({
 							}
 							openingArtifacts.dispose();
 						}
-						if (themeObserver) themeObserver.disconnect();
+						if (unsubscribeTheme) unsubscribeTheme();
                         frameSizeObservers.forEach(function (observer) { observer.disconnect(); });
                         frameSizeObservers.clear();
                         sizingObservers.forEach(observer => observer.stop());
@@ -9606,35 +9635,6 @@ window.__ModuleLoader__.load({
             return template.content;
         }
 
-        // One observer for all fragments: DSH writes the preference as a CSS variable on body.
-        const tavernContentFontListeners = new Set();
-        let tavernContentFontObserver = null, tavernContentFontSize = 14;
-        function readTavernContentFontSize(win) {
-            const value = parseFloat(win.getComputedStyle(win.document.body).getPropertyValue("--dsh-content-font-size"));
-            return Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
-        }
-        function subscribeTavernContentFontSize(win, listener) {
-            if (!tavernContentFontObserver) {
-                tavernContentFontSize = readTavernContentFontSize(win);
-                tavernContentFontObserver = new win.MutationObserver(function () {
-                    const next = readTavernContentFontSize(win);
-                    if (next === tavernContentFontSize) return;
-                    tavernContentFontSize = next;
-                    tavernContentFontListeners.forEach(function (notify) { notify(next); });
-                });
-                tavernContentFontObserver.observe(win.document.head, { subtree: true, childList: true, characterData: true });
-                [win.document.documentElement, win.document.body].forEach(function (node) { tavernContentFontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class"] }); });
-            }
-            tavernContentFontListeners.add(listener);
-            listener(tavernContentFontSize);
-            return function () {
-                tavernContentFontListeners.delete(listener);
-                if (tavernContentFontListeners.size || !tavernContentFontObserver) return;
-                tavernContentFontObserver.disconnect();
-                tavernContentFontObserver = null;
-            };
-        }
-
         function TavernInlineFragment(props) {
             const ref = React.useRef(null);
             React.useLayoutEffect(function () {
@@ -9644,9 +9644,10 @@ window.__ModuleLoader__.load({
                 if (fragment) root.replaceChildren(fragment);
                 // Zoom only our own wrapper: the card's DOM and styles are never written, and in
                 // the host page viewport units cannot feed back into the zoomed size.
-                const unsubscribe = subscribeTavernContentFontSize(root.ownerDocument.defaultView, function (size) {
-                    root.style.zoom = size === 14 ? "" : String(size / 14);
-                });
+                const win = root.ownerDocument.defaultView;
+                function apply(theme) { root.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
+                const unsubscribe = subscribeTavernHostTheme(win, apply);
+                apply(currentTavernHostTheme(win));
                 return function () { unsubscribe(); root.style.zoom = ""; root.replaceChildren(); };
             }, [props.content]);
             return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});

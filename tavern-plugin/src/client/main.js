@@ -583,6 +583,8 @@ window.__ModuleLoader__.load({
 
 // @include runtime/frame-document.js
 
+// @include modules/host-theme.js
+
 // @include runtime/helper-facade.js
 
         // Bounded, value-free timings shared by every card's initialization.

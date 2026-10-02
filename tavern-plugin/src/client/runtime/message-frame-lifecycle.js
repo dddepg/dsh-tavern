@@ -225,10 +225,10 @@
 				const channel = document && channels.get(document.token);
 				if (channel) channel.sync(helperContext, props.turn, mode);
 			}
-			function sendTextColors(document) {
+			function sendTextColors(document, theme) {
 				const body = hostWindow.document && hostWindow.document.body;
 				if (!body || typeof hostWindow.getComputedStyle !== "function") return;
-				const textColorOverrides = tavernTextColorOverrides(hostWindow);
+				const textColorOverrides = (theme || currentTavernHostTheme(hostWindow)).textColorOverrides;
                 if (!document && textColorOverrides.quote === lastTextAccent) return;
                 lastTextAccent = textColorOverrides.quote;
 				channels.forEach(function (channel, token) {
@@ -465,13 +465,8 @@
                             return executeSlash("/send " + text + "|/trigger", props.sessionId);
                         }, function (error) { tavernErrorHub.report("开始旅程", error); }) : function () {};
 
-					let themeObserver = null;
-					if (hostWindow.document && typeof hostWindow.MutationObserver === "function") {
-						themeObserver = new hostWindow.MutationObserver(function () { sendTextColors(); });
-                        // Theme token overrides are emitted as stylesheets, not only root attributes.
-                        themeObserver.observe(hostWindow.document.head, { subtree: true, childList: true, characterData: true });
-						[hostWindow.document.documentElement, hostWindow.document.body].filter(Boolean).forEach(function (node) { themeObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
-					}
+					const unsubscribeTheme = hostWindow.document && typeof hostWindow.MutationObserver === "function"
+						? subscribeTavernHostTheme(hostWindow, function (theme) { sendTextColors(null, theme); }) : null;
 					return function () {
                         touchRelay.stop();
 						releaseComposer();
@@ -482,7 +477,7 @@
 							}
 							openingArtifacts.dispose();
 						}
-						if (themeObserver) themeObserver.disconnect();
+						if (unsubscribeTheme) unsubscribeTheme();
                         frameSizeObservers.forEach(function (observer) { observer.disconnect(); });
                         frameSizeObservers.clear();
                         sizingObservers.forEach(observer => observer.stop());
