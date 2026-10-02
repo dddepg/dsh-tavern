@@ -3552,10 +3552,6 @@ window.__ModuleLoader__.load({
 			});
 		}
 
-		// Scales text by fontSize / 14 without resizing boxes: viewport units and fixed
-		// layouts stay intact. Shared by message iframes (embedded via toString, so it must
-		// stay self-contained) and trusted inline fragments in the host DOM.
-
 		// Also used on runtime-report clones: presentation preferences must never become saved card styles.
 		function restoreTavernFrameFontStyles(root) {
 			const attribute = "data-dsh-tavern-font-original";
@@ -3576,12 +3572,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 
-		function createTavernFontScaler(root, restore) {
-			const doc = root.ownerDocument, view = doc.defaultView;
-			// Inside a frame the whole document is ours; in the host DOM only the root's subtree.
-			const own = root === doc.body;
-			const scope = own ? "*" : "[data-dsh-tavern-font-root]";
-			if (!own) root.setAttribute("data-dsh-tavern-font-root", "");
+		function installTavernFrameFonts(token, restore) {
 			let fontSize = 14, scheduled = false, disposed = false, scaledText = new WeakSet();
 			// Mouse-follow effects update transforms every frame. They do not change
 			// typography; remeasuring would cancel the author's running transitions.
@@ -3598,7 +3589,7 @@ window.__ModuleLoader__.load({
 					return !owner || owner.nodeType !== 1 || hasText(owner) !== scaledText.has(owner);
 				}
 				if (record.type !== "attributes" || record.attributeName !== "style") return true;
-				const before = doc.createElement("span").style;
+				const before = document.createElement("span").style;
 				before.cssText = record.oldValue || "";
 				const after = record.target.style;
 				if (!after) return true;
@@ -3609,40 +3600,39 @@ window.__ModuleLoader__.load({
 				}
 				return false;
 			}
-			const observer = new view.MutationObserver(function (records) {
+			const observer = new MutationObserver(function (records) {
 				// At the original size there is nothing to keep in sync.
 				if (fontSize !== 14 && (!records || records.some(typographyChanged))) schedule();
 			});
-			function observe() { observer.observe(own ? doc.documentElement : root, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ["style", "class", "hidden"] }); }
+			function observe() { observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true, attributeFilter: ["style", "class", "hidden"] }); }
 			function schedule() {
 				if (scheduled || disposed) return;
 				scheduled = true;
-				view.requestAnimationFrame(apply);
+				requestAnimationFrame(apply);
 			}
 			function apply() {
 				scheduled = false;
-				const target = own ? doc.body : root;
-				if (disposed || !target) return;
+				if (disposed || !document.body) return;
 				observer.disconnect();
 				// Cancel author transitions while restoring/measuring; otherwise computed font
 				// sizes can still be the previous scaled frame, which compounds on each update.
-				const measurementStyle = doc.createElement("style");
+				const measurementStyle = document.createElement("style");
 				measurementStyle.setAttribute("data-dsh-tavern-font-measure", "");
-				measurementStyle.textContent = own ? "*,*::before,*::after{transition:none!important}" : [scope, scope + " *", scope + " *::before", scope + " *::after"].join(",") + "{transition:none!important}";
-				(doc.head || doc.documentElement).appendChild(measurementStyle);
+				measurementStyle.textContent = "*,*::before,*::after{transition:none!important}";
+				document.head.appendChild(measurementStyle);
 				try {
-					restore(target);
+					restore(document.body);
 					scaledText = new WeakSet();
 					const ratio = fontSize / 14;
 					if (ratio === 1) return;
 					// Measure everything before writing, with our old overrides removed. This prevents
 					// inherited em/rem sizes and repeated preference changes from compounding.
-					const measured = [target].concat(Array.from(target.querySelectorAll("*"))).filter(function (node) {
+					const measured = [document.body].concat(Array.from(document.body.querySelectorAll("*"))).filter(function (node) {
 						return node.style && !/^(SCRIPT|STYLE|LINK|META|NOSCRIPT)$/.test(node.tagName) && (!node.closest("svg") || node.tagName.toLowerCase() === "svg");
 					}).map(function (node) {
 						const text = hasText(node);
 						if (text) scaledText.add(node);
-						const style = view.getComputedStyle(node), factor = text ? ratio : 1;
+						const style = getComputedStyle(node), factor = text ? ratio : 1;
 						return { node: node, size: parseFloat(style.fontSize) * factor, line: parseFloat(style.lineHeight) * factor };
 					});
 					measured.forEach(function (item) {
@@ -3657,42 +3647,24 @@ window.__ModuleLoader__.load({
 				} finally {
 					// Flush the final values before restoring transitions, so the adapter itself
 					// does not start another interpolation from the temporary unscaled state.
-					void view.getComputedStyle(target).fontSize;
+					void getComputedStyle(document.body).fontSize;
 					measurementStyle.remove();
 					observe();
 				}
 			}
-			function loaded(event) { if (own || root.contains(event.target)) schedule(); }
-			observe();
-			view.addEventListener("resize", schedule);
-			doc.addEventListener("load", loaded, true);
-			return {
-				set: function (next) {
-					next = Number(next);
-					if (!Number.isFinite(next) || next < 8 || next > 48 || next === fontSize) return;
-					fontSize = next;
-					schedule();
-				},
-				dispose: function () {
-					if (disposed) return;
-					disposed = true;
-					observer.disconnect();
-					view.removeEventListener("resize", schedule);
-					doc.removeEventListener("load", loaded, true);
-					restore(own ? doc.body : root);
-					if (!own) root.removeAttribute("data-dsh-tavern-font-root");
-				}
-			};
-		}
-
-		function installTavernFrameFonts(token, createScaler, restore) {
-			const scaler = createScaler(document.body, restore);
 			function receive(event) {
 				const data = event.data;
-				if (event.source === parent && data && data.token === token && data.type === "dsh-tavern-font-size") scaler.set(data.fontSize);
+				if (event.source !== parent || !data || data.token !== token || data.type !== "dsh-tavern-font-size") return;
+				const next = Number(data.fontSize);
+				if (!Number.isFinite(next) || next < 8 || next > 48 || next === fontSize) return;
+				fontSize = next;
+				schedule();
 			}
+			observe();
 			addEventListener("message", receive);
-			addEventListener("pagehide", function () { scaler.dispose(); removeEventListener("message", receive); }, { once: true });
+			addEventListener("resize", schedule);
+			document.addEventListener("load", schedule, true);
+			addEventListener("pagehide", function () { disposed = true; observer.disconnect(); removeEventListener("message", receive); removeEventListener("resize", schedule); document.removeEventListener("load", schedule, true); }, { once: true });
 		}
 
 		// The pre-game iframe can select a card greeting, but cannot write Session history.
@@ -4901,7 +4873,7 @@ window.__ModuleLoader__.load({
 			// their authenticated variable channel can start receiving updates.
 			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,deadline=0,reported=false;function report(){if(reported)return;reported=true;clearTimeout(timer);clearTimeout(deadline);observer.disconnect();var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;deadline=setTimeout(report,1000);schedule();});})();<\/script>';
 			const layoutNormalizer = '<script data-dsh-tavern-layout>(function(){if(!document.body)return;function clean(){Array.prototype.slice.call(document.body.childNodes).forEach(function(node){var value=String(node.nodeValue||"");if(node.nodeType===3&&!/\\S/.test(value)&&/[\\r\\n]/.test(value))node.nodeValue="";});}clean();if(typeof MutationObserver!=="undefined"){var observer=new MutationObserver(clean);observer.observe(document.body,{childList:true});addEventListener("pagehide",function(){observer.disconnect();},{once:true});}})();<\/script>';
-			const fontRuntime = '<script data-dsh-tavern-font-runtime>(' + installTavernFrameFonts.toString() + ')(' + token + ',' + createTavernFontScaler.toString() + ',' + restoreTavernFrameFontStyles.toString() + ');<\/script>';
+			const fontRuntime = '<script data-dsh-tavern-font-runtime>(' + installTavernFrameFonts.toString() + ')(' + token + ',' + restoreTavernFrameFontStyles.toString() + ');<\/script>';
             const textColorRuntime = '<script data-dsh-tavern-text-colors>(function(){const colors=(' + installTavernTextColors.toString() + ')(document.body,{enabled:false},' + findTavernQuoteRanges.toString() + ');addEventListener("message",function(event){const data=event.data;if(event.source===parent&&data&&data.token===' + token + '&&(data.type==="dsh-tavern-text-colors"||data.type==="dsh-tavern-font-size")){colors.setColors(data.textColorOverrides);colors.setEnabled(data.type==="dsh-tavern-font-size"?data.textColorsEnabled:data.enabled);}});addEventListener("pagehide",()=>colors.dispose(),{once:true});})();<\/script>';
             if (sizing) {
                 if (sizing.mode !== "content") reporter = "";
@@ -9751,35 +9723,6 @@ window.__ModuleLoader__.load({
             return template.content;
         }
 
-        // One observer for all fragments: DSH writes the preference as a CSS variable on body.
-        const tavernContentFontListeners = new Set();
-        let tavernContentFontObserver = null, tavernContentFontSize = 14;
-        function readTavernContentFontSize(win) {
-            const value = parseFloat(win.getComputedStyle(win.document.body).getPropertyValue("--dsh-content-font-size"));
-            return Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
-        }
-        function subscribeTavernContentFontSize(win, listener) {
-            if (!tavernContentFontObserver) {
-                tavernContentFontSize = readTavernContentFontSize(win);
-                tavernContentFontObserver = new win.MutationObserver(function () {
-                    const next = readTavernContentFontSize(win);
-                    if (next === tavernContentFontSize) return;
-                    tavernContentFontSize = next;
-                    tavernContentFontListeners.forEach(function (notify) { notify(next); });
-                });
-                tavernContentFontObserver.observe(win.document.head, { subtree: true, childList: true, characterData: true });
-                [win.document.documentElement, win.document.body].forEach(function (node) { tavernContentFontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class"] }); });
-            }
-            tavernContentFontListeners.add(listener);
-            listener(tavernContentFontSize);
-            return function () {
-                tavernContentFontListeners.delete(listener);
-                if (tavernContentFontListeners.size || !tavernContentFontObserver) return;
-                tavernContentFontObserver.disconnect();
-                tavernContentFontObserver = null;
-            };
-        }
-
         function TavernInlineFragment(props) {
             const ref = React.useRef(null);
             React.useLayoutEffect(function () {
@@ -9787,10 +9730,7 @@ window.__ModuleLoader__.load({
                 if (!root) return;
                 const fragment = parseTavernInlineFragment(props.content, root.ownerDocument);
                 if (fragment) root.replaceChildren(fragment);
-                // Same text-only scaling as message iframes, so both card paths follow the preference alike.
-                const scaler = createTavernFontScaler(root, restoreTavernFrameFontStyles);
-                const unsubscribe = subscribeTavernContentFontSize(root.ownerDocument.defaultView, scaler.set);
-                return function () { unsubscribe(); scaler.dispose(); root.replaceChildren(); };
+                return function () { root.replaceChildren(); };
             }, [props.content]);
             return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});
         }
