@@ -62,6 +62,8 @@ test('时钟换字与 transform 动画不触发整页测高；文字撑高仍会
     await frame.waitForFunction(() => typeof window.scans === 'number' && document.readyState === 'complete')
     await page.waitForTimeout(300)
     const scans = await frame.evaluate(async () => {
+      // Let load, font and resize reports settle first.
+      for (let last = -1; last !== window.scans;) { last = window.scans; await new Promise(r => setTimeout(r, 300)) }
       const before = window.scans
       for (let i = 0; i < 10; i++) {
         document.getElementById('clock').textContent = String(i)
