@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "43456759f28fc04c24e08afe7445b5b3fbaee1d7",
-  "releaseSequence": 467,
+  "revision": "e2627511a37e3caef91918d595e32e56a1458fda",
+  "releaseSequence": 468,
   "version": "2.4.0",
   "files": [
     {
@@ -1876,8 +1876,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "06e2dafee1ddedf76dca0ae7d7cf7c3bb3840a75bfb9494eb30402db8e279f7e",
-      "size": 255094
+      "sha256": "3daa319dd66be91e864a3d1c482ea59846e431a0ffffe10b8bd8c425817185f1",
+      "size": 255275
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
