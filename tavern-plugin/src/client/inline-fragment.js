@@ -19,6 +19,35 @@ function parseTavernInlineFragment(content, doc) {
     return template.content;
 }
 
+// One observer for all fragments: DSH writes the preference as a CSS variable on body.
+const tavernContentFontListeners = new Set();
+let tavernContentFontObserver = null, tavernContentFontSize = 14;
+function readTavernContentFontSize(win) {
+    const value = parseFloat(win.getComputedStyle(win.document.body).getPropertyValue("--dsh-content-font-size"));
+    return Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14;
+}
+function subscribeTavernContentFontSize(win, listener) {
+    if (!tavernContentFontObserver) {
+        tavernContentFontSize = readTavernContentFontSize(win);
+        tavernContentFontObserver = new win.MutationObserver(function () {
+            const next = readTavernContentFontSize(win);
+            if (next === tavernContentFontSize) return;
+            tavernContentFontSize = next;
+            tavernContentFontListeners.forEach(function (notify) { notify(next); });
+        });
+        tavernContentFontObserver.observe(win.document.head, { subtree: true, childList: true, characterData: true });
+        [win.document.documentElement, win.document.body].forEach(function (node) { tavernContentFontObserver.observe(node, { attributes: true, attributeFilter: ["style", "class"] }); });
+    }
+    tavernContentFontListeners.add(listener);
+    listener(tavernContentFontSize);
+    return function () {
+        tavernContentFontListeners.delete(listener);
+        if (tavernContentFontListeners.size || !tavernContentFontObserver) return;
+        tavernContentFontObserver.disconnect();
+        tavernContentFontObserver = null;
+    };
+}
+
 function TavernInlineFragment(props) {
     const ref = React.useRef(null);
     React.useLayoutEffect(function () {
@@ -26,7 +55,12 @@ function TavernInlineFragment(props) {
         if (!root) return;
         const fragment = parseTavernInlineFragment(props.content, root.ownerDocument);
         if (fragment) root.replaceChildren(fragment);
-        return function () { root.replaceChildren(); };
+        // Zoom only our own wrapper: the card's DOM and styles are never written, and in
+        // the host page viewport units cannot feed back into the zoomed size.
+        const unsubscribe = subscribeTavernContentFontSize(root.ownerDocument.defaultView, function (size) {
+            root.style.zoom = size === 14 ? "" : String(size / 14);
+        });
+        return function () { unsubscribe(); root.style.zoom = ""; root.replaceChildren(); };
     }, [props.content]);
     return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});
 }
