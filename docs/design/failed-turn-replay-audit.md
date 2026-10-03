@@ -440,4 +440,29 @@ POST /api/dsh-tavern/deleteChats          {"chatIds":[…]}
 
 结果：`listSessions` 返回的会话数由 25 降到 23，列表里已无这两个 ID。
 
+### 修复 opencode-go 网关 400 MissingSessionID（2026-10-03 晚）
+
+实例默认模型是 `opencode-go` / `kimi-k3`（`settings.yaml` 的 `llm-pi-ai.providers.opencode-go` 只配 `apiKeyEnv: OPENCODE_GO_API_KEY`，provider 本体是 DSH 运行时 `@earendil-works/pi-ai` 的内置目录，网关 `https://opencode.ai/zen/go/v1`）。opencode 的 Go 中转要求请求带 `x-opencode-session`，DSH 发的请求没有，全部 400：`{"type":"MissingSessionID","message":"Request is missing x-opencode-session …"}`。
+
+用 curl 对照坐实（同一最小请求，key 来自实例 `.credentials.yaml`）：不带头 → 400 MissingSessionID；带 `x-opencode-session` → 200 正常返回。
+
+修复用社区插件 **`@gausszhou/dsh-opencode-session-id`**（0.1.1，[仓库](https://github.com/gausszhou/dsh-opencode-session-id)，[awesome-dsh-plugins](https://github.com/) 收录）：挂在 `llm/stream` waterfall，包装 fetch，对 host 后缀 `opencode.ai` 的请求注入 `x-opencode-session` 等四个头，默认 providers 就是 `[opencode, opencode-go]`，零配置。安装：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli
+DSH_TAVERN_PORT=3091 ./dsh-tavern stop
+PATH="$PWD/runtime/bin:$PATH" DSH_HOME=$PWD \
+  ./runtime/bin/dsh plugin --profile tavern add "@gausszhou/dsh-opencode-session-id"
+DSH_TAVERN_PORT=3091 ./dsh-tavern start
+```
+
+两个坑：
+
+- **`dsh plugin` 用 PATH 上的 pnpm**。系统 pnpm 是 10.34.5（store v10），而实例 profile 由安装器用 pnpm 11.25.0（store v11，就在 `runtime/bin/pnpm`）装成，直接跑会报 `ERR_PNPM_UNEXPECTED_STORE`。必须把 `runtime/bin` 前置到 PATH。
+- **`DSH_HOME` 必须指向实例目录**，否则插件会装进 legacy 的 `~/.dsh/profiles/tavern` 而不是实例 profile。
+
+`dsh plugin add` 自动把声明了 `dsh.bundle` 的包追加到 profile `package.json` 的 `dsh.profile.bundles` 末位（纯库才会警告只装成普通依赖）。启动日志确认挂载：`[opencode-session-id] mounted: providers=[opencode, opencode-go] headers=[x-opencode-session, x-session-affinity, x-client-request-id, x-session-id] hosts=[opencode.ai]`，`service.ready` 无错误。
+
+后续注意：实例更新（install.sh）重写 profile `package.json` 时只管理 `managedBundles`/`managedDependencies`，这个社区插件作为普通依赖应能保留，但更新后要复查 bundles 里仍在、启动日志仍有 mounted 行。插件可通过 profile 的 `cordis.patch.yml` 覆盖配置（providers/hosts/headers/verbose 等，见插件补丁文件头注释）。
+
 顺带记一条上游隐患：会话中途切换预设会让 `runtimePresetPath` 与固化快照不一致，下一次启动的迁移就会失败——本例即此。上游仍未有对应处理。
