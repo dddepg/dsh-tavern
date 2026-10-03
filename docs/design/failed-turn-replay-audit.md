@@ -365,6 +365,33 @@ tests 2413 · pass 2339 · fail 51 · skipped 23
 
 `git grep 'assertCompleteReply\|truncatedForegroundReply\|isFailedTurnReason' upstream/main -- tavern-plugin` 为空，与 §11 一致：本地这批修复继续是 fork 独有，更新实例时必须走本地源。
 
-### 实例未更新
+### 实例整体更新
 
-本次只做仓库同步与回归，**没有更新 `dsh-tavern-cli` 实例**（仍停在 `5318f6c9`，即上一轮 v2.4 同步）。注意修复落点已经改变：实例里当前的 `lib/index.js` 内联写法在同步后的仓库里已不存在，下次更新实例时要按 `tavern-plugin/lib/hooks/turn-lifecycle.js` 核对 `assertCompleteReply` 是否在位。
+注意修复落点在本轮发生了迁移：上一版实例里 `assertCompleteReply` 内联在 `lib/index.js`，同步后该写法在仓库中已不存在，改为落在 `lib/hooks/turn-lifecycle.js`，所以本次更新后要按新位置核对。
+
+沿用 §10 / §11 的做法（本地源 + 安装器全流程）。更新前实例已停止（无 PID 文件、3080–3099 无监听，日志停在 2026-10-01T03:11 那次会话）。备份 `backups/app-pre-20261003-180254.tar.gz`（24M / 1336 条目）——注意 `tar` 要带 `--exclude=node_modules` 才与 `app-pre-20260928-213817` 等同口径（不带会打出 127M / 28332 条目）。
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli
+DSH_TAVERN_CLI_HOME=$PWD DSH_TAVERN_HOST=cli DSH_TAVERN_PORT=3091 \
+DSH_TAVERN_GIT_URL=/home/ezio/workspace/dsh-tavern \
+sh /home/ezio/workspace/dsh-tavern/install.sh
+```
+
+`DSH_TAVERN_PORT=3091` 这次也传给了安装器（§10 时期 3081 被 DSH Pocket 占着才需要手工补 `start`，本次 3081 已空闲，带上是为了不改变既有的访问地址）。日志确认走本地仓库（`From /home/ezio/workspace/dsh-tavern`，未回退 jsDelivr）；`apps/dsh-tavern/.dsh-tavern-release.json` 记为 `fefb6d543dd7669db1f01716fb8827c43748d45a`；安装器收尾自动启动成功（PID 74213）。
+
+核对修复在新落点上：`tavern-plugin/lib/hooks/turn-lifecycle.js` 第 3 行 import `streamFinishKind`、第 60 行 `assertCompleteReply`、第 67 行 `foregroundHandoff.finalize`（判定仍早于提交）；`lib/domain/reply-completeness.js` 在位；`lib/index.js` 第 6 行 import、第 4044 行调用 `registerTurnLifecycleHooks`，旧的内联 `ctx.on('agent/turn-stopping'` 已为 0 处。
+
+实例 `tavern-plugin/lib` 与仓库 `main` 的**内容差异为 0**（文件全部正确替换）。启动日志 `service.ready` @ 2026-10-03T10:03:17Z，端口 3091；无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`。本次启动的 `cwd` 也从上一次的开发仓库 `/home/ezio/workspace/dsh-tavern` 修正为 `apps/dsh-tavern`。
+
+### 实例里未清理的旧文件（下一轮才会清）
+
+实例相对仓库多出 312 个条目：310 个旧 webpack chunk 在 `lib/vendor/st-prompt-template/host-build/artifact/`（该目录仓库侧现在 113 个文件，实例 423 个），外加退役的 `src/client/ejs-code-editor.js`、`src/client/modules/{history-window,story-ledger,session-inventory}.js`、`lib/domain/{full-template-runtime,scene-image-settings}.js`、`packages/dsh-tavern-remote/` 各一个。
+
+原因是上游本轮新增的 `bin/prune-installed-files.mjs` 按**清单**清理：它只删「上一份清单里记过、新版本不再发布」的文件，而这次是清单机制首次上线，实例里没有 `.dsh-tavern-files.txt`，所以按脚本注释「首次运行不删任何东西」处理，只写入了新清单（940 条）。下一轮更新会正常清理。
+
+已确认这一轮残留无害：仓库需要的 113 个 artifact 文件在实例里**一个不缺**；`full-prompt-template-assets.js` 是 manifest + SHA-256 驱动（未列入 `manifest.files` 的名字直接返回 `undefined`，且校验 `upstreamCommit`），旧 chunk 不会被送出；4 个退役 `src/` 文件在当前源码中已无引用。
+
+### 一个与本次更新无关的启动告警
+
+启动恢复时报 2 条 `旧对话预设条目配置迁移失败 … 外部预设条目不可抽取：jb_accept#1`（`bypass-plans.js:191` ← `preset-library.js:153` ← `recoverRuntimeHistory`）。判断为**既有数据问题**，不是本次同步引入：涉及的 `bypass-plans.js` / `preset-library.js` 在 `5318f6c9..fefb6d54` 区间无任何改动，且从备份里取出的更新前版本与更新后**哈希完全相同**；出错的两个会话（`chat-muozlp3w-*`、`chat-muozu2ur-*`）创建于 2026-10-01T03:41 / 03:47，晚于上一次启动（03:11），这次是它们首次经历启动恢复。旧版本遇到同样数据也会报同一条。
