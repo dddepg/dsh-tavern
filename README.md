@@ -11,6 +11,8 @@
 
 更快 · 更稳 · 更鲜活 · 所有模型都能用（不限于 DeepSeek）· 手机也能玩
 
+<sub>基于 DeepSeek Harness（DSH）构建</sub>
+
 [![观看 3 分钟实机演示：兼容酒馆生态，更快、更稳、更鲜活](docs/images/readme/promo-video.jpg)](https://www.bilibili.com/video/BV1MHaU6NE7S/)
 
 [下载安装](#快速开始) · [使用文档](https://flizzywine.github.io/dsh-tavern/) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [讨论区](https://github.com/flizzywine/dsh-tavern/discussions) · [Discord](https://discord.com/channels/1134557553011998840/1538577327028445194)
