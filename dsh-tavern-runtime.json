@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "52c6620d9cd83e84a6abf9f383108a7ce23618e6",
-  "releaseSequence": 480,
+  "revision": "8eea91647faad15516b3a7a3b23f2720e56b44ee",
+  "releaseSequence": 481,
   "version": "2.4.0",
   "files": [
     {
@@ -406,8 +406,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "b2959c6599133c6bcdaa405290fd002ccf06d4528bc6f6818e6273be63e34ed1",
-      "size": 1430074
+      "sha256": "0a7aeb6a191fde870c31db78128fceba299d90f309b8356063fa497030eca626",
+      "size": 1435228
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -4341,13 +4341,13 @@
     },
     {
       "path": "tavern-plugin/src/client/features/card-library.js",
-      "sha256": "9beb402d8023a60ad29a3e88097c4a47f80920768702e11dbe48c4b648b472ab",
-      "size": 38079
+      "sha256": "6708aa7082313f8835784943a6aaacf85f9b428569e781e8da972cda8244f426",
+      "size": 38685
     },
     {
       "path": "tavern-plugin/src/client/features/card-list.js",
-      "sha256": "5bb0bca6f5654ab772aed6d6d3c42c10fa4fc240001afb46a231144fffd245da",
-      "size": 6315
+      "sha256": "e4268f0fbc61605005c47aa85be30350bdca2f066cb2837681b9324777b7b2a8",
+      "size": 10862
     },
     {
       "path": "tavern-plugin/src/client/features/guide-library.js",
@@ -4386,8 +4386,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/sidebar.js",
-      "sha256": "a4c6d762d3e0236604098495d88501014b4094a943634c2f434ef0bc5be03f06",
-      "size": 82351
+      "sha256": "12b7c68bcb06689b0a0d1ea6aed29c06119dc4a4391f9b532cb7b6fbacd2d19f",
+      "size": 82121
     },
     {
       "path": "tavern-plugin/src/client/features/skills.js",
@@ -4461,8 +4461,8 @@
     },
     {
       "path": "tavern-plugin/src/client/main.js",
-      "sha256": "2706e4a56389af083cb0654b17091ce416c10d2e5284ff0d84b2c6ebf74e2b55",
-      "size": 49234
+      "sha256": "64c4dd5a0fd4280d493f641b19b8b37467db04136f107ca07974da7f7d3e6f8b",
+      "size": 49403
     },
     {
       "path": "tavern-plugin/src/client/modules/assistant-visibility.js",
@@ -4476,8 +4476,8 @@
     },
     {
       "path": "tavern-plugin/src/client/modules/confirm-dialog.js",
-      "sha256": "8e086bfa8046cab23bf37b097b72e632efda07d2fe6d01ff397b98562bf22aee",
-      "size": 4538
+      "sha256": "bface5e1c80ff504c464dae5cfb86355311a5114b4085411d1c33985a8d1f957",
+      "size": 4600
     },
     {
       "path": "tavern-plugin/src/client/modules/frame-activation.js",
