@@ -33,6 +33,16 @@
 
 每轮正文完整保存，Agent 需要时自己回查原文，不靠摘要硬记；配合上下文压缩，玩到几百层仍能记起开局的细节。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#d06)
 
+### 对话式修改人物卡
+
+不用懂卡片字段，告诉 Agent 哪里不喜欢、想改成什么样，它先给方案，你确认后才写入。也能从小说里提取人物做新卡，或用同样方式修改世界书和预设。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#h04)
+
+![卡片模式：与 Agent 对话修改人物卡，右侧为人物卡字段](docs/images/readme/card-editor.png)
+
+### 人物卡转 MVU 版，状态栏不再掉格式
+
+正文里的状态栏老是掉格式？让 Agent 把人物卡转成 MVU 版：前台只写正文，变量由后台按规则结算，状态栏常驻右侧，原卡图片和设定都保留。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#h07)
+
 ## 看看实际效果
 
 **MVU 状态栏**：人物状态随剧情变化，正文下方可查看本轮更新了什么。
