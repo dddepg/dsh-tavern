@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "00b7c885a15e00ee18bb463229089f1842f5a887",
-  "releaseSequence": 486,
+  "revision": "7968ce586d57dac256a7c5e404347ea7c107fec4",
+  "releaseSequence": 487,
   "version": "2.4.0",
   "files": [
     {
@@ -240,14 +240,19 @@
       "size": 635
     },
     {
+      "path": "patches/dsh-web-mobile@2.3.0.patch",
+      "sha256": "46583f7e1ecd267a97508af95d1afbf119c523d4cae4be010d5b7d727e848f63",
+      "size": 1177
+    },
+    {
       "path": "pnpm-lock.yaml",
-      "sha256": "317d753e73e987ffb7d31b38f73e9c07555fe3ef0337f7c04a77aecb50a13930",
-      "size": 85553
+      "sha256": "a5f5ad35ed55951aa1d1e85a6e5f5fdae340799ae6682c489bae511caca11186",
+      "size": 85796
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "e51486998ff146d534ec574b2f9f322b20bc37fb484531cbcda79f5578e55f18",
-      "size": 534
+      "sha256": "b035671c7de535192a9f745fa20d6daacc32a0da179e763d400c7adc946a8408",
+      "size": 593
     },
     {
       "path": "presets/tavern-background/agent.cordis.yml",
