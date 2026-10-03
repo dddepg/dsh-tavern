@@ -36,73 +36,13 @@
 
 ## 快速开始
 
-### Windows 一键安装
+1. **下载安装**：[Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)（x64）或 [Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)（Android 11+、ARM64），双击或点开后按提示完成。
+2. **配置模型**：在 **设置 → 模型** 填入模型服务和 API 密钥，任意模型都可以，本地模型也行。
+3. **开始游玩**：导入人物卡，开一局。
 
-**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)**（Windows x64，修复网络慢或开系统代理时安装超时）
+以后在酒馆里点「更新到最新版」即可更新。需要重装时，重新运行原来的安装包或命令，只替换程序，人物卡、聊天和设置都会保留。
 
-下载后双击运行，保持联网，按提示完成安装；以后从桌面「DSH Tavern」快捷方式打开。无需另装 Node.js 或 DSH Desktop。
-
-### Android 一键安装
-
-**[下载 Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)**（Android 11 及以上、ARM64）
-
-安装后打开「DSH Tavern」，点击启动，首次保持联网并等待自动安装完成，再进入酒馆；无需输入命令或另装 DSHA。
-
-装好后在 **设置 → 模型** 填入模型服务和 API 密钥（任意模型都可以，本地模型也行），导入人物卡就能开始。
-
-**更新：**在酒馆中点击「更新到最新版」，完成后按提示重启。更新保留人物卡、聊天和设置，不同安装方式的数据各自独立。
-
-**需要整体重新安装时：**重新运行原来的安装包或安装命令即可。重装只替换程序，不会覆盖人物卡、聊天和设置，无需先删除或卸载。宿主适配 DSH **0.1.5-rc.2**，请按文档使用对应版本。
-
-<details>
-<summary>其他安装方式：DSH Desktop、DSHA、命令行、插件安装、手机远程访问</summary>
-
-#### 借助 DSH Desktop（Windows / macOS）
-
-安装 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**，在 **设置 → 通用设置 → 打开 DSH 终端**中运行对应命令，重启后选择 **tavern** Profile。
-
-#### 借助 DSHA（Android）
-
-安装适配版本的 **[DSHA](https://github.com/DSH-APP/DSHA/releases)**，在 DSHA 中按指南安装并启动 Tavern。
-
-命令、截图和详细步骤见[桌面安装指南](https://flizzywine.github.io/dsh-tavern/#a02)及 [DSHA 安装指南](https://flizzywine.github.io/dsh-tavern/#a03)。
-
-#### 命令行（Windows / macOS / Linux）
-
-需要 **Node.js 22.19+**，无需预装 DSH。选择本机系统运行：
-
-Windows PowerShell：
-
-```powershell
-$env:DSH_TAVERN_HOST='cli'; $tavernInstaller=[Text.Encoding]::UTF8.GetString((New-Object Net.WebClient).DownloadData('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.ps1')); Invoke-Expression $tavernInstaller
-```
-
-macOS / Linux / WSL2：
-
-```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=cli sh
-```
-
-安装后自动打开网页；以后用 `dsh-tavern open` 打开，`dsh-tavern update` 更新。
-
-Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocket 及其开关。详见 [Pocket 手机访问](docs/pocket-access.md)。
-
-#### 已有 DSH：标准插件安装（试验）
-
-已有适配版本 DSH 的用户，可将 Tavern 安装到独立 Profile。GitHub 安装命令及版本要求见[标准插件安装指南](https://flizzywine.github.io/dsh-tavern/#plugin-installation)。
-
-[完整安装、更新与排错指南](https://flizzywine.github.io/dsh-tavern/#a02)包含安装目录、启动入口、DSHA 安装、手机远程访问和常见故障处理。
-
-#### 手机远程访问
-
-酒馆运行在电脑或服务器上，也可以用手机浏览器远程游玩：
-
-- **电脑运行、手机扫码连接**：[dsh-pocket](https://github.com/shaobeichen/dsh-pocket)，Desktop 安装时自动配置，可从 **设置 → 手机访问** 选择局域网或公网访问。
-- **服务器部署、账号密码登录**：[dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)，为远程 WebUI 添加登录认证；需自行配置可访问的服务器地址，插件不提供内网穿透。
-
-详细配置见[安装指南中的「手机远程访问」](https://flizzywine.github.io/dsh-tavern/#a02)。
-
-</details>
+macOS、Linux、DSH Desktop、DSHA、命令行、插件安装和手机远程访问，见[完整安装指南](https://flizzywine.github.io/dsh-tavern/#a02)（宿主适配 DSH **0.1.5-rc.2**）。
 
 ## 交流与反馈
 
