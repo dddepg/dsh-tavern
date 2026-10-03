@@ -7,9 +7,9 @@
 
 # DSH Tavern
 
-**基于 DSH（DeepSeek Harness）的 Agent 酒馆。兼容 SillyTavern 生态，人物卡直接导入就能玩。**
+**基于 DSH（DeepSeek Harness）的 Agent 酒馆。兼容 SillyTavern 生态，人物卡导入就能玩。**
 
-更快 · 更稳 · 更鲜活 · 所有模型都能用（不限于 DeepSeek）· 手机也能玩
+更快 · 更稳 · 更鲜活 · 所有模型都能用 · 手机也能玩
 
 [![观看 3 分钟实机演示：兼容酒馆生态，更快、更稳、更鲜活](docs/images/readme/promo-video.jpg)](https://www.bilibili.com/video/BV1MHaU6NE7S/)
 
