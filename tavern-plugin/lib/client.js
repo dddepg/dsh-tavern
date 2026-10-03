@@ -14824,7 +14824,7 @@ function subscribeTavernHostTheme(win, listener) {
                     }) : null,
 					h("section", { className: "dsh-tavern-status-section dsh-tavern-guide-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "Guide", h("span", { className: "dsh-tavern-guide-caption" }, (view.guides || []).length + " 条")),
-                        h("p", { className: "dsh-tavern-settings-desc" }, "Guide 是本局持续生效的要求，会同时注入前台（正文、候选）和后台（变量结算），可用来引导剧情走向、文风和数值尺度。"),
+                        h("p", { className: "dsh-tavern-settings-desc" }, "Guide 是本局持续生效的要求，会同时注入前台（正文）和后台（候选、变量结算），可用来引导剧情走向、文风和数值尺度。"),
                         h("details", { className: "dsh-tavern-guide-destinations" },
                             h("summary", null, "长期偏好与人物设定"),
                             h("div", null, "跨游戏通用的个人喜好，可在长期偏好中设置。", h("button", { type: "button", onClick: () => props.openStyleTab("dsh-tavern:user-profile") }, "打开长期偏好 ↗")),
