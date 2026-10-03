@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-# dsh-tavern
+# DSH Tavern
 
 **基于 DSH（DeepSeek Harness）的 Agent 酒馆。兼容 SillyTavern 生态，人物卡直接导入就能玩。**
 
