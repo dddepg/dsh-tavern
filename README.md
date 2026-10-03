@@ -36,13 +36,41 @@
 
 ## 快速开始
 
-1. **下载安装**：[Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)（x64）或 [Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)（Android 11+、ARM64），双击或点开后按提示完成。
-2. **配置模型**：在 **设置 → 模型** 填入模型服务和 API 密钥，任意模型都可以，本地模型也行。
-3. **开始游玩**：导入人物卡，开一局。
+### Windows
 
-以后在酒馆里点「更新到最新版」即可更新。需要重装时，重新运行原来的安装包或命令，只替换程序，人物卡、聊天和设置都会保留。
+**[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。
 
-macOS、Linux、DSH Desktop、DSHA、命令行、插件安装和手机远程访问，见[完整安装指南](https://flizzywine.github.io/dsh-tavern/#a02)（宿主适配 DSH **0.1.5-rc.2**）。
+### macOS
+
+先安装 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**，在 **设置 → 通用设置 → 打开 DSH 终端** 中运行：
+
+```bash
+curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=desktop sh
+```
+
+完成后重启 Desktop，选择 **tavern** Profile。
+
+### Linux
+
+需要 **Node.js 22.19+**，在终端运行：
+
+```bash
+curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | DSH_TAVERN_HOST=cli sh
+```
+
+安装后自动打开网页；以后用 `dsh-tavern open` 打开。
+
+### Android
+
+**[下载 Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)**（Android 11+、ARM64），安装后打开，点击启动，首次保持联网等待自动安装完成。
+
+### 开始游玩
+
+在 **设置 → 模型** 填入模型服务和 API 密钥（任意模型都可以，本地模型也行），导入人物卡就能开局。
+
+**更新与重装：**在酒馆里点「更新到最新版」即可更新。需要重装时，重新运行原来的安装包或命令，只替换程序，人物卡、聊天和设置都会保留。
+
+Windows / macOS 命令行安装、DSHA、插件安装、手机远程访问和常见故障，见[完整安装指南](https://flizzywine.github.io/dsh-tavern/#a02)（宿主适配 DSH **0.1.5-rc.2**）。
 
 ## 交流与反馈
 
