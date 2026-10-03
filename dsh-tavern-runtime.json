@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "e2627511a37e3caef91918d595e32e56a1458fda",
-  "releaseSequence": 468,
+  "revision": "3f21e698f745ccb1a14467e76d65f1e9eef3a1a8",
+  "releaseSequence": 469,
   "version": "2.4.0",
   "files": [
     {
@@ -406,8 +406,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "5a1473a4431ccc52ce5a143c6ad16035235460cf18d380fb91648dd379ade9cf",
-      "size": 1429936
+      "sha256": "5860d137eaf646529efaf83688b369ca20047c39e02ab16472ecc77b939056c9",
+      "size": 1430002
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -981,8 +981,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-background-settlement.js",
-      "sha256": "584aea27c607e7afa765a8fa9fc8bbd5dc795379dac63ee48ca949ff56cc765d",
-      "size": 33756
+      "sha256": "94619cc0f406ae63f580ba4a6597ba81ee877ce7ceb6385bc7f0cfa714a5762d",
+      "size": 34202
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-conversion-appearance.js",
@@ -1876,8 +1876,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "3daa319dd66be91e864a3d1c482ea59846e431a0ffffe10b8bd8c425817185f1",
-      "size": 255275
+      "sha256": "4da47cc0d80c7c1803795b1d6400923f613dd0d5019e93c182ed694c115afb95",
+      "size": 255350
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -4356,8 +4356,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/play-controls.js",
-      "sha256": "c8b2a52ed0f7a45f33f7e8d3f141d969f4242f963b5348797cf4ba2d62cf36bc",
-      "size": 100512
+      "sha256": "16338f0d18126b628ee3a90dcf352737c729104ec717e694401a41bb59601fd9",
+      "size": 100578
     },
     {
       "path": "tavern-plugin/src/client/features/preset-library.js",
