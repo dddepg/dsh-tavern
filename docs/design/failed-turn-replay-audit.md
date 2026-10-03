@@ -425,4 +425,19 @@ cd /home/ezio/workspace/dsh-tavern-cli && DSH_TAVERN_PORT=3091 ./dsh-tavern star
 
 脚本在改实例之前先在备份的临时副本上跑过一遍完整往返（干跑 → `--apply` → 复查报「已与快照一致」），确认诊断与写入两条路径都对，才动实例。
 
+### 随后删除这两个会话
+
+修好之后用户仍要求删掉它们，按应用自己的入口执行（不要手删目录，否则索引与 session 链接会留残）：
+
+```
+POST /api/dsh-tavern/prepareDeleteChats   {"chatIds":[…]}
+POST /api/dsh-tavern/deleteChats          {"chatIds":[…]}
+```
+
+注意路由分两条：`/api/dsh-tavern/gameplay.<x>` 是**卡片测试 API**（`gameplay-api.js:12` 要求 sessionId 匹配 `^test-[a-f0-9-]{36}$`，对真实会话一律拒绝「需要测试 API 创建的独立会话」），界面用的是 `/api/dsh-tavern/<x>`。鉴权由宿主层负责（用 `/?token=…` 换 cookie，再带 cookie POST）。
+
+`conversationRegistry.remove` 只清会话数据、索引行与 session→chat 链接；`model-requests/`、`worldbook-recalls/` 与 `model-request-sessions/` 下的关联记录**不删**（界面删除也是这个行为），本次残留约 1.15 M。迁移为它们建的 `bypass-4413e9d86ffe` 计划也随之变成孤儿，留在 `data/bypass-plans.json` 里，未清理。删除前备份 `backups/chats-delete-20261003-181722.tar.gz`（2.6M，含两个会话的块存储与上述日志）。
+
+结果：`listSessions` 返回的会话数由 25 降到 23，列表里已无这两个 ID。
+
 顺带记一条上游隐患：会话中途切换预设会让 `runtimePresetPath` 与固化快照不一致，下一次启动的迁移就会失败——本例即此。上游仍未有对应处理。
