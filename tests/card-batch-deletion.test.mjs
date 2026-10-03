@@ -55,3 +55,13 @@ test('只删除已成功删除的人物卡的游玩记录，归档失败的记�
   assert.deepEqual(Array.from(outcome.sessionIds), ['s1'])
   assert.match(outcome.notice, /游玩记录删除 1 个，1 个失败/)
 })
+
+test('批量删除只追问一次，并按卡列出游玩记录数', async () => {
+  const server = chatServer(sessions.map(item => ({ ...item, cardName: item.cardPath.includes('b.json') ? '店主' : '阿芙拉' })))
+  const asked = []
+  const chats = await helperClient.askTavernCardChatRemoval(['cards/a.json', 'cards/b.json', 'cards/c.json'], async message => { asked.push(message); return true }, server.call)
+  assert.equal(asked.length, 1)
+  assert.equal(chats.length, 3)
+  assert.match(asked[0], /所选人物卡中有 2 张还有 3 个游玩记录/)
+  assert.match(asked[0], /• 阿芙拉：2 个\n• 店主：1 个/)
+})
