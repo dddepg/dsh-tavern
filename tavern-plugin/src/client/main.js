@@ -884,6 +884,9 @@ window.__ModuleLoader__.load({
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
 		exports.describeTavernActivity = describeTavernActivity;
 		exports.deleteTavernCards = deleteTavernCards;
+		exports.deleteTavernChats = deleteTavernChats;
+		exports.askTavernCardChatRemoval = askTavernCardChatRemoval;
+		exports.removeTavernCardChats = removeTavernCardChats;
 		exports.groupTavernHistory = groupTavernHistory;
 		exports.createPlayWorkspaceResolver = createPlayWorkspaceResolver;
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
