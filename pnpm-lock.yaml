@@ -7,6 +7,7 @@ settings:
 patchedDependencies:
   dsh-better-sidebar@0.19.1: b29bb1e1e983c7efc5e71e4bad2f1acc4b134f3d5ded25cab9f8eee2111e60a3
   dsh-pocket@2.10.6: b87a52109852c2e61a3f4d89a00e580460ebb5b3f89c47d1170b68ad594adb38
+  dsh-web-mobile@2.3.0: 46583f7e1ecd267a97508af95d1afbf119c523d4cae4be010d5b7d727e848f63
 
 importers:
 
@@ -66,7 +67,7 @@ importers:
         version: link:tavern-plugin/packages/dsh-tavern-remote
       dsh-web-mobile:
         specifier: 2.3.0
-        version: 2.3.0(react@19.2.0)
+        version: 2.3.0(patch_hash=46583f7e1ecd267a97508af95d1afbf119c523d4cae4be010d5b7d727e848f63)(react@19.2.0)
       playwright:
         specifier: 1.58.2
         version: 1.58.2
@@ -2084,7 +2085,7 @@ snapshots:
       qrcode: 1.5.4
       qrcode-terminal: 0.12.0
 
-  dsh-web-mobile@2.3.0(react@19.2.0):
+  dsh-web-mobile@2.3.0(patch_hash=46583f7e1ecd267a97508af95d1afbf119c523d4cae4be010d5b7d727e848f63)(react@19.2.0):
     dependencies:
       react: 19.2.0
 
