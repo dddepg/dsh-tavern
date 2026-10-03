@@ -325,3 +325,46 @@ tests 3251 · pass 3183 · fail 46 · skipped 22
 - 46 个失败中 45 个是浏览器缺失（`chromium_headless_shell-1208` 不存在），仍集中在 `worldbook-*`、`full-template-*`、`template-html-fence-boundaries`、`tavern-prompt-template-runtime`、`dynamic-constant-worldbook` 这 9 个文件；日志里 `AssertionError` 为 0，没有逻辑断言失败。
 - 余下 1 个是 §10 已定性的 `tests/user-extensions.test.mjs`「实际 Unix 安装脚本更新程序两次」：本次在纯净 `upstream/main`（`9f5adaf8`）上再次复现（`4 pass / 1 fail`，同一个 `无法识别当前 DSH 版本`），确认与本地修复、本地源更新无关。
 - 与本地截断修复直接相关的 4 个文件（`rollback-surface` / `reply-completeness` / `foreground-handoff` / `prompt-streamlining`）更新前后分别跑过，36 个用例全绿；实例内也已核对修复代码仍在位。
+
+## 12. 同步上游 v2.4 后续（9f5adaf8 → 4034aff1）（2026-10-03）
+
+### 同步结果
+
+`upstream/main` 从 `9f5adaf8` 前进到 `4034aff1`：222 个提交，其中 169 个实质提交，其余是 `chore: publish runtime manifest [skip ci]` 自动发布；包版本仍是 2.4.0，最新 tag 仍是 `v2.4`。在分支 `sync/upstream-20261003` 上合并，合并提交 `4ee88002`（609 个文件，+23799 / −30761）。
+
+三处冲突同源：上游把原先内联在 `lib/index.js` 的前台回合钩子抽成了 `hooks/turn-lifecycle.js`（生命周期钩子）与 `hooks/model-stream.js`（`llm/stream`、`importContextPreparation`、`fullTemplateRequests`、`installWorkspaceInstructionPresentation`、`installCompactionRequestProjection`），`lib/index.js` 由 5388 行降到 4160 行。
+
+- `tavern-plugin/lib/index.js`：本地在这段里只有两处改动（`streamFinishKind` import、`assertCompleteReply` 调用），其余整段都是上游搬走的旧内联代码。**取上游版本**，把这两处移植进 `hooks/turn-lifecycle.js`（`assertCompleteReply` 在第 60 行，仍早于第 67 行的 `foregroundHandoff.finalize()`，修复语义不变）。
+- `tests/turn-orchestration.test.mjs`（+7/−526）与 `tests/foreground-handoff.test.mjs`（0/−75）：上游 `5a354447`（精简 30% 低价值用例）删掉了这两个文件里的一批用例，本地新增的 3 条（`被截断的正文按失败回合处理`、`卡片工作台回复不参与正文截断判定`、`达到 token 上限的回合按失败尾部清理`）是本次修复的回归护栏。**取上游的精简与重排，只保留本地新增用例**。
+- `tests/prompt-streamlining.test.mjs`：本地的源码结构断言锚在 `index.js`，上游搬走后 `missing start marker` 报错。改锚到 `hooks/turn-lifecycle.js`，`index.js` 侧只保留 `registerTurnLifecycleHooks` 接线检查（与 §10 同一种处理）。
+
+`node bin/build-tavern-client.mjs --check` 报「已是最新」——`lib/client.js` 由自动合并正确产出，不需要重新生成。
+
+### 全量测试
+
+`DSH_TAVERN_CLI_HOME=/home/ezio/workspace/dsh-tavern-cli node bin/test-tavern.mjs`：
+
+```
+tests 2413 · pass 2339 · fail 51 · skipped 23
+```
+
+同一命令、同一运行时下，合并前的 `39e153f1` 为 `tests 3251 · pass 3181 · fail 48 · skipped 22`。用例数从 3251 降到 2413 是上游 `5a354447`（精简 30%）的结果，与 §10 / §11 的两次精简同源。
+
+把 33 个失败文件逐一单独复跑归类后，51 个失败**没有一个是本次合并引入**：
+
+- **48 个缺浏览器（环境）**：`chromium_headless_shell-1208` 不存在，命中 29 个文件。其中 `global-settings-browser` / `immersive-header` / `inline-fragment` / `opening-slash` / `session-resource-retention` 是上游本轮**新增**的浏览器用例，所以呈现为「合并前不失败、合并后新增失败」。本机缓存仍只有 1.62.1 的 `-1234` / `-1243`；本次照 §9 再试了一次 `playwright install chromium`，**同样卡在解压**（167.3 MiB 下载完成，解压停在 18 MiB），已删掉半成品目录把缓存恢复原状，`-1234` / `-1243` 未被回收。
+- **1 个本机代理变量（环境）**：`tests/download.test.mjs` 的 `downloads honour proxy variables through NODE_USE_ENV_PROXY`（上游本轮新增文件）。本机 shell 常驻 Clash 代理（`http_proxy` / `HTTP_PROXY` / `all_proxy` 等 8 个大小写变量都指向 `127.0.0.1:7890`），该用例只覆盖大写 `HTTP_PROXY`，小写 `http_proxy` 仍然生效并抢走连接（`UND_ERR_SOCKET`）。`env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u no_proxy -u NO_PROXY` 清掉后该用例通过（`1 pass / 0 fail`），确认属环境而非代码。
+- **1 个缺 DSH 运行时（环境）**：`tests/user-extensions.test.mjs` 的「实际 Unix 安装脚本更新程序两次」，即 §10 / §11 已定性的同一个 mock `dsh --version` 无输出问题。
+- **1 个既有并发抖动**：`tests/mvu-incremental-settlement.test.mjs` 的 `append dispatch retains full fallback: old-client`（`AssertionError: dispatch must become ready`）。单独跑 7/7 全绿，只在全量并发下失败；**合并前的 `39e153f1` 全量跑同样出现 1 个 `AssertionError`**，与本次同步无关（§11 那次记录为 0，属该用例对并发时序敏感）。
+
+反向变化：`server-template-runtime` / `status-bar-placement` / `worldbook-token-budget` 三个文件合并前失败、合并后通过（上游已修）。
+
+与本地修复直接相关的 `rollback-surface` / `reply-completeness` / `foreground-handoff` / `turn-orchestration` / `prompt-streamlining` / `card-agent-preferences` 先跑一遍全绿（54 pass / 0 fail / 2 skipped）。
+
+### 上游仍无前台截断保护
+
+`git grep 'assertCompleteReply\|truncatedForegroundReply\|isFailedTurnReason' upstream/main -- tavern-plugin` 为空，与 §11 一致：本地这批修复继续是 fork 独有，更新实例时必须走本地源。
+
+### 实例未更新
+
+本次只做仓库同步与回归，**没有更新 `dsh-tavern-cli` 实例**（仍停在 `5318f6c9`，即上一轮 v2.4 同步）。注意修复落点已经改变：实例里当前的 `lib/index.js` 内联写法在同步后的仓库里已不存在，下次更新实例时要按 `tavern-plugin/lib/hooks/turn-lifecycle.js` 核对 `assertCompleteReply` 是否在位。
