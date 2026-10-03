@@ -2571,6 +2571,7 @@ export async function apply(ctx) {
             storyText: projectAgentMessageText(mvuTarget.message, { charName: card && card.name, macroState: snapshot.macroState }),
             currentVariables: mvuTarget.variables,
             helperContext: collectMvuHelperContext(snapshot.messages, mvuTarget.messageId),
+            guides: Array.isArray(snapshot.guides) ? snapshot.guides : [],
             variableSchema: mvuTarget.variables.schema,
             charName: card && card.name,
             macroState: snapshot.macroState,
