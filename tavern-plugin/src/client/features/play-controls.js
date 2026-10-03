@@ -658,7 +658,9 @@
 				} finally { setRolling(false); liveTavernView.invalidate(props.sessionId); tavernCoordination.invalidate(props.sessionId); }
 			}
 			if (!canRollback) {
-                const reason = rollbackViewState.view && rollbackViewState.view.rollbackUnavailableReason;
+                // While a reply is streaming, the surface has no settled target yet; the
+                // server's "not in the message stream" reason would wrongly read as permanent.
+                const reason = blocked && !rolling ? "正在生成或后台处理中，完成或停止后才能回退" : rollbackViewState.view && rollbackViewState.view.rollbackUnavailableReason;
                 return reason ? React.createElement("button", { type: "button", role: "menuitem", disabled: true, className: "dsh-tavern-menu-unavailable", title: reason },
                     React.createElement("span", null, "回退本轮"),
                     React.createElement("small", null, reason.includes("没有可回退") ? "暂无可回退轮次" : reason)) : null;
