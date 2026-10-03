@@ -13,7 +13,7 @@
 
 [![观看 3 分钟实机演示：兼容酒馆生态，更快、更稳、更鲜活](docs/images/readme/promo-video.jpg)](https://www.bilibili.com/video/BV1MHaU6NE7S/)
 
-[下载安装](#快速开始) · [使用文档](https://flizzywine.github.io/dsh-tavern/) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)
+[下载安装](#快速开始) · [使用文档](https://flizzywine.github.io/dsh-tavern/) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [讨论区](https://github.com/flizzywine/dsh-tavern/discussions) · [Discord](https://discord.com/channels/1134557553011998840/1538577327028445194)
 
 - **兼容 SillyTavern 生态**：人物卡、世界书、预设、正则美化、MVU、酒馆助手脚本，导入就能用，默认无需外部预设。
 - **更快**：一轮约 10 秒，缓存命中率 95% 以上。
@@ -106,7 +106,10 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 ## 交流与反馈
 
-欢迎到 [Discord 讨论频道](https://discord.com/channels/1134557553011998840/1538577327028445194)交流使用经验、分享人物卡或反馈问题。需要具备类脑社区成员资格才能进入。
+欢迎交流使用经验、分享人物卡或反馈问题：
+
+- **[GitHub Discussions](https://github.com/flizzywine/dsh-tavern/discussions)**：任何人都可以直接发帖。
+- **[Discord 讨论频道](https://discord.com/channels/1134557553011998840/1538577327028445194)**：需要类脑社区成员资格才能进入。
 
 反馈故障时，可从对话顶部的“日志”下载执行记录；分享前请检查其中的对话和附件隐私。
 
