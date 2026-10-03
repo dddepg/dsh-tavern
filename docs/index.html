@@ -35,7 +35,7 @@
 <p>支持导入酒馆人物卡、世界书和预设，也可以导入小说、剧本或大纲。正则、MVU 和前端美化的具体支持范围，见<a href="#compatibility">酒馆生态兼容</a>。</p>
 <p>想改变内容时，进入<a href="#cards">卡片模式</a>，告诉 Agent 哪些不喜欢、希望怎样调整，以及哪些需要保留。它也可以从素材中抽取人物与设定来制作新卡。</p>
 <h2 id="a01--section-8">开始前需要准备什么</h2>
-<ul><li>一台可运行 DSH 的设备，按<a href="#a02">安装与启动</a>选择桌面版或命令行版。</li><li>一个可用的文字模型服务，准备服务地址、模型名称和所需的 API 密钥；模型调用可能产生费用。</li><li>一张想玩的 PNG / JSON 人物卡；也可以安装后再通过卡片模式制作。</li></ul>
+<ul><li>一台可运行 DSH 的设备，按<a href="#a02">安装与启动</a>选择桌面版或命令行版。</li><li>一个可用的文字模型服务（任意模型均可，不限于 DeepSeek），准备服务地址、模型名称和所需的 API 密钥；模型调用可能产生费用。</li><li>一张想玩的 PNG / JSON 人物卡；也可以安装后再通过卡片模式制作。</li></ul>
 <p>不用先导入外部预设。用户画像、文生图和其他高级设置都可以先跳过，遇到需要时再查。</p>
 <h2 id="a01--section-9">下一步</h2>
 <p>还没安装：先看<a href="#a02">安装与启动</a>。已经装好：从<a href="#a04">完成第一次游玩</a>开始，再按需要查阅四部分功能文档。</p><nav class="pagination" aria-label="相邻文档"><a class="" href="#a01">← 入门指南</a><a class="" href="#a02">安装与启动 →</a></nav><footer class="article-footer"><span>DSH Tavern 使用文档</span><a class="" href="#help">需要帮助？</a></footer></article><article class="doc-page" id="a02" data-group="getting-started" data-title="安装与启动"><div class="breadcrumb">使用文档 <span>/</span> <a class="" href="#a01">入门指南</a> <span>/</span> 功能说明</div><h1 tabindex="-1">安装与启动</h1><p class="lead">先安装 DSH Tavern，再配置一个可用的文字模型。桌面版和命令行版选择一种即可。</p><h2 id="a02--section-1">先选一种安装方式</h2>
@@ -149,7 +149,7 @@ node -e &quot;fetch(&#39;https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@69d74
 <p>从手机 Download 目录导入人物卡前，请在 Android 系统设置中允许 DSHA <strong>访问所有文件</strong>；也可以尝试系统文件选择器。使用期间请允许 DSHA 后台运行，避免省电策略中断服务。</p>
 <h2 id="a02--section-7">配置模型并开始第一局</h2>
 <p><strong>能打开酒馆界面表示安装完成；要让角色回复，还需要配置可用的文字模型。</strong> 五种安装方式都从这里继续。</p>
-<ol><li>准备模型服务提供的 <strong>API 密钥、服务地址、模型名称</strong>。模型调用可能产生费用。</li><li>在酒馆左侧栏底部打开 <strong>设置 → 模型</strong>，按服务方要求填写并选择文字模型。具体操作见<a href="#a03">配置文字模型</a>。</li><li>导入一张 PNG / JSON 人物卡，选择新建游玩。</li><li>预览开场，按需设置玩家称呼，发送第一条行动。</li></ol>
+<ol><li>准备模型服务提供的 <strong>API 密钥、服务地址、模型名称</strong>。模型调用可能产生费用。DSH 可以接入所有模型，不限于 DeepSeek，用哪家服务或本地模型都可以。</li><li>在酒馆左侧栏底部打开 <strong>设置 → 模型</strong>，按服务方要求填写并选择文字模型。具体操作见<a href="#a03">配置文字模型</a>。</li><li>导入一张 PNG / JSON 人物卡，选择新建游玩。</li><li>预览开场，按需设置玩家称呼，发送第一条行动。</li></ol>
 <p>看到新生成的剧情正文，就完成了第一次游玩。详细步骤见<a href="#a04">第一次游玩</a>。外部预设、用户画像、文生图等功能可以之后再配置。</p>
 <h2 id="a02--section-8">关机后如何重新打开</h2>
 <p>日常启动不用重新安装。根据你当初选择的方式操作：</p>
