@@ -43,6 +43,24 @@
 
 正文里的状态栏老是掉格式？让 Agent 把人物卡转成 MVU 版：前台只写正文，变量由后台按规则结算，状态栏常驻右侧，原卡图片和设定都保留。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#h07)
 
+### Guide：给这一局定规矩
+
+想要的写法或节奏写成一条 Guide，比如“多写心理活动，对白不超过三句”“好感度涨得慢一点”，之后每轮正文、候选和变量结算都会遵守，不用每次重复。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#b09)
+
+### 带意见重写
+
+不满意这轮回复，写上哪里要改，比如“保留事件，但减少旁白解释”，只重写这一轮，比反复抽卡更可控。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#b07)
+
+![带意见重写当前正文，右侧为本局 Guide](docs/images/readme/rewrite-body.png)
+
+### 后台人物设计
+
+重要人物登场时，后台为其设计完整档案：动机、性格、外貌、说话方式、与主角的关系，之后反复出场都按同一套设定来，不会前后走样。已有设定直接复用，不重复造人。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#d10)
+
+### 写作 Skill
+
+把写作教程或喜欢的样文交给 Agent，提炼成场景写作 Skill，比如打斗、悬疑、感情戏各有一套写法；游玩时模型按场景自动选用。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m04)
+
 ## 看看实际效果
 
 **MVU 状态栏**：人物状态随剧情变化，正文下方可查看本轮更新了什么。
