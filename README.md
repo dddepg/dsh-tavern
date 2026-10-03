@@ -39,7 +39,25 @@
 
 ### Windows
 
+**方式一：一键安装包（推荐）**
+
 **[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。
+
+**方式二：借助 DSH Desktop**
+
+先安装 **[DSH Desktop 2.0.13](https://github.com/anywhere-labs/dsh-desktop/releases/tag/v2.0.13)**，在 **设置 → 通用设置 → 打开 DSH 终端** 中运行下面的命令，完成后重启 Desktop，选择 **tavern** Profile：
+
+```powershell
+$env:DSH_TAVERN_HOST='desktop'; $tavernInstaller=[Text.Encoding]::UTF8.GetString((New-Object Net.WebClient).DownloadData('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.ps1')); Invoke-Expression $tavernInstaller
+```
+
+**方式三：命令行**
+
+需要 **Node.js 22.19+**，在 PowerShell 中运行，安装后自动打开网页，以后用 `dsh-tavern open` 打开：
+
+```powershell
+$env:DSH_TAVERN_HOST='cli'; $tavernInstaller=[Text.Encoding]::UTF8.GetString((New-Object Net.WebClient).DownloadData('https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.ps1')); Invoke-Expression $tavernInstaller
+```
 
 ### macOS
 
@@ -63,7 +81,13 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 ### Android
 
+**方式一：一键安装（推荐）**
+
 **[下载 Android APK](https://github.com/flizzywine/dsh-tavern/releases/download/v2.1/dsh-tavern-android-release.apk)**（Android 11+、ARM64），安装后打开，点击启动，首次保持联网等待自动安装完成。
+
+**方式二：借助 DSHA**
+
+已在用 **[DSHA](https://github.com/DSH-APP/DSHA/releases)** 的，可以在 DSHA 中安装并启动酒馆，步骤见 [DSHA 安装指南](https://flizzywine.github.io/dsh-tavern/#a03)。
 
 ### 手机远程访问
 
@@ -78,7 +102,7 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 **更新与重装：**在酒馆里点「更新到最新版」即可更新。需要重装时，重新运行原来的安装包或命令，只替换程序，人物卡、聊天和设置都会保留。
 
-Windows / macOS 命令行安装、DSHA、插件安装和常见故障，见[完整安装指南](https://flizzywine.github.io/dsh-tavern/#a02)（宿主适配 DSH **0.1.5-rc.2**）。
+macOS 命令行安装、插件安装和常见故障，见[完整安装指南](https://flizzywine.github.io/dsh-tavern/#a02)（宿主适配 DSH **0.1.5-rc.2**）。
 
 ## 交流与反馈
 
