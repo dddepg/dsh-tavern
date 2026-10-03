@@ -9,6 +9,8 @@
 
 **基于 DeepSeek Harness（DSH）的文字游戏 Agent，支持导入 SillyTavern 人物卡。**
 
+> 所有模型都能用，不限于 DeepSeek 模型；云端服务和本地模型都可以在 DSH 中配置。
+
 选一张卡自由游玩，或绑定小说、剧本和大纲，让故事沿主线推进。也可以与 Agent 对话，从素材制作新卡，修改人物设定和世界书。
 
 [使用文档](https://flizzywine.github.io/dsh-tavern/) · [入门指南](https://flizzywine.github.io/dsh-tavern/#a02) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [安装与排错](https://flizzywine.github.io/dsh-tavern/#a02) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)

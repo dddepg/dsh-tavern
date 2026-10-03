@@ -16,7 +16,7 @@ export const introduction = `
 
 DSH Tavern 是一个以文字为主的 AI 角色扮演与故事游玩工具，提供类似 SillyTavern 的文字游戏体验。导入一张人物卡，就可以进入它设定的世界，与角色对话、采取行动，让故事继续发展。
 
-它运行在 DeepSeek Harness（简称 DSH）上：DSH 提供模型连接和运行环境，Tavern 提供人物卡、游玩界面、资源工作台和相关功能。你现在看到的是使用文档，实际游戏需要安装后打开。
+它运行在 DeepSeek Harness（简称 DSH）上：DSH 提供模型连接和运行环境，Tavern 提供人物卡、游玩界面、资源工作台和相关功能。名字里虽有 DeepSeek，但所有模型都能用，不限于 DeepSeek 模型。你现在看到的是使用文档，实际游戏需要安装后打开。
 
 ## 宣传视频
 
