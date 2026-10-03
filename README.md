@@ -7,7 +7,7 @@
 
 # dsh-tavern
 
-**类酒馆文字游戏 Agent。兼容 SillyTavern 生态，人物卡直接导入就能玩。**
+**Agent 酒馆。兼容 SillyTavern 生态，人物卡直接导入就能玩。**
 
 更快 · 更稳 · 更鲜活 · 所有模型都能用（不限于 DeepSeek）· 手机也能玩
 
