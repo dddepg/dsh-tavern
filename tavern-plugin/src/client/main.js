@@ -896,6 +896,7 @@ window.__ModuleLoader__.load({
         exports.createTavernComposerWindow = createTavernComposerWindow;
         exports.parseTavernInlineFragment = parseTavernInlineFragment;
         exports.TavernInlineFragment = TavernInlineFragment;
+        exports.bindTavernFontZoom = bindTavernFontZoom;
         exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;

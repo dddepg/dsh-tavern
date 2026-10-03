@@ -31,3 +31,13 @@ function subscribeTavernHostTheme(win, listener) {
         tavernHostTheme = null;
     };
 }
+
+// Card iframes keep their own typography (their text is never rewritten). Zoom
+// the plugin-owned slot instead: the frame's viewport shrinks by the same factor,
+// so the card reflows at a larger scale and viewport units cannot overflow.
+function bindTavernFontZoom(node, win) {
+    function apply(theme) { node.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
+    const unsubscribe = subscribeTavernHostTheme(win, apply);
+    apply(currentTavernHostTheme(win));
+    return function () { unsubscribe(); node.style.zoom = ""; };
+}

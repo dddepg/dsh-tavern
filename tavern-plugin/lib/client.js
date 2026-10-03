@@ -4834,6 +4834,16 @@ function subscribeTavernHostTheme(win, listener) {
     };
 }
 
+// Card iframes keep their own typography (their text is never rewritten). Zoom
+// the plugin-owned slot instead: the frame's viewport shrinks by the same factor,
+// so the card reflows at a larger scale and viewport units cannot overflow.
+function bindTavernFontZoom(node, win) {
+    function apply(theme) { node.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
+    const unsubscribe = subscribeTavernHostTheme(win, apply);
+    apply(currentTavernHostTheme(win));
+    return function () { unsubscribe(); node.style.zoom = ""; };
+}
+
 		function createTavernHelperTransport(options) {
 			const { parent, token, copy, identity, onContext, onEvent } = options;
 			let nextId = 1;
@@ -8924,6 +8934,7 @@ function subscribeTavernHostTheme(win, listener) {
 		        if (record.forget) record.forget();
 		        if (record.stop) record.stop();
 		        if (record.unpin) record.unpin();
+		        if (record.unzoom) record.unzoom();
 		        for (const item of record.frames.values()) item.descriptor.ref(null);
 		        record.frames.clear();
 		        record.node.remove();
@@ -8969,6 +8980,8 @@ function subscribeTavernHostTheme(win, listener) {
 		            parked().appendChild(node);
 		            record = { key: id, sessionId: props.sessionId, panelId: props.panelId, persistent: props.persistent, owner: props.frameOwner, node: node, frames: new Map(), unmount: null, unpin: null };
 		            records.set(id, record);
+		            // Story frames follow the reading font size; status panels keep their layout.
+		            if (!props.persistent) record.unzoom = bindTavernFontZoom(node, host);
 		            record.lifecycle = options.createLifecycle(props);
 		            paint(record, record.lifecycle.snapshot());
 		            record.stop = record.lifecycle.start(function (state) { paint(record, state); });
@@ -9461,6 +9474,11 @@ function subscribeTavernHostTheme(win, listener) {
 					title: "第 " + props.turn + " 轮 · 面板 " + (Number(props.partIndex) + 1),
 					node: slotRef.current, home: homeRef.current, pinned: false });
 			}, [movable, props.sessionId, props.content]);
+			React.useLayoutEffect(function () {
+				// Story frames follow the reading font size; status panels keep their layout.
+				if (props.persistent || !slotRef.current) return;
+				return bindTavernFontZoom(slotRef.current, window);
+			}, [props.persistent]);
 			const frames = activated ? [renderFrame(visibleDocument, false), renderFrame(pendingDocument, true)] : null;
 			return React.createElement("div", null,
 				movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
@@ -9644,11 +9662,8 @@ function subscribeTavernHostTheme(win, listener) {
                 if (fragment) root.replaceChildren(fragment);
                 // Zoom only our own wrapper: the card's DOM and styles are never written, and in
                 // the host page viewport units cannot feed back into the zoomed size.
-                const win = root.ownerDocument.defaultView;
-                function apply(theme) { root.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
-                const unsubscribe = subscribeTavernHostTheme(win, apply);
-                apply(currentTavernHostTheme(win));
-                return function () { unsubscribe(); root.style.zoom = ""; root.replaceChildren(); };
+                const unbind = bindTavernFontZoom(root, root.ownerDocument.defaultView);
+                return function () { unbind(); root.replaceChildren(); };
             }, [props.content]);
             return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});
         }
@@ -16381,6 +16396,7 @@ function subscribeTavernHostTheme(win, listener) {
         exports.createTavernComposerWindow = createTavernComposerWindow;
         exports.parseTavernInlineFragment = parseTavernInlineFragment;
         exports.TavernInlineFragment = TavernInlineFragment;
+        exports.bindTavernFontZoom = bindTavernFontZoom;
         exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;
