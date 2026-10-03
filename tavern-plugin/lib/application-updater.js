@@ -75,14 +75,18 @@ async function compareCdnRuntime(sourceRoot, metadata) {
   }
 }
 
-async function readVerifiedRuntimeMetadata(sourceRoot) {
+async function readRuntimeMetadata(sourceRoot) {
   try {
     const metadata = JSON.parse(await readFile(path.join(sourceRoot, 'dsh-tavern-runtime.json'), 'utf8'))
-    const compared = await compareCdnRuntime(sourceRoot, metadata)
-    return compared.matches ? compared : null
+    return await compareCdnRuntime(sourceRoot, metadata)
   } catch {
     return null
   }
+}
+
+async function readVerifiedRuntimeMetadata(sourceRoot) {
+  const compared = await readRuntimeMetadata(sourceRoot)
+  return compared?.matches ? compared : null
 }
 
 export function sanitizeUpdateError(value) {
@@ -277,11 +281,16 @@ export function createApplicationUpdater(options) {
       if (error?.code === 'ENOENT') return { currentVersion: 'unknown', currentCommit: '' }
       throw error
     }
-    const runtimeMetadata = await readVerifiedRuntimeMetadata(sourceRoot)
+    const runtimeMetadata = await readRuntimeMetadata(sourceRoot)
+    const verified = runtimeMetadata?.matches ? runtimeMetadata : null
     return {
       currentVersion: String(local?.version || '') || 'unknown',
-      currentCommit: runtimeMetadata?.revision || await readRecordedCommit(sourceRoot, dshHome),
-      ...(runtimeMetadata?.releaseSequence ? { currentReleaseSequence: runtimeMetadata.releaseSequence } : {}),
+      currentCommit: verified?.revision || await readRecordedCommit(sourceRoot, dshHome),
+      ...(verified?.releaseSequence ? { currentReleaseSequence: verified.releaseSequence } : {}),
+      // The manifest is published by a later commit, so a build installed before
+      // its own publish carries the previous manifest. That sequence is still a
+      // lower bound: any other published revision with a larger sequence is newer.
+      ...(!verified && runtimeMetadata?.releaseSequence ? { releaseSequenceFloor: runtimeMetadata.releaseSequence } : {}),
     }
   }
   let identitySnapshot = null
@@ -298,51 +307,71 @@ export function createApplicationUpdater(options) {
     return await identityLoad
   }
 
-  async function versions(identity) {
-    const { currentVersion, currentCommit, currentReleaseSequence } = identity
-    if (currentVersion === 'unknown') throw new Error('无法确认当前构建，请手动重新安装')
+  // Every remote source is optional. GitHub API is authoritative for the latest
+  // commit; jsDelivr is the fallback; raw package.json only supplies a label.
+  // Order is proven by release sequence, local Git or GitHub compare.
+  async function relationTo(identity, latest, latestSequence, { sequenceFirst = false } = {}) {
+    const { currentCommit, currentReleaseSequence, releaseSequenceFloor } = identity
+    if (currentCommit.toLowerCase() === latest.toLowerCase()) return false
+    if (sequenceFirst && currentReleaseSequence) {
+      const sequence = await latestSequence()
+      if (sequence) return sequence > currentReleaseSequence
+    }
     try {
-      const [remote, latestCommitResult] = await Promise.all([stage('github.version', fetchManifest), stage('github.commit', fetchLatestCommit)])
-      const { publishedCommit, runtimeCommit: latestCommit } = runtimeCommitIdentityOf(latestCommitResult)
-      const latestVersion = String(remote?.version || '')
-      if (currentVersion === '' || latestVersion === '') throw new Error('版本信息不完整')
-      if (!/^[0-9a-f]{40}$/i.test(latestCommit)) throw new Error('GitHub 返回的提交号无效')
-      const normalizedCurrentCommit = currentCommit.toLowerCase() === publishedCommit.toLowerCase()
-        ? latestCommit
-        : currentCommit
+      return await isNewerCommit(currentCommit, latest)
+    } catch (error) {
+      const sequence = currentReleaseSequence || releaseSequenceFloor ? await latestSequence() : null
+      if (sequence) {
+        record('commit.compare.sequence', { currentReleaseSequence, releaseSequenceFloor, latestSequence: sequence })
+        if (currentReleaseSequence) return sequence > currentReleaseSequence
+        // A floor only proves "newer"; an equal or lower sequence may be this very build.
+        if (sequence > releaseSequenceFloor) return true
+      }
+      throw error
+    }
+  }
+
+  async function versions(identity) {
+    const { currentVersion, currentCommit } = identity
+    if (currentVersion === 'unknown') throw new Error('无法确认当前构建，请手动重新安装')
+    if (currentVersion === '') throw new Error('版本信息不完整')
+    const settle = promise => promise.then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }))
+    // Start the CDN request in parallel, but only wait for it when GitHub cannot decide.
+    const cdn = settle(stage('cdn.fetch', fetchCdnMetadata))
+    const [manifest, commit] = await Promise.all([settle(stage('github.version', fetchManifest)), settle(stage('github.commit', fetchLatestCommit))])
+    const manifestVersion = manifest.status === 'fulfilled' ? String(manifest.value?.version || '') : ''
+    const cdnSequenceFor = async revision => {
+      const result = await cdn
+      const sequence = Number(result.value?.releaseSequence)
+      return result.status === 'fulfilled' && String(result.value?.revision || '').toLowerCase() === revision.toLowerCase()
+        && Number.isSafeInteger(sequence) && sequence > 0 ? sequence : null
+    }
+
+    const github = commit.status === 'fulfilled' ? runtimeCommitIdentityOf(commit.value) : null
+    if (github && /^[0-9a-f]{40}$/i.test(github.runtimeCommit)) {
+      const { publishedCommit, runtimeCommit: latestCommit } = github
+      const normalizedCurrentCommit = currentCommit.toLowerCase() === publishedCommit.toLowerCase() ? latestCommit : currentCommit
+      const updateAvailable = await relationTo({ ...identity, currentCommit: normalizedCurrentCommit }, latestCommit, () => cdnSequenceFor(latestCommit))
+      const latestVersion = manifestVersion || (await cdn).value?.version || 'unknown'
+      return { currentVersion, latestVersion: String(latestVersion), currentCommit: normalizedCurrentCommit, latestCommit, checkSource: 'github', updateAvailable, checkWarning: undefined }
+    }
+    const githubError = github ? new Error('GitHub 返回的提交号无效') : commit.reason
+    record('fallback.cdn', { reason: sanitizeUpdateError(githubError?.message || githubError) })
+    try {
+      const metadata = await cdn
+      if (metadata.status === 'rejected') throw metadata.reason
+      const compared = await compareCdnRuntime(sourceRoot, metadata.value)
+      record('cdn.comparison', { ...identity, latestVersion: compared.version, latestCommit: compared.revision, latestReleaseSequence: compared.releaseSequence, matches: compared.matches })
+      const updateAvailable = !compared.matches && await relationTo(identity, compared.revision, async () => compared.releaseSequence, { sequenceFirst: true })
       return {
-        currentVersion, latestVersion, currentCommit: normalizedCurrentCommit, latestCommit, checkSource: 'github',
-        updateAvailable: compareVersions(latestVersion, currentVersion) >= 0 && await isNewerCommit(normalizedCurrentCommit, latestCommit),
-        checkWarning: undefined,
+        currentVersion, latestVersion: manifestVersion || compared.version || 'unknown', currentCommit, latestCommit: compared.revision, checkSource: 'jsdelivr', updateAvailable,
+        // jsDelivr caches @main, so it can lag behind GitHub but never invent a newer build.
+        checkWarning: updateAvailable
+          ? 'GitHub 暂不可达；已发现 CDN 上的较新构建，但无法确认它是最新构建。'
+          : 'GitHub 暂不可达；CDN 清单未显示更新构建，CDN 可能有数小时缓存延迟。',
       }
-    } catch (githubError) {
-      record('fallback.cdn', { reason: sanitizeUpdateError(githubError?.message || githubError) })
-      try {
-        const compared = await compareCdnRuntime(sourceRoot, await stage('cdn.fetch', fetchCdnMetadata))
-        record('cdn.comparison', { currentVersion, currentCommit, currentReleaseSequence, latestVersion: compared.version, latestCommit: compared.revision, latestReleaseSequence: compared.releaseSequence, matches: compared.matches })
-        let updateAvailable = false
-        if (!compared.matches && currentCommit.toLowerCase() !== String(compared.revision).toLowerCase()) {
-          if (currentReleaseSequence && compared.releaseSequence) {
-            updateAvailable = compared.releaseSequence > currentReleaseSequence
-          } else if (compared.version && compareVersions(compared.version, currentVersion) !== 0) {
-            updateAvailable = compareVersions(compared.version, currentVersion) > 0
-          } else {
-            throw new Error('jsDelivr 清单缺少可比较的发布序号，需使用 GitHub 确认提交先后')
-          }
-        }
-        if (!updateAvailable) throw new Error('CDN 清单未显示更高构建，无法确认是否为最新版本')
-        return {
-          currentVersion,
-          latestVersion: compared.version || currentVersion,
-          currentCommit,
-          latestCommit: compared.revision,
-          checkSource: 'jsdelivr',
-          checkWarning: 'GitHub 暂不可达；已发现 CDN 上的较新构建，但无法确认它是最新构建。',
-          updateAvailable,
-        }
-      } catch (cdnError) {
-        throw new Error(`暂时无法确认最新版本：GitHub 核实失败（${sanitizeUpdateError(githubError?.message || githubError)}）；CDN 备用检查（${sanitizeUpdateError(cdnError?.message || cdnError)}）`)
-      }
+    } catch (cdnError) {
+      throw new Error(`暂时无法确认最新版本：GitHub 核实失败（${sanitizeUpdateError(githubError?.message || githubError)}）；CDN 备用检查（${sanitizeUpdateError(cdnError?.message || cdnError)}）`)
     }
   }
 

@@ -409,6 +409,14 @@ dsh-tavern open
 
 看到 **未发现更新构建** 就表示检查时没有发现更新，无需重装。命令行版也可以直接在终端运行 \`dsh-tavern update\`，它会沿用已安装位置。
 
+检查更新会依次使用 GitHub API 与 jsDelivr，任一可达即可完成检查；只有 GitHub 不可达时，结果会附带提示，因为 jsDelivr 可能有数小时缓存延迟。两者都不可达时，可用环境变量把查询地址改到可访问的镜像，重启酒馆后生效：
+
+| 环境变量 | 默认地址 | 用途 |
+| --- | --- | --- |
+| \`DSH_TAVERN_COMMIT_URL\` | api.github.com 的 main 最新提交 | 判断最新构建 |
+| \`DSH_TAVERN_CDN_METADATA_URL\` | jsDelivr 上的 \`dsh-tavern-runtime.json\` | GitHub 不可达时的备用清单 |
+| \`DSH_TAVERN_VERSION_URL\` | raw.githubusercontent.com 的 \`package.json\` | 仅用于显示版本号，失败不影响检查 |
+
 ### 方法二 A：Windows 一键版整体重新安装（覆盖更新）
 
 1. 保存操作、备份数据，关闭已打开的酒馆。

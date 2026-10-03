@@ -236,12 +236,12 @@ test('jsDelivr 发布序号阻止缓存倒退，并允许无 GitHub 更新', asy
       now: () => 321,
     }
     const current = await createApplicationUpdater(common).check()
-    assert.equal(current.phase, 'check-failed')
-    assert.match(current.error, /无法确认最新版本/)
+    assert.equal(current.phase, 'up-to-date')
+    assert.match(current.checkWarning, /缓存延迟/)
 
     metadata.files[0].sha256 = createHash('sha256').update('new package').digest('hex')
     metadata.releaseSequence = 41
-    assert.equal((await createApplicationUpdater(common).check()).phase, 'check-failed')
+    assert.equal((await createApplicationUpdater(common).check()).phase, 'up-to-date')
 
     metadata.releaseSequence = 43
     const child = { pid: 4321, once(event, listener) { if (event === 'spawn') queueMicrotask(listener); return this }, unref() {} }
@@ -286,18 +286,23 @@ test('更新任务正在运行时拒绝重复启动', async () => {
 test('更新诊断跨检查保留回退和网络原因，并可在重启后读取', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-update-diagnostics-'))
   try {
+    const networkError = () => Object.assign(new Error('fetch failed https://user:secret@example.test/meta?token=secret'), { cause: Object.assign(new Error('connect timeout'), { code: 'ETIMEDOUT' }) })
     const options = { dataRoot: root, sourceRoot: root, runtimeHost: 'desktop', ...verifiedUpdate,
       fetchCdnMetadata: async () => { throw new Error('清单缺少发布序号') },
-      fetchManifest: async () => { throw Object.assign(new Error('fetch failed https://user:secret@example.test/meta?token=secret'), { cause: Object.assign(new Error('connect timeout'), { code: 'ETIMEDOUT' }) }) },
+      fetchManifest: async () => { throw networkError() },
     }
-    const updater = createApplicationUpdater(options)
+    const updater = createApplicationUpdater({ ...options, fetchLatestCommit: async () => { throw networkError() } })
     assert.equal((await updater.check()).phase, 'check-failed')
-    const recovered = createApplicationUpdater({ ...options, fetchManifest: verifiedUpdate.fetchManifest })
-    assert.equal((await recovered.check()).phase, 'update-available')
+    // raw.githubusercontent.com blocked alone only loses the version label (#125).
+    const recovered = createApplicationUpdater(options)
+    const checked = await recovered.check()
+    assert.equal(checked.phase, 'update-available')
+    assert.equal(checked.latestVersion, 'unknown')
     const records = recovered.diagnostics().records
     assert.equal(new Set(records.filter(r => r.event === 'check.started').map(r => r.attemptId)).size, 2)
     assert.ok(records.some(r => r.event === 'fallback.cdn'))
-    assert.ok(records.some(r => r.event === 'github.version.failed' && r.cause.code === 'ETIMEDOUT' && r.durationMs >= 0))
+    assert.ok(records.some(r => r.event === 'github.commit.failed' && r.cause.code === 'ETIMEDOUT' && r.durationMs >= 0))
+    assert.ok(records.some(r => r.event === 'github.version.failed' && r.cause.code === 'ETIMEDOUT'))
     assert.ok(records.some(r => r.event === 'status' && r.phase === 'check-failed'))
     assert.ok(records.some(r => r.event === 'status' && r.phase === 'update-available'))
     assert.ok(!JSON.stringify(records).includes('secret'))
@@ -372,4 +377,29 @@ test('安装进程中断后即使源码已是目标提交也必须允许修复�
   assert.equal((await updater.status()).repairRequired, true)
   assert.equal((await updater.start()).phase, 'running')
   assert.equal(spawned, 1)
+})
+
+test('jsDelivr 兜底：本地清单未核验时用提交比较，比较不可达时以本地清单序号为下界 (#125)', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-updater-floor-'))
+  try {
+    const current = 'c'.repeat(40)
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.4.0' }))
+    await writeFile(path.join(root, '.dsh-tavern-release.json'), JSON.stringify({ commit: current }))
+    // Installed before its own manifest was published: local files do not match.
+    await writeFile(path.join(root, 'dsh-tavern-runtime.json'), JSON.stringify({
+      revision: 'a'.repeat(40), releaseSequence: 42, version: '2.4.0', files: [{ path: 'package.json', sha256: 'f'.repeat(64) }],
+    }))
+    const metadata = { revision: '9'.repeat(40), releaseSequence: 44, version: '2.4.0', files: [{ path: 'package.json', sha256: 'e'.repeat(64) }] }
+    const offline = async () => { throw new Error('fetch failed') }
+    const common = { dataRoot: path.join(root, 'data'), sourceRoot: root, runtimeHost: 'cli',
+      fetchManifest: offline, fetchLatestCommit: offline, fetchCdnMetadata: async () => metadata }
+    const compared = []
+    const viaCompare = await createApplicationUpdater({ ...common, compareCommits: async (a, b) => { compared.push([a, b]); return 'ahead' } }).check()
+    assert.equal(viaCompare.phase, 'update-available')
+    assert.deepEqual(compared, [[current, metadata.revision]])
+    const viaFloor = await createApplicationUpdater({ ...common, compareCommits: offline }).check()
+    assert.equal(viaFloor.phase, 'update-available')
+    metadata.releaseSequence = 42
+    assert.equal((await createApplicationUpdater({ ...common, compareCommits: offline }).check()).phase, 'check-failed')
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
