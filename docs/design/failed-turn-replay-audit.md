@@ -392,6 +392,37 @@ sh /home/ezio/workspace/dsh-tavern/install.sh
 
 已确认这一轮残留无害：仓库需要的 113 个 artifact 文件在实例里**一个不缺**；`full-prompt-template-assets.js` 是 manifest + SHA-256 驱动（未列入 `manifest.files` 的名字直接返回 `undefined`，且校验 `upstreamCommit`），旧 chunk 不会被送出；4 个退役 `src/` 文件在当前源码中已无引用。
 
-### 一个与本次更新无关的启动告警
+### 旧对话预设迁移告警：定性并修掉
 
-启动恢复时报 2 条 `旧对话预设条目配置迁移失败 … 外部预设条目不可抽取：jb_accept#1`（`bypass-plans.js:191` ← `preset-library.js:153` ← `recoverRuntimeHistory`）。判断为**既有数据问题**，不是本次同步引入：涉及的 `bypass-plans.js` / `preset-library.js` 在 `5318f6c9..fefb6d54` 区间无任何改动，且从备份里取出的更新前版本与更新后**哈希完全相同**；出错的两个会话（`chat-muozlp3w-*`、`chat-muozu2ur-*`）创建于 2026-10-01T03:41 / 03:47，晚于上一次启动（03:11），这次是它们首次经历启动恢复。旧版本遇到同样数据也会报同一条。
+启动恢复时报 2 条 `旧对话预设条目配置迁移失败 … 外部预设条目不可抽取：jb_accept#1`（`bypass-plans.js:191` ← `preset-library.js:153` ← `recoverRuntimeHistory`）。
+
+**先定性**：不是本次同步引入。涉及的 `bypass-plans.js` / `preset-library.js` 在 `5318f6c9..fefb6d54` 区间无任何改动，且从备份里取出的更新前版本与更新后**哈希完全相同**；出错的两个会话创建于 2026-10-01T03:41 / 03:47，晚于上一次启动（03:11），这次是它们首次经历启动恢复。
+
+**再定位**。用 `createNativeConversationStorage` 离线读真实状态（注意 `read()` 返回的是 `{chat, revision, native, …}` 包装，字段在 `.chat` 上），两个会话（`chat-muozlp3w-mz56y2`、`chat-muozu2ur-neboe0`，卡 `催眠小镇·佐藤家（原生沦陷版）`，各 1 / 3 条消息）的状态是自相矛盾的：
+
+| 字段 | 值 |
+| --- | --- |
+| `runtimePresetPath` | `presets/Ny-Gemini-1.4.2_SogonSigon.json` |
+| `snapshot.presetPath` | `presets/智脑-Z(3.78f特调).json` |
+| `snapshot.sources`（29 条）、`regexSources`（11 条） | 全部来自 `智脑-Z(3.78f特调).json` |
+| `bypassPlanId` | `""`（未迁移） |
+
+`migrateLegacyChatPreset` 用 `runtimePresetPath` 当取条目来源、只把 `snapshot.presetPath` 当兜底（`preset-library.js:136`），于是拿 Ny-Gemini 去找智脑-Z 的条目。按 `extract()` 的判定复刻核对：**29 个条目键里 28 个在 Ny-Gemini 中缺失**、11 个正则键同样缺失，`jb_accept#1` 只是迭代到的第一个（`extract` 遇到首个坏键即抛）。根因是这局中途切过预设，`runtimePresetPath` 跟着变成 Ny-Gemini，而固化快照仍是智脑-Z 的——两者不再一致。
+
+**修法**：把 `runtimePresetPath` 改回快照真正的来源，让状态自洽（不重建快照，因此不改变这个会话既有的注入内容）。改动前先离线验证目标预设可抽取性：按 `snapshot.presetPath`，29 个条目键与 11 个正则键**全部可抽取**；按原 `runtimePresetPath` 则 28 个条目、11 个正则均不可抽取。
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli && DSH_TAVERN_PORT=3091 ./dsh-tavern stop
+node scripts/repair-chat-preset-reference.mjs \
+  /home/ezio/workspace/dsh-tavern-cli/profile-data/tavern/data \
+  --apply chat-muozlp3w-mz56y2 chat-muozu2ur-neboe0
+cd /home/ezio/workspace/dsh-tavern-cli && DSH_TAVERN_PORT=3091 ./dsh-tavern start
+```
+
+`scripts/repair-chat-preset-reference.mjs`（新增）默认只诊断，加 `--apply` 才写入；它走应用自己的 `native-conversation-storage.js` 的 `patch(id, revision, changes)`，只改两个字段（`runtimePresetPath` 设为快照来源，`_storageRevision` 加一以满足该路径的写校验），不碰消息与快照，并在写入前用 `bypass-plans.extract()` 的同款判定先证明目标预设可抽取。改前备份 `backups/chats-preset-fix-20261003-181030.tar.gz`（2.2M，两个会话的块存储）。
+
+**结果**：重启后新增日志里迁移失败为 **0 条**；两个会话 `runtimePresetPath` 已置空、`bypassPlanId` 写成 `bypass-4413e9d86ffe`（两者预设路径与选中条目相同，走了迁移的去重逻辑共用同一计划），29 条快照与 1 / 3 条消息原样保留，计划已落 `data/bypass-plans.json`。服务 `service.ready` @ 2026-10-03T10:10:46Z（PID 76091，端口 3091），无 token 401、带 token 303。
+
+脚本在改实例之前先在备份的临时副本上跑过一遍完整往返（干跑 → `--apply` → 复查报「已与快照一致」），确认诊断与写入两条路径都对，才动实例。
+
+顺带记一条上游隐患：会话中途切换预设会让 `runtimePresetPath` 与固化快照不一致，下一次启动的迁移就会失败——本例即此。上游仍未有对应处理。
