@@ -27,7 +27,7 @@ const imageModule = createImageGenerationModule({ store, credentials: () => cred
 let tavernSettings = {}
 const setup = createModuleSceneImageSettings({ imageModule, credentials: () => credentials, store })
 const component = await readFile(new URL('../../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
-const source = component.slice(component.indexOf('function sceneImageRequestId()'), component.indexOf('function TavernSettingsSection()'))
+const source = component.slice(component.indexOf('function sceneImageRequestId()'), component.indexOf('function createGlobalSettingsModule('))
 const css = await readFile(new URL('../../tavern-plugin/lib/client-assets/tavern.css', import.meta.url), 'utf8')
 const hostRequire = createRequire(process.env.DSH_BROWSER_ROOT
   ? join(process.env.DSH_BROWSER_ROOT, 'node_modules/@deepseek-ai/dsh-client-ui-primitives/package.json')

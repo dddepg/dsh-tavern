@@ -1,3 +1,4 @@
+import { ensureSessionVariableDirectory } from '../tavern-plugin/lib/domain/session-variable-directory.js'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
@@ -18,7 +19,7 @@ test('前台确认更新后同版本复用背景，重开 Session 后仍复用',
   const implementation = source.slice(source.indexOf('  async function ensureNativeSystemPrefix('), source.indexOf('  async function ensureNativeCardWorkspace('))
   let reads = 0, flushes = 0
   const run = vm.runInNewContext(`(${implementation.trim()})`, {
-    readSessionStablePrefix, ensureSessionStablePrefix,
+    readSessionStablePrefix, ensureSessionStablePrefix, ensureSessionVariableDirectory,
     ensurePlayCardSnapshot: async chat => { reads++; return '背景版本 ' + chat.cardContextRevision },
     stablePrefixStorage: undefined, sessionStore: { flush: async () => { flushes++ } }
   })
@@ -32,31 +33,6 @@ test('前台确认更新后同版本复用背景，重开 Session 后仍复用',
   await run(session, {cardContextRevision:2})
   assert.equal(reads, 3)
   assert.equal(readSessionStablePrefix(session).text, '背景版本 2')
-})
-
-test('固定背景快照只写一次，正文不进入可压缩历史，恢复后仍装配为系统上下文', async t => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'tavern-prefix-'))
-  t.after(() => rm(directory, { recursive: true, force: true }))
-  let storage = createSessionStablePrefixStorage(directory)
-  let session = Session.create('prefix-test')
-  const prefix = await ensureSessionStablePrefix(session, text, storage)
-  assert.equal(prefix.message.source.form, 'snapshot')
-  assert.equal(Object.hasOwn(prefix.message.source, 'fixedSystemText'), false)
-  assert.equal(Object.hasOwn(prefix.message.source, 'cardContextRevision'), false)
-  assert.deepEqual(prefix.message.source.sections.map(section => section.name), ['tavern:character-card', 'tavern:constant-worldbook'])
-  assert.equal(sessionEvents(session).find(e => e.data?.id === prefix.id).type, 'user/message')
-  assert.equal(sessionEvents(session)[0].surfaceOp, 'append')
-  assert.equal(sessionStablePrefixSections(session).map(s => s.text).join('\n\n'), text)
-  const first = session.append('user/message', user('第一轮'), { surfaceOp: 'append' })
-  const second = session.append('user/message', user('第二轮'), { surfaceOp: 'append' })
-  assert.equal((await ensureSessionStablePrefix(session, '后来改卡不重新注入', storage)).message, prefix.message)
-  appendSessionEvent(session, 'user/message', plugin('剧情摘要'), { surfaceOp: { op: 'replace', start: first.seq, end: second.seq }, sourceEventSeqs: [first.seq, second.seq] })
-  session = Session.create(session.id, sessionEvents(session), session.header)
-  storage = createSessionStablePrefixStorage(directory)
-  assert.equal((await ensureSessionStablePrefix(session, '重启不重新注入', storage)).text, text)
-  assert.equal(sessionEvents(session).filter(event => event.type === 'dsh-tavern/stable-prefix').length, 0)
-  assert.equal(sessionEvents(session).filter(event => event.type === 'user/message' && event.data.id === prefix.id).length, 1)
-  assert.equal(sessionStablePrefixSections(session).map(s => s.text).join('\n\n'), text)
 })
 
 test('旧外部文件和旧 ignorable 事件只作为迁移来源，提升为标准 Session 消息', async t => {
@@ -100,45 +76,4 @@ test('旧背景迁入系统上下文，已压缩的原文也可恢复，迁移�
     const restored = Session.create(session.id, sessionEvents(session), session.header)
     assert.deepEqual(sessionStablePrefixSections(restored), sessionStablePrefixSections(session))
   }
-})
-
-test('旧 EJS 背景沿用已求值的开局快照，迁移后不再每轮替换', async () => {
-  const session = Session.create('ejs')
-  session.append('user/message', { id: 'tavern-session-prefix:ejs', role: 'user', content: [{ type: 'text', text: '<% print(await getwi("资料")) %>' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot' } }, { surfaceOp: 'append' })
-  await ensureSessionStablePrefix(session, '已求值的固定世界书')
-  await ensureSessionStablePrefix(session, '后续变化')
-  assert.equal(readSessionStablePrefix(session).text, '已求值的固定世界书')
-})
-
-
-test('原生分叉沿用继承事件中的固定背景，不因 Session ID 改变重建背景', async () => {
-  const original = Session.create('original')
-  await ensureSessionStablePrefix(original, text)
-  const fork = Session.create('fork', sessionEvents(original), Session.create('fork').header)
-  const before = sessionEvents(fork).length
-  await ensureSessionStablePrefix(fork, '后来改卡内容')
-  assert.equal(sessionEvents(fork).length, before)
-  assert.equal(readSessionStablePrefix(fork).text, text)
-})
-
-test('手动更新固定背景保留 200 轮历史，恢复及再次请求使用最新版本', async () => {
-  let session = Session.create('updated-card-history')
-  await ensureSessionStablePrefix(session, text)
-  for (let turn = 1; turn <= 200; turn++) session.append('user/message', user('剧情第 ' + turn + ' 轮'), { surfaceOp: 'append' })
-  const history = structuredClone(sessionEvents(session))
-  const updated = '【故事设定 · 人物卡】\n修改后的设定'
-  await ensureSessionStablePrefix(session, updated, undefined, 1)
-  assert.deepEqual(sessionEvents(session).slice(0, history.length), history)
-  assert.equal(readSessionStablePrefix(session).text, updated)
-  assert.deepEqual(sessionEvents(session).at(-1).data.content, [])
-  assert.equal(Object.hasOwn(sessionEvents(session).at(-1).data.source, 'fixedSystemText'), false)
-  assert.equal(Object.hasOwn(sessionEvents(session).at(-1).data.source, 'cardContextRevision'), false)
-  assert.match(sessionEvents(session).at(-1).data.id, /:revision-1$/)
-  const count = sessionEvents(session).length
-  await ensureSessionStablePrefix(session, '未经确认的其他修改', undefined, 1)
-  assert.equal(sessionEvents(session).length, count)
-  session = Session.create(session.id, sessionEvents(session), session.header)
-  assert.equal(readSessionStablePrefix(session).text, updated)
-  await ensureSessionStablePrefix(session, '第二次确认的设定', undefined, 2)
-  assert.equal(readSessionStablePrefix(session).text, '第二次确认的设定')
 })

@@ -3,6 +3,8 @@ import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
 import { projectRuntimePresetRequest } from './runtime-preset-lifecycle.js'
 
+const CARD_REFERENCE_SECTIONS = new Set(['tavern:character-card', 'tavern:card-system-prompt', 'tavern:constant-worldbook'])
+
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
@@ -321,10 +323,18 @@ export function createNativePlayOrchestrationStrategy(options) {
     // Play rules arrive in the foreground frame. Still replace the inherited
     // sections explicitly so removing play-mode cannot restore DSH's persona.
     const cardEdit = mode === 'card' && input.chat?.cardEditContext?.version === 1
-    const sections = mode === 'card' && !cardEdit ? [] : (input.fixedSystemSections || []).slice()
+    const fixed = input.fixedSystemSections || []
+    const sections = mode === 'card' && !cardEdit ? fixed.filter(section => section.name === 'tavern:user-preference') : fixed.slice()
     if (mode === 'card' && !cardEdit) {
       const text = typeof options.cardSystemPrompt === 'function' ? options.cardSystemPrompt().trim() : ''
       if (text) sections.push({ name: 'tavern:card-system', text })
+      // Card material is reference data for the card Agent, not its persona.
+      const reference = fixed.filter(section => CARD_REFERENCE_SECTIONS.has(section.name))
+      if (reference.length) {
+        const note = typeof options.cardReferencePrompt === 'function' ? options.cardReferencePrompt().trim() : ''
+        if (note) sections.push({ name: 'tavern:card-reference', text: note })
+        sections.push(...reference)
+      }
       const workspace = options.workspaceContext(input.cwd, input.workspaceProjection)
       if (workspace !== '') sections.push({ name: 'tavern:resource-workspace', text: workspace })
     }
@@ -348,6 +358,7 @@ export function createForegroundOrchestrationStrategies(options) {
   }
 
   async function prepareStep(input) {
+    if (input.chat?.requestMode === 'sillytavern') throw new Error('silly 模式已停用')
     if (input.chat?.regenInProgress && Number(input.payload.step) === 1) {
       const inputs = (input.payload.messages || []).filter(isTurnInput)
       const saved = input.chat.regenRecovery

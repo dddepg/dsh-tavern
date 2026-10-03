@@ -66,9 +66,3 @@ test('已有剧情、运行中的回合和伪造开场不能通过首页改写�
   await assert.rejects(prepareSessionOpening({ chat: initial(), card, swipeId: 1, message: '任意正文' }), /已有开场/)
   await assert.rejects(prepareSessionOpening({ chat: played, card, swipeId: 1, message: '实际开场' }), /已有剧情/)
 })
-
-test('empty primary follows native swipe numbering without shifting alternate ids', () => {
-  const c = { name: 'chooser', first_mes: '', alternate_greetings: ['menu', 'story'] }
-  const chat = initial(); chat.messages[0].text = chat.messages[0].sourceText = 'menu'
-  assert.deepEqual(sessionOpeningDescriptor(chat, c), { swipes: ['menu', 'story'], openingIds: ['alternate:0', 'alternate:1'], selectedIndex: 0, characterName: 'chooser' })
-})

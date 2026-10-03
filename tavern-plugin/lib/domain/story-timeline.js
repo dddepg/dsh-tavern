@@ -502,6 +502,12 @@ export function createStoryTimeline(options = {}) {
       Object.assign(chat.messages[index], intent.patch)
       delete chat.messages[index].displayRuntime
       chat.timeline.revision++
+      // Editing keeps the same committed round, but its next settlement must
+      // bind to the edited revision. Old in-flight work still fails basedOn.
+      const editedRound = backgroundBody(chat)
+      if (editedRound && Number(editedRound.turn) === Number(intent.turn)) {
+        editedRound.committedRevision = chat.timeline.revision
+      }
       chat.timeline.updatedAt = now()
       chat.candidates = null
       // Prose is authoritative. The previous settlement must not overrule the

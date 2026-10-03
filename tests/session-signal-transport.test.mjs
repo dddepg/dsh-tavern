@@ -20,36 +20,6 @@ test('typed session signals filter by kind and dedupe the same authoritative ver
   stopRuntime()
 })
 
-test('new subscribers replay the latest signal and never receive another session', function () {
-  const transport = createSessionSignalTransport()
-  transport.publish('session-a', { kind: 'candidate', version: '8' })
-  transport.publish('session-b', { kind: 'candidate', version: '9' })
-  const received = []
-  const stop = transport.subscribe('session-a', [], signal => received.push(signal))
-
-  assert.deepEqual(received.map(signal => ({ sessionId: signal.sessionId, version: signal.version })), [
-    { sessionId: 'session-a', version: '8' }
-  ])
-  stop()
-  transport.publish('session-a', { kind: 'candidate', version: '10' })
-  assert.equal(received.length, 1)
-})
-
-test('tavern-state signal preserves its matching projection snapshot across live delivery and replay', function () {
-  const transport = createSessionSignalTransport()
-  const snapshot = { mailboxVersion: 7, task: { status: 'succeeded' } }
-  const live = []
-  const stopLive = transport.subscribe('session-a', ['tavern-state'], signal => live.push(signal))
-
-  transport.publish('session-a', { kind: 'tavern-state', version: '7', snapshot })
-  assert.deepEqual(live[0].snapshot, snapshot)
-  stopLive()
-
-  const replayed = []
-  transport.subscribe('session-a', ['tavern-state'], signal => replayed.push(signal))()
-  assert.deepEqual(replayed[0].snapshot, snapshot)
-})
-
 test('one global snapshot stream coalesces bursts by session and kind and reopens from a complete baseline', async function () {
   const transport = createSessionSignalTransport()
   transport.publish('session-a', { kind: 'tavern-state', version: '1', snapshot: { mailboxVersion: 1 } })

@@ -35,6 +35,7 @@ for (const check of [false, true]) {
     }
     await copyFile(new URL('../bin/build-tavern-client.mjs', import.meta.url), builder)
     await writeFile(path.join(root, 'tavern-plugin/lib/client-assets/tavern.css'), '')
+    for (const name of ['logo', 'lockup', 'lockup-dark']) await writeFile(path.join(root, `tavern-plugin/lib/client-assets/${name}.svg`), '<svg/>')
     const valid = 'const fixture = 1;\n'
     const invalid = 'const = 1;\n'
     await writeFile(template, valid)

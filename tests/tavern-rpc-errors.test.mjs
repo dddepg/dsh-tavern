@@ -6,7 +6,7 @@ import test from 'node:test'
 // Run the production POST handler, stubbing dispatch rather than duplicating
 // the error envelope. No native session or credentials are needed.
 test('POST API 保留错误码而不泄漏错误对象中的额外数据', async () => {
-  const source = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../tavern-plugin/lib/http/routes.js', import.meta.url), 'utf8')
   const start = source.indexOf("          const method = pathname.slice('/api/dsh-tavern'.length + 1)")
   const end = source.indexOf('\n      }\n    }),', start)
   assert.ok(start >= 0 && end > start)

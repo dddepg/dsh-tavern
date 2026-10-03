@@ -66,24 +66,29 @@ function availableTurns(chat) {
   return turns.sort(function (a, b) { return a - b })
 }
 
-function safeValue(value, depth = 0, seen = new WeakSet()) {
+function safeValue(value, depth = 0, seen = new WeakSet(), complete = false) {
   if (value === null || value === undefined || typeof value === 'boolean' || typeof value === 'number') return value
-  if (typeof value === 'string') return value.length > 12000 ? value.slice(0, 12000) + '…[已截断]' : value
+  if (typeof value === 'string') return !complete && value.length > 12000 ? value.slice(0, 12000) + '…[已截断]' : value
   if (typeof value !== 'object') return str(value)
-  if (depth >= 6) return '[深度已截断]'
+  if (!complete && depth >= 6) return '[深度已截断]'
   if (seen.has(value)) return '[循环引用]'
   seen.add(value)
-  if (Array.isArray(value)) return value.map(function (item) { return safeValue(item, depth + 1, seen) })
-  const result = {}
-  for (const [key, item] of Object.entries(value).slice(0, 200)) {
-    if (/authorization|cookie|api[-_]?key|secret|password|access[-_]?token/i.test(key)) result[key] = '[已隐藏]'
-    else result[key] = safeValue(item, depth + 1, seen)
+  if (Array.isArray(value)) {
+    const result = value.map(function (item) { return safeValue(item, depth + 1, seen, complete) })
+    seen.delete(value)
+    return result
   }
+  const result = {}
+  for (const [key, item] of Object.entries(value).slice(0, complete ? Infinity : 200)) {
+    if (/authorization|cookie|api[-_]?key|secret|password|access[-_]?token/i.test(key)) result[key] = '[已隐藏]'
+    else result[key] = safeValue(item, depth + 1, seen, complete)
+  }
+  seen.delete(value)
   return result
 }
 
-function json(value) {
-  try { return JSON.stringify(safeValue(value), null, 2) } catch { return str(value) }
+function json(value, complete = false) {
+  try { return JSON.stringify(safeValue(value, 0, new WeakSet(), complete), null, 2) } catch { return str(value) }
 }
 
 function conversationText(chat) {
@@ -131,11 +136,14 @@ export function readPlayChatDebugTurn(editorChat, sourceChat, reference, request
   const found = messageForTurn(sourceChat, turn)
   if (found === null) throw new Error('游玩记录中不存在第 ' + turn + ' 轮回复')
   const message = found.message
-  const layers = ['overview', 'turns', 'conversation', 'input', 'source', 'session', 'display', 'saved-display', 'diagnostics', 'tavern', 'foreground', 'background', 'request', 'worldbook', 'iframe']
+  const layers = ['overview', 'turns', 'conversation', 'input', 'source', 'session', 'display', 'saved-display', 'diagnostics', 'tavern', 'foreground', 'background', 'request', 'worldbook', 'iframe', 'preset', 'context', 'regex']
   const layer = layers.includes(request.layer) ? request.layer : 'overview'
   const projected = typeof currentProjection === 'function' ? currentProjection(message) : currentProjection
   let text = ''
-  if (layer === 'turns') text = '【可用游玩轮次】\n' + availableTurns(sourceChat).map(function (item) { return '第 ' + item + ' 轮' }).join('\n')
+  if (layer === 'context') text = '【本局完整持久上下文 · 凭据已隐藏】\n' + json(sourceChat, true)
+  else if (layer === 'preset') text = '【本局预设快照】\n' + (sourceChat.runtimePresetSnapshot ? json(sourceChat.runtimePresetSnapshot, true) : '该局未保存预设快照；不能从当前预设文件反推。')
+  else if (layer === 'regex') text = '【当前全局与卡片规则＋本局预设规则 · 实际组合顺序】\n' + json(evidence.regex || [], true)
+  else if (layer === 'turns') text = '【可用游玩轮次】\n' + availableTurns(sourceChat).map(function (item) { return '第 ' + item + ' 轮' }).join('\n')
   else if (layer === 'conversation') text = conversationText(sourceChat)
   else if (layer === 'input') text = found.userText || '（开场轮，无玩家输入）'
   else if (layer === 'source') text = str(message.sourceText) || str(message.text)
@@ -161,16 +169,17 @@ export function readPlayChatDebugTurn(editorChat, sourceChat, reference, request
     const applied = projected && projected.applied ? projected.applied : { session: [], display: [] }
     const warnings = projected && Array.isArray(projected.warnings) ? projected.warnings : []
     text = [
-      '【当前人物卡正则重新检测】',
+      '【当前全局与卡片正则＋本局预设正则重新检测】',
       'Session 命中：' + JSON.stringify(applied.session || []),
       '展示命中：' + JSON.stringify(applied.display || []),
       '警告：' + JSON.stringify(warnings),
-      '说明：命中结果按当前人物卡重新计算；display 是当前实时投影，saved-display 是该轮保存时的展示快照。'
+      '说明：命中结果按当前全局、卡片规则及本局预设快照重新计算；display 是当前实时投影，saved-display 是该轮保存时的展示快照。'
     ].join('\n')
   } else {
     text = [
       '【最新一轮游玩诊断】第 ' + turn + ' 轮',
       '可按需读取：turns / conversation / input / source / session / display / saved-display / diagnostics / tavern / foreground / background / request / iframe',
+      '本局预设：' + (sourceChat.runtimePresetSnapshot ? (str(sourceChat.runtimePresetSnapshot.presetName) || str(sourceChat.runtimePresetSnapshot.presetPath) || '已保存快照') : '无保存快照') + '；用 preset 分页读取，context 查询完整持久上下文，regex 查询组合规则。',
       '模型原文：' + (str(message.sourceText) || str(message.text)).length + ' 字',
       'Session 文本：' + str(message.text).length + ' 字',
       '已保存展示文本：' + (str(message.displayText) || str(message.text)).length + ' 字',

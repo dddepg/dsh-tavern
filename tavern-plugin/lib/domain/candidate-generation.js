@@ -46,61 +46,6 @@ function parseJsonLenient(text) {
   return {}
 }
 
-function extractChoicesArray(text) {
-  const source = str(text)
-  const keyAt = source.indexOf('"choices"')
-  if (keyAt < 0) return null
-  const start = source.indexOf('[', keyAt)
-  if (start < 0) return null
-  let depth = 0
-  let inString = false
-  let escaped = false
-  for (let index = start; index < source.length; index++) {
-    const character = source[index]
-    if (inString) {
-      if (escaped) escaped = false
-      else if (character === '\\') escaped = true
-      else if (character === '"') inString = false
-      continue
-    }
-    if (character === '"') inString = true
-    else if (character === '[') depth++
-    else if (character === ']') {
-      depth--
-      if (depth === 0) return source.slice(start, index + 1)
-    }
-  }
-  return null
-}
-
-function parseChoiceObjects(text) {
-  const result = []
-  const expression = /\{\s*"type"\s*:\s*"([^"]+)"\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g
-  let match
-  while ((match = expression.exec(str(text))) !== null) {
-    let content = match[2]
-    try { content = JSON.parse('"' + content + '"') } catch (error) { content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n') }
-    result.push({ type: match[1], text: str(content) })
-  }
-  return result
-}
-
-function parsedDecision(text) {
-  const parsed = parseJsonLenient(text)
-  let choices = Array.isArray(parsed.choices) ? parsed.choices : (Array.isArray(parsed.options) ? parsed.options : [])
-  if (choices.length === 0) {
-    const arrayText = extractChoicesArray(text)
-    if (arrayText !== null) {
-      try {
-        const value = JSON.parse(arrayText)
-        if (Array.isArray(value)) choices = value
-      } catch (error) {}
-    }
-  }
-  if (choices.length === 0) choices = parseChoiceObjects(text)
-  return { choices }
-}
-
 function choiceType(value) {
   const type = str(value).trim().toLowerCase()
   if (type === 'action' || type === '人物行为' || type === '行动') return 'action'

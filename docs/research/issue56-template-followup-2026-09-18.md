@@ -38,10 +38,10 @@
 ## 重跑
 
 ```sh
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-followup-current large 20
-node tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-followup-pinned large-pinned-snapshot 20
-DSH_TAVERN_RECEIPT_EXPERIMENT=baseline node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-receipt-baseline large 20
-DSH_TAVERN_RECEIPT_EXPERIMENT=compact node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/fixtures/worldbook-template-benchmark.mjs /tmp/issue56-receipt-compact large 20
+node tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-followup-current large 20
+node tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-followup-pinned large-pinned-snapshot 20
+DSH_TAVERN_RECEIPT_EXPERIMENT=baseline node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-receipt-baseline large 20
+DSH_TAVERN_RECEIPT_EXPERIMENT=compact node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/performance/worldbook-template-benchmark.mjs /tmp/issue56-receipt-compact large 20
 ```
 
 实验 loader 只改测试进程中的基准内容，以及该基准向浏览器提供的队列源码；不改宿主源文件、不重建或改写发布产物。

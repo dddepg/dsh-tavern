@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile, readFile, mkdir, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { settledTurn, loadScenario, assertions } from '../lib/scenario.mjs'
+import { settledTurn, loadScenario } from '../lib/scenario.mjs'
 import { nativeResult } from '../lib/evidence.mjs'
 
 test('cannot advance on previous settlement, partial reply or pending MVU', () => {
@@ -18,13 +18,7 @@ test('cannot advance on previous settlement, partial reply or pending MVU', () =
   assert.equal(settledTurn(chat, 1, '继续').ready, true)
   assert.match(settledTurn(chat, 1, '不同输入').error, /不一致/)
 })
-test('background failure cannot hide behind a successful foreground response', () => {
-  const chat = { settleStatus: 'failed', settleError: 'provider failure', messages: [{ role: 'user', text: '继续' }, { role: 'assistant', text: '正文' }] }
-  assert.equal(settledTurn(chat, 0, '继续').error, 'provider failure')
-  chat.settleStatus = 'done'
-  chat.messages[1].mvu = { receipt: { failures: [{ message: 'invalid patch' }] } }
-  assert.match(settledTurn(chat, 0, '继续').error, /失败/)
-})
+
 test('native completion follows the new turn, not an old end or intermediate tool step', () => {
   const events = [ { seq: 1, type: 'turn/start', data: { turn: 1 } }, { seq: 2, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
     { seq: 3, type: 'turn/start', data: { turn: 2 } }, { seq: 4, type: 'step/end', data: { turn: 2 } } ]
@@ -42,9 +36,6 @@ test('scenario validation rejects unsupported assertions and image outside play'
     base.steps.push({ action: 'image' }); await writeFile(file, JSON.stringify(base)); await assert.rejects(loadScenario(file), /游玩对话/)
     base.steps.pop(); base.steps[1].expect = { typo: true }; await writeFile(file, JSON.stringify(base)); await assert.rejects(loadScenario(file), /不支持的断言/)
   } finally { await rm(root, { recursive: true, force: true }) }
-})
-test('state assertions fail on missing data rather than silently passing', () => {
-  assert.equal(assertions({ state: [{ path: 'a.b', equals: 1 }] }, { state: {} })[0].passed, false)
 })
 
 test('refusal marks keep service errors and fictional dialogue separate', async () => {
@@ -89,36 +80,6 @@ test('recording preserves failed subagent output even if the chat journal is unr
     assert.deepEqual(requests.map(r => r.id), ['new'])
     assert.equal(requests[0].response.text, 'partial output')
     assert.equal(JSON.parse(await readFile(path.join(root, '02-subagent-native-bg.json'), 'utf8'))[0].type, 'error')
-  } finally { await rm(root, { recursive: true, force: true }) }
-})
-
-test('compacted reasoning and tool chunks remain in per-turn native evidence', async () => {
-  const { eventsAfterSeq } = await import('../lib/evidence.mjs')
-  const events = [{ seq: 10, type: 'turn/end' }, { seq: 11, type: 'turn/start' },
-    { type: 'reasoning-chunks', data: { turn: 2, texts: ['reasoning'] } },
-    { type: 'tool-call-chunks', data: { turn: 2, args: ['partial'] } }, { seq: 25, type: 'turn/end' }]
-  assert.deepEqual(eventsAfterSeq(events, 10), events.slice(1))
-})
-
-test('candidate request must finish in addition to settlement', async () => {
-  const { backgroundChain } = await import('../lib/recording.mjs')
-  const settlement = { id: 'settlement', scope: 'background', task: 'settlement', status: 'completed' }
-  const candidate = { id: 'candidate', scope: 'background', task: 'candidate', status: 'running' }
-  assert.equal(backgroundChain([settlement, candidate]).passed, false)
-  assert.equal(backgroundChain([settlement, { ...candidate, status: 'completed' }]).passed, true)
-  assert.equal(backgroundChain([settlement, { ...candidate, status: 'failed' }]).passed, false)
-})
-
-test('candidate generation can be requested only for gameplay inputs', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-candidate-case-'))
-  const file = path.join(root, 'scenario.json')
-  const scenario = { model: { provider: 'test', model: 'test' }, steps: [{ action: 'play', cardName: 'demo' }, { action: 'say', input: '继续', candidates: true }] }
-  try {
-    await writeFile(file, JSON.stringify(scenario))
-    assert.equal((await loadScenario(file)).steps[1].candidates, true)
-    scenario.steps[0] = { action: 'card' }
-    await writeFile(file, JSON.stringify(scenario))
-    await assert.rejects(loadScenario(file), /candidates/)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 

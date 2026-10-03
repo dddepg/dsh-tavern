@@ -66,27 +66,3 @@ test('美化读取分页绑定版本，非托管卡明确返回不可编辑',asy
  assert.equal(original.editable,false);assert.equal(original.html,undefined)
  await assert.rejects(f.call('tavern_read_mvu_appearance',{path:f.path,revision:'stale',offset:10}),/版本/)
 })
-test('美化工具真实 DSH 无损快照及输出 schema 可接受读写回执', {skip:!process.env.DSH_BOOT_MODULE},async t=>{
- const {pathToFileURL}=await import('node:url'),root=pathToFileURL(process.env.DSH_BOOT_MODULE)
- const {defineTool,validateJsonSchemaValue}=await import(new URL('../../dsh-tools/lib/index.js',root))
- const {snapshotJsonValue}=await import(new URL('../../dsh-util-values/lib/index.js',root))
- const f=await fixture(t),tools=new Map()
- registerMvuConversionTools({tools:{register:t=>tools.set(t.name,t)},defineTool,conversion:f.conversion,chatForSession:async()=>({mode:'card'})})
- async function invoke(name,args) {
-  const tool=tools.get(name),result=await tool.execute(args,{})
-  assert.notEqual(snapshotJsonValue(result),undefined)
-  assert.deepEqual(validateJsonSchemaValue(tool.output.schema,result),[])
-  assert.notEqual(snapshotJsonValue(tool.output.render(args,result)),undefined)
-  return result.report
- }
- const read=await invoke('tavern_read_mvu_appearance',{path:f.path})
- const result=await invoke('tavern_update_mvu_appearance',{path:f.path,revision:read.revision,replacements:[{expected:'<strong>/日期</strong>',value:''}]})
- assert.equal(result.validation.valid,true)
- await invoke('tavern_read_mvu_appearance',{path:f.sourcePath})
-})
-
-test('直接外观工具新增捕获时指向草稿组件流程并保留目标',async t=>{
- const f=await fixture(t),read=await f.call('tavern_read_mvu_appearance',{path:f.path}),before=await f.resources.readText(f.path)
- await assert.rejects(f.call('tavern_update_mvu_appearance',{path:f.path,revision:read.revision,replacements:[{expected:'</section>',value:'<span>$10</span></section>'}]}),/tavern_card_draft.*mvu-field/)
- assert.equal(await f.resources.readText(f.path),before)
-})

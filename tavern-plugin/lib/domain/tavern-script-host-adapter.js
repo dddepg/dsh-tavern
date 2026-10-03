@@ -803,7 +803,7 @@ export function createTavernScriptHostAdapter(options = {}) {
         if (appended) for (const id of [...indices].sort((a,b)=>a-b)) {
           if (id < baseline.messageCount) continue
           const source = current.messages[id]
-          const role = source.role === 'tavern-helper' ? (['system','assistant','user'].includes(source.tavernRole) ? source.tavernRole : 'assistant') : source.role === 'user' ? 'user' : 'assistant'
+          const role = source.role === 'tavern-helper' ? (['system','assistant','user'].includes(source.tavernRole) ? source.tavernRole : 'assistant') : ['system','user'].includes(source.role) ? source.role : 'assistant'
           const turn = Math.max(0, Number(source.turn) || (source.greeting === true ? 1 : 0))
           if (role === 'assistant' && turn > 0) turnMessageIdChanges.push([String(turn),id])
         }

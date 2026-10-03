@@ -14,9 +14,17 @@ function syncTavernSubagentCatalogs(sessions) {
     }
     for (const [parentId, catalog] of Object.entries(snapshot.subagentsByParent || {})) {
       if (!catalog || catalog.state !== 'ready') continue;
-      const signature = (groups.get(parentId) || []).sort().join('|');
-      if (signatures.get(parentId) === signature) continue;
+      const rows = groups.get(parentId) || [];
+      const signature = rows.slice().sort().join('|');
+      const previous = signatures.get(parentId);
+      if (previous === signature) continue;
       signatures.set(parentId, signature);
+      // A catalog that just became ready was fetched moments ago; refetching it
+      // repeats a full session scan. Only refresh when it misses a known child.
+      if (previous === undefined) {
+        const listed = new Set((catalog.entries || []).map(function (entry) { return entry && entry.id; }));
+        if (rows.every(function (row) { return listed.has(row.slice(0, row.lastIndexOf(':'))); })) continue;
+      }
       Promise.resolve().then(function () {
         if (!disposed) return sessions.refreshSubagents(parentId);
       }).catch(function (error) { console.warn('[DSH Tavern] 子代理目录刷新失败', error); });

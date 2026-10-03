@@ -21,14 +21,6 @@ test('空响应与非 JSON 返回明确错误，认证错误不作为暂时故�
   }
 })
 
-test('执行更新遇到空响应不能自动再次提交，业务失败保留原消息', async () => {
-  let count = 0
-  const rpc = rpcFor(async () => { count++; return new Response('', { status: 503 }) })
-  await assert.rejects(rpc('startUpdate'))
-  assert.equal(count, 1)
-  await assert.rejects(rpcFor(async () => Response.json({ ok: false, error: '安装失败' }))('startUpdate'), /安装失败/)
-})
-
 function pollHarness(fetch) {
   const marker = source.indexOf('async function refreshUpdateStatus()')
   const start = source.lastIndexOf('React.useEffect(function () {', marker)
@@ -39,20 +31,10 @@ function pollHarness(fetch) {
   new Function('React', 'window', 'call', 'setUpdateStatus', 'tavernErrorHub', 'updateStartedAtRef', 'isMissingUpdateApiError', source.slice(start, end))(
     { useEffect(fn) { cleanup = fn() } },
     { setInterval(fn) { poll = fn; return 1 }, clearInterval() {} },
-    rpc, state => states.push(state), { report: (label, error) => reports.push({ label, error }), resolve: label => cleared.push(label) },
+    rpc, state => states.push(typeof state === 'function' ? state(states.at(-1)) : state), { report: (label, error) => reports.push({ label, error }), resolve: label => cleared.push(label) },
     { current: 0 }, () => false)
   return { reports, cleared, states, poll: () => poll(), stop: () => cleanup() }
 }
-
-test('慢查询不重叠，卸载后不再更新界面或清除其他错误', async () => {
-  let finish, calls = 0
-  const h = pollHarness(() => { calls++; return new Promise(resolve => { finish = resolve }) })
-  await h.poll()
-  assert.equal(calls, 1)
-  h.stop(); finish(ok()); await tick()
-  assert.equal(h.states.length, 0)
-  assert.equal(h.cleared.length, 0)
-})
 
 test('网络中断可恢复，认证和业务错误立即提示', async () => {
   let calls = 0

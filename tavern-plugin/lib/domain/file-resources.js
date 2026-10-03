@@ -25,10 +25,6 @@ async function exists(target) {
   try { await access(target); return true } catch { return false }
 }
 
-function comparableJson(value) {
-  return JSON.stringify(value, Object.keys(value || {}).sort())
-}
-
 export function safeResourceName(value, fallback = '未命名') {
   const name = path.basename(str(value).trim() || fallback).normalize('NFC')
   if (name === '.' || name === '..' || /[<>:"/\\|?*\u0000-\u001F]/.test(name) || /[. ]$/.test(name) || WINDOWS_RESERVED.test(name)) {
@@ -79,6 +75,25 @@ function originalCard(record, card, workingName) {
   const snapshot = clone((record && record.snapshot) || card)
   if (snapshot && typeof snapshot === 'object') delete snapshot.id
   return { name: workingName, data: JSON.stringify(snapshot, null, 2) }
+}
+
+// Card PNGs embed the whole card (often several MB of worldbook/scripts) in text
+// chunks. Thumbnails only need the pixels, so drop tEXt/zTXt/iTXt.
+export function stripPngTextChunks(buffer) {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (!Buffer.isBuffer(buffer) || buffer.length <= signature.length || !buffer.subarray(0, signature.length).equals(signature)) return buffer
+  const parts = [signature]
+  let offset = signature.length
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const end = offset + 12 + length
+    if (end > buffer.length) return buffer
+    if (type !== 'tEXt' && type !== 'zTXt' && type !== 'iTXt') parts.push(buffer.subarray(offset, end))
+    offset = end
+    if (type === 'IEND') return Buffer.concat(parts)
+  }
+  return buffer
 }
 
 function pngCardPayload(buffer, name) {
@@ -240,6 +255,18 @@ export function createFileResourceStore(options = {}) {
     return await readFile(path.join(path.dirname(absolute(normalized, true)), originalName))
   }
 
+  async function cardImagePreview(relative) {
+    const normalized = normalizeResourcePath(relative, 'card')
+    const originalName = await originalCardName(normalized)
+    if (originalName === null || path.extname(originalName).toLowerCase() !== '.png') return undefined
+    const file = path.join(path.dirname(absolute(normalized, true)), originalName)
+    const info = await stat(file)
+    return {
+      revision: '"' + info.size.toString(36) + '-' + Math.trunc(info.mtimeMs).toString(36) + '"',
+      read: async function () { return stripPngTextChunks(await readFile(file)) }
+    }
+  }
+
   async function ensureCardWorkspace(relative, migrate) {
     const normalized = normalizeResourcePath(relative, 'card')
     if (typeof migrate !== 'function') throw new Error('缺少人物卡工作区迁移器')
@@ -360,6 +387,35 @@ export function createFileResourceStore(options = {}) {
 
   async function writeWorldBookBindings(bindings) {
     await durableFiles.write(worldBookBindingsPath, JSON.stringify(bindings, null, 2))
+  }
+
+  async function globalWorldBookSources() {
+    const bindings = await readWorldBookBindings()
+    return (bindings.$global?.sources || []).map(source => ({ kind: 'standalone', path: normalizeResourcePath(source.path, 'worldbook') }))
+  }
+
+  // Global selections share the binding file with card bindings. Serialize all
+  // public mutations of that file so concurrent toggles cannot erase each other.
+  let worldBookMutationTail = Promise.resolve()
+  function serializeWorldBookMutation(work) {
+    return (...args) => {
+      const operation = worldBookMutationTail.catch(() => {}).then(() => work(...args))
+      worldBookMutationTail = operation
+      return operation
+    }
+  }
+
+  async function setGlobalWorldBook(relative, enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('全局生效开关必须为布尔值')
+    const bookPath = normalizeResourcePath(relative, 'worldbook')
+    if (enabled && !await exists(absolute(bookPath))) throw new Error('世界书不存在: ' + bookPath)
+    const bindings = await readWorldBookBindings()
+    if ((bindings.$global?.sources || []).some(source => source.path === bookPath) === enabled) return enabled
+    const sources = (bindings.$global?.sources || []).filter(source => source.path !== bookPath)
+    if (enabled) sources.push({ kind: 'standalone', path: bookPath })
+    bindings.$global = { version: 2, sources }
+    await writeWorldBookBindings(bindings)
+    return enabled
   }
 
   async function worldBookBindingForCard(cardPath) {
@@ -1020,5 +1076,5 @@ export function createFileResourceStore(options = {}) {
     return result
   }
 
-  return Object.freeze({ readMvuDraftSession, updateMvuDraftSession, readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard, inspectMvuDestination, bindMaterial, bindWorldBook, bindWorldBooks, cardsForMaterial, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove, rename: renameResource, replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook, worldBookBindingForCard, writeWorking })
+  return Object.freeze({ globalWorldBookSources, setGlobalWorldBook: serializeWorldBookMutation(setGlobalWorldBook), readMvuDraftSession, updateMvuDraftSession, readMvuDraft, updateMvuDraft, readMvuDefinition, saveMvuDefinition, absolute, copyCard, saveMvuCard: serializeWorldBookMutation(saveMvuCard), inspectMvuDestination, bindMaterial, bindWorldBook: serializeWorldBookMutation(bindWorldBook), bindWorldBooks: serializeWorldBookMutation(bindWorldBooks), cardsForMaterial, cardImagePreview, ensure, ensureCardWorkspace, hasCardImage, importCard, importText, importWorldBook, list, metadata, migrateLegacy, readCard, readCardImage, readText, remove: serializeWorldBookMutation(remove), rename: serializeWorldBookMutation(renameResource), replaceScript, restoreCard, scriptBindingsForCards, scriptForCard, unbindMaterial, unbindWorldBook: serializeWorldBookMutation(unbindWorldBook), worldBookBindingForCard, writeWorking })
 }

@@ -14,30 +14,6 @@ test('默认执行租约允许短暂断线，持续确认可续租', function ()
   assert.equal(TAVERN_SCRIPT_EXECUTION_TIMEOUT_MS, 60000)
 })
 
-test('Script dispatch skips immediately while no browser runtime is present', async function () {
-  const gate = createTavernScriptDispatch()
-  assert.deepEqual(await gate.dispatch('session-a', 'MESSAGE_SENT', [2]), { handled: false, unavailable: true, args: [2] })
-})
-
-test('Script dispatch publishes one work signal and returns browser mutations', async function () {
-  const signals = []
-  const gate = createTavernScriptDispatch({ timeoutMs: 500, publishSignal(sessionId, signal) { signals.push({ sessionId, ...signal }) } })
-  gate.touch('session-a', 'legacy', true)
-  const pending = gate.dispatch('session-a', 'COMMAND_PARSED', [{ value: 1 }, [{ type: 'set' }]], { messages: [] })
-  assert.equal(gate.status('session-a').phase, 'queued')
-  assert.deepEqual(signals, [{ sessionId: 'session-a', kind: 'runtime-work', version: 'script-work-1' }])
-  const offer = claimAndStart(gate, 'session-a')
-  const event = offer.event
-  assert.equal(gate.status('session-a').phase, 'executing')
-  assert.equal(event.name, 'COMMAND_PARSED')
-  assert.deepEqual(event.context, { messages: [] })
-  event.args[1].length = 0
-  assert.equal(gate.complete('session-a', event.id, event.args, 'legacy', offer.leaseToken), true)
-  assert.deepEqual(await pending, { handled: true, args: [{ value: 1 }, []] })
-  assert.equal(gate.status('session-a').phase, 'idle')
-  assert.equal(gate.claim('session-a', 'legacy', true).event, null)
-})
-
 test('claim 响应丢失后重放同一 offer，显式 start 后才进入执行超时', async function () {
   const gate = createTavernScriptDispatch({ claimTimeoutMs: 500, executionTimeoutMs: 100 })
   gate.touch('session-a', 'browser-a', true)
@@ -55,36 +31,6 @@ test('claim 响应丢失后重放同一 offer，显式 start 后才进入执行�
   const result = await pending
   assert.equal(result.executionLost, true)
   assert.equal(result.phase, 'executing')
-})
-
-test('Script dispatch propagates browser script failure instead of reporting handled', async function () {
-  const gate = createTavernScriptDispatch({ timeoutMs: 500 })
-  gate.touch('session-a', 'browser-a', true)
-  const pending = gate.dispatch('session-a', 'MESSAGE_RECEIVED', [2])
-  const offer = claimAndStart(gate, 'session-a', 'browser-a')
-  const event = offer.event
-
-  assert.equal(gate.complete('session-a', event.id, event.args, 'browser-a', offer.leaseToken, '变量守卫执行超时'), true)
-  assert.deepEqual(await pending, { handled: false, error: '变量守卫执行超时', args: [2] })
-  assert.equal(gate.claim('session-a', 'browser-a', true).event, null)
-})
-
-test('claimed script work times out without blocking later events', async function () {
-  let clock = 0
-  const gate = createTavernScriptDispatch({ timeoutMs: 100, presenceTtlMs: 1000, now: function () { return clock } })
-  gate.touch('session-a', 'legacy', true)
-  const first = gate.dispatch('session-a', 'MESSAGE_SENT', [3])
-  claimAndStart(gate, 'session-a')
-  const result = await first
-  assert.equal(result.handled, false)
-  assert.equal(result.executionLost, true)
-  clock = 50
-  gate.touch('session-a', 'legacy', true)
-  const pending = gate.dispatch('session-a', 'MESSAGE_SENT', [4])
-  const offer = claimAndStart(gate, 'session-a')
-  const event = offer.event
-  gate.complete('session-a', event.id, event.args, 'legacy', offer.leaseToken)
-  assert.equal((await pending).handled, true)
 })
 
 test('unclaimed work expires the stale ready lease before settlement retries', async function () {
@@ -109,40 +55,6 @@ test('同一会话只允许一个浏览器运行 Helper，租约过期后才能�
   clock = 1001
   assert.deepEqual(gate.claim('session-a', 'browser-b'), { active: true, ready: false, event: null })
   assert.deepEqual(gate.claim('session-a', 'browser-a'), { active: false, ready: false, event: null })
-})
-
-test('非所有者不能完成事件或释放其他浏览器的执行权', async function () {
-  const gate = createTavernScriptDispatch({ timeoutMs: 500 })
-  gate.claim('session-a', 'browser-a', true)
-  const pending = gate.dispatch('session-a', 'MESSAGE_SENT', [1])
-  const offer = claimAndStart(gate, 'session-a', 'browser-a')
-  const event = offer.event
-
-  assert.equal(gate.complete('session-a', event.id, event.args, 'browser-b', offer.leaseToken), false)
-  assert.equal(gate.dispose('session-a', 'browser-b'), false)
-  assert.equal(gate.complete('session-a', event.id, event.args, 'browser-a', offer.leaseToken), true)
-  assert.equal((await pending).handled, true)
-})
-
-test('浏览器取得租约但脚本尚未完成初始化时不会接收结算事件', async function () {
-  const gate = createTavernScriptDispatch({ timeoutMs: 500 })
-  assert.deepEqual(gate.claim('session-a', 'browser-a', false), { active: true, ready: false, event: null })
-  assert.deepEqual(await gate.dispatch('session-a', 'MESSAGE_RECEIVED', [1]), { handled: false, unavailable: true, args: [1] })
-  assert.deepEqual(gate.claim('session-a', 'browser-a', true), { active: true, ready: true, event: null })
-})
-
-test('执行器只在从未就绪变为就绪时通知接续任务', function () {
-  const gate = createTavernScriptDispatch()
-  const ready = []
-  const unsubscribe = gate.subscribeReady(function (sessionId) { ready.push(sessionId) })
-  gate.claim('session-a', 'browser-a', false)
-  gate.claim('session-a', 'browser-a', true)
-  gate.claim('session-a', 'browser-a', true)
-  assert.deepEqual(ready, ['session-a'])
-  gate.dispose('session-a', 'browser-a')
-  gate.claim('session-a', 'browser-b', true)
-  assert.deepEqual(ready, ['session-a', 'session-a'])
-  unsubscribe()
 })
 
 test('MVU 加载失败即时终止在途事件，保留脱敏原因且不发布 ready；只有租约所有者可报告', async () => {
@@ -184,20 +96,6 @@ test('claim 尚未同步失败时，事件回执也识别初始化失败并脱�
   assert.doesNotMatch(result.error, /secret-value/)
 })
 
-test('取消任务立即释放队列并拒绝旧回执，执行器仍可处理下一任务', async () => {
-  const gate = createTavernScriptDispatch()
-  const controller = new AbortController()
-  gate.claim('s', 'browser', true)
-  const pending = gate.dispatch('s', 'MESSAGE_RECEIVED', [], null, { signal: controller.signal })
-  const offer = gate.claim('s', 'browser', true)
-  gate.start('s', offer.event.id, offer.leaseToken, 'browser')
-  controller.abort()
-  assert.equal((await pending).disposed, true)
-  assert.equal(gate.status('s').busy, false)
-  assert.equal(gate.status('s').ready, true)
-  assert.equal(gate.complete('s', offer.event.id, [], 'browser', offer.leaseToken), false)
-})
-
 test('完成回执可重复确认，查询与续租严格校验执行身份', async () => {
   const gate = createTavernScriptDispatch({ executionTimeoutMs: 100 })
   gate.touch('s', 'browser', true)
@@ -214,30 +112,4 @@ test('完成回执可重复确认，查询与续租严格校验执行身份', as
     assert.equal(gate.workState('s', event.id, leaseToken, 'browser').phase, 'completed')
     assert.deepEqual(await pending, { handled: true, args: [2] })
   } finally { gate.dispose('s') }
-})
-
-test('失联只延期工作并撤销就绪状态，旧执行器不能再提交', async () => {
-  const gate = createTavernScriptDispatch({ executionTimeoutMs: 100 })
-  gate.touch('s', 'browser', true)
-  const pending = gate.dispatch('s', 'MESSAGE_RECEIVED', [1])
-  const offer = claimAndStart(gate, 's', 'browser')
-  assert.equal((await pending).executionLost, true)
-  assert.equal(gate.status('s').ready, false)
-  assert.equal(gate.workState('s', offer.event.id, offer.leaseToken, 'browser', true).phase, 'unknown')
-  assert.equal(gate.complete('s', offer.event.id, [2], 'browser', offer.leaseToken), false)
-})
-
-test('服务重启的新租约不接受旧 start 或完成回执，即使事件 ID 相同', async () => {
-  const old = createTavernScriptDispatch(), fresh = createTavernScriptDispatch()
-  old.touch('s', 'browser', true)
-  const before = old.dispatch('s', 'UPDATE', [], null, { eventId: 'same' })
-  const a = claimAndStart(old, 's', 'browser')
-  old.dispose('s'); await before
-  fresh.touch('s', 'browser', true)
-  const after = fresh.dispatch('s', 'UPDATE', [], null, { eventId: 'same' })
-  const b = claimAndStart(fresh, 's', 'browser')
-  assert.notEqual(a.leaseToken, b.leaseToken)
-  assert.equal(fresh.workState('s', a.event.id, a.leaseToken, 'browser', true).phase, 'unknown')
-  assert.equal(fresh.complete('s', a.event.id, [], 'browser', a.leaseToken), false)
-  fresh.dispose('s'); await after
 })

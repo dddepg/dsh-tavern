@@ -1,5 +1,8 @@
+import { applyCharacterDesignWorldbook, characterDesignWorldbookSnapshot, characterWorldbookEntries } from './character-design-worldbook.js'
+
 export const CHARACTER_DESIGN_READ_TOOL_NAME = 'character_design_read'
 export const CHARACTER_DESIGN_SAVE_TOOL_NAME = 'character_design_save'
+export const CHARACTER_DESIGN_REUSE_TOOL_NAME = 'character_design_reuse'
 
 const SPEC = 'dsh-tavern.character-design-document'
 const REQUIRED_DESIGN_FIELDS = Object.freeze([
@@ -96,7 +99,7 @@ const stringProperty = description => ({ type: 'string', description })
 
 export const CHARACTER_DESIGN_READ_TOOL = Object.freeze({
   name: CHARACTER_DESIGN_READ_TOOL_NAME,
-  description: '读取当前对话的人物设计档案。无参数时返回精简索引；需要复用、补全或修改某人时按姓名读取完整方案。',
+  description: '设计前先查本局世界书和人物档案。无参数返回两者索引；按姓名或别名查询返回匹配世界书原文及已有档案。判断世界书已有完整人物设定时调用 character_design_reuse，不重复建档。正文提及不等于完整人物设定；动态模板可用 worldbook_search 读取渲染结果。',
   countsTowardLimit: false,
   parameters: Object.freeze({
     type: 'object', additionalProperties: false,
@@ -104,9 +107,19 @@ export const CHARACTER_DESIGN_READ_TOOL = Object.freeze({
   })
 })
 
+export const CHARACTER_DESIGN_REUSE_TOOL = Object.freeze({
+  name: CHARACTER_DESIGN_REUSE_TOOL_NAME,
+  description: '确认已读取的本局世界书足以提供该人物设定，直接复用，成功结束该人物设计而不创建档案或修改世界书。仅姓名或零散提及时不要使用。',
+  countsTowardLimit: false,
+  parameters: { type: 'object', additionalProperties: false, properties: {
+    name: stringProperty('已查询的人物姓名或别名。'),
+    refs: { type: 'array', items: { type: 'string' }, minItems: 1, description: 'character_design_read 返回并已核对的世界书条目编号。' }
+  }, required: ['name', 'refs'] }
+})
+
 export const CHARACTER_DESIGN_SAVE_TOOL = Object.freeze({
   name: CHARACTER_DESIGN_SAVE_TOOL_NAME,
-  description: '保存当前对话的重要人物完整方案。人物设计独立于人物卡变量；若当前卡另有状态变量，由对应结算工具单独更新。',
+  description: '保存当前对话的重要人物完整方案，并自动写入本局世界书。新人物以姓名和别名触发非常驻条目，后续保存更新对应条目；不修改原始卡库或世界书库，不覆盖手动修改的正文。人物卡状态变量由对应结算工具单独更新。',
   parameters: Object.freeze({
     type: 'object', additionalProperties: false,
     properties: {
@@ -127,20 +140,25 @@ export function createCharacterDesignDocumentSession(options = {}) {
   const now = typeof options.now === 'function' ? options.now : Date.now
   let current = normalizeDocument(options.document)
   let dirty = false
+  const readWorldbooks = new Map(), reused = new Map()
+  const worldbookEntries = names => characterWorldbookEntries(options.worldbook?.(), names)
 
   function find(input) {
     const name = str(input.name).trim()
-    return name === '' ? undefined : current.characters.find(function (item) { return str(item.name) === name })
+    return name === '' ? undefined : current.characters.find(function (item) { return str(item.name) === name || item.aliases?.includes(name) })
   }
 
   function read(args) {
     const input = object(args)
     if (str(input.name).trim() !== '') {
       const character = find(input)
-      return character === undefined ? { ok: true, found: false, character: null } : { ok: true, found: true, character: clone(character) }
+      const entries = worldbookEntries([input.name, ...(character?.aliases || []), character?.name])
+      readWorldbooks.set(str(input.name).trim(), new Map(entries.map(entry => [entry.ref, entry.content])))
+      return { ok: true, found: Boolean(character) || entries.length > 0, character: clone(character) ?? null, worldbook: entries }
     }
     return {
       ok: true,
+      worldbook: worldbookEntries([]).map(({ content, ...entry }) => entry),
       characters: current.characters.map(function (item) {
         const design = object(item.design)
         return {
@@ -153,11 +171,11 @@ export function createCharacterDesignDocumentSession(options = {}) {
 
   function save(args) {
     const input = object(args)
-    const name = text(input.name, 'name', 200)
+    const existing = find(input)
+    const name = text(existing?.name || input.name, 'name', 200)
     const aliases = Array.isArray(input.aliases)
       ? Array.from(new Set(input.aliases.map(function (item) { return text(item, 'aliases', 200) })))
       : []
-    const existing = find(input)
     const created = existing === undefined
     const timestamp = Math.max(0, Number(now()) || 0)
     const character = Object.assign({}, existing || {}, {
@@ -165,6 +183,7 @@ export function createCharacterDesignDocumentSession(options = {}) {
       createdAt: created ? timestamp : Math.max(0, Number(existing.createdAt) || timestamp),
       updatedAt: timestamp
     })
+    const applied = options.onSave?.(clone(character))
     const characters = current.characters.slice()
     if (created) characters.push(character)
     else characters[characters.indexOf(existing)] = character
@@ -172,13 +191,22 @@ export function createCharacterDesignDocumentSession(options = {}) {
       characters, revision: Math.max(0, Number(current.revision) || 0) + 1, updatedAt: timestamp
     })
     dirty = true
-    return { ok: true, created, name: character.name, revision: current.revision }
+    return { ok: true, created, name: character.name, revision: current.revision, ...(applied ? { worldbook: applied.worldbook } : {}) }
   }
 
   async function execute(call) {
     try {
       if (call && call.name === CHARACTER_DESIGN_READ_TOOL_NAME) return JSON.stringify(read(call.arguments))
       if (call && call.name === CHARACTER_DESIGN_SAVE_TOOL_NAME) return JSON.stringify(save(call.arguments))
+      if (call?.name === CHARACTER_DESIGN_REUSE_TOOL_NAME) {
+        const name = text(call.arguments?.name, 'name', 200), refs = call.arguments?.refs
+        const read = readWorldbooks.get(name), entries = worldbookEntries([name])
+        if (!Array.isArray(refs) || !refs.length || refs.some(ref => !read?.has(ref) || !entries.some(entry => entry.ref === ref && entry.content === read.get(ref)))) {
+          throw new Error('请先按该人物姓名读取本局世界书，再提交返回的有效条目编号')
+        }
+        reused.set(name, refs.map(ref => ({ ref, content: read.get(ref) })))
+        return JSON.stringify({ ok: true, reused: true, name, refs, created: false })
+      }
       return JSON.stringify({ ok: false, retryable: true, error: '不是人物档案工具调用' })
     } catch (error) {
       return JSON.stringify({ ok: false, retryable: true, error: str(error && error.message || error) })
@@ -186,7 +214,8 @@ export function createCharacterDesignDocumentSession(options = {}) {
   }
 
   return Object.freeze({
-    tools: Object.freeze([CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL]), execute,
+    tools: Object.freeze([CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL]), execute,
+    reused: () => [...reused].map(([name, entries]) => ({ name, entries })),
     document: function () { return clone(current) }, changed: function () { return dirty }
   })
 }
@@ -207,16 +236,23 @@ export function createCharacterDesignDocumentTools(options = {}) {
       if (call.name === CHARACTER_DESIGN_READ_TOOL_NAME) {
         const chat = await store.readChat(chatId)
         if (!chat) throw new Error('人物设计所属聊天不存在')
-        return await createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now }).execute(call)
+        const snapshot = characterDesignWorldbookSnapshot(chat, chat.openingWorldbookSnapshot?.version === 1
+          ? null : await options.readWorldBook?.(chat))
+        return await createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now,
+          worldbook: () => snapshot.document }).execute(call)
       }
       let output = JSON.stringify({ ok: false, retryable: true, error: '人物设计所属聊天不存在' })
       await store.updateChat(chatId, async function (chat) {
         if (!chat) return undefined
-        const session = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now })
+        const snapshot = characterDesignWorldbookSnapshot(chat, chat.openingWorldbookSnapshot?.version === 1
+          ? null : await options.readWorldBook?.(chat))
+        const session = createCharacterDesignDocumentSession({ document: chat.characterDesignDocument, now,
+          onSave: character => applyCharacterDesignWorldbook(chat, character, snapshot) })
         output = await session.execute(call)
         const result = JSON.parse(output)
         if (result.ok !== true || !session.changed()) return undefined
         chat.characterDesignDocument = session.document()
+        if (options.publishWorldbook) await options.publishWorldbook(chat, [chat.characterDesignDocument.characters.find(character => character.name === result.name)])
         return chat
       }, { source: 'character-design.save' })
       return output

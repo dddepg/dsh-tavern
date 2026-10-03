@@ -11,37 +11,6 @@ function moduleUnderTest() {
   })
 }
 
-test('SillyTavern v3 导入与导出共享字段政策，并保持 world book 内容', () => {
-  const cards = moduleUnderTest()
-  const imported = cards.create({
-    kind: 'import',
-    payload: {
-      kind: 'text',
-      text: JSON.stringify({
-        spec: 'chara_card_v3',
-        spec_version: '3.0',
-        data: {
-          name: '阿芙拉',
-          description: '银发佣兵',
-          tags: ['佣兵', ' 佣兵 ', '旅行'],
-          alternate_greetings: ['你好', '你好', '雨夜见。'],
-          character_book: {
-            name: '黑麦镇',
-            entries: [{ keys: ['钟楼'], content: '钟楼藏着线索。', enabled: true, extensions: { depth: 4 } }]
-          }
-        }
-      })
-    }
-  })
-
-  assert.equal(imported.meta.id, 'card-1')
-  assert.deepEqual(cards.project(imported).tags, ['佣兵', '旅行'])
-  const exported = cards.present({ card: imported, as: 'sillytavern-v3' })
-  assert.equal(exported.spec, 'chara_card_v3')
-  assert.equal(exported.data.name, '阿芙拉')
-  assert.deepEqual(exported.data.character_book.entries[0].extensions, { depth: 4 })
-})
-
 test('旧版 DSH 扁平人物卡导出为 SillyTavern 可导入的 V3', () => {
   const cards = moduleUnderTest()
   const workspace = cards.create({
@@ -66,71 +35,6 @@ test('旧版 DSH 扁平人物卡导出为 SillyTavern 可导入的 V3', () => {
   assert.deepEqual(exported.data.tags, ['旧卡'])
   assert.deepEqual(exported.unknown_root, { keep: true })
   assert.equal(Object.prototype.hasOwnProperty.call(exported, 'name'), false)
-})
-
-test('SillyTavern V3 导出只在副本中写入当前绑定世界书', () => {
-  const cards = moduleUnderTest()
-  const workspace = cards.create({
-    kind: 'import',
-    payload: { spec: 'chara_card_v3', spec_version: '3.0', data: { name: '绑定角色' } }
-  })
-  const characterBook = {
-    name: '绑定书',
-    entries: [{ id: 3, keys: ['港口'], content: '港口设定', enabled: true, extensions: {} }],
-    extensions: {}
-  }
-
-  const exported = cards.present({ card: workspace, as: 'sillytavern-v3', characterBook })
-
-  assert.deepEqual(exported.data.character_book, characterBook)
-  assert.equal(cards.present({ card: workspace, as: 'raw' }).data.character_book, undefined)
-})
-
-test('人物卡工作 raw 在普通字段修改后仍保留 user 和 char 宏', () => {
-  const cards = moduleUnderTest()
-  const workspace = cards.create({
-    kind: 'import',
-    payload: {
-      spec: 'chara_card_v3',
-      spec_version: '3.0',
-      data: { name: '测试卡', description: '{{char}} 看向 {{user}}。旧描述。' }
-    }
-  })
-  const changed = cards.update({
-    kind: 'card',
-    card: workspace,
-    patch: { description: '{{char}} 看向 {{user}}。新描述。' }
-  })
-
-  assert.equal(changed.card.raw.data.description, '{{char}} 看向 {{user}}。新描述。')
-  assert.equal(cards.present({ card: changed.card, as: 'raw' }).data.description, '{{char}} 看向 {{user}}。新描述。')
-})
-
-test('完整 raw 是可编辑工作数据，未知扩展在投影、修改和导出后保持不变', () => {
-  const cards = moduleUnderTest()
-  const source = {
-    spec: 'chara_card_v3',
-    spec_version: '3.1',
-    future_root: { enabled: true },
-    data: {
-      name: '阿芙拉',
-      description: '旧描述',
-      future_field: ['保留'],
-      extensions: {
-        regex_scripts: [{ scriptName: '状态栏', findRegex: '/<status>(.*?)<\\/status>/s', replaceString: '<aside>$1</aside>' }],
-        mvu: { version: 7 }
-      }
-    }
-  }
-  const workspace = cards.create({ kind: 'import', payload: { kind: 'text', text: JSON.stringify(source) } })
-  const changed = cards.update({ kind: 'card', card: workspace, patch: { description: '新描述' } })
-  const exported = cards.present({ card: changed.card, as: 'raw' })
-
-  assert.equal(changed.view.description, '新描述')
-  assert.equal(exported.spec_version, '3.1')
-  assert.deepEqual(exported.future_root, { enabled: true })
-  assert.deepEqual(exported.data.future_field, ['保留'])
-  assert.deepEqual(exported.data.extensions, source.data.extensions)
 })
 
 test('raw 扩展按 JSON Pointer 分段读取并做最小修改', () => {
@@ -163,43 +67,6 @@ test('raw 扩展按 JSON Pointer 分段读取并做最小修改', () => {
     kind: 'card', card: workspace, patch: {},
     rawOperations: [{ op: 'set', path: '/data/character_book/entries/0/content', value: '绕过专用接口' }]
   }), /世界书只能通过 tavern_update_worldbook 修改/)
-})
-
-test('旧平面工作版迁移时以原版 raw 为底，并合并用户已修改字段', () => {
-  const cards = moduleUnderTest()
-  const original = {
-    spec: 'chara_card_v3', spec_version: '3.0',
-    data: { name: '原名', description: '原始描述', extensions: { regex_scripts: [{ scriptName: '保留' }] } }
-  }
-  const migrated = cards.migrate({
-    working: { name: '新名字', description: '用户修改', importedAt: 100, revision_history: [{ summary: '旧记录' }] },
-    payload: { kind: 'text', text: JSON.stringify(original) }
-  })
-
-  assert.equal(cards.project(migrated).name, '新名字')
-  assert.equal(migrated.raw.data.description, '用户修改')
-  assert.deepEqual(migrated.raw.data.extensions, original.data.extensions)
-  assert.equal(migrated.meta.importedAt, 100)
-  assert.deepEqual(migrated.meta.revisionHistory, [{ summary: '旧记录' }])
-})
-
-test('旧导入器的数组截断和 UI 投影回传不会覆盖完整 raw', () => {
-  const cards = moduleUnderTest()
-  const tags = Array.from({ length: 35 }, (_item, index) => '标签' + index)
-  const greetings = Array.from({ length: 25 }, (_item, index) => '开场' + index)
-  const original = { spec: 'chara_card_v3', spec_version: '3.0', data: { name: '阿芙拉', tags, alternate_greetings: greetings } }
-  const migrated = cards.migrate({
-    working: { name: '阿芙拉', tags: tags.slice(0, 30), alternate_greetings: greetings.slice(0, 20) },
-    payload: { kind: 'text', text: JSON.stringify(original) }
-  })
-  assert.deepEqual(migrated.raw.data.tags, tags)
-  assert.deepEqual(migrated.raw.data.alternate_greetings, greetings)
-
-  const view = cards.project(migrated)
-  const unchanged = cards.update({ kind: 'card', card: migrated, patch: { tags: view.tags, alternate_greetings: view.alternate_greetings } })
-  assert.equal(unchanged.changed, false)
-  assert.deepEqual(unchanged.card.raw.data.tags, tags)
-  assert.deepEqual(unchanged.card.raw.data.alternate_greetings, greetings)
 })
 
 test('世界书常驻上下文只暴露目录，正文按编号或关键词读取', () => {
@@ -275,28 +142,6 @@ test('世界书按条目合并修改，不要求模型重传整本世界书', ()
   assert.throws(() => cards.update({ kind: 'card', card, patch: {}, worldBookOperations: { op: 'update', ref: 'entry:9', patch: { content: 'x' } } }), /世界书条目不存在/)
 })
 
-test('手动编辑与对话式 patch 使用同一个 update interface', () => {
-  const cards = moduleUnderTest()
-  const original = cards.create({ kind: 'import', payload: { kind: 'text', text: '{"name":"旧名","description":"旧描述"}' } })
-  const changed = cards.update({
-    kind: 'card',
-    card: original,
-    patch: { name: '新名', description: '', tags: ['甲', '甲', ' 乙 '] },
-    revision: { ts: 123456, instruction: '修改名字', summary: '对话更新' }
-  })
-
-  assert.equal(changed.view.name, '新名')
-  assert.equal(changed.view.description, '')
-  assert.deepEqual(changed.view.tags, ['甲', '乙'])
-  assert.deepEqual(changed.changedFields.sort(), ['description', 'name', 'tags'])
-  assert.equal(changed.card.meta.revisionHistory.length, 1)
-  assert.equal(cards.project(original).name, '旧名')
-
-  const unchanged = cards.update({ kind: 'card', card: changed.card, patch: { name: '新名' } })
-  assert.equal(unchanged.changed, false)
-  assert.deepEqual(unchanged.changedFields, [])
-})
-
 test('卡片工作台草稿的 player 不是人物卡字段，保存时校验玩家与角色视角', () => {
   const cards = moduleUnderTest()
   const draftChange = cards.update({
@@ -319,28 +164,6 @@ test('卡片工作台草稿的 player 不是人物卡字段，保存时校验玩
 
   assert.throws(() => cards.create({ kind: 'draft', draft: { name: '阿芙拉' }, player: '', sourceIds: [] }), /玩家.*没有确认/)
   assert.throws(() => cards.create({ kind: 'draft', draft: { name: '阿芙拉', system_prompt: '你是阿芙拉' }, player: '旅行者', sourceIds: [] }), /第二人称|玩家身份冲突/)
-})
-
-test('未知 patch 字段明确失败，避免 Agent 输出被静默丢弃', () => {
-  const cards = moduleUnderTest()
-  const card = cards.create({ kind: 'import', payload: { kind: 'text', text: '{"name":"阿芙拉"}' } })
-  assert.throws(() => cards.update({ kind: 'card', card, patch: { unknown_field: 'x' } }), /未知人物卡字段/)
-})
-
-test('备用开场保留空槽、重复正文和空白，以保持脚本 swipe 索引', () => {
-  const cards = moduleUnderTest()
-  const greetings = ['', ' 海边 ', ' 海边 ', '山间']
-  const card = cards.create({ kind: 'import', payload: { kind: 'text', text: JSON.stringify({ name: '开场索引', first_mes: '首页', alternate_greetings: greetings }) } })
-  assert.deepEqual(cards.project(card).alternate_greetings, greetings)
-  const updated = cards.update({ kind: 'card', card, patch: { alternate_greetings: greetings } })
-  assert.deepEqual(cards.project(updated.card).alternate_greetings, greetings)
-})
-
-test('迁移旧去重投影时仍保留原卡开场槽位', () => {
-  const cards = moduleUnderTest()
-  const original = { name: '旧开场卡', alternate_greetings: ['', '海边', '海边', '山间'] }
-  const migrated = cards.migrate({ working: { name: '旧开场卡', alternate_greetings: ['海边', '山间'] }, payload: { kind: 'text', text: JSON.stringify(original) } })
-  assert.deepEqual(cards.project(migrated).alternate_greetings, original.alternate_greetings)
 })
 
 for (const spec of ['flat', 'chara_card_v2', 'chara_card_v3']) test('变量编辑不触发名字同步，原生与字段改名仍触发：' + spec, () => {

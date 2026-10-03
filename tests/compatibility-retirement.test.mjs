@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import test from 'node:test'
-import { initializationFixture } from './fixtures/conversation-initialization.mjs'
 
 const server = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 
@@ -10,24 +9,11 @@ const chats = [{ id: 'compat', sessionId: 'compat-session', requestMode: 'sillyt
 
 test('实验分支公开兼容会话并声明兼容能力可用', async () => {
   const start = server.indexOf("case 'listSessions': {")
-  const context = { readTavernSettings: async () => ({ trustedCardMode: true }), listTavernSessions: async () => chats }
+  const context = { readTavernSettings: async () => ({ trustedCardMode: true, sillyModeEnabled: true }), listTavernSessions: async () => chats }
   vm.runInNewContext('this.list = async () => { switch ("listSessions") {' + server.slice(start, server.indexOf("case 'listMobileCardImports'", start)) + '} };', context)
   const result = await context.list()
-  assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['compat', 'native'])
-  assert.equal(result.capabilities.compatibilityMode, true)
-})
-
-test('实验分支可以创建并重新进入兼容会话', async () => {
-  const h = initializationFixture()
-  const chat = await h.make().start({ ...h.input, requestMode: 'sillytavern' })
-  assert.equal(chat.requestMode, 'sillytavern')
-  assert.deepEqual(chat.runtimePresetSnapshot, h.state.preset)
-  assert.equal(h.state.presetReads, 1, 'compatibility conversations freeze the same selected preset at creation')
-  const before = structuredClone(h.session().events)
-  const reopened = await h.make().start({ ...h.input, sessionId: chat.sessionId, requestMode: 'sillytavern' })
-  assert.equal(reopened.id, chat.id)
-  assert.equal(reopened.requestMode, 'sillytavern')
-  assert.deepEqual(h.session().events, before)
+  assert.deepEqual(Array.from(result.sessions, chat => chat.id), ['native'])
+  assert.equal(result.capabilities.compatibilityMode, false)
 })
 
 test('启动恢复包含兼容与普通会话', async () => {

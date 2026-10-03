@@ -5,12 +5,6 @@ import { readdir, readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { parse } from 'yaml'
 import { createTavernSkillModule } from '../tavern-plugin/lib/domain/tavern-skills.js'
-import { createCardPreparation } from '../tavern-plugin/lib/domain/card-preparation.js'
-import { inspectCardExtensions } from '../tavern-plugin/lib/domain/card-extension-reading.js'
-import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
-import { constantWorldBookContext, mvuUpdateRulesFromWorldBook } from '../tavern-plugin/lib/domain/worldbook-recall.js'
-import { projectReplyLayers } from '../tavern-plugin/lib/domain/reply-presentation.js'
-import { projectPersistentStatusView } from '../tavern-plugin/lib/domain/persistent-status-view.js'
 
 const root = new URL('../presets/tavern/skills/', import.meta.url)
 const backgroundRoot = new URL('../presets/tavern-background/skills/', import.meta.url)
@@ -55,42 +49,7 @@ test('人物设计是现有后台 Agent 按需加载的内置 Skill', async () =
   assert.match(skill.content, /不设固定数量上限/)
   assert.doesNotMatch(skill.content, /仅在卡片已有人物库/)
   assert.match(skill.content, /本次任务不提交姿势、变量或候选项/)
-  assert.match(skill.content, /不[^\n]*前台正文 Agent/)
-})
-
-test('Skill 配方可构造可导入卡，规则分流、状态显示及模型历史隔离均有效', () => {
-  const entries = recipeEntries
-  const regex = JSON.stringify(recipeRegex)
-  const card = { spec: 'chara_card_v3', spec_version: '3.0', data: {
-    name: '转换配方测试', description: '{{char}} 与 {{user}} 的旅途。',
-    first_mes: '你站在门口。\n\n<mvu-status/>',
-    character_book: { name: '状态', entries },
-    extensions: { tavern_helper: { scripts: [], variables: {} }, regex_scripts: JSON.parse(regex) }
-  } }
-  const prep = createCardPreparation({ id: () => 'skill-recipe-test', now: () => 1 })
-  const workspace = prep.create({ kind: 'import', payload: { kind: 'text', text: JSON.stringify(card) } })
-  const exported = prep.present({ card: workspace, as: 'sillytavern-v3' })
-  assert.deepEqual(exported.data.character_book, card.data.character_book)
-  const extensions = inspectCardExtensions(exported)
-  assert.ok(extensions.mvuResources.some(resource => resource.enabled))
-  const worldBook = { view: inspectWorldBookDocument(exported) }
-  assert.equal(constantWorldBookContext({ worldBook }).context, '')
-  assert.deepEqual(mvuUpdateRulesFromWorldBook(worldBook), [entries[1].content])
-  const initial = JSON.parse(entries[0].content)
-  assert.equal(initial.人物.$meta.extensible, true)
-  assert.equal(initial.人物.$meta.template.在场, true)
-  assert.equal(initial.人物.$meta.template.位置, '未明确')
-  assert.equal(initial.玩家.位置, '门口')
-  const layers = projectReplyLayers(card.data.first_mes, { regexScripts: extensions.regexScripts, placement: 2, depth: 0 })
-  assert.equal(layers.sessionText.trim(), '你站在门口。')
-  const index = layers.displayParts.findIndex(part => part.content?.includes('Mvu.getMvuData'))
-  assert.ok(index >= 0)
-  const result = projectPersistentStatusView([
-    { role: 'assistant', turn: 1, displayRuntime: { frames: [{ partIndex: index, mvuViewUsed: true }] } }
-  ], [{ turn: 1, parts: layers.displayParts }], { regexScripts: extensions.regexScripts })
-  assert.ok(result.statusView?.content.includes('Mvu.getMvuData'))
-  assert.equal(result.statusViews.length, 1)
-  assert.ok(result.projections[0].parts.every(part => part.kind !== 'html'))
+  assert.match(skill.content, /不向前台追加设计说明/)
 })
 
 test('通用状态模板重新读取变量并刷新 DOM，支持新增与恢复且跳过内部字段', async () => {

@@ -25,6 +25,8 @@ export function createWorldBookLibrary(options = {}) {
   const cards = options.cards
   const normalizePath = options.normalizePath
   const removeStandalone = options.removeStandalone
+  // Catalog rows are pure functions of one file; the host may memoize them by file revision.
+  const summaries = options.summaries || { standalone: (path, compute) => compute(path), card: (cardPath, compute) => compute(cardPath) }
   const templateRecords = createJsonProjectionCache(), templateSnapshots = new WeakMap()
   const emptyTemplateSnapshot = freezeJsonProjection({ worldName: '', worldbooks: {} })
   if (!resources || !cards || typeof normalizePath !== 'function' || typeof removeStandalone !== 'function') {
@@ -77,20 +79,44 @@ export function createWorldBookLibrary(options = {}) {
 
   async function get(locator) {
     const record = await readRecord(locator)
-    return { source: record.source, view: record.view }
+    return { source: record.source, view: record.view, globalEnabled: record.source.kind === 'standalone' && (await globalSources()).some(source => source.path === record.source.path) }
   }
 
+  async function globalSources() { return resources.globalSources ? await resources.globalSources() : [] }
+
+  async function setGlobal(locator, enabled) {
+    const source = sourceOf(locator)
+    if (source.kind !== 'standalone') throw new Error('只有独立世界书支持全局生效')
+    if (typeof enabled !== 'boolean') throw new Error('全局生效开关必须为布尔值')
+    if (!resources.setGlobal) throw new Error('全局世界书存储不可用')
+    if (enabled) await readRecord(source)
+    await resources.setGlobal(source.path, enabled)
+    return await get(source)
+  }
+
+  async function standaloneSummary(path) {
+    const record = await readRecord({ kind: 'standalone', path })
+    return { path: record.source.path, name: record.view.displayName, entryCount: record.view.entryCount,
+      enabledCount: record.view.enabledCount, diagnostics: record.view.diagnostics.length }
+  }
+  async function cardSummary(cardPath) {
+    const card = await cards.read(cardPath)
+    if (!card || !card.character_book || typeof card.character_book !== 'object') return { hasBook: false }
+    const view = inspectWorldBookDocument(card.character_book, { filename: card.name })
+    return { hasBook: true, cardName: card.name, name: view.displayName, entryCount: view.entryCount,
+      enabledCount: view.enabledCount, diagnostics: view.diagnostics.length }
+  }
   async function catalog() {
+    const globals = new Set((await globalSources()).map(source => source.path))
     const standaloneResults = await Promise.all((await resources.list('worldbook')).map(async function (path) {
       try {
-        const [record, metadata] = await Promise.all([
-          readRecord({ kind: 'standalone', path }),
+        const [summary, metadata] = await Promise.all([
+          summaries.standalone(path, standaloneSummary),
           typeof resources.metadata === 'function' ? resources.metadata(path) : null
         ])
         return { row: {
-          kind: 'standalone', path: record.source.path, name: record.view.displayName,
-          entryCount: record.view.entryCount, enabledCount: record.view.enabledCount,
-          diagnostics: record.view.diagnostics.length,
+          kind: 'standalone', path: summary.path, name: summary.name, globalEnabled: globals.has(summary.path),
+          entryCount: summary.entryCount, enabledCount: summary.enabledCount, diagnostics: summary.diagnostics,
           importedAt: Math.max(0, Number(metadata && metadata.importedAt) || 0),
           updatedAt: Math.max(0, Number(metadata && metadata.updatedAt) || 0)
         } }
@@ -100,16 +126,14 @@ export function createWorldBookLibrary(options = {}) {
     }))
     const embeddedResults = await Promise.all((await cards.listPaths()).map(async function (cardPath) {
       try {
-        const [card, metadata] = await Promise.all([
-          cards.read(cardPath),
+        const [summary, metadata] = await Promise.all([
+          summaries.card(cardPath, cardSummary),
           typeof cards.metadata === 'function' ? cards.metadata(cardPath) : null
         ])
-        if (!card || !card.character_book || typeof card.character_book !== 'object') return {}
-        const view = inspectWorldBookDocument(card.character_book, { filename: card.name })
+        if (!summary.hasBook) return {}
         return { row: {
-          kind: 'card', cardPath, cardName: card.name, name: view.displayName,
-          entryCount: view.entryCount, enabledCount: view.enabledCount,
-          diagnostics: view.diagnostics.length,
+          kind: 'card', cardPath, cardName: summary.cardName, name: summary.name,
+          entryCount: summary.entryCount, enabledCount: summary.enabledCount, diagnostics: summary.diagnostics,
           importedAt: Math.max(0, Number(metadata && metadata.importedAt) || 0),
           updatedAt: Math.max(0, Number(metadata && metadata.updatedAt) || 0)
         } }
@@ -200,7 +224,7 @@ export function createWorldBookLibrary(options = {}) {
     return { source, cards: cardRows, boundCards, conflict: false }
   }
 
-  async function resolveBound(cardPath, card, chat, templateOnly = false) {
+  async function resolveBound(cardPath, card, chat, templateOnly = false, includeGlobals = true) {
     if (chat?.openingWorldbookSnapshot?.version === 1) {
       const snapshot = chat.openingWorldbookSnapshot
       if (snapshot.document === null) return null
@@ -222,15 +246,20 @@ export function createWorldBookLibrary(options = {}) {
       return records.get(key)
     }
     const current = await binding(cardPath, { card, read })
-    if (current.kind === 'none') return null
     if (current.available !== true) throw new Error('绑定的世界书不存在，请重新绑定或解绑')
-    if (current.kind === 'multiple') {
-      const resolved = await Promise.all(current.books.map(book => read(book.source)))
-      const merged = mergeWorldBooks(resolved)
-      if (templateOnly) return templateRecord(JSON.stringify(merged.document), { kind: 'merged', sources: resolved.map(record => record.source) })
-      return { source: current.source, document: merged.document, localChatId: chat?.id, mergedSources: merged.sources, view: inspectWorldBookDocument(merged.document) }
+    const localSources = current.kind === 'multiple' ? current.books.map(book => book.source) : current.source ? [current.source] : []
+    const sources = [], identities = new Set()
+    for (const locator of localSources.concat(includeGlobals ? await globalSources() : [])) {
+      const source = sourceOf(locator), identity = JSON.stringify(source)
+      if (!identities.has(identity)) { identities.add(identity); sources.push(source) }
     }
-    return await read(current.source)
+    if (!sources.length) return null
+    if (sources.length === 1) return await read(sources[0])
+    const resolved = await Promise.all(sources.map(read))
+    const merged = mergeWorldBooks(resolved)
+    const source = { kind: 'merged', sources: resolved.map(record => record.source) }
+    if (templateOnly) return templateRecord(JSON.stringify(merged.document), source)
+    return { source: resolved[0].source, document: merged.document, localChatId: chat?.id, mergedSources: merged.sources, view: inspectWorldBookDocument(merged.document) }
   }
 
   async function bound(cardPath, card, chat) { return await resolveBound(cardPath, card, chat) }
@@ -339,7 +368,7 @@ export function createWorldBookLibrary(options = {}) {
     const current = await binding(cardPath)
     if (current.kind === 'none') return null
     if (current.available !== true) throw new Error('绑定的世界书不存在，请重新绑定或解绑')
-    const record = await bound(cardPath)
+    const record = await resolveBound(cardPath, undefined, undefined, false, false)
     return exportCharacterBook(record.document || record.view.raw)
   }
 
@@ -353,5 +382,5 @@ export function createWorldBookLibrary(options = {}) {
     return { removed: source.cardPath, kind: 'embedded' }
   }
 
-  return Object.freeze({ catalog, get, binding, associations, bound, templateSnapshot, bind, setBindings, unbind, import: importBook, update, replaceNative, export: exportBook, characterBookForCard, remove })
+  return Object.freeze({ catalog, get, setGlobal, binding, associations, bound, templateSnapshot, bind, setBindings, unbind, import: importBook, update, replaceNative, export: exportBook, characterBookForCard, remove })
 }

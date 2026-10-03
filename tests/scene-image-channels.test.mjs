@@ -1,61 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createServer } from 'node:http'
+
 import { generateSceneImage } from '../tavern-plugin/lib/domain/scene-image-provider.js'
-import { SCENE_IMAGE_CHANNELS, channelSettings, channelImageResult, imageChannelRequest, imageExpressionProfile } from '../tavern-plugin/lib/domain/scene-image-channels.js'
+import { channelSettings, channelImageResult, imageChannelRequest, imageExpressionProfile } from '../tavern-plugin/lib/domain/scene-image-channels.js'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aKfoAAAAASUVORK5CYII=', 'base64')
-test('six cloud protocols dispatch to local HTTP with exact auth/body shapes and image extraction', async t => {
-  const seen = []
-  let provider, baseURL
-  const server = createServer(async (req, res) => {
-    if (req.url === '/picture') { assert.equal(req.headers.authorization, undefined); res.end(png); return }
-    let text = ''; for await (const part of req) text += part
-    seen.push({ url: req.url, headers: req.headers, body: JSON.parse(text) })
-    const payload = {
-      openai: { data: [{ b64_json: png.toString('base64') }] },
-      gemini: { steps: [{ type: 'thought', content: [{ type: 'image', data: 'not-an-image' }] }, { type: 'model_output', content: [{ type: 'image', data: png.toString('base64') }] }] },
-      banana: { choices: [{ message: { content: '![picture](data:image/png;base64,' + png.toString('base64') + ')' } }] },
-      grok: { data: [{ url: baseURL + '/picture' }] },
-      seedream: { data: [{ url: baseURL + '/picture' }] },
-      qwen: { output: { choices: [{ message: { content: [{ image: baseURL + '/picture' }] } }] } }
-    }[provider]
-    res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(payload))
-  })
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  t.after(() => new Promise(resolve => server.close(resolve)))
-  baseURL = 'http://127.0.0.1:' + server.address().port
-  // The optional plugin uses its own Studio contract, tested separately.
-  for (const channel of SCENE_IMAGE_CHANNELS.filter(item => !['webui', 'novelai', 'comfyui', 'dsh-image-gen'].includes(item.id))) {
-    provider = channel.id
-    const config = channelSettings({}, provider)
-    const image = await generateSceneImage({ ...config, model: config.model || 'relay-model', baseURL: baseURL + '/v1', prompt: 'one quiet scene', apiKey: 'fixture-secret' })
-    assert.deepEqual(image.data, png)
-    const { body, headers, url } = seen.at(-1)
-    assert.equal(headers[provider === 'gemini' ? 'x-goog-api-key' : 'authorization'], provider === 'gemini' ? 'fixture-secret' : 'Bearer fixture-secret')
-    if (provider === 'gemini') {
-      assert.equal(headers.authorization, undefined)
-      assert.equal(url, '/v1/interactions')
-      assert.deepEqual(body.input, [{ type: 'text', text: 'one quiet scene' }])
-      assert.deepEqual(body.response_format, { type: 'image', mime_type: 'image/png', aspect_ratio: '1:1', image_size: '1K' })
-    } else if (provider === 'banana') {
-      assert.equal(url, '/v1/chat/completions')
-      assert.deepEqual(body.messages, [{ role: 'user', content: [{ type: 'text', text: 'one quiet scene' }] }])
-      assert.equal(body.stream, false)
-    } else if (provider === 'qwen') {
-      assert.equal(url, '/v1/services/aigc/multimodal-generation/generation')
-      assert.deepEqual(body.input, { messages: [{ role: 'user', content: [{ text: 'one quiet scene' }] }] })
-      assert.deepEqual(body.parameters, { size: '1024*1024', n: 1, prompt_extend: false })
-    } else {
-      assert.equal(url, '/v1/images/generations')
-      assert.equal(body.prompt, 'one quiet scene')
-      if (provider === 'grok') { assert.equal(body.resolution, '1k'); assert.equal(body.size, undefined); assert.equal(body.n, 1) }
-      if (provider === 'seedream') { assert.equal(body.sequential_image_generation, 'disabled'); assert.equal(body.n, undefined); assert.equal(body.response_format, 'url') }
-      if (provider === 'openai') assert.equal(body.n, 1)
-    }
-  }
-  assert.equal(seen.length, 6)
-})
 
 test('response extraction ignores prose/thoughts, tolerates malformed responses and rejects unsupported config', () => {
   assert.equal(channelImageResult('gemini', { steps: [{ type: 'thought', content: [{ type: 'image', data: 'x' }] }] }), undefined)

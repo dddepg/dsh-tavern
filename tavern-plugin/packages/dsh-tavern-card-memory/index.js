@@ -10,6 +10,12 @@ const text = (value, maximum) => String(value ?? '').trim().slice(0, maximum)
 function requireCard(chat) {
   if (!chat || chat.mode !== 'card') throw new Error('记忆仅限卡片模式')
 }
+// Agents only touch memory in card mode; the user may view and hand-edit it
+// from any conversation through the memory panel ({ manual: true }).
+function requireAccess(chat, options) {
+  if (options?.manual === true) { if (!chat) throw new Error('请先打开一个对话') }
+  else requireCard(chat)
+}
 function createSource(factory, config, key, packageName) {
   return factory(config).create({ sourceInstanceKey: key, configuration: {}, provenance: { packageName, entryId: key } })
 }
@@ -31,8 +37,8 @@ export function createCardMemory({ dataRoot }) {
       preferences: createSource(createRuntimeMemorySource, { dataDir: join(root, 'preferences') }, 'tavern-preferences', 'dsh-mnemon-source-runtime')
     }
   }
-  async function scope(chat, shared = false) {
-    requireCard(chat)
+  async function scope(chat, shared = false, options) {
+    requireAccess(chat, options)
     const key = shared ? 'shared' : digest(chat.cardPath || 'chat:' + chat.id)
     const workspaceId = join(root, 'scopes', key)
     await mkdir(workspaceId, { recursive: true })
@@ -47,40 +53,40 @@ export function createCardMemory({ dataRoot }) {
   async function manage(source, scope, operation, input = null, write = false) {
     return (await source.manage({ scope, operation, input, mode: write ? 'write' : 'read', confirmed: write })).value
   }
-  async function preferences(chat) {
-    requireCard(chat)
+  async function preferences(chat, options) {
+    requireAccess(chat, options)
     const result = await manage(storage().preferences, {}, 'snapshot')
     return result.entries.filter(entry => entry.target === 'user').map(entry => entry.content)
   }
-  async function search(chat, query = '') {
-    requireCard(chat)
+  async function search(chat, query = '', options) {
+    requireAccess(chat, options)
     return serial(async () => {
-      const values = await preferences(chat)
+      const values = await preferences(chat, options)
       const results = []
       for (const shared of [false, true]) {
-        const operationScope = await scope(chat, shared)
+        const operationScope = await scope(chat, shared, options)
         const result = await manage(documentSource(operationScope), operationScope, 'search', { query: text(query, 2000), limit: 5 })
         for (const row of result.results) results.push({ id: row.id, scope: shared ? 'shared' : 'card', title: row.title, content: row.content })
       }
       return { preferences: values, experiences: results }
     })
   }
-  async function preference(chat, input) {
-    requireCard(chat)
+  async function preference(chat, input, options) {
+    requireAccess(chat, options)
     return serial(async () => {
       if (!['add', 'replace', 'remove'].includes(input.action)) throw new Error('不支持的偏好操作')
       const content = text(input.content, 1000), oldText = text(input.oldText, 1000)
       if (input.action !== 'remove' && !content) throw new Error('偏好内容不能为空')
-      const entries = await preferences(chat)
+      const entries = await preferences(chat, options)
       if (input.action === 'add' && entries.includes(content)) return { saved: true, duplicate: true }
       if (input.action !== 'add' && !entries.includes(oldText)) throw new Error('偏好已改变，请重新读取后使用完整原文修改')
       return manage(storage().preferences, {}, 'mutate', { action: input.action, target: 'user', content, oldText }, true)
     })
   }
-  async function writeExperience(chat, input) {
+  async function writeExperience(chat, input, options) {
     const shared = input.scope === 'shared'
     if (input.scope && !['card', 'shared'].includes(input.scope)) throw new Error('未知记忆范围')
-    const operationScope = await scope(chat, shared)
+    const operationScope = await scope(chat, shared, options)
     const source = documentSource(operationScope)
     if (input.action === 'archive') return manage(source, operationScope, 'archive', { id: input.id, summary: '用户移除的改卡经验；不再检索或注入。' }, true)
     const title = text(input.title, 160)
@@ -97,10 +103,10 @@ export function createCardMemory({ dataRoot }) {
     const mutation = { action: input.id ? 'update' : 'create', ...(input.id ? { id: input.id } : {}), title, content, sessionIds: chat.sessionId ? [chat.sessionId] : [] }
     return manage(source, operationScope, 'mutate', mutation, true)
   }
-  async function experience(chat, input) {
-    requireCard(chat)
+  async function experience(chat, input, options) {
+    requireAccess(chat, options)
     if (!['save', 'archive'].includes(input.action || 'save')) throw new Error('不支持的经验操作')
-    return serial(() => writeExperience(chat, { ...input, recordedBy: 'agent-or-user' }))
+    return serial(() => writeExperience(chat, { ...input, recordedBy: 'agent-or-user' }, options))
   }
   async function recordValidation(chat, cardPath, result) {
     requireCard(chat)

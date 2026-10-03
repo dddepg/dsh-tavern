@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 
 // Host adapters only: apply(), HTTP dispatch, storage, and projections stay real.
 // Call from an isolated child process with its own DSH_HOME.
-export async function createPluginHost() {
+export async function createPluginHost({ withTools = false } = {}) {
   globalThis.fetch = async () => new Response('/* test asset */', { headers: { 'content-type': 'text/css' } })
   const { apply } = await import('../../tavern-plugin/lib/index.js')
   const routes = new Map(), events = new Set(), disposers = []
@@ -13,6 +13,13 @@ export async function createPluginHost() {
     ['agentPresets', { resolvedRoots: [] }], ['agents', new Map()], ['sessions', new Map()],
     ['webServer', { register(route) { routes.set(route.path, route.handler); return () => routes.delete(route.path) } }]
   ])
+  const registeredTools = new Map()
+  if (withTools) services.set('tools', {
+    register(tool) {
+      assert.ok(!registeredTools.has(tool.name), 'duplicate tool: ' + tool.name)
+      registeredTools.set(tool.name, tool)
+    }
+  })
   const dispose = async () => { for (const callback of disposers.reverse()) await callback() }
   try {
     await apply({
@@ -26,7 +33,7 @@ export async function createPluginHost() {
     await new Promise(resolve => setImmediate(resolve))
   } catch (error) { await dispose(); throw error }
   return {
-    services, events, dispose,
+    services, events, registeredTools, dispose,
     async rpc(method, args = {}) {
       const req = Readable.from([Buffer.from(JSON.stringify(args))])
       Object.assign(req, { method: 'POST', url: '/api/dsh-tavern/' + method, headers: {} })

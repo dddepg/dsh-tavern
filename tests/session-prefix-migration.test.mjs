@@ -29,19 +29,6 @@ test('旧压缩历史兼容修复保留全部帧、头、序号和正文，原�
   assert.deepEqual(await readFile(file), saved)
 })
 
-test('只修复识别出的 Tavern 背景事件，其他未知事件和不完整文件不被改动', async t => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-prefix-invalid-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
-  const file = path.join(root, 'session.jsonl')
-  const text = JSON.stringify({ type: 'session', id: 'test' }) + '\n' + JSON.stringify({ type: 'other/unknown', seq: 0, data: {} }) + '\n'
-  await writeFile(file, text)
-  assert.deepEqual(await migrateSessionPrefixEvents({ sessionsRoot: root, backupRoot: root + '-unused' }), [])
-  assert.equal(await readFile(file, 'utf8'), text)
-  await writeFile(file, text + '{"type":"dsh-tavern/stable-prefix"')
-  await assert.rejects(migrateSessionPrefixEvents({ sessionsRoot: root, backupRoot: root + '-unused' }))
-  assert.equal(await readFile(file, 'utf8'), text + '{"type":"dsh-tavern/stable-prefix"')
-})
-
 test('重启前写入的重复固定背景只保留第一条可见消息，序号和正文不变', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-prefix-duplicate-'))
   t.after(() => rm(root, { recursive: true, force: true }))

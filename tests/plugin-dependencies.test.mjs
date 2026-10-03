@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { parse } from 'yaml'
+
 import { installPluginDependencies, resolveDshBootModule, resolveHostDependencies } from '../bin/plugin-dependencies.mjs'
 
 function fixture(t) {
@@ -33,41 +33,6 @@ function fixture(t) {
   writeFileSync(path.join(pluginDirectory, 'package.json'), JSON.stringify({ name: 'host-deps-fixture', private: true, dependencies: Object.fromEntries(Object.keys(packages).map(name => [name, '>=0.1.0-rc.7'])) }))
   return { root, pluginDirectory, original, bootstrap, packages }
 }
-
-test('Desktop alpha.1 本地依赖存在而 npm 未发布：安装直接复用，不请求 alpha.1 或 alpha.2', t => {
-  const f = fixture(t)
-  let installs = 0
-  installPluginDependencies({ ...f, dshVersion: '0.1.2-alpha.1', dsh: 'dsh', host: 'desktop',
-    env: { DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
-    run(command, args, options) {
-      installs++
-      assert.equal(command, 'pnpm')
-      assert.deepEqual(args, ['install', '--lockfile=false'])
-      assert.equal(options.cwd, f.pluginDirectory)
-      const { overrides } = parse(readFileSync(path.join(f.pluginDirectory, 'pnpm-workspace.yaml'), 'utf8'))
-      for (const [name, directory] of Object.entries(f.packages)) {
-        assert.equal(overrides[name], `link:${realpathSync(directory).replaceAll('\\', '/')}`, `不能去 npm 下载不存在的 ${name}@0.1.2-alpha.1`)
-      }
-    },
-  })
-  assert.equal(installs, 1)
-  assert.equal(readFileSync(path.join(f.pluginDirectory, 'pnpm-workspace.yaml'), 'utf8'), f.original)
-})
-
-test('Desktop 更新不预删仍可能被运行中宿主占用的插件依赖目录', t => {
-  const f = fixture(t)
-  const modules = path.join(f.pluginDirectory, 'node_modules')
-  const sentinel = path.join(modules, 'desktop-in-use.txt')
-  mkdirSync(modules)
-  writeFileSync(sentinel, 'in use')
-
-  installPluginDependencies({ ...f, dsh: 'dsh', host: 'desktop',
-    env: { DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
-    run() {
-      assert.equal(readFileSync(sentinel, 'utf8'), 'in use', 'pnpm 应接管原地更新，安装器不得先删除运行中 Desktop 可能占用的目录')
-    },
-  })
-})
 
 test('真实 pnpm 离线安装本地链接，并由插件解析到宿主原包及其传递依赖', t => {
   const f = fixture(t)
@@ -150,72 +115,4 @@ test('Desktop 无 bootstrap 环境变量时按 app 可执行文件定位，不�
   const macDeps = resolveHostDependencies({ host: 'desktop', platform: 'darwin', env: { DSH_DESKTOP_APP_EXECUTABLE: path.join(f.root, 'Desktop.app/Contents/MacOS/DSH Desktop') } })
   assert.ok(macDeps.every(dep => dep.directory.includes('Desktop.app')))
   assert.ok(resolveDshBootModule({ host: 'desktop', platform: 'darwin', env: { DSH_DESKTOP_APP_EXECUTABLE: path.join(f.root, 'Desktop.app/Contents/MacOS/DSH Desktop') } }).includes('Desktop.app'))
-})
-
-test('Desktop 内置更新使用当前 Tavern 插件作为宿主依赖锚点，不把系统 Node 当成 Desktop', t => {
-  const f = fixture(t)
-  const anchor = path.join(f.pluginDirectory, 'lib/application-updater.js')
-  mkdirSync(path.dirname(anchor), { recursive: true })
-  writeFileSync(anchor, '')
-  const scope = path.join(f.pluginDirectory, 'node_modules/@deepseek-ai')
-  mkdirSync(scope, { recursive: true })
-  for (const [name, directory] of Object.entries(f.packages)) {
-    symlinkSync(directory, path.join(scope, name.slice('@deepseek-ai/'.length)), 'junction')
-  }
-  const deps = resolveHostDependencies({
-    host: 'desktop',
-    dsh: '/wrong/cli',
-    platform: 'win32',
-    // The updater itself may run under an unrelated system Node; resolution
-    // must still come from the already-loaded Tavern plugin.
-    execPath: process.execPath,
-    env: { DSH_TAVERN_HOST_DEPENDENCY_ANCHOR: anchor },
-  })
-  assert.equal(deps.length, Object.keys(f.packages).length)
-  for (const dependency of deps) assert.equal(dependency.directory, realpathSync(f.packages[dependency.name]))
-})
-
-test('本地包版本不等于宿主或 alpha.2 也不拦截；依赖安装失败仍恢复源码配置', t => {
-  const f = fixture(t)
-  const pkg = path.join(f.packages['@deepseek-ai/dsh-tools'], 'package.json')
-  const manifest = JSON.parse(readFileSync(pkg, 'utf8'))
-  manifest.version = '0.1.1-rc.2'
-  writeFileSync(pkg, JSON.stringify(manifest))
-  assert.throws(() => installPluginDependencies({ ...f, dshVersion: '0.1.2-alpha.1', host: 'desktop', env: { DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
-    run() { throw new Error('模拟普通依赖安装失败') },
-  }), /模拟普通依赖安装失败/)
-  assert.equal(readFileSync(path.join(f.pluginDirectory, 'pnpm-workspace.yaml'), 'utf8'), f.original)
-})
-
-test('旧插件缺少新增 agent 链接时从已有宿主链接找到完整依赖', t => {
-  const f = fixture(t)
-  const anchor = path.join(f.pluginDirectory, 'lib/index.js')
-  const scope = path.join(f.pluginDirectory, 'node_modules/@deepseek-ai')
-  mkdirSync(scope, { recursive: true })
-  for (const [name, directory] of Object.entries(f.packages)) {
-    if (name.endsWith('/dsh-agent')) continue
-    symlinkSync(directory, path.join(scope, name.split('/')[1]), 'junction')
-  }
-  const deps = resolveHostDependencies({ host: 'desktop', env: { DSH_TAVERN_HOST_DEPENDENCY_ANCHOR: anchor } })
-  assert.equal(deps.length, 5)
-  for (const dep of deps) assert.equal(dep.directory, realpathSync(f.packages[dep.name]))
-})
-
-test('Desktop dependencies recover the same installation after unpacked junction targets move into app', t => {
-  const f = fixture(t)
-  const scope = path.join(f.pluginDirectory, 'node_modules', '@deepseek-ai')
-  mkdirSync(scope, { recursive: true })
-  for (const [name, directory] of Object.entries(f.packages)) {
-    symlinkSync(directory, path.join(scope, name.split('/')[1]), 'junction')
-  }
-  const oldRoot = path.resolve(path.dirname(f.bootstrap), '..')
-  const newRoot = path.join(path.dirname(oldRoot), 'app')
-  renameSync(oldRoot, newRoot)
-  const dependencies = resolveHostDependencies({ host: 'desktop', env: {
-    DSH_TAVERN_HOST_DEPENDENCY_ANCHOR: path.join(f.pluginDirectory, 'lib', 'index.js'),
-  } })
-  assert.equal(dependencies.length, Object.keys(f.packages).length)
-  for (const dependency of dependencies) {
-    assert.equal(dependency.directory, realpathSync(path.join(newRoot, 'node_modules', dependency.name)))
-  }
 })

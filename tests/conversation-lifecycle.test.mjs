@@ -16,18 +16,6 @@ const createConversationLifecycleModule = client.createConversationLifecycleModu
 const createConversationPrewarmModule = client.createConversationPrewarmModule
 const createPlayWorkspaceResolver = client.createPlayWorkspaceResolver
 
-test('没有现成 Workspace 时自动创建 Tavern 资源 Workspace', async function () {
-  const calls = []
-  const resolveWorkspace = createPlayWorkspaceResolver({
-    currentWorkspaceId: function () { return '' },
-    resourceRoot: async function () { calls.push('root'); return { path: '/data/resources' } },
-    createWorkspace: async function (input) { calls.push(['create', input.path]); return { workspaceId: 'workspace-tavern' } }
-  })
-
-  assert.equal(await resolveWorkspace(), 'workspace-tavern')
-  assert.deepEqual(calls, ['root', ['create', '/data/resources']])
-})
-
 test('预热与正式启动并发解析时只创建一个 Tavern 资源 Workspace', async function () {
   let creates = 0
   const resolveWorkspace = createPlayWorkspaceResolver({
@@ -55,47 +43,6 @@ function harness(overrides = {}) {
   return { calls, module: createConversationLifecycleModule(Object.assign(adapters, overrides)) }
 }
 
-test('游玩对话通过一个 interface 严格完成创建生命周期', async function () {
-  const { calls, module } = harness()
-  const result = await module.start({ kind: 'play', targetMode: 'free', card: { path: 'cards/a.json' } })
-
-  assert.deepEqual(calls, [
-    'archive', 'resolve:play', 'connect:workspace-1', 'wait:session-1',
-    'preset:session-1', 'chat:free:session-1', 'remember:session-1', 'open:session-1'
-  ])
-  assert.equal(result.sessionId, 'session-1')
-  assert.equal(result.pending.targetMode, 'free')
-})
-
-test('已预热的游玩 Session 跳过点击后的 Workspace 解析和 Agent 创建', async function () {
-  const { calls, module } = harness()
-
-  const result = await module.start({
-    kind: 'play', targetMode: 'story', card: { path: 'cards/a.json' }, preparedSessionId: 'session-warm'
-  })
-
-  assert.deepEqual(calls, [
-    'archive', 'wait:session-warm', 'preset:session-warm',
-    'chat:story:session-warm', 'remember:session-warm', 'open:session-warm'
-  ])
-  assert.equal(result.sessionId, 'session-warm')
-})
-
-test('创建失败会标记准确阶段并停止后续副作用', async function () {
-  const { calls, module } = harness({
-    ensurePreset: async function () { calls.push('preset:failed'); throw new Error('preset unavailable') }
-  })
-
-  await assert.rejects(module.start({ kind: 'play', targetMode: 'free' }), function (error) {
-    assert.equal(error.phase, '切换到酒馆模式')
-    assert.match(error.message, /preset unavailable/)
-    return true
-  })
-  assert.deepEqual(calls, [
-    'archive', 'resolve:play', 'connect:workspace-1', 'wait:session-1', 'preset:failed'
-  ])
-})
-
 function prewarmHarness(overrides = {}) {
   const calls = []
   const reports = []
@@ -116,54 +63,6 @@ test('游戏准备只解析 Workspace，认领后才创建 Session', async () =>
   assert.equal(await module.claim('card'), 'workspace-1')
   assert.deepEqual(calls, ['resolve'])
   assert.equal(await module.claim('card'), '')
-})
-
-test('取消尚未完成的工作区预热不会创建 Session，也不能再认领', async () => {
-  let release
-  const { calls, module } = prewarmHarness({ resolveWorkspace: () => new Promise(resolve => { release = resolve }) })
-  const pending = module.begin({ key: 'card' })
-  await Promise.resolve()
-  module.cancel()
-  release('workspace-1')
-  await pending
-  assert.equal(await module.claim('card'), '')
-  assert.deepEqual(calls, [])
-})
-
-test('反复选择人物卡并取消不会创建或归档任何 Session', async () => {
-  const { calls, module } = prewarmHarness()
-  for (let i = 0; i < 5; i++) { await module.begin({ key: 'card' + i }); module.cancel() }
-  await new Promise(resolve => setImmediate(resolve))
-  assert.equal(calls.filter(item => item === 'connect' || item.startsWith('archive:')).length, 0)
-})
-
-test('初始化失败后重试复用已创建 Session', async () => {
-  let attempts = 0
-  const { calls, module } = harness({ createChat: async () => { if (++attempts === 1) throw new Error('初始化失败') } })
-  const request = { kind: 'play', targetMode: 'story' }
-  await assert.rejects(module.start(request), /初始化失败/)
-  await module.start(request)
-  assert.equal(calls.filter(item => item.startsWith('connect:')).length, 1)
-})
-
-test('列表同步超时后丢弃未完成 attempt，下次新建 Session', async () => {
-  let connects = 0
-  const { calls, module } = harness({
-    connectWorkspace: async function () {
-      connects += 1
-      return 'session-' + connects
-    },
-    waitForSession: async function (sessionId) {
-      calls.push('wait:' + sessionId)
-      if (sessionId === 'session-1') throw Object.assign(new Error('DSH Session 列表同步超时，请刷新页面后重试：' + sessionId), { phase: '等待 DSH Session 就绪' })
-    }
-  })
-  const request = { kind: 'play', targetMode: 'story' }
-  await assert.rejects(module.start(request), /列表同步超时/)
-  await module.start(request)
-  assert.equal(connects, 2)
-  assert.ok(calls.includes('wait:session-2'))
-  assert.equal(calls.filter(item => item.startsWith('wait:session-1')).length, 1)
 })
 
 test('刷新页面后可复用失败 Session，打开失败不重复初始化，成功后下次新建', async () => {

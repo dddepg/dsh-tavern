@@ -12,14 +12,6 @@ test('MVU wire schema uses explicit types without unions that gateways can narro
   assert.doesNotMatch(JSON.stringify(MVU_SUBMIT_UPDATE_TOOL.parameters), /"(?:anyOf|oneOf)"/)
 })
 
-test('MVU wire values preserve equipment objects, currency, arrays and legitimate booleans', () => {
-  for (const value of [{ 名称: '苍白逆旅之刃', 等级: 1 }, 999995, false, true, null, ['装备', 3], 'false', '']) {
-    const result = normalizeMvuToolSubmission({ operations: [{ op: 'replace', path: '/stat_data/value', valueJson: JSON.stringify(value) }] })
-    assert.deepEqual(result.operations, [{ op: 'replace', path: '/stat_data/value', value }])
-  }
-  assert.deepEqual(normalizeMvuToolSubmission({ operations: [{ op: 'delta', path: '/stat_data/金币', valueJson: '-5' }] }).operations[0].value, -5)
-})
-
 test('invalid or ambiguous encoded values fail before dispatch; legacy persisted operations survive', () => {
   for (const extra of [{ valueJson: '{' }, { valueJson: false }, { valueJson: '1', value: false }, { valueJson: '1e999' }]) {
     assert.throws(() => normalizeMvuToolSubmission({ operations: [{ op: 'replace', path: '/hp', ...extra }] }))

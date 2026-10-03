@@ -17,19 +17,6 @@ function mount(send, managed = false) {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
-test('legacy DOM send preserves multiline payload and prevents duplicate submission', async () => {
-  const calls = []; let finish
-  const { area, button } = mount(line => { calls.push(line); return new Promise(resolve => { finish = resolve }) })
-  area.value = '请开始故事\n{"name":"林州","value":"a|b"}'
-  button.click(); button.click()
-  await tick()
-  assert.deepEqual(calls, ['/send ' + area.value + '|/trigger'])
-  assert.equal(button.disabled, true)
-  finish({ submitted: true }); await tick()
-  assert.equal(area.value, '')
-  assert.equal(button.disabled, false)
-})
-
 test('failed legacy send retains payload, displays failure and permits retry', async () => {
   const { nodes, area, button } = mount(() => Promise.reject(new Error('发送失败')))
   area.value = '开始故事'; button.click(); await tick()
@@ -52,14 +39,6 @@ test('preparation composer owns parent controls, submits once and ignores detach
   assert.equal(calls.length, 1)
 })
 
-test('legacy input event fills the real composer without triggering generation', async () => {
-  const calls = []
-  const { area } = mount(line => { calls.push(line); return Promise.resolve() })
-  area.value = '开场引导\n原样保留 | /trigger'
-  area.input(); await tick()
-  assert.deepEqual(calls, ['/setinput ' + area.value])
-})
-
 test('parent composer routes to the focused card, survives replacement and releases owners', async () => {
   const nodes = [], calls = [], errors = [];
   function element() { return { value: '', append(...items) { nodes.push(...items) }, remove() { this.removed = true }, addEventListener(name, fn) { this[name] = fn } } }
@@ -80,18 +59,6 @@ test('parent composer routes to the focused card, survives replacement and relea
   doc.activeElement = a; area.value = '已经卸载'; button.click(); releaseA(); await tick();
   assert.equal(calls.length, 3); assert.ok(errors.includes('卡片已关闭，请重新打开'));
 });
-
-test('shared sandbox composer sends exact text once without replacing the user draft', async () => {
-  const calls = []; let finish
-  const { area, button } = mount(text => { calls.push(text); return new Promise(resolve => { finish = resolve }) }, true)
-  area.value = 'A neutral opening\nLiteral | /cut is text.'
-  area.input(); await tick(); assert.equal(calls.length, 0)
-  button.click(); button.click(); await tick()
-  assert.deepEqual(calls, [area.value])
-  finish({submitted:true}); await tick()
-  assert.equal(area.value, '')
-})
-
 
 test('parent and top DOM composer APIs submit exact text to their own sandbox', async () => {
   const { JSDOM } = await import('jsdom')
@@ -154,33 +121,4 @@ test('legacy layout anchors track the conversation viewport below native navigat
     assert.equal(scope.top.document.querySelector('#sheld'),chat)
     assert.equal(host.window.document.getElementById('sheld'),null)
   } finally {host.window.close();frame.window.close()}
-})
-
-test('layout anchors notify position changes on scroll and release listeners on frame exit', async () => {
-  const { JSDOM } = await import('jsdom')
-  const host=new JSDOM('<div style="overflow-y:auto"><div class="dsh-tavern-assistant"></div></div>',{pretendToBeVisual:true})
-  const frame=new JSDOM('<body></body>')
-  let disconnected=0
-  host.window.ResizeObserver=class {observe(){} disconnect(){disconnected++}}
-  let rect=new host.window.DOMRect(0,82,500,600)
-  host.window.document.body.firstElementChild.getBoundingClientRect=()=>rect
-  try {
-    const scope=helperClient.createTavernComposerWindow(frame.window,host.window)
-    const anchor=scope.parent.document.getElementById('top-settings-holder')
-    host.window.dispatchEvent(new host.window.Event('scroll'))
-    await new Promise(r=>host.window.requestAnimationFrame(r))
-    const before=anchor.getAttribute('style')
-    rect=new host.window.DOMRect(0,35,500,600)
-    host.window.dispatchEvent(new host.window.Event('scroll'))
-    await new Promise(r=>host.window.requestAnimationFrame(r))
-    assert.notEqual(anchor.getAttribute('style'),before)
-    assert.equal(anchor.getBoundingClientRect().bottom,35)
-    const finalStyle=anchor.getAttribute('style')
-    frame.window.dispatchEvent(new frame.window.Event('pagehide'))
-    assert.ok(disconnected>0)
-    rect=new host.window.DOMRect(0,12,500,600)
-    host.window.dispatchEvent(new host.window.Event('scroll'))
-    await new Promise(r=>host.window.requestAnimationFrame(r))
-    assert.equal(anchor.getAttribute('style'),finalStyle)
-  }finally{host.window.close();frame.window.close()}
 })

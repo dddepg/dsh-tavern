@@ -389,6 +389,7 @@ export function createTurnOrchestrator(options) {
     const sceneWorldbook = typeof options.captureSceneWorldbook === 'function' ? await options.captureSceneWorldbook(chat, card) : null
     const plan = await planner.plan({ purpose: 'body', card, chat: templateWorldBook?.macroState ? { ...chat, macroState: templateWorldBook.macroState } : chat, userText: runtimeUserText, sessionId: input.sessionId, nativeTurn: turn, scriptReference, worldBookContext })
     const source = frameSource(chat, card, foregroundOperation)
+    source.card.systemPromptText = plan.systemPromptText
     source.worldBook.scriptPromptRefs = Array.isArray(scriptWorldBook && scriptWorldBook.refs) ? clone(scriptWorldBook.refs) : []
     if (scriptWorldBook && typeof scriptWorldBook.recordReads === 'function') chat.worldBookReads = scriptWorldBook.recordReads(chat.worldBookReads)
     source.worldBook.templateRefs = Array.isArray(templateWorldBook && templateWorldBook.refs) ? clone(templateWorldBook.refs) : []
@@ -522,8 +523,28 @@ export function createTurnOrchestrator(options) {
   }
 
   async function finalize(input) {
-    let chat = await store.chatForSession(input.sessionId)
+    const chat = await store.chatForSession(input.sessionId)
     if (chat === undefined) return { saved: false, reason: 'unbound' }
+    if (!['story', 'script'].includes(chat.mode || 'story') || typeof store.updateChat !== 'function') {
+      return finalizeSnapshot(input, chat, (value, metadata) => store.writeChat(value, metadata))
+    }
+    // Consume the current template input and append its messages in one write.
+    // Display rendering can enrich that input after our initial session lookup.
+    const expectedTimeline = { branchId: chat.timeline?.branchId, revision: chat.timeline?.revision }
+    const metadata = { source: 'foreground.commit' }
+    let result = { saved: false, reason: 'unbound' }
+    await store.updateChat(chat.id, async current => {
+      let next
+      result = await finalizeSnapshot(input, current, async (value, details) => {
+        next = value
+        Object.assign(metadata, details)
+      }, expectedTimeline)
+      return next
+    }, metadata)
+    return result
+  }
+
+  async function finalizeSnapshot(input, chat, writeChat, expectedTimeline) {
     const turn = Math.max(0, Number(input.turn) || 0)
     const requestId = str(input.requestId).trim()
     const requestCommit = commitForRequest(chat, requestId)
@@ -538,6 +559,9 @@ export function createTurnOrchestrator(options) {
     }
     const prior = commitFor(chat, turn)
     if (prior !== null) return { saved: true, duplicate: true, mode: chat.mode || 'story', changed: prior.changed === true }
+    if (expectedTimeline && (chat.timeline?.branchId !== expectedTimeline.branchId || chat.timeline?.revision !== expectedTimeline.revision)) {
+      throw new Error('正文生成期间剧情状态已变化，本轮结果已作废')
+    }
     const userText = str(input.userText).trim()
     const attachments = inputAttachments(input.userContent)
     const mode = chat.mode || 'story'
@@ -598,7 +622,7 @@ export function createTurnOrchestrator(options) {
       chat.foregroundError = null
       chat.cardName = created === null ? (str(state.draft && state.draft.name) || '卡片工作台') : created.card.name
       rememberCommit(chat, turn, { mode, userText, requestId, changed }, null, now)
-      await store.writeChat(chat, { source: 'card.commit' })
+      await writeChat(chat, { source: 'card.commit' })
       return {
         saved: true,
         mode,
@@ -625,7 +649,7 @@ export function createTurnOrchestrator(options) {
       chat.foregroundError = null
       chat.cardName = savedCard.name
       rememberCommit(chat, turn, { mode, userText, requestId, changed }, null, now)
-      await store.writeChat(chat, { source: 'card.commit' })
+      await writeChat(chat, { source: 'card.commit' })
       return { saved: true, mode, changed, chatId: chat.id, cardName: savedCard.name }
     }
 
@@ -694,7 +718,7 @@ export function createTurnOrchestrator(options) {
     })
     chat = completed.chat
     if (completed.value.status !== 'committed') throw new Error('正文生成期间剧情状态已变化，本轮结果已作废')
-    await store.writeChat(chat, { source: 'foreground.commit', operationId: operation.id })
+    await writeChat(chat, { source: 'foreground.commit', operationId: operation.id })
     return { saved: true, mode, changed: false, chatId: chat.id, cardName: chat.cardName, reply }
   }
 

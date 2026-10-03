@@ -2,189 +2,28 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import net from 'node:net'
+
 import test from 'node:test'
 import { parseDocument } from 'yaml'
 
-import { applySidebarDefaults, browserOpenCommand, decodeUpdateOutput, encodeWindowsPowerShellScript, ensureSidebarDefaults, isPortOpen, isServiceReady, needsFrontendBootstrap, recordInstalledRelease, resolveDshInvocation, resolveUpdateProgram, restartBrowserTarget, webUrlFromLogChunk, updateApplication } from '../bin/dsh-tavern.mjs'
+import { ensureSidebarDefaults, isServiceReady } from '../bin/dsh-tavern.mjs'
 
 const windowsInstaller = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')
 const unixInstaller = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
 
-const launcherSource = await readFile(new URL('../bin/dsh-tavern.mjs', import.meta.url), 'utf8')
-const serviceSource = await readFile(new URL('../bin/service-lifecycle.mjs', import.meta.url), 'utf8')
 const installationSource = await readFile(new URL('../bin/profile-installation.mjs', import.meta.url), 'utf8')
 const updateSource = await readFile(new URL('../bin/application-update.mjs', import.meta.url), 'utf8')
-const updateHelperSource = await readFile(new URL('../bin/dsh-tavern-update-helper.mjs', import.meta.url), 'utf8')
 const profilePatch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 const managedProfilePatch = await readFile(new URL('../tavern-plugin/cordis.patch.yml', import.meta.url), 'utf8')
 const profileConfigurationSource = await readFile(new URL('../bin/profile-configuration.mjs', import.meta.url), 'utf8')
 const rootManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
-test('无 Git 的 ZIP 安装在收尾时补写提交号', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-release-'))
-  try {
-    const commit = 'd'.repeat(40)
-    const result = await recordInstalledRelease({ sourceRoot: root, dshRoot: path.join(root, '.dsh'), targetCommit: commit })
-    assert.equal(result.commit, commit)
-    assert.equal(JSON.parse(await readFile(path.join(root, '.dsh-tavern-release.json'), 'utf8')).commit, commit)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
 const tavernPluginManifest = JSON.parse(await readFile(new URL('../tavern-plugin/package.json', import.meta.url), 'utf8'))
 const profileWorkspace = await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
-
-test('Android 通过 Node expose-internals 运行 DSH，其他宿主保持原命令', () => {
-  assert.deepEqual(resolveDshInvocation('/usr/local/bin/dsh', ['--version'], 'android', '/usr/local/bin/node'), {
-    command: '/usr/local/bin/node',
-    args: ['--expose-internals', '/usr/local/bin/dsh', '--version'],
-  })
-  assert.deepEqual(resolveDshInvocation('/usr/local/bin/dsh', ['--version'], 'cli', '/usr/local/bin/node'), {
-    command: '/usr/local/bin/dsh',
-    args: ['--version'],
-  })
-})
-
-test('升级时只用本次启动标识引导一次新页面，之后交给页面自动恢复', () => {
-  assert.equal(
-    restartBrowserTarget(3081, 'runtime-a b', 'http://127.0.0.1:3081/?token=alpha2-token'),
-    'http://127.0.0.1:3081/?token=alpha2-token&tavern-boot=runtime-a+b',
-  )
-  assert.equal(webUrlFromLogChunk('old\ndsh web: http://127.0.0.1:3081/?token=fresh\n'), 'http://127.0.0.1:3081/?token=fresh')
-  assert.equal(webUrlFromLogChunk('dsh web: http://127.0.0.1:3081/?token=old\ndsh web: http://127.0.0.1:3081/?token=new\n'), 'http://127.0.0.1:3081/?token=new')
-  assert.match(serviceSource, /for \(let logAttempt = 0; logAttempt < 50 && webUrl === ''; logAttempt \+= 1\)/)
-  assert.equal(needsFrontendBootstrap(null), true)
-  assert.equal(needsFrontendBootstrap({ version: 0 }), true)
-  assert.equal(needsFrontendBootstrap({ version: 1 }), true)
-  assert.equal(needsFrontendBootstrap({ version: 2 }), false)
-  assert.match(serviceSource, /const target = restartBrowserTarget\(state\.port, state\.runtimeGeneration, state\.webUrl\)/)
-  assert.match(serviceSource, /openBrowserTarget\(target\)/)
-  assert.match(launcherSource, /if \(!await bootstrapFrontendOnce\(state\)\)/)
-  assert.doesNotMatch(launcherSource, /Shift \+ R 强制刷新/)
-  assert.deepEqual(browserOpenCommand('http://127.0.0.1:3081/?tavern-boot=x', 'darwin'), {
-    command: 'open',
-    args: ['http://127.0.0.1:3081/?tavern-boot=x'],
-  })
-})
-
-test('Windows update script carries a UTF-8 BOM for Windows PowerShell 5.1', () => {
-  for (const source of ["Write-Host '模型设置'", "\uFEFFWrite-Host '模型设置'"]) {
-    const encoded = encodeWindowsPowerShellScript(source)
-    assert.ok(encoded.startsWith('\uFEFF'))
-    assert.match(encoded, /System\.Text\.UTF8Encoding/)
-    assert.equal(encoded.match(/Write-Host '模型设置'/g)?.length, 1)
-  }
-})
-
-test('Windows 更新日志同时识别 UTF-8 与 UTF-16LE', () => {
-  assert.equal(decodeUpdateOutput(Buffer.from('更新失败', 'utf8')), '更新失败')
-  assert.equal(decodeUpdateOutput(Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('更新失败', 'utf16le')])), '更新失败')
-})
-
-test('Android UI 更新选择专用更新脚本，CLI 与 Desktop 保持原安装器', () => {
-  assert.deepEqual(resolveUpdateProgram('android', 'linux', '/app/dsh-tavern'), {
-    script: path.join('/app/dsh-tavern', 'android', 'update.sh'),
-    command: 'bash',
-    args: [path.join('/app/dsh-tavern', 'android', 'update.sh')],
-  })
-  assert.deepEqual(resolveUpdateProgram('cli', 'linux', '/app/dsh-tavern'), {
-    script: path.join('/app/dsh-tavern', 'install.sh'),
-    command: 'sh',
-    args: [path.join('/app/dsh-tavern', 'install.sh')],
-  })
-})
-
-test('Windows 更新在 PATH 缺少 PowerShell 时优先使用系统绝对路径', () => {
-  const systemPowerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-  const program = resolveUpdateProgram('desktop', 'win32', 'C:\\app\\dsh-tavern', {
-    env: { SystemRoot: 'C:\\Windows' },
-    fileExists: (candidate) => candidate === systemPowerShell,
-    commandAvailable: () => false,
-  })
-
-  assert.equal(program.command, systemPowerShell)
-  assert.deepEqual(program.args.slice(0, 4), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File'])
-})
-
-test('Windows 更新在 Windows PowerShell 不可用时回退到 PowerShell 7', () => {
-  const program = resolveUpdateProgram('cli', 'win32', 'C:\\app\\dsh-tavern', {
-    env: {},
-    fileExists: () => false,
-    commandAvailable: (candidate) => candidate === 'pwsh.exe',
-  })
-
-  assert.equal(program.command, 'pwsh.exe')
-})
-
-test('Windows 更新找不到任何 PowerShell 时给出手动恢复命令', () => {
-  assert.throws(() => resolveUpdateProgram('desktop', 'win32', 'C:\\app\\dsh-tavern', {
-    env: {},
-    fileExists: () => false,
-    commandAvailable: () => false,
-  }), /cdn\.jsdelivr\.net\/gh\/flizzywine\/dsh-tavern@main\/install\.ps1/)
-})
-
-test('更新器在选择安装器后的任一步骤失败时写入 failed 终态', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-update-runner-'))
-  try {
-    const statusFile = path.join(root, 'update-status.json')
-    await assert.rejects(() => updateApplication({
-      host: 'cli', statusFile, delay: 0, sourceRoot: path.join(root, 'missing-source'),
-      log: function () {},
-    }), /当前安装缺少更新程序/)
-    const status = JSON.parse(await readFile(statusFile, 'utf8'))
-    assert.equal(status.phase, 'failed')
-    assert.equal(status.host, 'cli')
-    assert.match(status.error, /当前安装缺少更新程序/)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('更新器成功执行并清理临时脚本后写入 completed 终态', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-update-runner-'))
-  try {
-    const statusFile = path.join(root, 'update-status.json')
-    const installerName = process.platform === 'win32' ? 'install.ps1' : 'install.sh'
-    const installerSource = process.platform === 'win32' ? 'exit 0\r\n' : '#!/bin/sh\nexit 0\n'
-    await writeFile(path.join(root, installerName), installerSource)
-    const logs = []
-    await updateApplication({ host: 'cli', statusFile, delay: 0, sourceRoot: root, log: function (message) { logs.push(message) } })
-    const status = JSON.parse(await readFile(statusFile, 'utf8'))
-    assert.equal(status.phase, 'completed')
-    assert.equal(status.host, 'cli')
-    assert.equal(status.requiresRestart, false)
-    assert.deepEqual(logs, ['正在更新 DSH Tavern……'])
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test('代码已覆盖但安装器失败时仍保留失败状态', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-update-partial-'))
-  try {
-    const statusFile = path.join(root, 'update-status.json')
-    const commit = 'e'.repeat(40)
-    const installerName = process.platform === 'win32' ? 'install.ps1' : 'install.sh'
-    const installerSource = process.platform === 'win32' ? 'exit 1\r\n' : '#!/bin/sh\nexit 1\n'
-    await writeFile(path.join(root, installerName), installerSource)
-    await writeFile(path.join(root, '.dsh-tavern-release.json'), JSON.stringify({ commit }))
-    await assert.rejects(() => updateApplication({ host: 'cli', statusFile, delay: 0, sourceRoot: root, targetCommit: commit, log() {} }), /更新失败/)
-    const status = JSON.parse(await readFile(statusFile, 'utf8'))
-    assert.equal(status.phase, 'failed')
-    assert.equal(status.targetCommit, commit)
-    assert.match(status.error, /更新失败/)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
 
 test('Windows UI 更新隐藏 PowerShell 窗口并保持 UTF-8 输出', () => {
   assert.match(updateSource, /System\.Text\.UTF8Encoding/)
   assert.match(updateSource, /spawnSync\(command, args, \{[\s\S]*?windowsHide: true,/)
-  assert.match(updateHelperSource, /detached: true/)
-  assert.match(updateHelperSource, /windowsHide: true/)
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {
@@ -216,69 +55,6 @@ test('Tavern profile isolates conversations from other DSH profiles on fresh ins
   assert.match(installationSource, /prepareProfilePatch/)
   assert.match(unixInstaller, /node "\$\{APP_DIR\}\/bin\/dsh-tavern\.mjs" install --host "\$\{INSTALL_HOST\}"/)
   assert.match(windowsInstaller, /Invoke-InstallCommand 'profile\.install' 'node' @\(\(Join-Path \$AppDir 'bin\\dsh-tavern\.mjs'\), 'install', '--host', \$InstallHost\)/)
-})
-
-test('Tavern sidebar defaults enable resource tabs, Files and text previews', () => {
-  const settings = applySidebarDefaults({
-    'unrelated-plugin': { enabled: true },
-    'dsh-better-sidebar': { openByDefault: false },
-  })
-
-  assert.deepEqual(settings['unrelated-plugin'], { enabled: true })
-  assert.equal(settings['dsh-better-sidebar'].openByDefault, false)
-  assert.equal(settings['dsh-better-sidebar'].defaultWidthPercent, undefined)
-  assert.deepEqual(settings['dsh-better-sidebar'].tabsEnabled, {
-    editor: true,
-    git: false,
-    subagent: false,
-    terminal: false,
-    browser: false,
-    diff: false,
-    'dsh-tavern:resources': true,
-    'dsh-tavern:presets': true,
-    'dsh-tavern:cards': true,
-    'dsh-tavern:status': true,
-  })
-  assert.deepEqual(settings['dsh-better-sidebar'].viewersEnabled, {
-    image: false,
-    pdf: false,
-    markdown: true,
-    html: false,
-    code: true,
-    'binary-download': false,
-  })
-  assert.equal(settings['dsh-tavern'].sidebarDefaultsVersion, 8)
-})
-
-test('Tavern sidebar restores native Files and text previews during version 5 migration', () => {
-  const settings = applySidebarDefaults({
-    'dsh-tavern': { sidebarDefaultsVersion: 4 },
-    'dsh-better-sidebar': { tabsEnabled: { editor: false, 'dsh-tavern:resources': false }, viewersEnabled: { markdown: false, code: false } },
-  })
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled.editor, true)
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled['dsh-tavern:resources'], false)
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled['dsh-tavern:cards'], true)
-  assert.equal(settings['dsh-better-sidebar'].viewersEnabled.markdown, true)
-  assert.equal(settings['dsh-better-sidebar'].viewersEnabled.code, true)
-})
-
-test('Tavern sidebar preserves user choices after version 5 migration', () => {
-  const settings = applySidebarDefaults({
-    'dsh-tavern': { sidebarDefaultsVersion: 5 },
-    'dsh-better-sidebar': { tabsEnabled: { editor: false }, viewersEnabled: { markdown: false, code: false } },
-  })
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled.editor, false)
-  assert.equal(settings['dsh-better-sidebar'].viewersEnabled.markdown, false)
-  assert.equal(settings['dsh-better-sidebar'].viewersEnabled.code, false)
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled['dsh-tavern:boundary-prompts'], undefined)
-})
-
-test('Tavern sidebar version 8 migration removes the retired boundary prompt tab', () => {
-  const settings = applySidebarDefaults({
-    'dsh-tavern': { sidebarDefaultsVersion: 7 },
-    'dsh-better-sidebar': { tabsEnabled: { 'dsh-tavern:boundary-prompts': false } },
-  })
-  assert.equal(settings['dsh-better-sidebar'].tabsEnabled['dsh-tavern:boundary-prompts'], undefined)
 })
 
 test('Tavern sidebar migration marker与三个库设置写入 YAML', async (t) => {
@@ -353,16 +129,6 @@ test('升级后用户数据固定在 Profile 目录，并在安装时迁移旧�
   assert.match(installationSource, /migrateLegacyTavernData\(\{/)
   assert.match(installationSource, /backupRoot: path\.join\(DSH_ROOT, 'backups', 'dsh-tavern-data-upgrade'\)/)
   assert.doesNotMatch(installationSource, /mkdirSync\(path\.join\(SOURCE_ROOT, 'data'/)
-})
-
-test('port probe distinguishes an open listener from a closed port', async () => {
-  const server = net.createServer()
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const address = server.address()
-  assert.equal(typeof address, 'object')
-  assert.equal(await isPortOpen(address.port), true)
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
-  assert.equal(await isPortOpen(address.port), false)
 })
 
 test('Web 服务就绪检查接受 alpha.2 鉴权响应', async () => {

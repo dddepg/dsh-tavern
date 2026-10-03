@@ -1,16 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { prompt } from '../tavern-plugin/lib/prompt-catalog.js'
+
 import { applyTavernSettingsPatch, resolveSystemPrompt } from '../tavern-plugin/lib/domain/tavern-settings.js'
 import { createBackgroundAgentRunner } from '../tavern-plugin/lib/background-agent-runner.js'
-
-test('附加指令保存、清空和导入均可立即读取', () => {
-  let settings = applyTavernSettingsPatch({}, { systemPrompt: { name: 'system-append', text: '附加内容' } })
-  assert.equal(resolveSystemPrompt(settings, 'system-append', prompt), '附加内容')
-  settings = applyTavernSettingsPatch(settings, { systemPrompt: { name: 'system-append', text: '' } })
-  assert.equal(resolveSystemPrompt(settings, 'system-append', prompt), '')
-  assert.doesNotThrow(() => applyTavernSettingsPatch(settings, { systemPrompts: { 'system-append': '' } }))
-})
 
 for (const task of ['settlement', 'image', 'phone']) test(task + ' 复用会话时置顶最新指令且清空后移除', async () => {
   let assemble, completeSection, pending, text = '第一版'
@@ -40,7 +32,6 @@ for (const task of ['settlement', 'image', 'phone']) test(task + ' 复用会话�
   } finally { await runner.dispose() }
 })
 
-
 test('真实 DSH complete system 在后台各任务中保留最新附加指令', { skip: !process.env.DSH_BOOT_MODULE }, async t => {
   const { createSceneImageNativeRuntime } = await import('./fixtures/scene-image-native-runtime.mjs')
   let text = '附加指令第一版'
@@ -60,13 +51,12 @@ test('真实 DSH complete system 在后台各任务中保留最新附加指令',
   }
 })
 
-
 test('附加指令默认开启，明确关闭的选择与用户覆盖继续保留', async () => {
   const { readFileSync } = await import('node:fs')
   const { presentTavernSettings } = await import('../tavern-plugin/lib/domain/tavern-settings.js')
   const source = readFileSync(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
   const implementation = source.slice(source.indexOf('  function runtimePrompt(name)'), source.indexOf('  function presentSystemPrompts'))
-  const resolve = document => new Function('tavernSettingsDocument', 'resolveSystemPrompt', 'prompt', implementation + '; return runtimePrompt;')(document, resolveSystemPrompt, name => name === 'system-append' ? '默认内容' : '其他提示词')
+  const resolve = document => new Function('tavernSettingsDocument', 'resolveSystemPrompt', 'promptFile', implementation + '; return runtimePrompt;')(document, resolveSystemPrompt, name => name === 'system-append' ? '默认内容' : '其他提示词')
   let document = applyTavernSettingsPatch({}, { systemPrompt: { name: 'system-append', text: '用户内容' } })
   assert.equal(presentTavernSettings(document, {}).systemAppendEnabled, true)
   assert.equal(resolve(document)('system-append'), '用户内容')

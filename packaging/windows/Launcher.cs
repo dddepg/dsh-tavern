@@ -15,8 +15,10 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
 class Launcher : Form {
- // Bump for any embedded runtime/bootstrap change; never patch a running installation.
- const string Version="a272f20b3f1f5b15-setup4";
+ // build.ps1 rewrites both payload values for the payload it embeds; the defaults here are the last published payload.
+ const string PayloadSha256="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4";
+ // Bump the suffix for any embedded runtime/bootstrap change; never patch a running installation.
+ const string Version="a272f20b3f1f5b15-setup5";
  Label label=new Label(), activity=new Label(); ProgressBar bar=new ProgressBar();
  Button logs=new Button(); System.Windows.Forms.Timer progressTimer=new System.Windows.Forms.Timer();
  Stopwatch elapsed=Stopwatch.StartNew(); TimeSpan lastProgress=TimeSpan.Zero; string lastStatus="";
@@ -159,17 +161,19 @@ class Launcher : Form {
   CreateShortcut(TestRoot==null?Environment.GetFolderPath(Environment.SpecialFolder.Programs):Path.Combine(TestRoot,"StartMenu"));
   File.WriteAllText(Path.Combine(root,"如何启动.txt"),"以后请从桌面或开始菜单打开 DSH Tavern，也可双击本目录的 DSH Tavern.exe。\r\n程序位置："+root+"\r\n数据位置："+data+"\r\n请保留数据目录；不要单独运行 runtime 文件夹中的 DSH Desktop.exe。\r\n",Encoding.UTF8);
  }
+ // WScript.Shell converts paths to the ANSI code page: on a non-Chinese Windows a Chinese
+ // install path or user name becomes '?' and Save fails with E_INVALIDARG. IShellLinkW is Unicode.
  void CreateShortcut(string folder) {
   if(string.IsNullOrWhiteSpace(folder))throw new Exception("无法找到系统快捷方式目录；可从 "+installedLauncher+" 启动。");
   Directory.CreateDirectory(folder);
-  object shell=null,link=null;
+  var link=(IShellLinkW)new ShellLink();
   try {
-   shell=Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell",true));
-   link=shell.GetType().InvokeMember("CreateShortcut",BindingFlags.InvokeMethod,null,shell,new object[]{Path.Combine(folder,"DSH Tavern.lnk")});
-   foreach(var pair in new[]{new[]{"TargetPath",installedLauncher},new[]{"WorkingDirectory",root},new[]{"Description","打开 DSH Tavern 酒馆"},new[]{"IconLocation",Path.Combine(runtime,"DSH Desktop.exe")+",0"}})
-    link.GetType().InvokeMember(pair[0],BindingFlags.SetProperty,null,link,new object[]{pair[1]});
-   link.GetType().InvokeMember("Save",BindingFlags.InvokeMethod,null,link,null);
-  } finally {if(link!=null)Marshal.FinalReleaseComObject(link);if(shell!=null)Marshal.FinalReleaseComObject(shell);}
+   link.SetPath(installedLauncher);
+   link.SetWorkingDirectory(root);
+   link.SetDescription("打开 DSH Tavern 酒馆");
+   link.SetIconLocation(Path.Combine(runtime,"DSH Desktop.exe"),0);
+   ((System.Runtime.InteropServices.ComTypes.IPersistFile)link).Save(Path.Combine(folder,"DSH Tavern.lnk"),true);
+  } finally {Marshal.FinalReleaseComObject(link);}
  }
  void Status(string text,int percent=-1) { BeginInvoke((Action)(()=>{if(text!=lastStatus){lastProgress=elapsed.Elapsed;lastStatus=text;}label.Text=text;bar.Style=percent<0?ProgressBarStyle.Marquee:ProgressBarStyle.Continuous;if(percent>=0)bar.Value=Math.Min(100,percent);})); }
  void Resource(string name,string path) {using(var s=Assembly.GetExecutingAssembly().GetManifestResourceStream(name))using(var f=File.Create(path))s.CopyTo(f);}
@@ -192,7 +196,7 @@ class Launcher : Form {
      Resource("payload",archive);Resource("seven",seven);
      using(var sha=SHA256.Create())using(var f=File.OpenRead(archive)) {
       var h=BitConverter.ToString(sha.ComputeHash(f)).Replace("-","").ToLowerInvariant();
-      if(h!="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4")throw new Exception("运行包校验失败");
+      if(h!=PayloadSha256)throw new Exception("运行包校验失败");
      }
      var pi=new ProcessStartInfo(seven,"x "+Quote(archive)+" -o"+Quote(app)+" -y -bsp1 -bso0");
      pi.UseShellExecute=false;pi.CreateNoWindow=true;pi.RedirectStandardOutput=true;
@@ -200,15 +204,10 @@ class Launcher : Form {
      using(var p=Process.Start(pi)) {char[] buf=new char[256];int n;while((n=p.StandardOutput.Read(buf,0,buf.Length))>0){var m=Regex.Match(new string(buf,0,n),@"(\d{1,3})%");if(m.Success)Status("首次准备运行环境："+m.Value,int.Parse(m.Groups[1].Value));}p.WaitForExit();if(p.ExitCode!=0)throw new Exception("解压失败，代码 "+p.ExitCode);}
      if(!File.Exists(Path.Combine(app,"DSH Desktop.exe")))throw new Exception("运行环境不完整");
      Status("本地处理：解压完成，正在配置运行环境…");
-     var patch=Path.Combine(stage,"patch-runtime.cjs");Resource("runtimePatch",patch);
-     var packageHelper=Path.Combine(stage,"desktop-package-manager.mjs");Resource("packageHelper",packageHelper);
+     // Desktop's own pnpm runs under Electron; the runtime itself is used unmodified.
      Resource("setupUpgrade",Path.Combine(app,@"resources\setup-upgrade.mjs"));
+     Resource("downloadModule",Path.Combine(app,@"resources\download.cjs"));
      Resource("powershellInstaller",Path.Combine(app,@"resources\install.ps1"));
-     var patchStart=new ProcessStartInfo(Path.Combine(app,"DSH Desktop.exe"),Quote(patch)+" "+Quote(app)+" "+Quote(packageHelper));
-     patchStart.UseShellExecute=false;patchStart.CreateNoWindow=true;patchStart.RedirectStandardError=true;
-     patchStart.EnvironmentVariables["ELECTRON_RUN_AS_NODE"]="1";
-     patchStart.EnvironmentVariables["TEMP"]=stage;patchStart.EnvironmentVariables["TMP"]=stage;
-     using(var p=Process.Start(patchStart)){string error=p.StandardError.ReadToEnd();p.WaitForExit();if(p.ExitCode!=0)throw new Exception("无法准备中文路径支持："+error);}
      });
      // Payload files may be read-only; Directory.Delete then throws UnauthorizedAccessException
      // ("Access to the path 'DSH Desktop.exe' is denied") and can mask a finished prepare.
@@ -319,4 +318,27 @@ class Launcher : Form {
    Directory.Delete(path,true);
   } catch {}
  }
+}
+
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")] class ShellLink {}
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+interface IShellLinkW {
+ void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int size, IntPtr data, int flags);
+ void GetIDList(out IntPtr list);
+ void SetIDList(IntPtr list);
+ void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int size);
+ void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+ void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder directory, int size);
+ void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string directory);
+ void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder arguments, int size);
+ void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string arguments);
+ void GetHotkey(out short hotkey);
+ void SetHotkey(short hotkey);
+ void GetShowCmd(out int command);
+ void SetShowCmd(int command);
+ void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int size, out int index);
+ void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+ void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
+ void Resolve(IntPtr window, int flags);
+ void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
 }

@@ -19,7 +19,7 @@ import { createProfileDataStore } from '../../tavern-plugin/lib/profile-data-sto
 import { createSessionStablePrefixStorage, ensureSessionStablePrefix, sessionStablePrefixSections } from '../../tavern-plugin/lib/domain/session-stable-prefix.js'
 import { createStoryTimeline } from '../../tavern-plugin/lib/domain/story-timeline.js'
 
-export async function createInitializationNative(bootPath, { preset, contextWindow = 2000, modelStream } = {}) {
+export async function createInitializationNative(bootPath, { preset, contextWindow = 2000, modelStream, cardOverrides, userPreferenceProfile, assembleStablePrefix = true } = {}) {
   const bootUrl = pathToFileURL(bootPath)
   const { boot } = await import(bootUrl.href)
   const { LlmAdapter } = await import(new URL('../../dsh-llm/lib/index.js', bootUrl))
@@ -38,7 +38,7 @@ export async function createInitializationNative(bootPath, { preset, contextWind
       return ctx.llm.stream(adapted)
     })
   }
-  ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
+  if (assembleStablePrefix) ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const assembly = await next()
     assembly.sections = sessionStablePrefixSections(context.agent.session)
     return assembly
@@ -52,7 +52,7 @@ export async function createInitializationNative(bootPath, { preset, contextWind
     { ref: 'dynamic', enabled: true, primaryKeys: ['走到花店'], content: 'Fixture recalled worldbook' }
   ] } }) }
   let target, persistence, importer
-  const card = { path: 'cards/test.json', name: '角色', first_mes: '{{user}}，你好。', description: '不可丢失的固定背景', system_prompt: 'Fixture card special instruction', post_history_instructions: 'Fixture card writing constraint' }
+  const card = { path: 'cards/test.json', name: '角色', first_mes: '{{user}}，你好。', description: '不可丢失的固定背景', system_prompt: 'Fixture card special instruction', post_history_instructions: 'Fixture card writing constraint', ...cardOverrides }
   const data = createProfileDataStore({ dataRoot: root })
   let storage = createSessionStablePrefixStorage(join(root, 'prefix'))
   const eventsPath = join(root, 'native-events.json')
@@ -90,11 +90,11 @@ export async function createInitializationNative(bootPath, { preset, contextWind
       if (state.failMarker && metadata.source === 'opening.native-append') throw Error('marker failure')
       return persistence.write(chat, metadata)
     }
-    const snapshots = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }), readCard: async () => card, writeChat: write })
+    const snapshots = createPlayCardSnapshots({ worldBooks, planner: createContextPlanner({ prompt: () => '' }), readCard: async () => card, writeChat: write, userPreferenceProfile })
     const timeline = createStoryTimeline({ id: () => randomUUID() })
     const initialization = createConversationInitialization({
       cards: { read: async () => card, readChat: async () => card, script: async () => undefined, extensions: async () => ({}) },
-      chats: { resolve: registry.resolve, publish: registry.publish, write }, snapshots, timeline,
+      chats: { resolve: registry.resolve, publish: registry.publish, write }, snapshots, timeline, userPreferenceProfile,
       presets: { fullSnapshot: async () => null }, settings: async () => ({}),
       logger: { warn() {} }, cardGreeting: () => '工作台', emptyCardWorkspace: () => ({}), id: () => randomUUID(), present: async chat => structuredClone(chat),
       native: { wait: async () => target, selection: () => selection, ensurePrefix: (session, text) => ensureSessionStablePrefix(session, text, storage),

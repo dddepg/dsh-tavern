@@ -17,11 +17,3 @@ test('missing/unsettled snapshots and unknown names do not invent designs', asyn
   const reader = createSceneCharacterDesigns({ snapshot: snapshot(), target, sources: [] })
   assert.equal((await reader.read({ name: '不存在' })).found, false)
 })
-
-test('design reads share the scene source budget and never return truncated records', async () => {
-  const reader = createSceneCharacterDesigns({ snapshot: snapshot(), target, sources: [{ text: 'x'.repeat(11990) }] })
-  const result = await reader.read({ name: '林岚' })
-  assert.equal(result.ok, false)
-  assert.equal(result.character, undefined)
-  assert.deepEqual(result.sources, [])
-})

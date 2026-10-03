@@ -52,26 +52,3 @@ test('右侧状态栏继续读取更新后的变量，不重复识别或重建 i
   assert.equal(displayed, 8)
   assert(!run.reports.some(item => item.type === 'dsh-tavern-mvu-view-used'))
 })
-
-test('预设自检面板按 TH-message 名称识别实际楼层，持久页面换轮后同步更新', async () => {
-  const run = frame(false)
-  // Dream self-repair's detection order: window.name, frame id/name, then .mes[mesid].
-  const detect = () => vm.runInContext(`(() => {
-    const names = [window.name, window.frameElement && window.frameElement.id,
-      window.frameElement && window.frameElement.getAttribute('name')].filter(Boolean);
-    for (const name of names) {
-      const matched = String(name).match(/^TH-message--(\\d+)--/);
-      if (matched) return Number(matched[1]);
-    }
-    const message = window.frameElement && window.frameElement.closest('.mes[mesid]');
-    const id = message && Number(message.getAttribute('mesid'));
-    return Number.isInteger(id) ? id : null;
-  })()`, run.context)
-  assert.equal(detect(), 0, 'self-check panel must recognize its own floor, not fail or select the latest floor')
-  const next = structuredClone(run.state)
-  next.stateRevision = 2
-  run.handlers.message({ source: run.parent, data: { type: 'dsh-tavern-helper-context-update', token: 'probe',
-    update: client.createTavernHelperContextUpdate(null, next, 1, 2) } })
-  await new Promise(resolve => setImmediate(resolve))
-  assert.equal(detect(), 1)
-})

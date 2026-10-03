@@ -1,11 +1,11 @@
 // Isolated comparison: baseline restores full-scope receipts; compact uses production.
 // Large local variables, unchanged render/refresh/save counts.
-// DSH_TAVERN_RECEIPT_EXPERIMENT=baseline|compact node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/fixtures/worldbook-template-benchmark.mjs OUTPUT large 20
+// DSH_TAVERN_RECEIPT_EXPERIMENT=baseline|compact node --import ./tests/fixtures/worldbook-batch-receipt-experiment.mjs tests/performance/worldbook-template-benchmark.mjs OUTPUT large 20
 import { registerHooks } from 'node:module'
 const mode = process.env.DSH_TAVERN_RECEIPT_EXPERIMENT || 'baseline'
 if (!['baseline', 'compact'].includes(mode)) throw new Error('Unknown receipt experiment')
 process.env.DSH_TAVERN_BENCH_EXPERIMENT = 'batch-receipt-' + mode
-const target = new URL('./worldbook-template-benchmark.mjs', import.meta.url).href
+const target = new URL('../performance/worldbook-template-benchmark.mjs', import.meta.url).href
 function replaceOnce(source, before, after) {
   if (source.split(before).length !== 2) throw new Error('Receipt experiment no longer matches benchmark: ' + before)
   return source.replace(before, after)

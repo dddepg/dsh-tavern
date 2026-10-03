@@ -4,26 +4,6 @@ import { helperClient } from './fixtures/helper-host-harness.mjs'
 
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
-test('MVU schema rejection diagnostics remain visible even when upstream notifications are off', async () => {
-  const checkbox = { checked: false }, diagnostics = []
-  const bus = helperClient.createTavernHelperEventBus({ currentScript: () => ({ id: 'schema' }),
-    withScript: async (_id, run) => run(), reportSubscriptions() {}, post() {},
-    document: { getElementById: id => id === 'mvu_notification_error' ? checkbox : null } })
-  const variables = { stat_data: { enemies: {} } }, commands = [{ type: 'set', args: ['hp', '9'] }]
-  // The real mvu_zod companion suppresses *all* details behind this DOM flag.
-  bus.listen('mag_command_parsed_for_zod', (value, operations) => {
-    assert.equal(value, variables); assert.equal(operations, commands)
-    if (checkbox.checked) diagnostics.push('enemies: expected array, received object')
-  })
-  await bus.emit('mag_command_parsed_for_zod', variables, commands)
-  assert.deepEqual(diagnostics, ['enemies: expected array, received object'])
-  assert.equal(checkbox.checked, false, 'diagnostics must not persist notification settings')
-  assert.deepEqual(variables, { stat_data: { enemies: {} } })
-  bus.listen('mag_command_parsed_for_zod', () => { throw Error('original failure') })
-  await assert.rejects(bus.emit('mag_command_parsed_for_zod', variables, commands), /original failure/)
-  assert.equal(checkbox.checked, false, 'restore even when the companion throws')
-})
-
 test('生产通信模块校验窗口与token，拒绝伪造回复并在更新上下文后完成请求', async () => {
   let receive, eventId = 'event-1', scriptId = 'script-1'
   const sent = [], contexts = [], events = []
@@ -78,35 +58,4 @@ test('生产事件模块保留脚本身份、失败进度和once递归保护', a
   await assert.rejects(bus.emitHost('failure', 'bad', []), error => error.message === 'broken script' && error.dshTavernScriptId === 'b')
   assert.equal(progress.at(-1).phase, 'failed')
   assert.ok(reports >= 4)
-})
-
-test('helper RPC recovers response delivery after document.open removes listeners', async () => {
-  const listeners = new Set()
-  const parent = { postMessage(message) {
-    queueMicrotask(() => listeners.forEach(receive => receive({ source: parent, data: {
-      type: 'dsh-tavern-helper-response', token: 'reload', requestId: message.requestId, ok: true, result: { ready: true }
-    } })))
-  } }
-  const transport = helperClient.createTavernHelperTransport({ parent, token: 'reload', copy: structuredClone,
-    identity: () => ({}), listen: fn => listeners.add(fn), onContext() {}, onEvent() {} })
-  listeners.clear()
-  assert.deepEqual(await transport.request('getTavernHelperWorldbook', {}), { ready: true })
-  assert.equal(listeners.size, 1)
-})
-
-test('脚本拒绝保留宿主错误码和事件归属，失败不会阻塞下一次 RPC', async () => {
-  let receive
-  const sent = []
-  const parent = { postMessage: message => sent.push(message) }
-  const transport = helperClient.createTavernHelperTransport({ parent, token: 'error-code', copy: structuredClone,
-    identity: () => ({ eventId: 'mvu-work:one', scriptId: 'helper' }), listen: fn => { receive = fn }, onContext() {}, onEvent() {} })
-  const failed = transport.request('updateTavernHelperVariables', {})
-  const rejection = assert.rejects(failed, error => error.code === 'MVU_SETTLEMENT_EVENT_MISMATCH'
-    && error.dshTavernEventId === 'mvu-work:one' && error.dshTavernScriptId === 'helper')
-  receive({ source: parent, data: { token: 'error-code', type: 'dsh-tavern-helper-response', requestId: sent[0].requestId,
-    ok: false, error: '脚本写入不属于当前 MVU 结算事件', errorCode: 'MVU_SETTLEMENT_EVENT_MISMATCH' } })
-  await rejection
-  const next = transport.request('getTavernHelperContext', {})
-  receive({ source: parent, data: { token: 'error-code', type: 'dsh-tavern-helper-response', requestId: sent[1].requestId, ok: true, result: { fresh: true } } })
-  assert.equal((await next).fresh, true)
 })

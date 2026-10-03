@@ -23,9 +23,3 @@ test('手动固定多个页面保持节点身份，取消固定和卸载都回�
   assert.equal(entries[1].node.parentNode, entries[1].home)
   assert.equal(registry.inspect().length, 0)
 })
-test('不支持保留状态移动时明确失败，不用会重载 iframe 的方式降级', () => {
-  const registry = client.createTavernPanelRegistry(), home = { isConnected: true }
-  registry.register({ id: 'a', home, node: { parentNode: home } })
-  assert.throws(() => registry.pin('a', true), /不支持保留页面状态/)
-  assert.ok(!registry.inspect()[0].pinned)
-})

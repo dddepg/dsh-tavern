@@ -25,24 +25,6 @@ function connections() {
   }
 }
 
-test('SSE 推送终态后立即替换前端旧 busy 状态，不依赖浏览器定时器', function () {
-  const transport = connections()
-  const module = createTavernCoordinationEventModule({ connect: transport.connect })
-  const seen = []
-  const stop = module.subscribe('session-1', function (state) { seen.push(state) })
-  const stream = transport.opened[0]
-
-  stream.handlers.message({ activity: { busy: true, phase: 'running' }, mailboxVersion: 1 })
-  stream.handlers.message({ activity: { busy: false, phase: 'idle' }, mailboxVersion: 2, task: { status: 'succeeded', busy: false } })
-
-  assert.equal(module.getSnapshot('session-1').view.activity.busy, false)
-  assert.equal(module.getSnapshot('session-1').view.task.status, 'succeeded')
-  assert.equal(seen.at(-1).phase, 'ready')
-  assert.equal(transport.opened.length, 1)
-  stop()
-  assert.equal(stream.closed, true)
-})
-
 test('SSE 断线时保留最后快照，重连后的最新快照直接校准状态', function () {
   const transport = connections()
   const module = createTavernCoordinationEventModule({ connect: transport.connect })

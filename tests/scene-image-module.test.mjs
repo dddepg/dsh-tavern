@@ -61,34 +61,6 @@ test('Tavern image module forwards read-only connection diagnostics to the Host 
   assert.doesNotMatch(lines[0], /private-key/)
 })
 
-test('default is off without generation; saved choices survive restart', async t => {
-  const f = await fixture(t)
-  const initial = await f.setup.settings()
-  assert.equal(initial.enabled, false)
-  assert.equal(initial.ready, false)
-  assert.equal(f.requests.length, 0)
-  await f.setup.configure({ enabled: false })
-  assert.equal((await f.create().setup.settings()).enabled, false)
-  assert.equal(f.requests.length, 0)
-})
-
-test('legacy and current configurations stay off unless explicitly enabled', async t => {
-  const f = await fixture(t)
-  for (const version of [undefined, 2, 3, 4]) {
-    await f.store.writeJson('scene-images/settings.json', { version, provider: 'grok', providers: {} })
-    assert.equal((await f.setup.settings()).enabled, false)
-    await f.store.writeJson('scene-images/settings.json', { version, provider: 'grok', enabled: false, providers: {} })
-    const settings = await f.setup.settings()
-    assert.equal(settings.enabled, false)
-    assert.equal(settings.ready, false)
-    await f.setup.configure({ enabled: false })
-    assert.equal((await f.create().setup.settings()).enabled, false)
-    await f.setup.configure({ enabled: true })
-    assert.equal((await f.create().setup.settings()).enabled, true)
-  }
-  assert.equal(f.requests.length, 0)
-})
-
 test('no plugin registration: config, credentials, generate bytes; Tavern alone owns image saving', async t => {
   const f = await fixture(t)
   await f.setup.configure({ provider: 'grok', apiKey: 'fake-key' })

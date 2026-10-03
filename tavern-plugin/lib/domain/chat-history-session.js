@@ -59,9 +59,9 @@ export async function buildImportedConversation(chat, parsed, { operationId, fil
         const frame = frameBuilder.build({ chatId: chat.id, branchId: chat.timeline.branchId,
           basedOnRevision: chat.timeline.revision, operationId: `import:${operationId}:${turn}`, turn,
           inputs: foregroundFrameInputs(plan, userText, userText, chat.runtimePresetSnapshot, chat),
-          source: { importSource: message.importSource } })
+          source: { importSource: message.importSource, card: { systemPromptText: plan.systemPromptText } } })
         const adapted = createForegroundFrameSessionAdapter({ id: () => `tavern-import-frame:${operationId}:${turn}` })
-          .append({ messages: [], frame, step: 1, historyMessages: events.filter(event => event.type === 'user/message').map(event => event.data) })
+          .append({ messages: [], frame, step: 1, openingText: chat.cardContextSnapshot, historyMessages: events.filter(event => event.type === 'user/message').map(event => event.data) })
         events.push({ type: 'turn/start', data: { turn } }, { type: 'step/start', data: { turn, step: 1 } })
         for (const context of adapted.messages) events.push({ type: 'user/message', data: context, intent: { surfaceOp: 'append' } })
         chat.timeline.checkpoints.push({ id: `import-checkpoint:${operationId}:${turn}`, turn, userText: pendingUsers.join('\n\n'),

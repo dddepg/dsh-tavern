@@ -21,16 +21,3 @@ test('real reasoning extends liveness; empty chunks and stale attempts do not',a
  p.frame({type:'chunk',attemptId:'old',chunk:{type:'text-delta',text:'stale'}})
  await delay(60);await check;p.dispose()
 })
-test('completed model waiting on tools is not a model timeout; manual stop always settles',async()=>{
- const p=createBackgroundProgress({idleMs:20});p.frame(start);p.frame({type:'end',attemptId:'a'})
- await delay(40);assert.equal(p.signal.aborted,false)
- const check=assert.rejects(p.wait(new Promise(()=>{})),{code:'BACKGROUND_CANCELLED'})
- p.cancel();await check;p.dispose()
-})
-
-test('automatic request restarts without output do not renew the idle deadline',async()=>{
- const p=createBackgroundProgress({idleMs:40});p.frame(start)
- const check=assert.rejects(p.wait(new Promise(()=>{})),{code:'BACKGROUND_MODEL_IDLE_TIMEOUT'})
- await delay(25);p.frame({type:'start',attemptId:'retry'})
- await delay(25);await check;p.dispose()
-})

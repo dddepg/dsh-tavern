@@ -1,5 +1,6 @@
 import { createBackgroundProgress } from './domain/background-progress.js'
 import { worldbookSnapshot } from './domain/worldbook-snapshot.js'
+import { CARD_SYSTEM_PROMPT_SECTION, cardSystemPromptSnapshot, cardSystemPromptSource } from './domain/card-system-prompt.js'
 import { projectCandidateScriptContext } from './domain/candidate-script-context.js'
 import { projectWorldbookFilterContext } from './domain/worldbook-filter-context.js'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
@@ -28,9 +29,6 @@ function messageText(message) {
 
 function backgroundPrompt(messages, turnContext, task, taskProtocol, input = {}) {
   const sections = []
-  if (task === 'candidate' && str(input.systemPromptText).trim()) {
-    sections.push('【人物卡系统提示】\n' + str(input.systemPromptText).trim())
-  }
   const authoritative = str(turnContext).trim()
   if (authoritative !== '') {
     sections.push('【本轮权威状态】\n以下内容是当前最新状态；若与后台会话中的旧游标、姿势或指导冲突，以本节为准。\n' + authoritative)
@@ -160,7 +158,13 @@ export function createBackgroundAgentTask(options) {
         // DSH restores complete sections after the assembly waterfall, so the
         // additional instruction must be part of this authoritative text.
         text: () => {
-          const fixed = sessionStablePrefixSections(state.session)
+          // Settlement and candidates share a Session: scope the fixed writing
+          // instruction without changing its system prefix when the task switches.
+          const fixed = sessionStablePrefixSections(state.session).flatMap(section => {
+            if (section.name !== CARD_SYSTEM_PROMPT_SECTION) return [section]
+            if (['image', 'phone'].includes(state.input.task)) return []
+            return [{ ...section, text: '以下人物卡系统提示仅用于候选文本的写作；结算、筛选、人物设计等后台任务遵循各自任务协议。\n' + section.text }]
+          })
           const sections = state.currentWorldbook === undefined ? fixed : withCurrentWorldbook(fixed, state.currentWorldbook)
           const assembly = { sections: [...sections, { name: 'deployment:persona', text: state.input.task === 'image' ? (options.imageSystemPrompt ? options.imageSystemPrompt() : readSceneImageSystemInstruction()) : backgroundPersona }] }
           return prependSystemInstruction(assembly, options.systemAppend?.()).sections.map(section => section.text).join('\n\n')
@@ -389,13 +393,15 @@ export function createBackgroundAgentTask(options) {
         ? await options.resolveForegroundWorldbookReads(input) : ''
       const snapshot = worldbook && typeof worldbook === 'object'
         ? worldbookSnapshot(agent.session, turnWorldbook) : null
-      const taskText = [foregroundReads, snapshot?.rendered,
+      const systemUpdate = input.task === 'candidate' && typeof input.systemPromptText === 'string'
+        ? cardSystemPromptSnapshot(agent.session, input.systemPromptText) : null
+      const taskText = [foregroundReads, snapshot?.rendered, systemUpdate?.rendered,
         backgroundPrompt(filterContext?.messages || input.messages, scriptContext?.turnContext ?? input.turnContext, input.task, input.system, input)].filter(Boolean).join('\n\n')
       agent.followup({
         id: randomUUID(),
         role: 'user',
         content: [{ type: 'text', text: taskText }],
-        source: { kind: 'plugin', plugin: 'dsh-tavern', ...(snapshot ? { worldbookSnapshot: snapshot } : {}), ...(scriptContext?.body ? {
+        source: { kind: 'plugin', plugin: 'dsh-tavern', ...(systemUpdate ? { trace: cardSystemPromptSource(systemUpdate) } : {}), ...(snapshot ? { worldbookSnapshot: snapshot } : {}), ...(scriptContext?.body ? {
           candidateScriptWindow: { version: 1, start: taskText.indexOf(scriptContext.body), length: scriptContext.body.length, digest: scriptContext.digest }
         } : {}), ...(filterContext ? {
           worldbookFilterPayload: { version: 1, start: taskText.indexOf(filterContext.payloadText), length: filterContext.payloadText.length }

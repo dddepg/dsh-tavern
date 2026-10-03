@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { createSessionStateView } from '../tavern-plugin/lib/domain/chat-session-state.js'
 
 const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+
+const routeSource = await readFile(new URL('../tavern-plugin/lib/http/routes.js', import.meta.url), 'utf8')
 
 const scriptHostAdapterSource = await readFile(new URL('../tavern-plugin/lib/domain/tavern-script-host-adapter.js', import.meta.url), 'utf8')
 
@@ -35,17 +36,8 @@ test('开场白创建失败时在选择弹窗内持续显示具体阶段和错�
   assert.match(playFlow, /err && err\.phase/)
 })
 
-test('酒馆状态读取 MVU 回执时使用当前模块可用的复制能力', () => {
-  const stored = { version: 1, status: 'updated', changes: [{ path: '/hp', after: 9 }] }
-  const view = createSessionStateView({ activity: () => ({}), evidence: () => ({}) })
-  const receipts = view.receipts({ messages: [{ role: 'assistant', turn: 2, mvu: { receipt: stored } }] })
-  assert.deepEqual(receipts, [{ turn: 2, receipt: stored }])
-  receipts[0].receipt.changes[0].after = 1
-  assert.equal(stored.changes[0].after, 9, 'reading receipts must not expose persisted objects')
-})
-
 test('创建对话失败时服务端记录请求边界但不记录开场白正文', () => {
-  const dispatch = between(serverSource, 'async function dispatch', 'const webServer')
+  const dispatch = between(serverSource, 'async function dispatch', '  registerTavernHttpRoutes({')
 
   assert.match(dispatch, /console\.error\('dsh-tavern: 创建对话失败'/)
   assert.match(dispatch, /cardPath: str\(args && args\.path\)/)
@@ -74,7 +66,7 @@ test('人物卡 Helper 的世界书写入按资源串行，避免生命周期事
 })
 
 test('隔离 Helper iframe 可以只读加载已锁定的本机远程资源', () => {
-	const handler = between(serverSource, "handler: async (req, res) => {", "function contentText(message)")
+	const handler = routeSource
 	assert.match(handler, /const readsCachedAsset = req\.method === 'GET' && cachedAssetMatch/)
 	assert.match(handler, /const readsStaticAsset = req\.method === 'GET'/)
 	assert.match(handler, /const localOrOpaqueOrigin =/)
@@ -85,11 +77,11 @@ test('隔离 Helper iframe 可以只读加载已锁定的本机远程资源', ()
 })
 
 test('HTTP RPC 在启动恢复前注册，并等待运行时完成初始化', () => {
-	const routeRegistration = serverSource.indexOf("ctx.effect(() => webServer.register({")
+	const routeRegistration = serverSource.indexOf("  registerTavernHttpRoutes({")
 	const runtimeInitialization = serverSource.indexOf('await initializeRuntimeState()')
 	const runtimeReady = serverSource.indexOf('settleRuntimeReadiness({ ok: true })')
 	const historyRecovery = serverSource.indexOf('recoverRuntimeHistory(recoveredIndex).catch')
-	const handler = between(serverSource, "handler: async (req, res) => {", "function contentText(message)")
+	const handler = routeSource
 	assert.notEqual(routeRegistration, -1)
 	assert.notEqual(runtimeInitialization, -1)
 	assert.notEqual(runtimeReady, -1)

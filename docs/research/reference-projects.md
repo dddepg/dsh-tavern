@@ -11,7 +11,7 @@
 - 仓库：<https://github.com/SillyTavern/SillyTavern>
 - 用途：核对人物卡、预设、世界书、正则、宏、消息存储与展示等酒馆原生语义。
 - 定位：酒馆兼容行为的主要语义基准。遇到社区实现与酒馆本体不一致时，应先说明差异，而不是默认社区实现等同于酒馆。
-- 本地源码：`references/SillyTavern`（取得方式和固定提交见 `references/README.md`）。
+- 历史研究基线：`release` 分支，提交 `8172dcd0ee672d3cd9a5e5f7af134f91a45cd2b8`。本地参考副本已清理，需要时从上游重新取得。
 - 已有研究：[酒馆正则如何把 `【首页】` 变成可交互卡片](sillytavern-regex-rendering-memo.md)
 
 ## 社区参考实现
@@ -20,8 +20,14 @@
 
 - 仓库：<https://github.com/N0VI028/JS-Slash-Runner>
 - 用途：核对酒馆助手如何识别消息中的前端代码块，并用 `iframe srcdoc` 或 Blob URL 渲染交互界面。
-- 本地源码：`references/JS-Slash-Runner`（取得方式和固定提交见 `references/README.md`）。
+- 历史研究基线：`main` 分支，提交 `4dd4b873f191accb5dd933089ddf36b846458585`。本地参考副本已清理，需要时从上游重新取得。
 - 已有研究：[酒馆正则如何把 `【首页】` 变成可交互卡片](sillytavern-regex-rendering-memo.md)
+
+### ST Prompt Template
+
+- 仓库：<https://github.com/zonde306/ST-Prompt-Template>
+- 历史研究基线：`master` 分支，提交 `9bf9bcdfa8d0d38ab1f4f7342067bc16f347d85d`。本地参考副本已清理。
+- 产品内的 vendor 源码与构建产物仍保留在 `tavern-plugin/lib/vendor/st-prompt-template/`。
 
 ### dsh-agent-rp
 

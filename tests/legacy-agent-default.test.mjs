@@ -19,17 +19,6 @@ function fixture(user, base = 'tavern') {
   return { settings, writes, defaultId: () => user?.default ?? base }
 }
 
-test('clear the global Tavern override, preserving other settings and Profile default', async () => {
-  const user = { default: 'tavern', other: { enabled: true } }
-  const h = fixture(user)
-  assert.equal(await clearLegacyTavernDefault(h.settings), true)
-  assert.deepEqual(user, { other: { enabled: true } })
-  assert.equal(h.defaultId(), 'tavern')
-  assert.equal(fixture(user, 'standard').defaultId(), 'standard')
-  assert.equal(await clearLegacyTavernDefault(h.settings), false)
-  assert.equal(h.writes.length, 1)
-})
-
 for (const user of [undefined, {}, { default: 'standard' }, { default: 'custom' }]) {
   test(`preserve absent or non-Tavern user default: ${JSON.stringify(user)}`, async () => {
     const h = fixture(user)

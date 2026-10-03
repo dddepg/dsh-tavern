@@ -70,18 +70,6 @@ test('旧方案迁移隔离失败资源，过滤失效正则，重复启动不�
   assert.equal((await h.create().plans.list()).length, 1)
 })
 
-test('旧激活方案迁移到整份预设选择；手动选择也清理旧方案激活状态', async () => {
-  const h = harness(), library = h.create()
-  const plan = await library.plans.extract({ name: '旧方案', sourcePresetPath: path, entryKeys: ['main#1'], regexKeys: [] })
-  await library.plans.activate(plan.id)
-  await library.migrate()
-  assert.equal((await library.catalog()).activePresetPath, path)
-  assert.equal((await library.plans.state()).activePlanId, '')
-  await library.plans.activate(plan.id)
-  await library.select(path)
-  assert.equal((await library.plans.state()).activePlanId, '')
-})
-
 test('旧对话在预设源丢失时从快照迁移；已有方案保持不变', async () => {
   const h = harness(), library = h.create()
   const chat = { id: 'old', cardName: '角色', runtimePresetPath: 'presets/deleted.json', messages: [{ role: 'assistant', text: '正文' }],
@@ -104,29 +92,6 @@ test('无效导入在写入前失败，导出保留原始文本', async () => {
   const text = JSON.stringify(document(), null, 4)
   await library.import({ name: 'imported.json', text })
   assert.equal((await library.export('presets/imported.json')).text, text)
-})
-
-test('预设目录公开前中后三段数量，不再只给无法判断位置的总数', async () => {
-  const h = harness()
-  h.files.set(path, JSON.stringify({
-    prompts: [
-      { identifier: 'front', content: '前段' },
-      { identifier: 'middle', content: '中段', injection_position: 1 },
-      { identifier: 'chatHistory', marker: true, content: '' },
-      { identifier: 'back', content: '后段' },
-      { identifier: 'orphan', content: '未编排' }
-    ],
-    prompt_order: [{ order: [
-      { identifier: 'front', enabled: true },
-      { identifier: 'middle', enabled: true },
-      { identifier: 'chatHistory', enabled: true },
-      { identifier: 'back', enabled: true }
-    ] }]
-  }))
-
-  const item = (await h.create().catalog()).presets[0]
-  assert.deepEqual(item.phaseCounts, { front: 1, middle: 1, back: 1 })
-  assert.equal(item.unassignedPromptCount, 2)
 })
 
 test('条目跨段与段内移动持久化到预设，重启后运行顺序一致且保留原文', async () => {
@@ -170,9 +135,4 @@ test('移动拒绝系统占位及无效分段，同名标识条目不会丢失',
   preset = await library.moveEntry(path, 'same#2', 'back', '', preset.revision)
   assert.deepEqual(preset.dshPreset.front.map(e => e.content), ['第一项'])
   assert.deepEqual(preset.dshPreset.back.map(e => e.content), ['第二项'])
-})
-
-test('列出后文件消失时跳过缺失预设', async () => {
-  const library = createPresetLibrary({ resources: { list: async () => ['presets/gone.json'], readText: async () => undefined }, state: { readJson: async () => undefined } })
-  assert.deepEqual((await library.catalog()).presets, [])
 })

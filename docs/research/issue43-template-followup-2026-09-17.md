@@ -50,10 +50,10 @@ digest 内部还调用原生 Hash.update，该函数另外约 0.184 秒采样时
 ```sh
 # 当前基线 CPU profile
 mkdir -p output/playwright/issue43-cpu
-node --cpu-prof --cpu-prof-dir=output/playwright/issue43-cpu tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-cpu large
+node --cpu-prof --cpu-prof-dir=output/playwright/issue43-cpu tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-cpu large
 
 # 隔离 clone 实验；不会改写正式模块
-node --import ./tests/fixtures/worldbook-clone-experiment.mjs tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-clone-experiment large
+node --import ./tests/fixtures/worldbook-clone-experiment.mjs tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-clone-experiment large
 
 # 实验代码下的已有回归测试
 node --import ./tests/fixtures/worldbook-clone-experiment.mjs --test tests/worldbook-resource.test.mjs tests/worldbook-library.test.mjs tests/worldbook-snapshot-read.test.mjs tests/multi-worldbook-runtime.test.mjs

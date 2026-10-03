@@ -60,38 +60,21 @@ test('explicit moves still preserve values before automatic additions and remova
   }finally{runtime.dispose()}
 })
 
-test('重新加载同步开场 initvar 元数据，保留正文与当前变量',async()=>{
- const runtime=createLiveCardUpdate()
- try {
-  const old=card({金币:0,旧字段:1}),next=card({金币:99,体力:100})
-  const original=chat(old,{金币:12,旧字段:1})
-  original.messages[0].sourceText='保留原开场\n'+old.first_mes
-  original.messages[0].text=original.messages[0].sourceText
-  original.messages[0].swipes=[original.messages[0].sourceText]
-  original.rollbackUndo.messages=structuredClone(original.messages)
-  const updated=await runtime.prepare(original,next,original)
-  const text=updated.messages[0].sourceText
-  assert.deepEqual(JSON.parse(text.match(/<initvar>([\s\S]*?)<\/initvar>/)[1]),{金币:99,体力:100})
-  assert.ok(text.startsWith('保留原开场\n'))
-  assert.equal(updated.messages[0].swipes[0],text)
-  assert.equal(updated.rollbackUndo.messages[0].sourceText,text)
-  assert.deepEqual(updated.messages[0].variables[0].stat_data,{金币:12,体力:100})
-  assert.equal(original.messages[0].sourceText,'保留原开场\n'+old.first_mes)
- }finally{runtime.dispose()}
-})
-
-test('frame sizing is applied as card configuration while preserving earned variables and story', async () => {
-  const runtime = createLiveCardUpdate()
+test('explicit card reload clears ordinary regex display caches without replaying template effects', async () => {
+  const runtime=createLiveCardUpdate()
   try {
-    const original = chat(card({ gold: 0 }), { gold: 73 })
-    original.messages[0].text = 'existing story'
-    const next = structuredClone(original.cardDefinitionSnapshot)
-    next.extensions.dsh_tavern = { frameSizing: { default: { mode: 'viewport' }, panels: { status: { mode: 'content', maxHeight: 600 } } } }
-    const updated = await runtime.prepare(original, next, original)
-    assert.equal(updated.messages[0].text, 'existing story')
-    assert.equal(updated.messages[0].variables[0].stat_data.gold, 73)
-    assert.equal(updated.timeline[0].variables.stat_data.gold, 73)
-    assert.equal(updated.rollbackUndo.variables.stat_data.gold, 73)
-    assert.deepEqual(original.cardDefinitionSnapshot.extensions, {})
-  } finally { runtime.dispose() }
+    const definition=card({hp:10}), original=chat(definition,{hp:7})
+    original.messages[0].text='开场正文'
+    original.messages[0].tavernPluginData={template_display:{source:'开场正文',swipe:0,html:'旧界面',formattingText:'旧界面'},template_rendered:{hash:'saved',swipe:0},is_ejs_processed:[true]}
+    original.messages.push({text:'剧情',tavernPluginData:{template_display:{source:'剧情',swipe:0,html:'历史模板结果'}}})
+    const before=structuredClone(original)
+    const updated=await runtime.prepare(original,definition,original)
+    assert.equal(updated.messages[0].tavernPluginData.template_display,undefined)
+    assert.deepEqual(updated.messages[0].tavernPluginData.template_rendered,before.messages[0].tavernPluginData.template_rendered)
+    assert.deepEqual(updated.messages[0].tavernPluginData.is_ejs_processed,[true])
+    assert.deepEqual(updated.messages[0].variables,before.messages[0].variables)
+    assert.deepEqual(updated.messages[1],before.messages[1])
+    assert.equal(updated.messages[0].text,'开场正文')
+    assert.deepEqual(original,before)
+  } finally {runtime.dispose()}
 })

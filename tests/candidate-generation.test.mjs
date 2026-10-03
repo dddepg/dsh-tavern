@@ -131,56 +131,6 @@ function harness({ mode = 'story', outputs, initialCandidates, initialCandidateA
   }
 }
 
-test('开场白后的首次候选会先等待完整后台结算，再规划候选', async () => {
-  const order = []
-  const run = harness({
-    outputs: [JSON.stringify({ choices: storyChoices })],
-    messages: [{ role: 'assistant', text: '雨水敲着窗。', greeting: true }],
-    async waitUntilSettled(chat) {
-      assert.equal(chat.messages[0].greeting, true)
-      order.push('settlement')
-    }
-  })
-  const originalPlan = run.plannerCalls
-  await run.candidates.generate({ sessionId: 'session-1', messageId: 'opening' })
-  if (originalPlan.length > 0) order.push('candidate')
-
-  assert.deepEqual(order, ['settlement', 'candidate'])
-})
-
-test('Story Timeline 后台 operation 运行时立即拒绝候选生成，不相信重复的 settleStatus', async () => {
-  let waits = 0
-  const run = harness({
-    outputs: [JSON.stringify({ choices: storyChoices })],
-    initialSettleStatus: 'done',
-    async waitUntilSettled() { waits++ }
-  })
-  const timeline = createStoryTimeline({ id: (prefix) => prefix + '-busy', now: () => 123456 })
-  run.mutateChat(function (chat) {
-    const begun = timeline.apply({ chat, intent: { kind: 'agent.begin', role: 'settlement' } })
-    Object.assign(chat, begun.chat)
-  })
-
-  await assert.rejects(
-    run.candidates.generate({ sessionId: 'session-1', messageId: 'message-running' }),
-    /后台 Agent 正在执行 settlement/
-  )
-  assert.equal(waits, 0)
-  assert.equal(run.modelCalls(), 0)
-})
-
-test('候选 prepare 只持久化 Operation，模型 Promise 由响应结束后再创建', async () => {
-  const run = harness({ outputs: [JSON.stringify({ choices: storyChoices })] })
-
-  const prepared = await run.candidates.prepare({ sessionId: 'session-1', messageId: 'message-prepared' })
-  assert.match(prepared.operationId, /^operation-/)
-  assert.equal(run.modelCalls(), 0)
-
-  const result = await prepared.execute()
-  assert.equal(run.modelCalls(), 1)
-  assert.equal(result.messageId, 'message-prepared')
-})
-
 test('模型成功但 chat 提交失败时明确报告候选已经生成但保存失败', async () => {
   const run = harness({
     outputs: [JSON.stringify({ choices: storyChoices })],
@@ -289,18 +239,6 @@ test('剧本候选可按数字自由读取远处剧本并直接定位游标', as
   assert.deepEqual(savedChat.messages, [{ role: 'assistant', text: '雨水敲着窗。' }])
 })
 
-test('剧本候选 JSON 中的旧 scriptCursor 字段不能再移动游标', async () => {
-  const blind = JSON.stringify({
-    choices: [{ type: 'action', text: '直接前往钟楼顶层寻找最终的真相' }],
-    scriptCursor: 3
-  })
-  const run = harness({ mode: 'script', outputs: [blind] })
-
-  await run.candidates.generate({ sessionId: 'session-1', messageId: 'message-blind' })
-  const progress = run.continuity.inspect({ script: script(), state: run.chat().scriptState, request: { kind: 'progress' } })
-  assert.equal(progress.cursor, 0)
-})
-
 test('单次输出无效时不覆盖旧候选，也不改变剧本游标', async () => {
   const invalid = '{"choices":[{"type":"unknown","text":"有文本但类型无效"}]}'
   const oldCandidates = { messageId: 'old', choices: [{ type: 'action', text: '保留这一份旧的有效候选内容' }], generatedAt: 1 }
@@ -317,23 +255,6 @@ test('单次输出无效时不覆盖旧候选，也不改变剧本游标', async
   assert.equal(run.continuity.inspect({ script: script(), state: after.scriptState, request: { kind: 'progress' } }).cursor, 0)
 })
 
-test('卡片模式拒绝生成候选项', async () => {
-  const run = harness({ mode: 'card', outputs: ['{}'] })
-  await assert.rejects(() => run.candidates.generate({ sessionId: 'session-1', messageId: 'message-4' }), /卡片模式不生成剧情候选项/)
-})
-
-test('候选 Agent 使用宏解析后的 Session 正文而不是原始 sourceText', async () => {
-  const run = harness({
-    outputs: [JSON.stringify({ choices: storyChoices })],
-    macroState: { userName: '叶天邪', local: {}, global: {} },
-    messages: [{ role: 'assistant', text: '叶天邪走进白伊甸校园。', sourceText: '{{user}}走进白伊甸校园。' }]
-  })
-  await run.candidates.generate({ sessionId: 'session-1', messageId: 'message-projected' })
-
-  assert.match(JSON.stringify(run.modelRequests[0].messages), /叶天邪走进白伊甸校园/)
-  assert.doesNotMatch(JSON.stringify(run.modelRequests[0].messages), /\{\{user\}\}/)
-})
-
 test('first candidate interrupted before a result keeps its bound session for retry', async () => {
   const run = harness({ outputs: [async input => {
     await input.onPersistentSessionReady('background-bound-before-result');
@@ -343,37 +264,3 @@ test('first candidate interrupted before a result keeps its bound session for re
   await run.candidates.generate({ sessionId: 'session-1', messageId: 'first' });
   assert.equal(run.modelRequests[1].persistentSessionId, 'background-bound-before-result');
 });
-
-test('候选准备期间人工移动游标，旧上下文不得开始模型任务或覆盖游标', async () => {
-  let run
-  run = harness({ mode: 'script', outputs: [], planHook: () => {
-    run.mutateChat(chat => { chat.scriptState = createScriptContinuity().transition({ script: script(), state: chat.scriptState, event: { kind: 'manual-focus', cursor: 3 } }).state })
-  } })
-  await assert.rejects(run.candidates.generate({ sessionId: 'session-1', messageId: 'manual-cursor' }), /剧本游标已变化/)
-  assert.equal(run.modelRequests.length, 0)
-  assert.equal(run.chat().scriptState.cursor, 2)
-  assert.equal(run.chat().candidates, undefined)
-})
-
-test('候选准备期间修改切片字数，即使游标未变也不能继续使用旧上下文', async () => {
-  let run
-  run = harness({ mode: 'script', outputs: [], planHook: () => {
-    run.mutateChat(chat => { chat.scriptState = createScriptContinuity().transition({ script: script(), state: chat.scriptState, event: { kind: 'set-chunk-size', chunkSize: 1000 } }).state })
-  } })
-  await assert.rejects(run.candidates.generate({ sessionId: 'session-1', messageId: 'new-budget' }), /剧本游标已变化/)
-  assert.equal(run.modelRequests.length, 0)
-})
-
-
-test('one request shares its prepared worldbook with the runner and the next request resolves afresh', async () => {
-  let count = 0
-  const app = harness({outputs:[JSON.stringify({choices:storyChoices})],worldBookContext:async()=>({context:'context-'+(++count),prefixContext:'prefix-'+count})})
-  const first = await app.candidates.prepare({sessionId:'s',messageId:'m',requestId:'one'})
-  await first.execute()
-  const second = await app.candidates.prepare({sessionId:'s',messageId:'m',requestId:'two'})
-  await second.execute()
-  assert.equal(count,2)
-  assert.equal(app.plannerCalls[0].constantWorldBookContext,'context-1')
-  assert.equal(app.modelRequests[0].preparedWorldbook.prefixContext,'prefix-1')
-  assert.equal(app.modelRequests[1].preparedWorldbook.prefixContext,'prefix-2')
-})

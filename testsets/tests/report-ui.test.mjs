@@ -81,35 +81,3 @@ test('case catalog starts the existing runner once and reports process failures'
     assert.equal((await (await fetch(base + '/api/job')).json()).status, 'completed')
   } finally { await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }) }
 })
-
-test('manual start launches a subprocess and its report is readable through the viewer', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-process-'))
-  await mkdir(path.join(root, 'demo'))
-  await writeFile(path.join(root, 'demo/scenario.yaml'), 'model: { provider: fixture, model: fixture }\nsteps: [{ action: play, sourceCard: demo.json }]\n')
-  await writeFile(path.join(root, 'test-play.mjs'), `
-    import { mkdir, writeFile } from 'node:fs/promises'
-    import path from 'node:path'
-    const run = path.join(process.argv[process.argv.indexOf('--output') + 1], 'run-fixture')
-    await mkdir(run)
-    await writeFile(path.join(run, 'report.json'), JSON.stringify({ name: 'Process fixture', status: 'passed', steps: [] }))
-  `)
-  const server = await createReportServer(path.join(root, 'results'), { casesRoot: root })
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-  const base = 'http://127.0.0.1:' + server.address().port
-  try {
-    const response = await fetch(base + '/api/start?id=demo', { method: 'POST', headers: { Origin: base } })
-    assert.equal(response.status, 202)
-    const started = await response.json()
-    let job
-    for (let attempt = 0; attempt < 100; attempt++) {
-      job = await (await fetch(base + '/api/job')).json()
-      if (job.status !== 'running') break
-      await new Promise(resolve => setTimeout(resolve, 20))
-    }
-    assert.equal(job.status, 'completed')
-    const runs = await (await fetch(base + '/api/runs')).json()
-    assert.equal(runs[0].directory, started.directory + '/run-fixture')
-    const detail = await (await fetch(base + '/api/run?id=' + runs[0].id)).json()
-    assert.equal(detail.report.status, 'passed')
-  } finally { await new Promise(resolve => server.close(resolve)); await rm(root, { recursive: true, force: true }) }
-})

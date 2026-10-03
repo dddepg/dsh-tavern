@@ -1,49 +1,53 @@
-// Legacy card pages submit through these SillyTavern DOM IDs. Keep the
-// adapter inside its owning frame so it cannot target another conversation.
+// Legacy DOM IDs are adapters onto the shared frame lifetime and sender.
 function installLegacyTavernComposer() {
-  if (document.getElementById('send_textarea') || document.getElementById('send_but')) return;
-  const controls = document.createElement('div');
-  controls.hidden = true;
-  const area = document.createElement('textarea');
-  area.id = 'send_textarea';
-  const button = document.createElement('button');
-  button.id = 'send_but';
-  button.type = 'button';
-  controls.append(area, button);
-  document.body.append(controls);
-  area.addEventListener('input', function () {
-    if (typeof window.submitTavernInput === 'function') return;
-    Promise.resolve().then(function () {
-      if (typeof window.triggerSlash !== 'function') throw new Error('当前对话输入框尚未就绪');
-      return window.triggerSlash('/setinput ' + String(area.value || ''));
-    }).catch(function (error) {
-      const notice = document.createElement('div');
-      notice.setAttribute('role', 'alert');
-      notice.textContent = '开场文字填入失败：' + String(error && error.message || error);
-      document.body.append(notice);
+  const existing = window.__dshTavernComposerRuntime;
+  if (existing) { existing.refresh(); return existing.ready; }
+  const lifetime = createTavernFrameLifecycle(window, document);
+  let releaseSender = () => {}, controls, resolveReady, rejectReady;
+  const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  function report(prefix, error) {
+    if (!document.body) return;
+    const notice = document.createElement('div');
+    notice.setAttribute('role', 'alert');
+    notice.textContent = prefix + String(error && error.message || error);
+    document.body.append(notice);
+  }
+  const mounted = lifetime.maintain(function () {
+    if (document.getElementById('send_textarea') || document.getElementById('send_but')) { resolveReady(); return; }
+    releaseSender();
+    controls = document.createElement('div'); controls.hidden = true;
+    const area = document.createElement('textarea'), button = document.createElement('button');
+    area.id = 'send_textarea'; button.id = 'send_but'; button.type = 'button';
+    controls.append(area, button); document.body.append(controls);
+    const owner = controls;
+    const sender = lifetime.sender({
+      valid: () => owner.isConnected !== false,
+      busy: value => { button.disabled = value; },
+      submit: text => {
+        if (typeof window.submitTavernInput === 'function') return window.submitTavernInput(text);
+        if (typeof window.triggerSlash === 'function') return window.triggerSlash('/send ' + text + '|/trigger');
+        throw new Error('当前对话发送入口尚未就绪');
+      }
     });
-  });
-  let pending = false;
-  button.addEventListener('click', function () {
-    const text = String(area.value || '').trim();
-    if (pending || !text) return;
-    if (typeof window.submitTavernInput !== 'function' && typeof window.triggerSlash !== 'function') throw new Error('当前对话发送入口尚未就绪');
-    pending = true;
-    button.disabled = true;
-    Promise.resolve().then(function () {
-      return typeof window.submitTavernInput === 'function' ? window.submitTavernInput(text) : window.triggerSlash('/send ' + text + '|/trigger');
-    }).then(function () {
-      if (area.value.trim() === text) area.value = '';
-    }, function (error) {
-      // A DOM click cannot return an asynchronous rejection to legacy callers.
-      // Surface it in the card itself, retaining the payload for a retry.
-      const notice = document.createElement('div');
-      notice.setAttribute('role', 'alert');
-      notice.textContent = '开局消息发送失败：' + String(error && error.message || error);
-      document.body.append(notice);
-      console.error('[DSH Tavern] 开局消息发送失败', error);
-    }).finally(function () { pending = false; button.disabled = false; });
-  });
+    releaseSender = sender.dispose;
+    area.addEventListener('input', function () {
+      if (typeof window.submitTavernInput === 'function') return;
+      Promise.resolve().then(() => {
+        if (owner.isConnected === false) return;
+        if (typeof window.triggerSlash !== 'function') throw new Error('当前对话输入框尚未就绪');
+        return window.triggerSlash('/setinput ' + String(area.value || ''));
+      }).catch(error => report('开场文字填入失败：', error));
+    });
+    button.addEventListener('click', function () {
+      const text = String(area.value || '').trim();
+      if (!text || button.disabled) return;
+      sender.send(text).then(() => { if (area.value.trim() === text) area.value = ''; }, error => report('开局消息发送失败：', error));
+    });
+    resolveReady();
+  }, rejectReady);
+  window.__dshTavernComposerRuntime = { ready, refresh: mounted.refresh };
+  window.addEventListener?.('pagehide', () => { lifetime.dispose(); delete window.__dshTavernComposerRuntime; }, { once: true });
+  return ready;
 }
 
 // Preparation pages address the parent DOM. Own these controls only while that
@@ -58,16 +62,15 @@ function installOpeningHostComposer(hostDocument, submit, report) {
   button.id = 'send_but'; button.type = 'button';
   controls.append(area, button);
   hostDocument.body.append(controls);
-  let active = true, pending = false, completed = false;
-  button.addEventListener('click', function () {
-    const text = String(area.value || '').trim();
-    if (!active || pending || completed || !text) return;
-    pending = true; button.disabled = true;
-    Promise.resolve().then(function () { return submit(text); }).then(function () {
-      completed = true; area.value = '';
-    }, report).finally(function () { pending = false; button.disabled = completed; });
+  const sender = createTavernFrameLifecycle(hostDocument.defaultView || {}, hostDocument).sender({
+    once: true, submit, busy: value => { button.disabled = value; }
   });
-  return function () { active = false; controls.remove(); };
+  let active = true;
+  button.addEventListener('click', function () {
+    if (!active || button.disabled || !String(area.value || '').trim()) return;
+    sender.send(area.value).then(() => { area.value = ''; }, report);
+  });
+  return function () { active = false; sender.dispose(); controls.remove(); };
 }
 
 // Parent DOM IDs are shared, but the focused iframe identifies the sender even
@@ -88,18 +91,15 @@ function installFrameHostComposer(doc, ownsFrame, submit, report) {
       const owners = Array.from(state.owners).filter(function (owner) { return owner.ownsFrame(doc.activeElement); });
       if (owners.length !== 1) throw new Error('无法确定开局消息所属的卡片，请重新点击卡片内的开始按钮');
       const owner = owners[0], text = String(area.value || '').trim();
-      if (owner.pending || !text) return;
-      owner.pending = true;
-      Promise.resolve().then(function () {
-        if (!state.owners.has(owner)) throw new Error('卡片已关闭，请重新打开');
-        return owner.submit(text);
-      }).then(function () { if (area.value === text) area.value = ''; }, owner.report)
-        .finally(function () { owner.pending = false; });
+      if (!text) return;
+      owner.sender.send(text).then(function () { if (area.value === text) area.value = ''; }, owner.report);
     });
   }
-  const owner = { ownsFrame, submit, report, pending: false };
+  const owner = { ownsFrame, report };
+  owner.sender = createTavernFrameLifecycle(doc.defaultView || {}, doc).sender({ submit, valid: () => state.owners.has(owner) });
   state.owners.add(owner);
   return function () {
+    owner.sender.dispose();
     state.owners.delete(owner);
     if (!state.owners.size) { state.controls.remove(); tavernHostComposers.delete(doc); }
   };
@@ -110,6 +110,31 @@ function installFrameHostComposer(doc, ownsFrame, submit, report) {
 function createTavernComposerWindow(frame, host = frame.parent) {
   const ids = new Set(['send_textarea', 'send_but']);
   const documents = new WeakMap(), windows = new WeakMap();
+  const roots = new WeakMap(), nativeRoots = new WeakMap();
+  const unwrap = value => nativeRoots.get(value) || value;
+  function rootView(root) {
+    if (!root) return root;
+    if (roots.has(root)) return roots.get(root);
+    const mutations = new Set(['insertAdjacentHTML', 'append', 'prepend', 'appendChild', 'insertBefore', 'replaceChildren']);
+    const proxy = new Proxy(root, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== 'function') return value;
+        return function (...args) {
+          const run = () => value.apply(target, args.map(unwrap));
+          const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+          return mutations.has(key) && artifacts ? artifacts.mutateRoot(target, run) : run();
+        };
+      },
+      set(target, key, value) {
+        const run = () => Reflect.set(target, key, value, target);
+        const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+        return key === 'innerHTML' && artifacts ? artifacts.mutateRoot(target, run) : run();
+      }
+    });
+    roots.set(root, proxy); nativeRoots.set(proxy, root);
+    return proxy;
+  }
   const jq = frame.jQuery;
   const anchors = new Map();
   let observedViewport = null;
@@ -166,12 +191,15 @@ function createTavernComposerWindow(frame, host = frame.parent) {
     return anchors.get(id);
   }
   function lookup(doc, id) {
-    return ids.has(id) ? frame.document.getElementById(id) : doc.getElementById(id) || layoutAnchor(id);
+    if (ids.has(id)) return frame.document.getElementById(id);
+    const artifacts = frame.frameElement?.__dshTavernHostArtifacts;
+    return (artifacts ? artifacts.findElementById(id) : doc.getElementById(id)) || layoutAnchor(id);
   }
 
   function documentView(doc) {
     if (documents.has(doc)) return documents.get(doc);
     const proxy = new Proxy({}, { get(_, key) {
+      if (key === 'body' || key === 'head') return rootView(doc[key]);
       if (key === 'createElement' || key === 'createElementNS') return function (...args) {
         const node = doc[key](...args);
         frame.frameElement?.__dshTavernHostArtifacts?.trackNode(node);
@@ -184,7 +212,7 @@ function createTavernComposerWindow(frame, host = frame.parent) {
           : /^#(?:send_textarea|send_but)$/.test(selector) ? frame.document[key](selector) : doc[key](selector);
       if (key === 'defaultView') return windowView(doc.defaultView);
       const value = doc[key];
-      return typeof value === 'function' ? value.bind(doc) : value;
+      return typeof value === 'function' ? (...args) => value.apply(doc, args.map(unwrap)) : value;
     }, set(_, key, value) { doc[key] = value; return true; } });
     documents.set(doc, proxy);
     return proxy;
@@ -201,7 +229,7 @@ function createTavernComposerWindow(frame, host = frame.parent) {
       };
       return result;
     }
-    return jq(selector, context);
+    return jq(unwrap(selector), unwrap(context));
   }
   function windowView(target) {
     if (windows.has(target)) return windows.get(target);
@@ -211,7 +239,7 @@ function createTavernComposerWindow(frame, host = frame.parent) {
       if (key === 'document') return target === frame ? frame.document : documentView(target.document);
       if ((key === '$' || key === 'jQuery') && jq) return new Proxy(jq, {apply(_, receiver, args) { return jquery(...args); }});
       const value = target[key];
-      return typeof value === 'function' && !value.prototype ? value.bind(target) : value;
+      return typeof value === 'function' && !value.prototype ? (...args) => value.apply(target, args.map(unwrap)) : value;
     }, set(_, key, value) { target[key] = value; return true; } });
     windows.set(target, proxy);
     return proxy;

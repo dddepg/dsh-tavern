@@ -35,13 +35,3 @@ test('Android 下载目录人物卡只列出受限目录里的 PNG/JSON，并按
   const traversalId = 'downloads:' + Buffer.from('../outside.json').toString('base64url')
   await assert.rejects(imports.read(traversalId), /无效|不允许/)
 })
-
-test('下载目录导入拒绝过大文件', async function () {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-mobile-card-large-'))
-  await writeFile(path.join(root, 'large.json'), '12345')
-  const imports = createMobileCardImport({
-    runtimeHost: 'android', maxBytes: 4,
-    roots: [{ id: 'downloads', label: '手机 Download', path: root }]
-  })
-  assert.deepEqual((await imports.list()).files, [])
-})

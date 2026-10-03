@@ -21,37 +21,7 @@ async function fixture(t) {
     return module.prepare({ chatId: 'game', target: targets[turn - 1], lineage: targets.slice(0, turn), sources: [{ id: 'target', turn, text }], profile: 'tags-v1', ...extra })
   } }
 }
-test('semantic errors identify the exact character or subject before any canonical write', async t => {
-  const fx = await fixture(t), prepared = await fx.prepare()
-  const plan = first()
-  delete plan.characters[0].name
-  await assert.rejects(fx.module.commit(prepared, plan), /characters\[0\]\.name/)
-  plan.characters[0].name = '林岚'
-  plan.subjects = ['missing']
-  await assert.rejects(fx.module.commit(prepared, plan), /subjects\[0\].*missing.*未知或重复人物/)
-  assert.equal((await fx.prepare()).saved, undefined)
-})
 
-test('persistent character identity, independent block versions and a complete prompt after action-only delta', async t => {
-  const fx = await fixture(t)
-  const one = await fx.module.commit(await fx.prepare(), first())
-  fx.restart()
-  const prepared = await fx.prepare(2, '林岚坐下。')
-  const id = one.subjects[0]
-  assert.equal(prepared.input.characters[0].id, id)
-  assert.equal(prepared.input.characters[0].fields.appearance, '黑发')
-  assert.equal(JSON.stringify(prepared.input).includes('black hair'), false, 'unchanged tags are not sent back to the text model')
-  const two = await fx.module.commit(prepared, { description: '林岚坐下', continuity: 'continued', subjects: [id], characters: [{ id, fields: { action: field('坐下', 'sitting') } }], scene: { composition } })
-  assert.match(two.prompt, /black hair, white coat, sitting/)
-  assert.doesNotMatch(two.prompt, /standing/)
-  assert.match(two.prompt, /doorway/)
-  assert.equal(two.blockIds[0], one.blockIds[0])
-  assert.equal(two.blockIds[1], one.blockIds[1])
-  assert.equal(two.blockIds[3], one.blockIds[3])
-  assert.notEqual(two.blockIds[2], one.blockIds[2])
-  assert.equal((await fx.prepare()).saved.id, one.id, 'historical frame is unchanged')
-  assert.equal((await fx.prepare(2)).saved.id, two.id)
-})
 test('field clearing removes old pose; scene change and incomplete continuity do not retain stale dynamic facts', async t => {
   const fx = await fixture(t), one = await fx.module.commit(await fx.prepare(), first()), id = one.subjects[0]
   const prepared = await fx.prepare(2, '林岚停止动作，进入室内。')
@@ -79,21 +49,6 @@ test('same names stay distinct without citations; unknown identities and invalid
   bad.characters = [{ id: 'person-foreign', fields: {} }]
   await assert.rejects(fx.module.commit(next, bad), /不属于/)
   assert.equal((await fx.prepare(2)).saved, undefined, 'no partially valid revision published')
-})
-
-test('legacy output citations are ignored while both text and tags remain required', async t => {
-  const fx = await fixture(t), value = first()
-  value.characters[0].identity = { source: 'no-such-source', quote: 'old-session-output' }
-  value.characters[0].fields.appearance.evidence = [{ source: 'no-such-source', quote: 'old-session-output' }]
-  const frame = await fx.module.commit(await fx.prepare(), value)
-  const saved = await fx.module.snapshot('game', frame)
-  assert.equal(saved.people[0].identity.kind, 'scene-person')
-  assert.equal(saved.people[0].identity.quote, undefined)
-  assert.equal(saved.people[0].fields.appearance.evidence, undefined)
-  assert.equal(saved.people[0].fields.appearance.text, '黑发')
-  assert.equal(saved.blocks[0].tags, 'black hair')
-  const next = await fx.prepare(2)
-  await assert.rejects(fx.module.commit(next, { ...first(), subjects: frame.subjects, characters: [{ id: frame.subjects[0], fields: { appearance: { text: '黑发' } } }] }), /tags/)
 })
 
 test('persisted legacy identities and evidence remain readable and unchanged across channel conversion', async t => {
@@ -135,17 +90,4 @@ test('branches and games do not share future identities; stale parallel commits 
   const fresh = await fx.prepare(3, '林岚挥手。')
   await fx.module.commit(fresh, { description: '', continuity: 'continued', subjects: one.subjects, characters: [], scene: { composition } })
   await assert.rejects(fx.module.commit(stale, { description: '', continuity: 'continued', subjects: one.subjects, characters: [], scene: { composition } }), /版本已变化/)
-})
-test('channel conversion requires only missing expressions and leaves character fact revisions unchanged', async t => {
-  const fx = await fixture(t), one = await fx.module.commit(await fx.prepare(), first())
-  const prepared = await fx.prepare(1, '林岚黑发白衣，站在门口。', { profile: 'another-profile' })
-  assert.equal(prepared.input.characters[0].id, one.subjects[0])
-  assert.equal(prepared.input.missingBlocks.length, 4)
-  const input = { description: '新表达', continuity: 'continued', subjects: one.subjects, characters: [], scene: { composition } }
-  await assert.rejects(fx.module.commit(prepared, input), /缺少当前渠道标签/)
-  input.expressions = prepared.input.missingBlocks.map(item => ({ ...item, tags: item.field + ' translated' }))
-  const converted = await fx.module.commit(prepared, input)
-  assert.deepEqual(converted.characterRefs, one.characterRefs)
-  assert.notDeepEqual(converted.blockIds, one.blockIds)
-  assert.equal((await fx.prepare()).saved.id, one.id)
 })

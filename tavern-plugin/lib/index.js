@@ -1,3 +1,20 @@
+import { ensureSessionVariableDirectory } from './domain/session-variable-directory.js'
+import { createCompatibilityTurnCompiler } from './domain/compatibility-turn.js'
+import { registerTavernHttpRoutes } from './http/routes.js'
+import { registerRequestHooks } from './hooks/request.js'
+import { registerModelStreamHooks } from './hooks/model-stream.js'
+import { registerTurnLifecycleHooks } from './hooks/turn-lifecycle.js'
+import { registerGameplayTools } from './tools/gameplay.js'
+import { registerUserProfileTools } from './tools/user-profile.js'
+import { registerSkillTools } from './tools/skills.js'
+import { registerCardReadingTools } from './tools/card-reading.js'
+import { registerPlayChatTool } from './tools/play-chat.js'
+import { registerScriptTool } from './tools/script.js'
+import { registerWorldbookTools } from './tools/worldbook.js'
+import { registerPresetTools } from './tools/preset.js'
+import { registerCardEditingTools } from './tools/card-editing.js'
+import { createConversationGuides } from './domain/conversation-guides.js'
+import { createGuideLibrary } from './domain/guide-library.js'
 import { copyJsonTree } from './domain/copy-json-tree.js'
 import { createCandidateContextReader } from './domain/candidate-context-reader.js'
 import { createCandidateWorldbookPreparation } from './domain/candidate-worldbook-preparation.js'
@@ -14,7 +31,7 @@ import { createScopedMessages } from './domain/scoped-messages.js'
 import {registerVariableReadTool} from './domain/read-variables.js'
 import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } from './domain/background-session-retirement.js'
 import { createCardMemory, CARD_MEMORY_TOOLS } from '../packages/dsh-tavern-card-memory/index.js'
-import { inputAttachments, projectPlayerContent } from './domain/player-input-content.js'
+import { projectPlayerContent } from './domain/player-input-content.js'
 import { installSkillCatalogSessionScope } from './domain/skill-catalog-session-scope.js'
 import { projectCardSummary } from './domain/card-preparation.js'
 import { createCardSummaryCache } from './domain/card-summary-cache.js'
@@ -22,6 +39,7 @@ import { openingPreviewPayload, openingInitializationPayload } from './domain/op
 import { createLiveCardUpdate } from './domain/live-card-update.js'
 import { createSessionViewReader, createSessionChatReader, createSessionSliceReader } from './domain/session-view-reader.js'
 import { createSessionStateView, settlementTurn, pendingMvuSettlementState, projectDisplayRuntimeState } from './domain/chat-session-state.js'
+import { createSettlementProgressGuard } from './domain/settlement-progress-guard.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
 import { createMvuConversion } from './domain/mvu-conversion.js'
 import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
@@ -32,7 +50,6 @@ import { installHostSubprocessPatch } from './domain/host-subprocess-patch.js'
 import { migrateInstalledLegacySessions } from './domain/legacy-session-migration.js'
 import { measureForegroundPressure } from './domain/foreground-context-pressure.js'
 import { replaceSessionSurface } from './domain/session-surface-mutations.js'
-import { installWorkspaceInstructionPresentation } from './domain/workspace-instruction-presentation.js'
 import { createPresetDiagnostics } from './domain/preset-diagnostics.js'
 import { createIncrementalReplyView } from './domain/incremental-reply-view.js'
 import { createRequestPerformance } from './domain/request-performance.js'
@@ -41,6 +58,7 @@ import { createScriptNavigation } from './domain/script-navigation.js'
 import { createSessionInventory } from './domain/session-inventory.js'
 import { createSessionViewSync } from './domain/session-view-sync.js'
 import { setFailedErrorVisibility, setAllFailedErrorVisibility } from './domain/failed-error-visibility.js'
+import { createCharacterDesignPublisher } from './domain/character-design-worldbook.js'
 import { createManualCharacterDesign } from './domain/manual-character-design.js'
 import { prepareTemplateHistory, synchronizeTemplateHistory } from './domain/template-history.js'
 import { createServerTemplateSync } from './domain/server-template-sync.js'
@@ -51,32 +69,26 @@ import { adoptConversationFeatures, adoptConversationBackground, patchConversati
 import { clearLegacyTavernDefault } from './domain/legacy-agent-default.js'
 import { conversationStateAtTurn, conversationForkBoundary } from './domain/conversation-fork-point.js'
 import { createCardResponseTest } from './domain/card-response-test.js'
-import { prependSystemInstruction } from './domain/system-append.js'
 import { createGameplayApi } from './gameplay-api.js'
 import { cardOpeningChoices } from './domain/card-openings.js'
 import { marked } from 'marked'
-import { presentModelError } from './domain/model-error-presentation.js'
-import { validateCardFile } from './domain/card-validation.js'
 import { resolveAgentCompaction } from './agent-compaction.js'
 import { compactForegroundIfNeeded } from './domain/foreground-compaction.js'
 import { compactBackgroundIfNeeded, measureBackgroundBudget } from './domain/background-compaction.js'
 import { createAutoCompaction, installCompactionPolicy } from './domain/auto-compaction.js'
-import { observeHttpRequests } from './domain/http-performance-diagnostics.js'
 import { createPerformanceDiagnostics } from './domain/performance-diagnostics.js'
 import { createBackgroundSuppressionReader } from './domain/background-surface.js'
 import { ensureCardWorkspaceMessage } from './domain/card-workspace-message.js'
 import { createPromptTemplateGlobalVariables } from './domain/prompt-template-global-variables.js'
-import { FULL_PROMPT_TEMPLATE_ASSET_PREFIX, readFullPromptTemplateAsset } from './domain/full-prompt-template-assets.js'
 import { createTavernApiDiagnostics } from './domain/tavern-api-diagnostics.js'
 import { generateHelperRaw, generateHelperCompletion } from './domain/helper-generation.js'
-import { createBodyEditor, synchronizeBodyEdits } from './domain/body-editor.js'
+import { createBodyEditor } from './domain/body-editor.js'
 import { appendHelperUserSessionContext } from './domain/helper-user-session-context.js'
 import { sessionOpeningDescriptor, prepareSessionOpening } from './domain/session-opening.js'
 import { scriptPromptScanText } from './domain/tavern-script-prompts.js'
 import { createOpeningPreparation } from './domain/opening-preparation.js'
 import { createChatHistoryImportService } from './domain/chat-history-import-service.js'
-import { createImportContextPreparation, needsImportContextPreparation } from './domain/import-context-preparation.js'
-import { sessionEvents, appendSessionEvent } from './domain/session-events.js'
+import { sessionEvents } from './domain/session-events.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -88,7 +100,7 @@ import { legacyImageConfigurationReader } from './domain/image-generation-host.j
 import { createSceneWorldbooks, sceneWorldbookBinding } from './domain/scene-worldbook.js'
 import { createSceneImageDiagnostics, createSceneImageHostLogger, recordSceneImageInteraction } from './domain/scene-image-diagnostics.js'
 import { TAVERN_RELEASE_CAPABILITIES } from './domain/release-capabilities.js'
-import { createSessionStablePrefixStorage, ensureSessionStablePrefix, readSessionStablePrefix, sessionStablePrefixSections, withCurrentWorldbook } from './domain/session-stable-prefix.js'
+import { createSessionStablePrefixStorage, ensureSessionStablePrefix, readSessionStablePrefix } from './domain/session-stable-prefix.js'
 import { waitForWritableSession } from './domain/agent-readiness.js'
 import { createCardDeletion } from './domain/card-deletion.js'
 import { createCardOrganization } from './domain/card-organization.js'
@@ -96,7 +108,6 @@ import { orderCardsByNewestImport } from './domain/card-list-order.js'
 import { createCardPreparation } from './domain/card-preparation.js'
 import { withGlobalRegexScripts, composeTavernRegexScripts } from './domain/card-extension-reading.js'
 import { projectCardOpeningPreviews } from './domain/card-opening-previews.js'
-import { READABLE_CARD_FIELDS, readCardField } from './domain/card-reading.js'
 import { createConversationInitialization } from './domain/conversation-initialization.js'
 import { assertConversationForkable, conversationForkReceipt, forkConversationChat } from './domain/conversation-fork.js'
 import { normalizeBackgroundModel, resolveChatBackgroundModel, readBackgroundModelReasoning } from './domain/background-model-selection.js'
@@ -115,8 +126,7 @@ import { createForegroundFrameBuilder } from './domain/agent-input-frame.js'
 import { retireForegroundFrames } from './domain/foreground-frame-retirement.js'
 import { compactionFailureMessage } from './domain/compaction-failure.js'
 import { createForegroundFrameSessionAdapter } from './domain/foreground-frame-session-adapter.js'
-import { HISTORY_RECALL_OUTPUT_SCHEMA, HISTORY_RECALL_TOOL, createHistoryRecall, renderHistoryRecall } from './domain/history-recall.js'
-import { dshParameterFields } from './domain/dsh-tool-schema.js'
+import { HISTORY_RECALL_TOOL, createHistoryRecall, renderHistoryRecall } from './domain/history-recall.js'
 import { createModelRequestLog } from './domain/model-request-log.js'
 import { MVU_SUBMIT_UPDATE_TOOL, collectMvuHelperContext, createMvuSettlementModule } from './domain/mvu-background-settlement.js'
 import { applyMvuSettlementEffect } from './domain/mvu-settlement-effect.js'
@@ -124,6 +134,7 @@ import { createMvuSettlementReconciler } from './domain/mvu-settlement-reconcile
 import {
   CHARACTER_DESIGN_READ_TOOL,
   CHARACTER_DESIGN_SAVE_TOOL,
+  CHARACTER_DESIGN_REUSE_TOOL,
   createCharacterDesignDocumentTools,
   projectCharacterDesignDocument
 } from './domain/character-design-document.js'
@@ -135,47 +146,31 @@ import { createMvuDiagnosticStore, createMvuDiagnosticExport, sanitizeRuntimeDia
 import { createPlayChatDebugReference, readPlayChatDebugTurn } from './domain/play-chat-debug.js'
 import { createPhoneChat } from './domain/phone-chat.js'
 import { createPresetLibrary } from './domain/preset-library.js'
-import { compileSillyTavernRequest, createCleanCompatibilityPreset } from './domain/sillytavern-compatibility.js'
-import { applySillyTavernStrictTools } from './domain/sillytavern-strict-tools.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
 import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
-import { streamFinishKind } from './domain/reply-completeness.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
-import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
+import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, replaceTavernHelperVariables, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
 import { projectTavernHelperWorldbook } from './domain/tavern-helper-worldbook.js'
-import { applyTavernHelperVariableMacros } from './domain/tavern-helper-variable-macros.js'
 import { projectTavernHelperScripts, hasTavernScriptRuntime } from './domain/tavern-helper-scripts.js'
 import { createTavernScriptDispatch } from './domain/tavern-script-dispatch.js'
 import { createTavernExtensionSettings } from './domain/tavern-extension-settings.js'
 import { createTavernScriptHostAdapter } from './domain/tavern-script-host-adapter.js'
 import { createTavernRemoteAssetPinStore } from './domain/tavern-remote-assets.js'
-import { OFFICIAL_MVU_VERSION, readOfficialMvuBundle, inspectOfficialMvuAsset } from './domain/official-mvu-assets.js'
-import { TAVERN_RUNTIME_ASSET_PREFIX, readTavernRuntimeAsset } from './domain/tavern-runtime-assets.js'
-import { TAVERN_CLIENT_ASSET_PREFIX, readTavernClientAsset } from './domain/tavern-client-assets.js'
-import { createTavernStaticResourceCache, projectCachedResourceBody } from './domain/tavern-static-resource-cache.js'
+import { OFFICIAL_MVU_VERSION, inspectOfficialMvuAsset } from './domain/official-mvu-assets.js'
+import { createTavernStaticResourceCache } from './domain/tavern-static-resource-cache.js'
 import { SILLYTAVERN_CSS_COMPAT_URLS } from './domain/sillytavern-css-compatibility.js'
 import { createRoundHistory } from './domain/round-history.js'
 import { createResourceWorkspaceProjection } from './domain/resource-workspace-projection.js'
-import {
-  preserveRuntimeSource,
-  projectAgentContent,
-  projectAgentMessageText,
-  projectRuntimeReply,
-  resolveRuntimeMacroText,
-  sanitizeAgentProjectionText
-} from './domain/runtime-content-projection.js'
+import { projectAgentContent, projectAgentMessageText, projectRuntimeReply } from './domain/runtime-content-projection.js'
 import { createScriptContinuity } from './domain/script-continuity.js'
 import { appendWritingSkillState } from './domain/skill-visibility.js'
 import { createStoryTimeline } from './domain/story-timeline.js'
-import { createStoryCompactionRequest, usesStoryCompaction } from './domain/story-compaction.js'
-import { installCompactionRequestProjection } from './domain/compaction-request.js'
 import { resolveTavernDataRoot } from './domain/tavern-data.js'
 import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { createTavernSkillProvider } from './domain/tavern-skill-provider.js'
 import { canonicalTavernSkillName, createTavernSkillModule } from './domain/tavern-skills.js'
 import { createTavernConversationRegistry } from './domain/tavern-conversation-registry.js'
-import { applyTavernRegexText } from './domain/tavern-regex-display.js'
 import { installTavernTokenMeter } from './domain/tavern-token-meter.js'
 import { createTavernCompactionCoordinator } from './domain/tavern-compaction.js'
 import { cordisToolNames, createTurnOrchestrator, dshFileToolNames } from './domain/turn-orchestration.js'
@@ -183,7 +178,7 @@ import { resourceWorkspaceContext } from './domain/workspace-resources.js'
 import { createWorldBookLibrary } from './domain/worldbook-library.js'
 import { createWorldbookRecallLog, compactRecallDiagnostics } from './domain/worldbook-recall-log.js'
 import { foregroundWorldbookReads } from './domain/worldbook-read-handoff.js'
-import { createWorldbookSearch, sharedWorldbookSearch, WORLD_BOOK_SEARCH_TOOL } from './domain/worldbook-search.js'
+import { createWorldbookSearch, sharedWorldbookSearch } from './domain/worldbook-search.js'
 import { createForegroundWorldbook } from './domain/foreground-worldbook.js'
 import { prepareTemplateWorldbook, mvuUpdateRulesFromWorldBook, prepareWorldBookRecall, projectWorldBookTemplates } from './domain/worldbook-recall.js'
 import {
@@ -195,11 +190,13 @@ import { createChatPersistence } from './domain/chat-persistence.js'
 import { createChatJournalStore } from './domain/chat-journal-store.js'
 import { createResourceGraph } from './domain/resource-graph.js'
 import { normalizeBackgroundTasks, applyTavernSettingsPatch, presentTavernSettings, resolveSystemPrompt } from './domain/tavern-settings.js'
-import { prompt, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt-catalog.js'
-
+// Runtime reads go through runtimePrompt() so panel overrides apply; the raw
+// file catalog only supplies built-in defaults.
+import { prompt as promptFile, SYSTEM_PROMPT_DEFINITIONS, SYSTEM_PROMPT_NAMES } from './prompt-catalog.js'
 // dsh-tavern 宿主插件（profile 组合行）
 // RPC：同源 HTTP 路由 /api/dsh-tavern/<method>（客户端 fetch 调用）
 // DSH 生命周期负责回合状态；模型工具只处理按需读取和明确修改。
+
 export async function apply(ctx) {
   const persistence = ctx.get('sessionPersistence')
   try {
@@ -297,6 +294,7 @@ export async function apply(ctx) {
   ctx.effect(() => () => fullTemplateRuntime.dispose())
   const cardOrganization = createCardOrganization(profileData)
   const worldbookRecallLog = createWorldbookRecallLog({ store: profileData })
+  const guideLibrary = createGuideLibrary({ store: profileData })
   const userPreferenceProfile = createUserPreferenceProfile({ store: profileData })
   const sceneWorldbooks = TAVERN_RELEASE_CAPABILITIES.sceneImages ? createSceneWorldbooks({ store: profileData }) : null
   const imageHostDiagnostic = createSceneImageHostLogger(ctx.logger)
@@ -334,7 +332,7 @@ export async function apply(ctx) {
   const writePromptTemplateGlobalVariables = promptTemplateGlobalVariables.save
   let tavernSettingsDocument = await profileData.readJson(settingsPath)
   function promptDefaults() {
-    return Object.fromEntries(SYSTEM_PROMPT_NAMES.map(function (name) { return [name, prompt(name)] }))
+    return Object.fromEntries(SYSTEM_PROMPT_NAMES.map(function (name) { return [name, promptFile(name)] }))
   }
   async function readTavernSettings() {
     tavernSettingsDocument = await profileData.readJson(settingsPath)
@@ -342,7 +340,7 @@ export async function apply(ctx) {
   }
   async function updateTavernSettings(patch) {
     if (patch && (Object.hasOwn(patch, 'backgroundModel') || Object.hasOwn(patch, 'backgroundTasks') || Object.hasOwn(patch, 'webSearchEnabled'))) throw new Error('后台配置已移至顶栏的本局设置')
-    for (const name of ['defaultForegroundModel', 'defaultBackgroundModel']) {
+    for (const name of ['defaultForegroundModel', 'defaultBackgroundModel', 'defaultWorkbenchModel']) {
       if (patch?.[name] != null) await llm.resolveCallConfig(patch[name])
     }
     tavernSettingsDocument = await profileData.updateJson(settingsPath, function (current) {
@@ -352,7 +350,7 @@ export async function apply(ctx) {
   }
   function runtimePrompt(name) {
     if (name === 'system-append' && tavernSettingsDocument?.systemAppendEnabled === false) return ''
-    return resolveSystemPrompt(tavernSettingsDocument, name, prompt)
+    return resolveSystemPrompt(tavernSettingsDocument, name, promptFile)
   }
   function presentSystemPrompts(settings) {
     const byName = Object.fromEntries((settings.systemPrompts || []).map(function (item) { return [item.name, item] }))
@@ -361,7 +359,7 @@ export async function apply(ctx) {
       version: 1,
       systemAppendEnabled: settings.systemAppendEnabled === true,
       prompts: SYSTEM_PROMPT_DEFINITIONS.map(function (definition) {
-        return Object.assign({}, definition, byName[definition.name] || { text: prompt(definition.name), customized: false })
+        return Object.assign({}, definition, byName[definition.name] || { text: promptFile(definition.name), customized: false })
       })
     }
   }
@@ -706,9 +704,20 @@ export async function apply(ctx) {
   async function deletePreset(resourcePath) {
     return await deleteLibraryResource(resourcePath, 'preset')
   }
+  // The catalog is refetched on every card/worldbook change; reparsing every card each time blocked the server.
+  const worldBookSummaryCaches = {}
+  function cachedWorldBookSummary(kind) {
+    return function (path, compute) {
+      worldBookSummaryCaches[kind] ||= createCardSummaryCache({ absolute: value => fileResources.absolute(value), read: compute })
+      return worldBookSummaryCaches[kind].read(path)
+    }
+  }
   const worldBooks = createWorldBookLibrary({
     normalizePath: normalizeResourcePath,
+    summaries: { standalone: cachedWorldBookSummary('standalone'), card: cachedWorldBookSummary('card') },
     resources: {
+      globalSources: async function () { return await fileResources.globalWorldBookSources() },
+      setGlobal: async function (path, enabled) { return await fileResources.setGlobalWorldBook(path, enabled) },
       list: async function (kind) { return await fileResources.list(kind) },
       readText: async function (path) { return await fileResources.readText(path) },
       metadata: async function (path) { return await fileResources.metadata(path) },
@@ -1218,16 +1227,6 @@ export async function apply(ctx) {
     }).concat([reference])
     await writeChat(editorChat, { source: 'play-chat.attach' })
     return reference
-  }
-
-  function assistantMessageAtTurn(chat, requestedTurn) {
-    const messages = Array.isArray(chat && chat.messages) ? chat.messages : []
-    let inferred = 1
-    for (const message of messages) {
-      if (message && message.role === 'user') inferred += 1
-      if (message && message.role === 'assistant' && Math.max(1, Number(message.turn) || (message.greeting === true ? 1 : inferred)) === requestedTurn) return message
-    }
-    return null
   }
 
   function cleanRuntimeUrl(value) {
@@ -1855,9 +1854,11 @@ export async function apply(ctx) {
   async function ensureNativeSystemPrefix(session, chat) {
     const before = readSessionStablePrefix(session)
     const revision = Number(chat.cardContextRevision) || 0
-    const text = before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
+    const cardAgent = chat.mode === 'card' && chat.cardEditContext?.version !== 1
+    const text = !cardAgent && before?.version === 3 && revision <= before.revision ? '' : await ensurePlayCardSnapshot(chat)
     const prefix = await ensureSessionStablePrefix(session, text, stablePrefixStorage, revision)
-    if (prefix && prefix.event !== before?.event) await sessionStore.flush(session)
+    const directory = cardAgent ? false : ensureSessionVariableDirectory(session, chat)
+    if (directory || prefix && prefix.event !== before?.event) await sessionStore.flush(session)
     return prefix
   }
   async function ensureNativeCardWorkspace(session, chat) {
@@ -1875,7 +1876,7 @@ export async function apply(ctx) {
     userPreferenceProfile,
     presets: runtimePresets,
     settings: readTavernSettings,
-    cardGreeting: function () { return prompt('card-mode-greeting') },
+    cardGreeting: function () { return runtimePrompt('card-mode-greeting') },
     emptyCardWorkspace,
     id: uid,
     native: {
@@ -1972,7 +1973,7 @@ export async function apply(ctx) {
     resolveModelSelection: async input => backgroundModelSelection(await backgroundConfigForSession(input.sessionId)) || input.selection,
     resolveWebSearch: async input => (await backgroundConfigForSession(input.sessionId))?.webSearchEnabled === true,
     resolveBackgroundTasks: async input => input.backgroundTasks || normalizeBackgroundTasks((await backgroundConfigForSession(input.sessionId))?.backgroundTasks),
-    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL],
+    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL],
     sharedTools: [sharedWorldbookSearch(searchWorldbook), {
       tool: HISTORY_RECALL_TOOL,
       async execute({ input, args }) {
@@ -2037,12 +2038,17 @@ export async function apply(ctx) {
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
     beginTask: chat => backgroundTasks.begin(chat, 'worldbook-filter')
   })
+  const publishCharacterDesign = createCharacterDesignPublisher({ worldBooks, readCard })
   const characterDesignDocuments = createCharacterDesignDocumentTools({
+    publishWorldbook: publishCharacterDesign,
     store: { readChat, updateChat },
+    readWorldBook: async chat => worldBooks.bound(chat.cardPath, await readChatCard(chat), chat),
     now: Date.now
   })
   const manualCharacterDesign = createManualCharacterDesign({
-    store: { chatForSession, updateChat, readCard: readChatCard },
+    publishWorldbook: publishCharacterDesign,
+    store: { chatForSession, updateChat, readCard: readChatCard,
+      readWorldBook: (chat, card) => worldBooks.bound(chat.cardPath, card, chat) },
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
     beginTask: async (chat, sessionId) => {
       if (agentRegistry.get(sessionId)?.phase?.kind === 'running' || chat.regenInProgress) throw new Error('前台正在生成，请完成后再设计人物。')
@@ -2379,29 +2385,7 @@ export async function apply(ctx) {
   async function listTavernSessions() {
     return await conversationRegistry.list()
   }
-  async function addGuide(sessionId, text) {
-    const chat = await chatForSession(sessionId)
-    if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
-    const guide = str(text).trim().slice(0, 2000)
-    if (guide === '') throw new Error('Guide 内容不能为空')
-    if (!Array.isArray(chat.guides)) chat.guides = []
-    if (chat.guides.length >= 20) throw new Error('Guide 数量已达上限（20 条）')
-    chat.guides.push({ id: uid('guide'), text: guide, createdAt: Date.now() })
-    chat.updatedAt = Date.now()
-    await writeChat(chat, { source: 'guide.add' })
-    return chat.guides
-  }
-  async function deleteGuide(sessionId, index) {
-    const chat = await chatForSession(sessionId)
-    if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
-    if (!Array.isArray(chat.guides)) chat.guides = []
-    const idx = clampInt(index, 0, Math.max(0, chat.guides.length - 1), -1)
-    if (idx < 0) throw new Error('Guide 序号无效')
-    chat.guides.splice(idx, 1)
-    chat.updatedAt = Date.now()
-    await writeChat(chat, { source: 'guide.delete' })
-    return chat.guides
-  }
+  const conversationGuides = createConversationGuides({ chats: { forSession: chatForSession, update: updateChat }, library: guideLibrary, isPlay: chat => groupOfMode(chat.mode) === 'play' })
   async function setPlayerName(sessionId, userName) {
     const chat = await chatForSession(sessionId)
     if (chat === undefined) throw new Error('当前会话没有绑定人物卡')
@@ -2516,6 +2500,9 @@ export async function apply(ctx) {
     return latest
   }
   async function runSettlement(chatId, signal) {
+    const retryStale = createSettlementProgressGuard({ backgroundTasks, onStopped: ({ operationId, error }) => {
+      console.error('dsh-tavern: 结算连续三次未能提交且剧情状态未前进，已停止，可重新结算', chatId, operationId, str(error?.message || error || '提交已过期'))
+    } })
     while (true) {
       signal?.throwIfAborted()
       let snapshot = await readSettlementInput(chatId, {readWindow:chatPersistence.readWindow,readChat})
@@ -2584,6 +2571,7 @@ export async function apply(ctx) {
             storyText: projectAgentMessageText(mvuTarget.message, { charName: card && card.name, macroState: snapshot.macroState }),
             currentVariables: mvuTarget.variables,
             helperContext: collectMvuHelperContext(snapshot.messages, mvuTarget.messageId),
+            guides: Array.isArray(snapshot.guides) ? snapshot.guides : [],
             variableSchema: mvuTarget.variables.schema,
             charName: card && card.name,
             macroState: snapshot.macroState,
@@ -2740,8 +2728,8 @@ export async function apply(ctx) {
         const completed = await taskRun.commit(completion)
         if (completed.status === 'missing') return
         if (completed.status === 'stale') {
-          const activity = backgroundTasks.activity(completed.chat)
-          if (activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) continue
+          signal?.throwIfAborted()
+          if (await retryStale(completed.chat)) continue
           return
         }
         console.log('dsh-tavern: 结算完成', chatId, '姿势', stat.postureUpdated ? '已更新' : '未更新')
@@ -2762,8 +2750,9 @@ export async function apply(ctx) {
         })
         if (failed.status === 'missing') return
         if (failed.status === 'stale') {
-          const activity = backgroundTasks.activity(failed.chat)
-          if (activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) continue
+          signal?.throwIfAborted()
+          console.warn('dsh-tavern: 结算失败结果已过期', chatId, str(err?.message || err))
+          if (await retryStale(failed.chat, err)) continue
           return
         }
         const latest = await readChat(chatId)
@@ -3203,7 +3192,7 @@ export async function apply(ctx) {
         return { prepared: true }
       }
       case 'getUserPreferenceProfile': {
-        const chat = await chatHeaderForSession(args && args.sessionId, ['userProfileEnabled','userProfileContextSnapshot','userProfileId','userProfileRevision'])
+        const chat = args?.sessionId && args.globalDefaults !== true ? await chatHeaderForSession(args.sessionId, ['userProfileEnabled','userProfileContextSnapshot','userProfileId','userProfileRevision']) : null
         return {
           userProfile: presentUserPreferenceProfile(await userPreferenceProfile.read()),
           currentConversation: chat && groupOfMode(chat.mode) === 'play' ? {
@@ -3249,15 +3238,15 @@ export async function apply(ctx) {
           const target = await waitForWritableSession({ registry: agentRegistry, sessions: sessionStore, sessionId: chat.sessionId, sleep })
           legacyWorkspaceText = await ensureNativeCardWorkspace(target.session, chat)
         }
-        return { task, text: prompt(promptName), legacyWorkspaceText }
+        return { task, text: runtimePrompt(promptName), legacyWorkspaceText }
       }
       case 'getCardMemory': {
         const chat = await chatForSession(args?.sessionId)
-        if (chat?.mode !== 'card') return { enabled: false }
-        return { enabled: true, ...await cardMemory.search(chat, args?.query) }
+        if (!chat) return { enabled: false }
+        return { enabled: true, ...await cardMemory.search(chat, args?.query, { manual: true }) }
       }
-      case 'changeCardMemoryPreference': return await cardMemory.preference(await chatForSession(args?.sessionId), args || {})
-      case 'changeCardMemoryExperience': return await cardMemory.experience(await chatForSession(args?.sessionId), args || {})
+      case 'changeCardMemoryPreference': return await cardMemory.preference(await chatForSession(args?.sessionId), args || {}, { manual: true })
+      case 'changeCardMemoryExperience': return await cardMemory.experience(await chatForSession(args?.sessionId), args || {}, { manual: true })
       case 'getResourceWorkspace': return { path: dataRoot + '/resources' }
       case 'listResources': return await listTavernResources()
       case 'getResource': {
@@ -3266,6 +3255,7 @@ export async function apply(ctx) {
         if (text === undefined) throw new Error('剧本不存在: ' + resourcePath)
         return { path: resourcePath, text }
       }
+      case 'setGlobalWorldBook': return await worldBooks.setGlobal(args && args.source, args && args.enabled)
       case 'listWorldBooks': return await worldBooks.catalog()
       case 'getWorldBook': return await worldBooks.get(args && args.source)
       case 'getWorldBookBinding': return { binding: await worldBooks.binding(args && args.cardPath) }
@@ -3423,6 +3413,7 @@ export async function apply(ctx) {
         return { backgroundModel: saved.backgroundModelSelection || null, backgroundTasks: normalizeBackgroundTasks(saved.backgroundTasks), webSearchEnabled: saved.webSearchEnabled === true, sceneImagesEnabled: saved.sceneImagesEnabled === true }
       }
       case 'getBackgroundModelReasoning': return { reasoning: await readBackgroundModelReasoning(llm, args) }
+      case 'getDisplayPreferences': return { hideContextAndReasoning: (await readTavernSettings()).hideContextAndReasoning }
       case 'getCandidatePreferences': return { candidateDismissMode: (await readTavernSettings()).candidateDismissMode }
       case 'getTavernSettings': return { settings: await readTavernSettings(), modelCatalog: await tavernModelCatalog(), releaseCapabilities: TAVERN_RELEASE_CAPABILITIES }
       case 'getSceneImageSettings': {
@@ -3477,7 +3468,7 @@ export async function apply(ctx) {
       }
       case 'listSessions': {
         const settings = await readTavernSettings()
-        return { sessions: await listTavernSessions(), capabilities: { compatibilityMode: true, trustedCardMode: settings.trustedCardMode } }
+        return { sessions: (await listTavernSessions()).filter(chat => chat.requestMode !== 'sillytavern'), capabilities: { compatibilityMode: false, trustedCardMode: settings.trustedCardMode } }
       }
       case 'renameConversation': {
         const chat = await chatForSession(args && args.sessionId)
@@ -3721,8 +3712,12 @@ export async function apply(ctx) {
         return { document: cardPreparation.present({ card: workspace, as: 'sillytavern-v3', characterBook }) }
       }
       case 'editLedger': { await ledgerEditor(args || {}); return { view: await sessionView(args.sessionId) } }
-      case 'addGuide': return { guides: await addGuide(args && args.sessionId, args && args.text) }
-      case 'deleteGuide': return { guides: await deleteGuide(args && args.sessionId, args && args.index) }
+      case 'updateGuideLibrary': return { item: await guideLibrary.update(args) }
+      case 'listGuideLibrary': return { items: await guideLibrary.list() }
+      case 'saveGuideLibrary': return { item: await conversationGuides.save(args?.sessionId, args?.name) }
+      case 'loadGuideLibrary': return { guides: await conversationGuides.load(args?.sessionId, args?.id) }
+      case 'addGuide': return { guides: await conversationGuides.add(args?.sessionId, args?.text) }
+      case 'deleteGuide': return { guides: await conversationGuides.remove(args?.sessionId, args) }
       case 'getBodyEdit': return { edit: await bodyEditor.read(args && args.sessionId) }
       case 'saveBodyEdit': return { view: await bodyEditor.save(args && args.sessionId, args) }
       case 'regenBody': return { view: await regenBody(args && args.chatId, args && args.guidance, args && args.sessionId) }
@@ -3803,245 +3798,20 @@ export async function apply(ctx) {
     }
   }))
 
-  const webServer = ctx.get('webServer')
-  if (webServer !== undefined) {
-    ctx.effect(() => observeHttpRequests(webServer.server, snapshot => performanceDiagnostics.http(snapshot)))
-    // Fixed SillyTavern compatibility version for card-script feature probes.
-    ctx.effect(() => {
-      return webServer.register({
-        kind: 'prefix',
-        path: '/version',
-        handler: async (req, res) => {
-          const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
-          if (pathname !== '/version') { res.writeHead(404); res.end('not found'); return }
-          if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD' }); res.end(); return }
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-          res.end(req.method === 'HEAD' ? undefined : JSON.stringify({ pkgVersion: '1.12.14' }))
-        }
-      })
-    })
-    ctx.effect(() => webServer.register({
-      kind: 'prefix',
-      path: '/api/dsh-tavern',
-      handler: async (req, res) => {
-        const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
-        const cachedAssetMatch = /^\/api\/dsh-tavern\/remote-assets\/([0-9a-f]{64})(?:\/[^/]*)?$/i.exec(pathname)
-        const readsStaticAsset = req.method === 'GET' && pathname === '/api/dsh-tavern/static-assets'
-        const readsFullTemplate = req.method === 'GET' && pathname.startsWith(FULL_PROMPT_TEMPLATE_ASSET_PREFIX)
-        const readsOfficialMvu = req.method === 'GET' && pathname === OFFICIAL_MVU_VERSION.assetUrl
-        const readsRuntimeAsset = req.method === 'GET' && pathname.startsWith(TAVERN_RUNTIME_ASSET_PREFIX)
-        const readsClientAsset = req.method === 'GET' && pathname.startsWith(TAVERN_CLIENT_ASSET_PREFIX)
-        const origin = req.headers.origin
-        if (pathname === '/api/dsh-tavern/session-resource' && req.method === 'GET') {
-          const headers = {'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, max-age=600',
-            'Access-Control-Allow-Origin':'*','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}
-          try {
-            const json = await sessionResources.read(new URL(req.url, 'http://localhost').searchParams.get('cap'))
-            res.writeHead(200, headers); res.end(json)
-          } catch (_) {
-            res.writeHead(403, {...headers, 'Cache-Control':'no-store'})
-            res.end(JSON.stringify({error:'Resource unavailable; refresh the session'}))
-          }
-          return
-        }
-        if (pathname === '/api/dsh-tavern/helper-history' && req.method === 'GET') {
-          const target = new URL(req.url, 'http://localhost')
-          const headers = {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Access-Control-Allow-Origin':'*','X-Content-Type-Options':'nosniff'}
-          try {
-            const result = await helperHistoryAccess.read(target.searchParams.get('cap'), Number(target.searchParams.get('from')), Number(target.searchParams.get('to')))
-            res.writeHead(200,headers); res.end(JSON.stringify(result))
-          } catch (_) { res.writeHead(403,headers); res.end(JSON.stringify({error:'History unavailable; refresh the session'})) }
-          return
-        }
-        const gameplayRoute = pathname.startsWith('/api/dsh-tavern/gameplay.')
-        if (gameplayRoute && origin && origin !== 'http://' + req.headers.host && origin !== 'https://' + req.headers.host) {
-          res.writeHead(403); res.end('forbidden'); return
-        }
-        const sceneImageRoute = TAVERN_RELEASE_CAPABILITIES.sceneImages && /^\/api\/dsh-tavern\/(?:scene-image|getSceneImageSettings|saveSceneImageSettings|testSceneImageConnection|listSceneImageModels|sceneImageStatus|recordSceneImageInteraction|generateSceneImage|retrySceneImageSave|cancelSceneImage|removeSceneImage|setSceneImageReference)$/.test(pathname)
-        const sceneSameOrigin = sceneImageRoute && (origin === 'http://' + req.headers.host || origin === 'https://' + req.headers.host)
-        if (sceneImageRoute && origin && !sceneSameOrigin) {
-          res.writeHead(403)
-          res.end('forbidden')
-          return
-        }
-        const readsCachedAsset = req.method === 'GET' && cachedAssetMatch
-        const localOrOpaqueOrigin = origin === undefined || origin === '' || origin === 'null' || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)
-        if (readsStaticAsset && !localOrOpaqueOrigin) {
-          res.writeHead(403)
-          res.end('forbidden')
-          return
-        }
-        if (!readsCachedAsset && !readsStaticAsset && !readsOfficialMvu && !readsFullTemplate && !readsRuntimeAsset && !readsClientAsset && !sceneSameOrigin && typeof origin === 'string' && origin !== '' && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) {
-          res.writeHead(403)
-          res.end('forbidden')
-          return
-        }
-        if (req.method === 'GET' && pathname === '/api/dsh-tavern/runtime-generation') {
-          res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-store, max-age=0'
-          })
-          res.end(JSON.stringify({ ok: true, runtimeGeneration }))
-          return
-        }
-        try {
-          if (readsFullTemplate) {
-            const asset = await readFullPromptTemplateAsset(pathname)
-            if (!asset) { res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' }); res.end('not found'); return }
-            res.writeHead(200, { 'Content-Type': asset.mediaType, 'Content-Length': asset.body.length,
-              'ETag': asset.etag, 'Cache-Control': 'no-cache', 'Access-Control-Allow-Origin': '*',
-              'Cross-Origin-Resource-Policy': 'cross-origin', 'X-Content-Type-Options': 'nosniff' })
-            res.end(asset.body)
-            return
-          }
-          if (readsClientAsset) {
-            const asset = await readTavernClientAsset(pathname)
-            if (asset === undefined) {
-              res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' })
-              res.end('not found')
-              return
-            }
-            res.writeHead(200, {
-              'Content-Type': asset.mediaType,
-              'Content-Length': asset.body.length,
-              'Cache-Control': 'no-cache',
-              'X-Content-Type-Options': 'nosniff'
-            })
-            res.end(asset.body)
-            return
-          }
-          if (readsRuntimeAsset) {
-            const asset = await readTavernRuntimeAsset(pathname)
-            res.writeHead(200, {
-              'Content-Type': asset.mediaType,
-              'Content-Length': asset.body.length,
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              'Access-Control-Allow-Origin': '*',
-              'Cross-Origin-Resource-Policy': 'cross-origin',
-              'X-Content-Type-Options': 'nosniff'
-            })
-            res.end(asset.body)
-            return
-          }
-          const readiness = await runtimeReadiness
-          if (!readiness.ok) throw readiness.error
-          if (req.method === 'GET' && pathname === '/api/dsh-tavern/card-image') {
-            const query = new URL(req.url, 'http://x').searchParams
-            const body = await fileResources.readCardImage(query.get('path'))
-            if (body === undefined) {
-              res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' })
-              res.end('not found')
-              return
-            }
-            res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': body.byteLength, 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' })
-            res.end(body)
-            return
-          }
-          if (TAVERN_RELEASE_CAPABILITIES.sceneImages && req.method === 'GET' && pathname === '/api/dsh-tavern/scene-image') {
-            const query = new URL(req.url, 'http://x').searchParams
-            const image = await sceneIllustrations.readImage(query.get('sessionId'), Number(query.get('turn')), query.get('key'), query.get('versionId'))
-            res.writeHead(200, { 'Content-Type': image.ref.mediaType, 'Content-Length': image.data.byteLength, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' })
-            res.end(image.data)
-            return
-          }
-          if (readsOfficialMvu) {
-            const asset = await readOfficialMvuBundle()
-            res.writeHead(200, {
-              'Content-Type': asset.mediaType,
-              'Content-Length': asset.body.length,
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              'ETag': asset.etag,
-              'Access-Control-Allow-Origin': '*',
-              'Cross-Origin-Resource-Policy': 'cross-origin',
-              'X-Content-Type-Options': 'nosniff',
-              'X-DSH-Tavern-MVU-Commit': asset.commit
-            })
-            res.end(asset.body)
-            return
-          }
-          if (readsCachedAsset) {
-            const asset = await tavernRemoteAssets.readCached(cachedAssetMatch[1])
-            if (!asset) {
-              res.writeHead(404, { 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' })
-              res.end('not found')
-              return
-            }
-            const body = projectCachedResourceBody({ url: asset.url, mediaType: asset.mediaType, body: Buffer.from(asset.content, 'utf8') })
-            res.writeHead(200, {
-              'Content-Type': str(asset.mediaType) + '; charset=utf-8',
-              'Content-Length': body.length,
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              'Access-Control-Allow-Origin': '*',
-              'Cross-Origin-Resource-Policy': 'cross-origin',
-              'X-Content-Type-Options': 'nosniff'
-            })
-            res.end(body)
-            return
-          }
-          if (readsStaticAsset) {
-            const target = new URL(req.url ?? '/', 'http://x')
-            const asset = await tavernStaticResources.get(target.searchParams.get('url'))
-            const body = projectCachedResourceBody(asset)
-            res.writeHead(200, {
-              'Content-Type': str(asset.mediaType),
-              'Content-Length': body.length,
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              'Access-Control-Allow-Origin': '*',
-              'Cross-Origin-Resource-Policy': 'cross-origin',
-              'X-Content-Type-Options': 'nosniff',
-              'X-DSH-Tavern-Cache': asset.cache
-            })
-            res.end(body)
-            return
-          }
-          const method = pathname.slice('/api/dsh-tavern'.length + 1)
-          if (req.method !== 'POST') {
-            res.writeHead(405)
-            res.end()
-            return
-          }
-          const sceneImageBodyLimit = method === 'saveSceneImageSettings' ? 2 * 1024 * 1024 : 16384
-          const bodyChunks = []
-          let bodyBytes = 0
-          for await (const chunk of req) {
-            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-            bodyBytes += bytes.length
-            if (gameplayRoute && bodyBytes > 2 * 1024 * 1024) throw new Error('游戏 API 请求超过 2 MB')
-            if (sceneImageRoute && bodyBytes > sceneImageBodyLimit) {
-              throw new Error(method === 'saveSceneImageSettings'
-                ? '无法保存生图配置：工作流与配置数据超过当前 2 MB 请求大小限制。请精简工作流后重试；这不是图片尺寸或显存不足。'
-                : '生图请求数据超过当前 16 KB 大小限制，请减少输入数据后重试；这不是图片尺寸或显存不足。')
-            }
-            bodyChunks.push(bytes)
-          }
-          // HTTP chunks may split a UTF-8 code point. Decode only after joining bytes;
-          // decoding each chunk corrupts Chinese snapshots and causes false conflicts.
-          const body = Buffer.concat(bodyChunks, bodyBytes).toString('utf8')
-          let args = {}
-          try {
-            args = body.trim() === '' ? {} : JSON.parse(body)
-          } catch (err) {
-            res.writeHead(400)
-            res.end('bad json')
-            return
-          }
-          const result = await dispatch(method, args)
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify(Object.assign({ ok: true }, result, { runtimeGeneration })))
-        } catch (err) {
-          if (readsOfficialMvu || readsFullTemplate || readsRuntimeAsset) {
-            res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
-              'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' })
-            res.end(JSON.stringify({ ok: false, error: redactMvuLoadError(err && err.message || err) }))
-            return
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ ok: false, error: str(err && err.message || err),
-            errorCode: typeof err?.code === 'string' ? err.code : undefined }))
-        }
-      }
-    }), 'dsh-tavern: web route')
-  }
+  registerTavernHttpRoutes({
+    ctx,
+    dispatch,
+    fileResources,
+    helperHistoryAccess,
+    performanceDiagnostics,
+    runtimeGeneration,
+    runtimeReadiness,
+    sceneIllustrations,
+    sessionResources,
+    str,
+    tavernRemoteAssets,
+    tavernStaticResources,
+  })
 
   function contentText(message) {
     if (message === null || typeof message !== 'object' || !Array.isArray(message.content)) return ''
@@ -4126,155 +3896,15 @@ export async function apply(ctx) {
       : null
   }
 
-  function compatibilityWorldBookMatch(entry, source) {
-    if (entry.constant === true) return true
-    const text = entry.caseSensitive === true ? source : source.toLocaleLowerCase()
-    const keys = Array.isArray(entry.primaryKeys) ? entry.primaryKeys : []
-    return keys.some(function (value) {
-      const key = str(value).trim()
-      if (key === '') return false
-      const match = /^\/(.*)\/([dgimsuvy]*)$/.exec(key)
-      if (match) {
-        try { return new RegExp(match[1], match[2].replace(/[gy]/g, '')).test(source) } catch { return false }
-      }
-      return text.includes(entry.caseSensitive === true ? key : key.toLocaleLowerCase())
-    })
-  }
-
-  async function compatibilityWorldInfo(chat, card, input) {
-    let worldBook = null
-    try { worldBook = await worldBooks.bound(chat.cardPath, card, chat) } catch {}
-    const entries = Array.isArray(worldBook && worldBook.view && worldBook.view.entries) ? worldBook.view.entries : []
-    const scan = (chat.messages || []).map(function (item) { return str(item.sourceText || item.text) }).concat([str(input)]).join('\n')
-    function promptTemplateSpecial(entry) {
-      const comment = str(entry && entry.comment)
-      const content = str(entry && entry.content)
-      return comment.startsWith('[InitialVariables]') || /^(?:@@[^\r\n]*\r?\n)*@@initial_variables(?:\s|$)/m.test(content)
-    }
-    const enabled = entries.filter(function (entry) { return entry && entry.enabled !== false && str(entry.content).trim() !== '' })
-    const active = enabled.filter(function (entry) {
-      return !promptTemplateSpecial(entry) && compatibilityWorldBookMatch(entry, scan)
-    }).sort(function (left, right) {
-      return (Number(right.order) || 0) - (Number(left.order) || 0) || (Number(left.displayIndex) || 0) - (Number(right.displayIndex) || 0)
-    })
-    const before = []
-    const after = []
-    for (const entry of active) {
-      const position = entry.position
-      const target = position === 0 || position === 'before_char' || position === 'before' ? before : after
-      target.push(str(entry.content).trim())
-    }
-    return {
-      before: before.join('\n\n'),
-      after: after.join('\n\n'),
-      refs: active.map(function (entry) { return entry.ref }),
-      entries: enabled.map(function (entry) {
-        return {
-          id: str(entry.sourceUid || entry.ref),
-          name: str(entry.title),
-          comment: str(entry.comment),
-          content: str(entry.content),
-          enabled: entry.enabled !== false,
-          book: str(worldBook && worldBook.view && worldBook.view.displayName)
-        }
-      })
-    }
-  }
-
-  async function compileCompatibilityTurn(chat, userText, attachments = []) {
-    const snapshot = await resolveChatRuntimePreset(chat)
-    const presetPath = str(snapshot && snapshot.presetPath)
-    const preset = presetPath === '' ? createCleanCompatibilityPreset() : snapshot.compatibilityPreset
-    const presetDocument = presetPath === '' ? {} : snapshot.compatibilityPresetDocument
-    if (!preset || preset.valid !== true || preset.recognized !== true || !presetDocument) throw new Error('当前预设不存在或无法读取：' + presetPath)
-    const card = await readChatCard(chat)
-    const extensions = await readCardExtensions(chat.cardPath, chat)
-    const regexScripts = composeTavernRegexScripts(extensions, snapshot?.regexScripts)
-    const worldInfo = await compatibilityWorldInfo(chat, card, userText)
-    const compiled = compileSillyTavernRequest({
-      card,
-      preset,
-      presetPath,
-      presetDocument,
-      history: (chat.messages || []).map(function (item) { return { role: item.role, text: str(item.text), sourceText: str(item.sourceText), inputAttachments: item.inputAttachments } }),
-      input: userText,
-      inputAttachments: attachments,
-      userName: str(chat.macroState && chat.macroState.userName),
-      macroState: chat.macroState,
-      worldInfoBefore: worldInfo.before,
-      worldInfoAfter: worldInfo.after,
-      resolveMacros: resolveRuntimeMacroText,
-      projectPromptText: function (text, context) {
-        return applyTavernRegexText(text, regexScripts, {
-          placement: context.placement,
-          isMarkdown: false,
-          isEdit: false,
-          depth: context.depth
-        })
-      }
-    })
-    compiled.trace.worldBookRefs = worldInfo.refs
-    compiled.trace.presetPath = presetPath
-    compiled.trace.presetTitle = preset.title
-    compiled.trace.presetMode = presetPath === '' ? 'builtin-clean' : 'external'
-    compiled.trace.regexCount = regexScripts.length
-    const helperMacros = applyTavernHelperVariableMacros(compiled.messages, {
-      message: lastTavernHelperVariables(chat.messages),
-      chat: chat.variables,
-      character: extensions && extensions.variables,
-      preset: snapshot && snapshot.variables,
-      global: chat.macroState && chat.macroState.global
-    })
-    compiled.messages = helperMacros.messages
-    compiled.trace.tavernHelperVariableMacroCount = helperMacros.replacements
-    const promptTemplates = await promptTemplateRuntime(chat.sessionId)
-    const transcript = (chat.messages || []).map(function (item) {
-      return { role: item.role === 'user' ? 'user' : 'assistant', content: str(item.sourceText || item.text) }
-    })
-    const templateContext = {
-      charName: str(card.name),
-      userName: str(chat.macroState && chat.macroState.userName) || '你',
-      runType: 'generate',
-      transcript,
-      worldBookEntries: worldInfo.entries,
-      scopes: {
-        global: await readPromptTemplateGlobalVariables(),
-        initial: chat.promptTemplateInitialVariables,
-        local: chat.variables,
-        message: lastTavernHelperVariables(chat.messages)
-      }
-    }
-    const initialized = await promptTemplates.initializeVariables(worldInfo.entries, templateContext)
-    const templated = await promptTemplates.renderMessages(compiled.messages, Object.assign({}, templateContext, { scopes: initialized.scopes }))
-    compiled.messages = templated.messages
-    compiled.promptTemplateState = {
-      scopes: templated.scopes,
-      persist: initialized.evaluated + templated.evaluated > 0
-    }
-    compiled.diagnostics.push(...initialized.diagnostics, ...templated.diagnostics)
-    compiled.trace.promptTemplateEvaluations = initialized.evaluated + templated.evaluated
-    compiled.trace.promptTemplateDiagnostics = initialized.diagnostics.length + templated.diagnostics.length
-    const sourceMessageCount = compiled.messages.length
-    compiled.messages = applySillyTavernStrictTools(compiled.messages, {
-      charName: str(card.name),
-      userName: str(chat.macroState && chat.macroState.userName)
-    })
-    if (chat.userProfileEnabled === true) {
-      const preferenceText = str(chat.userProfileContextSnapshot)
-      if (preferenceText !== '') {
-        compiled.messages.unshift({
-          role: 'system',
-          content: preferenceText,
-          source: { kind: 'dsh-user-profile', revision: Number(chat.userProfileRevision) || 0 }
-        })
-        compiled.trace.userProfileRevision = Number(chat.userProfileRevision) || 0
-      }
-    }
-    compiled.trace.postProcessing = 'strict_tools'
-    compiled.trace.sourceMessageCount = sourceMessageCount
-    compiled.trace.finalMessageCount = compiled.messages.length
-    return compiled
-  }
+  const compileCompatibilityTurn = createCompatibilityTurnCompiler({
+    promptTemplateRuntime,
+    readCardExtensions,
+    readChatCard,
+    readPromptTemplateGlobalVariables,
+    resolveChatRuntimePreset,
+    str,
+    worldBooks,
+  })
 
   // ---------- DSH 回合生命周期 ----------
   const requestCoordinates = new Map()
@@ -4369,7 +3999,8 @@ export async function apply(ctx) {
         }))
       },
       visibleTools: async function (sessionId) { return await turnOrchestrator.visibleTools(sessionId) },
-      cardSystemPrompt: function () { return prompt('card-system') },
+      cardSystemPrompt: function () { return runtimePrompt('card-system') },
+      cardReferencePrompt: function () { return runtimePrompt('card-reference') },
       workspaceContext: function (cwd, projection) { return resourceWorkspaceContext(cwd, projection, runtimePrompt('card-workspace')) },
       ensureSessionPrefix: async function (input) {
         return await ensureNativeSystemPrefix(input.payload.agent.session, input.chat)
@@ -4378,999 +4009,140 @@ export async function apply(ctx) {
     }
   })
 
-  ctx.on('agent/request', async function (payload, next) {
-    const sessionId = payload.agent && payload.agent.session ? payload.agent.session.id : ''
-    if (sessionId !== '') requestCoordinates.set(sessionId, { turn: payload.turn, step: payload.step })
-    return await next()
+  registerRequestHooks({
+    backgroundAgentRunner,
+    cardMemory,
+    chatForSession,
+    ctx,
+    foregroundStrategies,
+    persistClearedBodyEdits,
+    requestCoordinates,
+    requestIdForMessages,
+    sessionStore,
+    tavernRetryLimiter,
   })
 
-  ctx.on('agent/request-error', tavernRetryLimiter.handle, { prepend: true })
-
-  ctx.on('agent/pre-step', async function (payload, next) {
-    const sessionId = payload.agent && payload.agent.session ? payload.agent.session.id : ''
-    if (backgroundAgentRunner.owns(sessionId)) return next()
-    const decision = await next()
-    if (decision.kind === 'reject') return decision
-    const chat = await chatForSession(sessionId)
-    if (chat) await synchronizeTemplateHistory(payload.agent.session, chat, session => sessionStore.flush(session))
-    if (chat) await synchronizeBodyEdits(payload.agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
-    const prepared = await foregroundStrategies.prepareStep({
-      sessionId,
-      payload,
-      decision,
-      chat,
-      requestId: requestIdForMessages(payload.messages)
-    })
-    try { return await cardMemory.appendRecall({ chat, payload, decision: prepared }) }
-    catch (error) { console.warn('[Tavern card memory] recall unavailable:', error.message); return prepared }
+  registerModelStreamHooks({
+    agentRegistry,
+    backgroundAgentRunner,
+    chatForSession,
+    chatHeaderForSession,
+    ctx,
+    foregroundStrategies,
+    fullTemplateRuntime,
+    modelRequestLog,
+    requestCoordinates,
+    runtimePrompt,
+    sessionStateForSession,
+    sessionStore,
+    storyCompactionRequests,
+    str,
+    updateChat,
+    worldbookRecallLog,
   })
 
-  const importContextPreparation = createImportContextPreparation({
-    readChat: chatForSession, updateChat,
-    getSession: id => sessionStore.get(id) || agentRegistry.get(id)?.session,
-    flush: session => sessionStore.flush(session),
-    modelInfo: request => ctx.llm.resolveModelInfo(request.provider, request.model, request.signal),
-    estimateMessage: message => {
-      const meter = ctx.get('tokenMeter')
-      if (!meter?.estimateMessage) throw new Error('当前宿主缺少原生 token 计量接口，请更新 DSH 后重试')
-      const native = meter.estimateMessage(message)
-      // The host's fixed four-characters/token estimate underprices CJK text.
-      // Use a conservative Unicode floor for this one-time admission check.
-      const text = (message.content || []).map(block => block.text || JSON.stringify(block)).join('')
-      const nonAscii = [...text].filter(char => char.codePointAt(0) > 127).length
-      return Math.max(native, Math.ceil((text.length - nonAscii) / 4) + nonAscii * 2 + 8)
-    }
-  })
-  const fullTemplateRequests = new WeakMap()
-  installWorkspaceInstructionPresentation(ctx, async sessionId => {
-    if (backgroundAgentRunner.owns(sessionId)) return true
-    const chat = await sessionStateForSession(sessionId)
-    return Boolean(chat)
-  })
-  installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)))
-
-  ctx.on('llm/stream', function (options, next) {
-    const sessionId = str(options && options.sessionId)
-    const coordinates = requestCoordinates.get(sessionId)
-    if (coordinates !== undefined) {
-      requestCoordinates.set(sessionId, Object.assign({}, coordinates, {
-        source: { kind: 'model', provider: str(options.provider), model: str(options.model) }
-      }))
-    }
-    if (options !== null && typeof options === 'object' && options.purpose === 'compaction' && !storyCompactionRequests.has(options)) {
-      const fallback = next()
-      return (async function * () {
-        const chat = await chatForSession(sessionId)
-        if (!usesStoryCompaction(chat)) {
-          yield * fallback
-          return
-        }
-        if (needsImportContextPreparation(chat)) throw new Error('导入对话尚未完成首次上下文容量检查，暂不调用摘要模型')
-        const request = createStoryCompactionRequest(options, runtimePrompt('story-compaction'))
-        if (request === options) {
-          yield * fallback
-          return
-        }
-        storyCompactionRequests.add(request)
-        yield * ctx.llm.stream(request)
-      })()
-    }
-    const projectedRequest = (fullTemplateRequests.has(options) || importContextPreparation.isPrepared(options)) ? null : foregroundStrategies.projectRequest(options, coordinates)
-    if (projectedRequest !== null) return ctx.llm.stream(projectedRequest)
-    const stream = next()
-    const backgroundContext = backgroundAgentRunner.requestContext(sessionId)
-    const ownerSessionId = backgroundContext ? backgroundContext.parentSessionId : sessionId
-    return (async function * () {
-      const prepared = await importContextPreparation.prepare(options)
-      if (prepared !== options) { yield * ctx.llm.stream(prepared); return }
-      const chat = ownerSessionId === '' ? undefined : await chatHeaderForSession(ownerSessionId, [
-        'requestMode', 'compatibilityTraces', 'bypassPlanId', 'runtimePresetSnapshot', 'foregroundFrames'
-      ])
-      if (chat && ['story', 'script'].includes(chat.mode) && options.purpose === undefined && chat.requestMode !== 'sillytavern' && !fullTemplateRequests.has(options)) {
-        const projected = await fullTemplateRuntime.forSession(ownerSessionId).projectRequestProjection({ messages: options.messages, system: options.system, model: options.model })
-        const templated = { ...options, ...projected }
-        fullTemplateRequests.set(templated, options)
-        yield * ctx.llm.stream(templated)
-        return
-      }
-      let requestRecord = null
-      if (options.purpose === undefined && chat !== undefined && ['story', 'script', 'card'].includes(chat.mode)) {
-        const coordinates = requestCoordinates.get(sessionId) || {}
-        requestRecord = await modelRequestLog.record({ chat, context: backgroundContext, coordinates, options })
-        if (!backgroundContext && ['story', 'script'].includes(chat.mode)) {
-          try { await worldbookRecallLog.requested(chat, options, requestRecord.id) }
-          catch (error) { console.warn('dsh-tavern: 世界书请求日志关联失败', String(error?.message || error)) }
-        }
-      }
-      let responseText = ''
-      let finish = null
-      let failure = null
-      try {
-        for await (const chunk of stream) {
-          if (chunk && chunk.type === 'text-delta') responseText += str(chunk.text)
-          if (chunk && chunk.type === 'finish') finish = chunk.reason === undefined ? chunk : chunk.reason
-          yield chunk
-        }
-      } catch (error) {
-        const displayedError = chat ? presentModelError(error) : error
-        failure = str(displayedError && displayedError.message || displayedError)
-        throw displayedError
-      } finally {
-        const completed = finish && finish.kind !== 'error' && finish.kind !== 'aborted'
-        foregroundStrategies.completeRequest(fullTemplateRequests.get(options) || options, completed)
-        if (chat && requestRecord) {
-          try { await modelRequestLog.complete({ chatId: chat.id, id: requestRecord.id, text: responseText, finish, error: failure }) }
-          catch (error) { console.error('dsh-tavern: 模型结果日志写入失败', str(error && error.message || error)) }
-        }
-      }
-    })()
-  }, { global: true })
-
-  ctx.on('agent/turn-stopping', async function (payload) {
-    const session = payload.agent && payload.agent.session
-    if (session === undefined) return
-    const sessionId = session.id
-    const templateOwner = backgroundAgentRunner.requestContext(sessionId)?.parentSessionId || sessionId
-    fullTemplateRuntime.cancel(templateOwner)
-    clearRuntimePresetRequestState(payload.agent)
-    if (backgroundAgentRunner.owns(sessionId)) return
-    const userMessage = userMessageForTurn(session, payload.turn)
-    const userText = contentText(userMessage)
-    const userContent = userMessage?.content || []
-    if (userText === '' && !inputAttachments(userContent).length) return
-    const requestId = requestIdForTurn(session, payload.turn)
-    const assistant = assistantResultForTurn(session, payload.turn)
-    if (assistant === null || assistant.text === '') {
-      const reasoningOnly = assistant !== null && assistant.reasoningOnly === true
-      const message = reasoningOnly
-        ? '模型本轮只返回了思考过程，没有返回正文；请重新生成本轮正文。'
-        : '模型本轮没有返回正文；请重新生成本轮正文。'
-      await turnOrchestrator.recordFailure({
-        sessionId,
-        turn: payload.turn,
-        requestId,
-        code: reasoningOnly ? 'reasoning-only' : 'empty-response',
-        message
-      })
-      throw new Error(message)
-    }
-    // A truncated body must not become a Round: committing it would freeze a half
-    // sentence into the story and consume the failed tail that replays the input.
-    await turnOrchestrator.assertCompleteReply({
-      sessionId,
-      turn: payload.turn,
-      requestId,
-      text: assistant.text,
-      finishKind: streamFinishKind(assistant.event && assistant.event.data && assistant.event.data.stream)
-    })
-    const saved = await foregroundHandoff.finalize({
-      sessionId,
-      turn: payload.turn,
-      requestId,
-      userText,
-      userContent,
-      assistantText: assistant === null ? '' : assistant.text
-    })
-    if (saved.reply) replaceAssistantReply(session, assistant, saved.reply.sessionText)
-  })
-
-  ctx.on('agent/error', function (payload) {
-    clearRuntimePresetRequestState(payload.agent)
-  })
-
-  ctx.on('session/event', function (session, event) {
-    if (!event || event.type !== 'turn/end') return
-    foregroundStrategies.endTurn(session.id)
-    if (backgroundAgentRunner.owns(session.id)) return
-    const reason = event.data && event.data.reason ? event.data.reason.kind : ''
-    foregroundHandoff.end({ sessionId: session.id, turn: event.data && event.data.turn, reason })
-  })
-
-  ctx.on('system-prompt/assemble', async function (_assembly, context, next) {
-    const assembly = await next()
-    const agent = context && context.agent
-    if (agent === undefined || agent.session === undefined) return assembly
-    if (backgroundAgentRunner.owns(agent.session.id)) return assembly
-    const chat = await chatForSession(agent.session.id)
-    if (chat) await synchronizeTemplateHistory(agent.session, chat, session => sessionStore.flush(session))
-    if (chat) await synchronizeBodyEdits(agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
-    if (chat && chat.requestMode !== 'sillytavern' && ['story', 'script'].includes(await turnOrchestrator.modeFor(agent.session.id))) {
-      await ensureNativeSystemPrefix(agent.session, chat)
-    }
-    let workspaceProjection = null
-    try { workspaceProjection = await publishResourceWorkspace(agent.session.id, chat) }
-    catch { console.error('dsh-tavern: 资源工作区投影刷新失败，继续使用现有资源文件') }
-    const assembled = await foregroundStrategies.assembleSystemPrompt(assembly, {
-      sessionId: agent.session.id,
-      chat,
-      cwd: agent.session.header && agent.session.header.cwd,
-      workspaceProjection,
-      fixedSystemSections: chat && ['story', 'script'].includes(chat.mode || 'story')
-        ? withCurrentWorldbook(sessionStablePrefixSections(agent.session), (await nativeWorldBookTemplateContext(chat, await readChatCard(chat))).prefixContext ?? '')
-        : sessionStablePrefixSections(agent.session)
-    })
-    return prependSystemInstruction(assembled, chat ? runtimePrompt('system-append') : '')
+  registerTurnLifecycleHooks({
+    backgroundAgentRunner,
+    chatForSession,
+    clearRuntimePresetRequestState,
+    contentText,
+    ctx,
+    ensureNativeSystemPrefix,
+    foregroundHandoff,
+    foregroundStrategies,
+    fullTemplateRuntime,
+    nativeWorldBookTemplateContext,
+    persistClearedBodyEdits,
+    publishResourceWorkspace,
+    readChatCard,
+    replaceAssistantReply,
+    requestIdForTurn,
+    runtimePrompt,
+    sessionStore,
+    turnOrchestrator,
+    userMessageForTurn,
   })
 
   // ---------- 模型可选工具 ----------
   const tools = ctx.get('tools')
   if (tools !== undefined) {
-    tools.register(defineTool({
-      name: 'tavern_test_response',
-      description: '用正式游玩 API 为已保存人物卡创建独立测试存档，按保存的案例逐轮调用模型并检查拒绝信号。configure 保存案例，start 启动，status 查询（最多等待 10 秒），cancel 停止。最长 5 分钟；真实调用产生费用。不支持浏览器脚本卡。未发现拒绝不等于内容合规。',
-      parameters: {
-        action: { type: 'string', enum: ['configure', 'start', 'status', 'cancel'], required: true },
-        name: { type: 'string', description: 'configure 必填，案例名称。' },
-        caseId: { type: 'string', description: 'start 必填，configure 返回的案例 ID。' },
-        sourceCard: { type: 'string', description: 'configure 必填，库中人物卡文件名，不含 cards/。' },
-        provider: { type: 'string', description: 'configure 必填，用户指定的 provider。' },
-        model: { type: 'string', description: 'configure 必填，用户指定的模型。' },
-        reasoningEffort: { type: 'string' },
-        steps: { type: 'array', description: 'configure 必填，1 至 10 轮。首轮 input；后续可 input 或 inputFrom 二选一。candidates 表示本轮后生成候选项。', items: { type: 'object', additionalProperties: false, properties: {
-          input: { type: 'string' },
-          inputFrom: { type: 'object', additionalProperties: false, properties: { candidate: { type: 'integer', required: true }, type: { type: 'string', enum: ['action', 'scene'] } } },
-          candidates: { type: 'boolean' }
-        } } },
-        sessionId: { type: 'string', description: 'status/cancel 必填，start 返回的测试会话 ID。' }
-      },
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: { report: { type: 'string', required: true } } },
-        render: function (_args, value) { return [{ type: 'text', text: value.report }] }
-      },
-      isConcurrencySafe: function () { return false },
-      async execute(args, exec) {
-        return { report: JSON.stringify(await cardResponseTest.execute(exec?.agent?.session?.id || '', args), null, 2) }
-      }
-    }))
-    tools.register(defineTool({
-      ...WORLD_BOOK_SEARCH_TOOL,
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: { report: { type: 'string', required: true } } },
-        render: (_args, value) => [{ type: 'text', text: value.report }]
-      },
-      isConcurrencySafe: () => false,
-      async execute(args, exec) {
-        return { report: JSON.stringify(await searchWorldbook(exec?.agent?.session?.id || '', args)) }
-      }
-    }))
-    tools.register(defineTool({
-      name: HISTORY_RECALL_TOOL.name,
-      description: HISTORY_RECALL_TOOL.description,
-      parameters: dshParameterFields(HISTORY_RECALL_TOOL.parameters),
-      output: {
-        schema: HISTORY_RECALL_OUTPUT_SCHEMA,
-        render: function (_args, value) { return [{ type: 'text', text: renderHistoryRecall(value) }] }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const session = exec?.agent?.session
-        const turn = activeTurnOf(exec)
-        let scope
-        if (session && turn > 0) {
-          scope = foregroundRecallScopes.get(session)
-          if (!scope || scope.turn !== turn) {
-            scope = { turn }
-            foregroundRecallScopes.set(session, scope)
-          }
-        }
-        return await recallHistoryForSession(sessionId, args, scope, 'foreground')
-      }
-    }))
-    tools.register(defineTool({
-      name: 'tavern_user_profile_read',
-      description: '读取当前用户画像及待确认的修改。画像始终作为同一份资料维护，revision 仅供工具校验，不向用户展示编号。建立、复查或修改用户画像时先调用；草案不等于已确认偏好。',
-      parameters: {},
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: {
-          profileName: { type: 'string', required: true },
-          hasDraft: { type: 'boolean', required: true },
-          hasConfirmed: { type: 'boolean', required: true },
-          draftRevision: { type: 'integer', required: true },
-          confirmedRevision: { type: 'integer', required: true },
-          draftJson: { type: 'string', required: true },
-          confirmedJson: { type: 'string', required: true }
-        } },
-        render: function (_args, value) {
-          if (!value.hasDraft && !value.hasConfirmed) return [{ type: 'text', text: '画像“' + value.profileName + '”尚未建立。' }]
-          return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(_args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-        const value = await userPreferenceProfile.read(chat.userProfileId || 'default')
-        return {
-          profileName: value.name,
-          hasDraft: value.hasDraft,
-          hasConfirmed: value.hasConfirmed,
-          draftRevision: value.hasDraft ? Number(value.draft.revision) || 0 : 0,
-          confirmedRevision: value.hasConfirmed ? Number(value.confirmed.profileRevision) || 0 : 0,
-          draftJson: value.hasDraft ? JSON.stringify(value.draft, null, 2) : '',
-          confirmedJson: value.hasConfirmed ? JSON.stringify(value.confirmed, null, 2) : ''
-        }
-      }
-    }))
+    registerGameplayTools({
+      activeTurnOf,
+      cardResponseTest,
+      foregroundRecallScopes,
+      recallHistoryForSession,
+      searchWorldbook,
+      tools,
+    })
+    registerUserProfileTools({
+      chatForSession,
+      tools,
+      userPreferenceProfile,
+    })
 
-    tools.register(defineTool({
-      name: 'tavern_user_profile_save',
-      description: '将整理好的长期偏好直接保存到当前用户画像，更新同一份资料。用户要求建立或修改画像即授权保存，无需额外确认；保存后简短报告，用户可随时要求修改。不会自动启用画像。',
-      parameters: {
-        content: { type: 'string', required: true, description: '完整 Markdown 用户画像正文，最多 3000 字；保存内容与启用内容相同' }
-      },
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: {
-          saved: { type: 'boolean', required: true },
-          hasConfirmed: { type: 'boolean', required: true }
-        } },
-        render: function (_args, value) {
-          return [{ type: 'text', text: '用户画像已保存。用户提出修改时继续更新当前画像。' }]
-        }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-        const value = await userPreferenceProfile.save({ content: args.content, profileId: chat.userProfileId || 'default' })
-        return { saved: true, hasConfirmed: value.hasConfirmed }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_user_profile_confirm',
-      description: '将用户已核对并明确同意的当前内容保存到同一份画像。用户已确认时直接调用，不重复询问。不得把沉默、继续回答、模糊认可或 Agent 自己的判断当作确认。',
-      parameters: {
-        draftRevision: { type: 'integer', required: true, description: '工具返回的内部校验值，不向用户展示' },
-        confirmation: { type: 'string', required: true, enum: ['确认保存用户画像'], description: '只有用户明确确认保存后才能填写此固定文本' }
-      },
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: {
-          confirmedRevision: { type: 'integer', required: true }
-        } },
-        render: function (_args, value) {
-          return [{ type: 'text', text: '用户画像已保存。可在用户画像面板为当前游戏或新游戏启用。' }]
-        }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('用户画像只能在卡片工作台中管理')
-        const value = await userPreferenceProfile.confirm({ ...args, profileId: chat.userProfileId || 'default' })
-        return { confirmedRevision: Number(value.confirmed.profileRevision) || 0 }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_read_skill_reference',
-      description: '按需读取当前 Agent 可用 Skill 内的 references/*.md。先用原生 skill 工具读取入口，再按入口指引读取相关参考文件。',
-      parameters: { name: { type: 'string', required: true }, path: { type: 'string', required: true, description: 'Skill 内的相对路径，例如 references/dialogue.md' } },
-      output: { schema: { type: 'object', additionalProperties: false, properties: { content: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.content }] },
-      isConcurrencySafe: () => true,
-      async execute(args, exec) {
-        const role = await skillRoleFor(exec.agent)
-        const skill = await tavernSkills.read(args.name)
-        if (!role || !skill?.modelInvocable || !skill.agents.includes(role) || !await skillEnabledFor(skill, exec.agent)) throw new Error('此 Skill 未分配给当前 Agent')
-        return { content: await tavernSkills.readReference(args.name, args.path) }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_save_skill',
-      description: '仅当用户明确要求创建或修改 Tavern Skill 时，把结构化内容安全保存到用户 Skill 目录。不能覆盖内置 Skill；修改同名用户 Skill 必须明确 overwrite=true。',
-      parameters: {
-        name: { type: 'string', required: true, description: 'kebab-case Skill 名称' },
-        description: { type: 'string', required: true, description: '用于 Skill 自动发现的一句话简介，说明做什么以及何时使用' },
-        body: { type: 'string', required: true, description: '不含 YAML frontmatter 的完整 Markdown 指令正文' },
-        purpose: { type: 'string', enum: ['card', 'writing', 'background', 'image'], description: '用途：卡片制作、前台写作、后台任务、文生图；默认卡片制作' },
-        agents: { type: 'array', items: { type: 'string', enum: ['card', 'foreground', 'background', 'image'] }, description: '分配给哪些 Agent；省略时按用途默认分配' },
-        references: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { path: { type: 'string', required: true }, content: { type: 'string', required: true } } }, description: 'Skill 自带的参考资料副本，路径为 references/名称.md；省略保留旧文件，传数组替换整套文件' },
-        modelInvocable: { type: 'boolean', description: '是否允许 Agent 自动发现，默认 true' },
-        userInvocable: { type: 'boolean', description: '是否允许用户显式调用，默认 true' },
-        overwrite: { type: 'boolean', description: '同名用户 Skill 已存在且用户明确要求修改时设为 true' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            name: { type: 'string', required: true },
-            chars: { type: 'integer', required: true },
-            overwritten: { type: 'boolean', required: true },
-            saved: { type: 'boolean', required: true }
-          }
-        },
-        render: function (_args, value) {
-          return [{ type: 'text', text: 'Tavern Skill 已' + (value.overwritten ? '更新' : '创建') + '：' + value.name + ' · ' + value.chars + ' 字；已进入 Skill 目录，不会自动执行。' }]
-        }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('Tavern Skill 只能在卡片工作台中创建或修改')
-        const saved = await tavernSkills.write(args)
-        return { name: saved.name, chars: saved.chars, overwritten: saved.overwritten, saved: true }
-      }
-    }))
+    registerSkillTools({
+      chatForSession,
+      skillEnabledFor,
+      skillRoleFor,
+      tavernSkills,
+      tools,
+    })
 
     registerVariableReadTool({tools,defineTool,chatForSession})
     registerMvuConversionTools({ tools, defineTool, conversion: createMvuConversion({ resources: fileResources }), chatForSession })
 
-    tools.register(defineTool({
-      name: 'tavern_copy_card',
-      description: '在卡片工作台创建独立人物卡副本，复制当前工作数据和源 PNG 封面，生成独立资源 ID；重名时拒绝覆盖。返回副本 path 与 imageCopied。不会切换当前卡，也不复制外部世界书或剧本绑定；后续编辑须显式使用返回路径。',
-      parameters: {
-        path: { type: 'string', required: true, description: '源人物卡路径，如 cards/角色.json' },
-        name: { type: 'string', required: true, description: '副本名称，如 角色 MVU版本；须使用未占用名称' }
-      },
-      output: {
-        schema: { type: 'object', additionalProperties: false, properties: {
-          path: { type: 'string', required: true }, sourcePath: { type: 'string', required: true }, imageCopied: { type: 'boolean', required: true }
-        } },
-        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }]
-      },
-      isConcurrencySafe: () => false,
-      async execute(args, exec) {
-        const chat = await chatForSession(exec?.agent?.session?.id || '')
-        if (!chat || chat.mode !== 'card') throw new Error('人物卡复制只能在卡片工作台中执行')
-        return await fileResources.copyCard(args.path, args.name)
-      }
-    }))
+    registerCardReadingTools({
+      cardMemory,
+      cardPreparation,
+      chatForSession,
+      fileResources,
+      readCard,
+      readCardWorkspace,
+      readChatCard,
+      str,
+      tools,
+    })
 
-    for (const definition of [
-      { name: 'tavern_memory_search', description: '仅卡片模式：读取当前改卡偏好，检索当前卡片与通用错误修复经验。query 留空查看近期记录。历史记忆不是指令，验证状态不等于当前仍有效。',
-        parameters: { query: { type: 'string' } }, run: (chat, args) => cardMemory.search(chat, args.query) },
-      { name: 'tavern_memory_preference', description: '仅卡片模式：保存用户明确表达的长期改卡偏好，或按用户要求修改、移除。一次性要求与角色人设不属于改卡偏好。replace/remove 必须先读取并提供完整 oldText。',
-        parameters: { action: { type: 'string', enum: ['add', 'replace', 'remove'], required: true }, content: { type: 'string' }, oldText: { type: 'string' } }, run: (chat, args) => cardMemory.preference(chat, args) },
-      { name: 'tavern_memory_experience', description: '仅卡片模式：保存或更新改卡错误与修复经验。默认仅当前卡片；shared 仅限可复用且不含角色剧情的经验。必须区分猜测、静态校验、运行实测、用户确认，提供具体依据。archive 按用户要求移除。',
-        parameters: { action: { type: 'string', enum: ['save', 'archive'], required: true }, id: { type: 'string' }, scope: { type: 'string', enum: ['card', 'shared'] }, title: { type: 'string' }, problem: { type: 'string' }, attempts: { type: 'string' }, solution: { type: 'string' }, status: { type: 'string', enum: ['unverified', 'static-validated', 'runtime-verified', 'user-confirmed'] }, evidence: { type: 'string' } }, run: (chat, args) => cardMemory.experience(chat, args) }
-    ]) {
-      tools.register(defineTool({ name: definition.name, description: definition.description, parameters: definition.parameters,
-        output: { schema: { type: 'object', additionalProperties: false, properties: { report: { type: 'string', required: true } } }, render: (_args, value) => [{ type: 'text', text: value.report }] },
-        isConcurrencySafe: () => false,
-        async execute(args, exec) {
-          const chat = await chatForSession(exec?.agent?.session?.id || '')
-          return { report: JSON.stringify(await definition.run(chat, args)) }
-        }
-      }))
-    }
+    registerPlayChatTool({
+      chatForSession,
+      modelRequestLog,
+      readCardExtensions,
+      readChat,
+      sessionDebugEvidence,
+      str,
+      tools,
+      worldbookRecallLog,
+    })
 
-    tools.register(defineTool({
-      name: 'tavern_validate_card',
-      description: '只读校验人物卡 JSON、字段类型和 MVU 扩展结构。写入后必须调用，始终读取磁盘文件。不会执行脚本、自动修复或覆盖文件。',
-      parameters: { path: { type: 'string', description: '可选的 cards/... 相对路径；省略时检查当前已保存人物卡' } },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            valid: { type: 'boolean', required: true },
-            errors: { type: 'array', required: true, items: { type: 'object', additionalProperties: false, properties: { path: { type: 'string', required: true }, message: { type: 'string', required: true } } } },
-            warnings: { type: 'array', required: true, items: { type: 'object', additionalProperties: false, properties: { path: { type: 'string', required: true }, message: { type: 'string', required: true } } } }
-          }
-        },
-        render: function (_args, value) { return [{ type: 'text', text: JSON.stringify(value, null, 2) }] }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const chat = await chatForSession(exec.agent.session.id)
-        if (!chat || chat.mode !== 'card') throw new Error('人物卡校验只能在卡片工作台使用')
-        const requested = str(args.path).trim()
-        const cardPath = requested || str(chat.cardPath)
-        const normalized = cardPath ? normalizeResourcePath(cardPath, 'card') : ''
-        const result = await validateCardFile({ path: normalized, readText: fileResources.readText })
-        try { await cardMemory.recordValidation(chat, normalized, result) }
-        catch (error) { console.warn('[Tavern card memory] validation record unavailable:', error.message) }
-        return result
-      }
-    }))
+    registerScriptTool({
+      chatForSession,
+      readScript,
+      scriptContinuity,
+      str,
+      tools,
+    })
 
-    tools.register(defineTool({
-      name: 'tavern_read_card',
-      description: '在卡片工作台中按字段、分段读取当前人物卡或尚未创建的新卡设定。默认上下文只有字段目录，先按任务选择字段，不要一次读取全部字段。',
-      parameters: {
-        path: { type: 'string', description: '可选的人物卡相对路径；省略时读取当前人物卡或尚未创建的新卡设定' },
-        field: { type: 'string', required: true, enum: READABLE_CARD_FIELDS, description: '要读取的人物卡字段' },
-        offset: { type: 'integer', description: '可选的 1 起始字符位置，默认 1' },
-        limit: { type: 'integer', description: '本次最多读取字符数，默认 6000，最大 12000' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            field: { type: 'string', required: true },
-            text: { type: 'string', required: true },
-            totalChars: { type: 'integer', required: true },
-            from: { type: 'integer', required: true },
-            to: { type: 'integer', required: true },
-            done: { type: 'boolean', required: true }
-          }
-        },
-        render: function (_args, value) {
-          if (value.totalChars === 0) return [{ type: 'text', text: '人物卡字段 ' + value.field + ' 为空。' }]
-          return [{ type: 'text', text: '人物卡字段 ' + value.field + ' · 第 ' + value.from + '~' + value.to + ' 字 / 共 ' + value.totalChars + ' 字\n\n' + value.text }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined) throw new Error('尚未选择人物卡。')
-        if ((chat.mode || 'story') !== 'card') throw new Error('人物卡字段只能在卡片工作台中读取')
-        const resourcePath = str(args.path).trim()
-        const card = resourcePath !== ''
-          ? await readCard(resourcePath)
-          : (str(chat.cardPath) === '' ? ((chat.workspace && chat.workspace.draft) || {}) : await readChatCard(chat))
-        if (card === undefined) throw new Error('人物卡资源不存在: ' + resourcePath)
-        return readCardField(card, args)
-      }
-    }))
+    registerWorldbookTools({
+      chatForSession,
+      readChatCard,
+      str,
+      tools,
+      worldBooks,
+    })
 
-    tools.register(defineTool({
-      name: 'tavern_read_card_raw',
-      description: '在卡片工作台中按 JSON Pointer 分段读取完整工作 raw。只在标准字段工具无法覆盖正则、脚本、MVU 或未知扩展时使用；pointer 为空可查看根结构。',
-      parameters: {
-        path: { type: 'string', description: '可选的人物卡相对路径；省略时读取当前人物卡' },
-        pointer: { type: 'string', description: 'JSON Pointer，例如 /data/extensions/regex_scripts；V1 卡可使用 /extensions。省略时读取根节点' },
-        offset: { type: 'integer', description: '可选的 1 起始字符位置，默认 1' },
-        limit: { type: 'integer', description: '本次最多读取字符数，默认 6000，最大 12000' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            pointer: { type: 'string', required: true },
-            text: { type: 'string', required: true },
-            totalChars: { type: 'integer', required: true },
-            from: { type: 'integer', required: true },
-            to: { type: 'integer', required: true },
-            done: { type: 'boolean', required: true }
-          }
-        },
-        render: function (_args, value) {
-          return [{ type: 'text', text: '人物卡 raw ' + (value.pointer || '/') + ' · 第 ' + value.from + '~' + value.to + ' 字 / 共 ' + value.totalChars + ' 字\n\n' + value.text }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('人物卡 raw 只能在卡片工作台中读取')
-        const resourcePath = str(args.path).trim() || str(chat.cardPath)
-        if (resourcePath === '') throw new Error('空白工作台还没有正式人物卡 raw')
-        const workspace = await readCardWorkspace(resourcePath)
-        if (workspace === undefined) throw new Error('人物卡资源不存在: ' + resourcePath)
-        return cardPreparation.present({ card: workspace, as: 'raw-section', pointer: args.pointer, offset: args.offset, limit: args.limit })
-      }
-    }))
+    registerPresetTools({
+      chatForSession,
+      presetEditor,
+      tools,
+    })
 
-    tools.register(defineTool({
-      name: 'tavern_read_play_chat',
-      description: '在卡片工作台中渐进读取已挂载的游玩诊断。默认从最新一轮的小型 overview 开始；需要时可列出轮次、读取任意轮次或整场对话，并按层、分页获取文本、状态、日志、真实模型请求、正则诊断和 iframe 证据。',
-      parameters: {
-        ref: { type: 'string', description: '已挂载游玩记录引用，例如 play-chat:chat-xxx；只有一个引用时可省略' },
-        turn: { type: 'integer', description: '要读取的游玩轮次；省略时使用最新一轮' },
-        layer: { type: 'string', enum: ['overview', 'turns', 'conversation', 'input', 'source', 'session', 'display', 'saved-display', 'diagnostics', 'tavern', 'foreground', 'background', 'request', 'worldbook', 'iframe'], description: '读取层：小型概览、轮次目录、整场对话、本轮玩家输入、模型原文、Session 文本、当前实时展示、保存时展示快照、当前正则诊断、Tavern 状态、前台 Agent、后台 Agent、真实模型请求或 iframe 运行证据；默认 overview' },
-        offset: { type: 'integer', description: '可选的 1 起始字符位置，默认 1' },
-        limit: { type: 'integer', description: '本次最多读取字符数，默认 6000，最大 12000' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            ref: { type: 'string', required: true },
-            chatId: { type: 'string', required: true },
-            turn: { type: 'integer', required: true },
-            layer: { type: 'string', required: true },
-            text: { type: 'string', required: true },
-            totalChars: { type: 'integer', required: true },
-            from: { type: 'integer', required: true },
-            to: { type: 'integer', required: true },
-            done: { type: 'boolean', required: true },
-            cardSnapshotVersion: { type: 'integer', required: true },
-            cardSnapshotDigest: { type: 'string', required: true }
-          }
-        },
-        render: function (_args, value) {
-          return [{ type: 'text', text: '游玩记录第 ' + value.turn + ' 轮 · ' + value.layer + ' · 第 ' + value.from + '~' + value.to + ' 字 / 共 ' + value.totalChars + ' 字 · 人物卡快照 v' + value.cardSnapshotVersion + ' (' + (value.cardSnapshotDigest || '无摘要') + ')\n\n' + value.text }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const editorChat = await chatForSession(sessionId)
-        if (editorChat === undefined || (editorChat.mode || 'story') !== 'card') throw new Error('游玩记录只能在卡片工作台中读取')
-        const references = Array.isArray(editorChat.workspace && editorChat.workspace.mountedResources)
-          ? editorChat.workspace.mountedResources.filter(function (item) { return item && item.kind === 'play-chat' })
-          : []
-        const requestedRef = str(args.ref).trim()
-        const reference = requestedRef === ''
-          ? (references.length === 1 ? references[0] : null)
-          : references.find(function (item) { return item.path === requestedRef })
-        if (reference === null || reference === undefined) throw new Error(references.length > 1 ? '请指定要读取的游玩记录 ref' : '当前卡片工作台没有挂载游玩记录')
-        const sourceChat = await readChat(reference.chatId)
-        if (sourceChat === undefined) throw new Error('游玩记录已不存在')
-        let projector = null
-        if (str(args.layer) === 'diagnostics' || str(args.layer) === 'display') {
-          const extensions = await readCardExtensions(editorChat.cardPath)
-          projector = function (message) {
-            return projectRuntimeReply(str(message.sourceText) || str(message.text), {
-              charName: sourceChat.cardName,
-              macroState: sourceChat.macroState,
-              projectionText: Object.prototype.hasOwnProperty.call(message, 'projectionText') ? str(message.projectionText) : (str(message.sourceText) || str(message.text)),
-              regexScripts: Array.isArray(extensions && extensions.regexScripts) ? extensions.regexScripts : [],
-              placement: 2,
-              isEdit: false,
-              depth: 0
-            })
-          }
-        }
-        const foregroundId = str(sourceChat.sessionId)
-        const backgroundId = str(sourceChat.timeline && sourceChat.timeline.participants && sourceChat.timeline.participants.background && sourceChat.timeline.participants.background.sessionId) || str(sourceChat.candidateAgent && sourceChat.candidateAgent.sessionId)
-        return readPlayChatDebugTurn(editorChat, sourceChat, reference, args, projector, {
-          foreground: sessionDebugEvidence(foregroundId),
-          background: sessionDebugEvidence(backgroundId),
-          worldbook: args.layer === 'worldbook' ? await worldbookRecallLog.read(sourceChat, args.turn || reference.turn) : undefined,
-          requests: await modelRequestLog.evidence(sourceChat.id, args.turn || reference.turn)
-        })
-      }
-    }))
-
-    const scriptOutput = {
-      type: 'object', additionalProperties: false,
-      properties: {
-        found: { type: 'boolean', required: true },
-        message: { type: 'string', required: true },
-        title: { type: 'string', required: true },
-        totalChunks: { type: 'integer', required: true },
-        from: { type: 'integer', required: true },
-        to: { type: 'integer', required: true },
-        cursor: { type: 'integer', required: true },
-        chunks: {
-          type: 'array', required: true,
-          items: {
-            type: 'object', additionalProperties: false,
-            properties: {
-              id: { type: 'string', required: true },
-              number: { type: 'integer', required: true },
-              text: { type: 'string', required: true }
-            }
-          }
-        }
-      }
-    }
-    tools.register(defineTool({
-      name: 'tavern_read_script',
-      description: '按需读取已绑定剧本。剧本游玩中优先读取当前游标附近；卡片设定中可检索整本剧本。',
-      parameters: {
-        path: { type: 'string', description: '卡片工作台中可指定剧本相对路径；游玩模式省略并读取当前人物卡绑定剧本' },
-        query: { type: 'string', description: '可选关键词；剧本游玩只检索当前游标前后 10 块' },
-        offset: { type: 'integer', description: '可选的 1 起始块号' },
-        limit: { type: 'integer', description: '连续读取块数；游玩最多 21，卡片设定最多 6' }
-      },
-      output: {
-        schema: scriptOutput,
-        render: function (_args, value) {
-          if (!value.found) return [{ type: 'text', text: value.message }]
-          const body = value.chunks.map(function (chunk) { return '[' + chunk.id + ' · 第 ' + chunk.number + ' 块]\n' + chunk.text }).join('\n\n')
-          return [{ type: 'text', text: '剧本《' + value.title + '》第 ' + value.from + '~' + value.to + ' 块 / 共 ' + value.totalChunks + ' 块\n\n' + body }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined) return { found: false, message: '尚未选择人物卡。', title: '', totalChunks: 0, from: 0, to: 0, cursor: 0, chunks: [] }
-        const mode = chat.mode || 'story'
-        if (mode !== 'script' && mode !== 'card') throw new Error('当前模式不能读取剧本')
-        const requestedPath = str(args.path).trim()
-        const resourcePath = mode === 'card' && requestedPath !== '' ? requestedPath : str(chat.cardPath)
-        if (resourcePath === '') return { found: false, message: '当前工作台尚未指定人物卡或剧本。', title: '', totalChunks: 0, from: 0, to: 0, cursor: 0, chunks: [] }
-        const script = await readScript(resourcePath)
-        if (script === undefined || !Array.isArray(script.chunks) || script.chunks.length === 0) return { found: false, message: '当前人物卡没有绑定剧本。', title: '', totalChunks: 0, from: 0, to: 0, cursor: 0, chunks: [] }
-        const windowResult = scriptContinuity.inspect({
-          script,
-          state: chat.scriptState,
-          request: { kind: mode === 'script' ? 'play' : 'read', query: args.query, offset: args.offset, limit: args.limit }
-        })
-        if (windowResult.notFound === true || windowResult.chunks.length === 0) {
-          return {
-            found: false,
-            message: windowResult.notFound === true ? '没有找到包含该关键词的剧本分块。' : '剧本分块为空。',
-            title: str(windowResult.title), totalChunks: Number(windowResult.total) || 0,
-            from: 0, to: 0, cursor: Number(windowResult.cursor) || 0, chunks: []
-          }
-        }
-            return {
-              found: true, message: '', title: str(windowResult.title), totalChunks: Number(windowResult.total) || 0,
-              from: Number(windowResult.from) || 0, to: Number(windowResult.to) || 0, cursor: Number(windowResult.cursor) || 0,
-              chunks: windowResult.chunks.map(function (chunk) {
-                const project = mode === 'card' ? preserveRuntimeSource : projectAgentContent
-                const projected = project(chunk.text, { charName: str(chat.cardName), macroState: chat.macroState })
-                return { id: str(chunk.id), number: Number(chunk.order) + 1, text: projected.agentText }
-              })
-            }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_read_worldbook',
-      description: '在卡片设定对话中按编号、关键词或分页读取世界书正文。省略 path 时读取当前人物卡绑定的世界书。',
-      parameters: {
-        path: { type: 'string', description: '世界书相对路径；独立世界书为 worldbooks/...，人物卡内置世界书为 cards/...' },
-        ref: { type: 'string', description: '目录中的条目编号，例如 entry:0' },
-        query: { type: 'string', description: '可选关键词' },
-        offset: { type: 'integer', description: '可选的 1 起始条目序号' },
-        limit: { type: 'integer', description: '读取 1~10 条，默认 3' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            found: { type: 'boolean', required: true },
-            message: { type: 'string', required: true },
-            name: { type: 'string', required: true },
-            total: { type: 'integer', required: true },
-            entries: {
-              type: 'array', required: true,
-              items: {
-                type: 'object', additionalProperties: false,
-                properties: { ref: { type: 'string', required: true }, entry: { type: 'json', required: true } }
-              }
-            }
-          }
-        },
-        render: function (_args, value) {
-          if (!value.found) return [{ type: 'text', text: value.message }]
-          const body = value.entries.map(function (item) { return '[' + item.ref + ']\n' + JSON.stringify(item.entry, null, 2) }).join('\n\n')
-          return [{ type: 'text', text: '世界书《' + (value.name || '未命名') + '》· 共 ' + value.total + ' 条\n\n' + body }]
-        }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined) return { found: false, message: '尚未选择人物卡。', name: '', total: 0, entries: [] }
-        if ((chat.mode || 'story') !== 'card') throw new Error('世界书只能在卡片工作台中读取')
-        const requestedPath = str(args.path).trim()
-        let record
-        if (requestedPath !== '') {
-          const normalized = normalizeResourcePath(requestedPath)
-          const kind = resourceKind(normalized)
-          if (kind !== 'worldbook' && kind !== 'card') throw new Error('世界书引用路径类型不正确')
-          record = await worldBooks.get(kind === 'card' ? { kind: 'card', cardPath: normalized } : { kind: 'standalone', path: normalized })
-        } else {
-          if (str(chat.cardPath) === '') return { found: false, message: '当前工作台尚未引用世界书。', name: '', total: 0, entries: [] }
-          record = await worldBooks.bound(chat.cardPath, await readChatCard(chat), chat)
-          if (record === null) return { found: false, message: '当前人物卡没有世界书。', name: '', total: 0, entries: [] }
-        }
-        const allEntries = Array.isArray(record.view.entries) ? record.view.entries : []
-        const query = str(args.query).trim().toLowerCase()
-        const ref = str(args.ref).trim()
-        const filtered = allEntries.filter(function (entry) {
-          if (ref !== '') return str(entry.ref) === ref
-          if (query === '') return true
-          return JSON.stringify(entry).toLowerCase().includes(query)
-        })
-        const offset = Math.max(1, Number(args.offset) || 1)
-        const limit = Math.min(10, Math.max(1, Number(args.limit) || 3))
-        const entries = filtered.slice(offset - 1, offset - 1 + limit).map(function (entry) { return { ref: str(entry.ref), entry } })
-        if (entries.length === 0) return { found: false, message: '没有找到符合条件的世界书条目。', name: str(record.view.displayName), total: allEntries.length, entries: [] }
-        return { found: true, message: '', name: str(record.view.displayName), total: allEntries.length, entries }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_update_worldbook',
-      description: '仅在用户明确确认后，对世界书提交条目级最小修改。支持独立世界书和人物卡内置世界书；省略 path 时修改当前人物卡绑定的世界书。不要重写整本世界书。',
-      parameters: {
-        path: { type: 'string', description: '可选的世界书路径；省略时使用当前人物卡，或填写 worldbooks/...、cards/...' },
-        name: { type: 'string', description: '可选的新世界书名称' },
-        description: { type: 'string', description: '可选的新世界书说明' },
-        operations: {
-          type: 'array', required: true,
-          items: {
-            type: 'object', additionalProperties: false,
-            properties: {
-              op: { type: 'string', required: true, enum: ['update', 'add', 'delete'] },
-              ref: { type: 'string' },
-              patch: { type: 'object', additionalProperties: true },
-              entry: { type: 'object', additionalProperties: true }
-            }
-          }
-        }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            path: { type: 'string', required: true },
-            name: { type: 'string', required: true },
-            entryCount: { type: 'integer', required: true },
-            saved: { type: 'boolean', required: true }
-          }
-        },
-        render: function (_args, value) { return [{ type: 'text', text: '世界书《' + value.name + '》已修改并生效 · ' + value.entryCount + ' 条' }] }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('世界书只能在卡片工作台中修改')
-        const requestedPath = str(args.path).trim()
-        if (requestedPath === '' && str(chat.cardPath) === '') throw new Error('当前工作台尚未绑定人物卡，无法修改世界书')
-        const normalized = requestedPath === '' ? normalizeResourcePath(chat.cardPath, 'card') : normalizeResourcePath(requestedPath)
-        const kind = resourceKind(normalized)
-        if (kind !== 'worldbook' && kind !== 'card') throw new Error('世界书引用路径类型不正确')
-        const source = kind === 'card' ? { kind: 'card', cardPath: normalized } : { kind: 'standalone', path: normalized }
-        const request = { operations: args.operations }
-        if (Object.prototype.hasOwnProperty.call(args, 'name')) request.name = args.name
-        if (Object.prototype.hasOwnProperty.call(args, 'description')) request.description = args.description
-        const result = await worldBooks.update(source, request)
-        return { path: normalized, name: str(result.view.displayName), entryCount: Number(result.view.entryCount) || 0, saved: true }
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_read_preset',
-      description: '按 JSON Pointer 分段读取预设的原始工作 JSON。目标预设只用于编辑，不会应用到当前 Agent。',
-      parameters: {
-        path: { type: 'string', required: true, description: 'presets/... 相对路径' },
-        pointer: { type: 'string', description: 'JSON Pointer，例如 /prompts/0；省略时读取根节点' },
-        offset: { type: 'integer', description: '可选的 1 起始字符位置' },
-        limit: { type: 'integer', description: '本次最多读取字符数，默认 6000，最大 12000' }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            path: { type: 'string', required: true }, pointer: { type: 'string', required: true }, text: { type: 'string', required: true },
-            totalChars: { type: 'integer', required: true }, from: { type: 'integer', required: true }, to: { type: 'integer', required: true }, done: { type: 'boolean', required: true }
-          }
-        },
-        render: function (_args, value) { return [{ type: 'text', text: '预设 ' + value.path + ' · ' + (value.pointer || '/') + ' · 第 ' + value.from + '~' + value.to + ' 字 / 共 ' + value.totalChars + ' 字\n\n' + value.text }] }
-      },
-      isConcurrencySafe: function () { return true },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('预设只能在卡片工作台中读取')
-        const normalized = normalizeResourcePath(args.path, 'preset')
-        return await presetEditor.read(normalized, args)
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_update_preset',
-      description: '仅在用户明确确认后，按 JSON Pointer 修改预设的最小路径并重新校验。不会应用或运行目标预设。',
-      parameters: {
-        path: { type: 'string', required: true, description: 'presets/... 相对路径' },
-        operations: {
-          type: 'array', required: true,
-          items: {
-            type: 'object', additionalProperties: false,
-            properties: {
-              op: { type: 'string', required: true, enum: ['set', 'delete'] },
-              path: { type: 'string', required: true, description: 'JSON Pointer，例如 /prompts/0/content' },
-              value: { type: 'json', description: 'set 操作的新值；delete 时省略' }
-            }
-          }
-        }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            path: { type: 'string', required: true }, changed: { type: 'array', required: true, items: { type: 'string' } },
-            valid: { type: 'boolean', required: true }, recognized: { type: 'boolean', required: true }, promptCount: { type: 'integer', required: true },
-            regexCount: { type: 'integer', required: true }, warning: { type: 'string', required: true }
-          }
-        },
-        render: function (_args, value) { return [{ type: 'text', text: '预设已修改并通过 JSON 校验；变更 ' + value.changed.length + ' 个路径。目标预设仍未应用。' + (value.warning ? '\n诊断：' + value.warning : '') }] }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const chat = await chatForSession(sessionId)
-        if (chat === undefined || (chat.mode || 'story') !== 'card') throw new Error('预设只能在卡片工作台中修改')
-        const normalized = normalizeResourcePath(args.path, 'preset')
-        return await presetEditor.update(normalized, args.operations)
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_update_card',
-      description: '仅当用户明确要求或确认修改时，立即保存最小的人物卡变更；保存后调用 tavern_validate_card 检查实际文件。空白工作台会直接创建并绑定正式人物卡文件，必须同时具备角色名和玩家身份。另存为副本时先调用 tavern_copy_card，由工具保留源卡 PNG。只讨论时不要调用。',
-      parameters: {
-        fields: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            name: { type: 'string' },
-            description: { type: 'string' },
-            personality: { type: 'string' },
-            scenario: { type: 'string' },
-            first_mes: { type: 'string' },
-            mes_example: { type: 'string' },
-            system_prompt: { type: 'string' },
-            post_history_instructions: { type: 'string' },
-            creator_notes: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } },
-            alternate_greetings: { type: 'array', items: { type: 'string' } },
-            player: { type: 'string', description: '新建人物卡时用于约束 {{user}} 视角的玩家身份' }
-          }
-        },
-        rawOperations: {
-          type: 'array',
-          description: '仅用于标准字段和专用资源工具无法覆盖的扩展字段；不能修改世界书。按 JSON Pointer 对完整工作 raw 做最小 set/delete 修改',
-          items: {
-            type: 'object', additionalProperties: false,
-            properties: {
-              op: { type: 'string', required: true, enum: ['set', 'delete'] },
-              path: { type: 'string', required: true, description: 'JSON Pointer，例如 /data/extensions/regex_scripts/0/disabled' },
-              value: { type: 'json', description: 'set 操作的新值；delete 时省略' }
-            }
-          }
-        }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            saved: { type: 'boolean', required: true },
-            mode: { type: 'string', required: true, enum: ['card'] },
-            changed: { type: 'boolean', required: true },
-            createsCard: { type: 'boolean', required: true },
-            changedFields: { type: 'array', required: true, items: { type: 'string' } }
-          }
-        },
-        render: function (_args, value) {
-          const detail = value.changedFields.length > 0 ? '：' + value.changedFields.join('、') : ''
-          if (value.createsCard) return [{ type: 'text', text: '已创建并绑定正式人物卡' + detail }]
-          if (!value.changed) return [{ type: 'text', text: '提交内容与当前设定相同，无需改动' }]
-          return [{ type: 'text', text: '已保存人物卡变更' + detail }]
-        }
-      },
-      async execute(args, exec) {
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        return await turnOrchestrator.saveChanges({
-          sessionId,
-          turn: activeTurnOf(exec),
-          fields: args.fields,
-          rawOperations: args.rawOperations
-        })
-      }
-    }))
-
-    tools.register(defineTool({
-      name: 'tavern_restore_card',
-      description: '灾难恢复工具：仅当用户明确要求将当前正式人物卡从 originals 原版整体恢复、已获知会覆盖全部工作版修改，并再次明确确认后使用。普通编辑、撤销、不确定或空白工作台严禁调用。恢复前会自动备份当前工作版。',
-      parameters: {
-        confirmation: {
-          type: 'string',
-          required: true,
-          enum: ['确认从原版恢复'],
-          description: '只能在用户已经明确确认整体覆盖后填写固定文本“确认从原版恢复”；不得由 Agent 代替用户确认'
-        }
-      },
-      output: {
-        schema: {
-          type: 'object', additionalProperties: false,
-          properties: {
-            path: { type: 'string', required: true },
-            name: { type: 'string', required: true },
-            originalPath: { type: 'string', required: true },
-            backupPath: { type: 'string', required: true }
-          }
-        },
-        render: function (_args, value) {
-          return [{ type: 'text', text: '人物卡《' + value.name + '》已从原版恢复并立即生效。恢复前工作版已备份到 ' + value.backupPath }]
-        }
-      },
-      async execute(args, exec) {
-        if (str(args && args.confirmation) !== '确认从原版恢复') throw new Error('原版恢复缺少明确确认')
-        const sessionId = exec && exec.agent && exec.agent.session ? exec.agent.session.id : ''
-        const turn = activeTurnOf(exec)
-        if (turn > 0) await turnOrchestrator.discard({ sessionId: sessionId, turn: turn })
-        return await restoreCurrentCard(sessionId)
-      }
-    }))
+    registerCardEditingTools({
+      activeTurnOf,
+      restoreCurrentCard,
+      str,
+      tools,
+      turnOrchestrator,
+    })
   }
 
   try {

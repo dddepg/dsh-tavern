@@ -1,15 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import vm from 'node:vm'
+import { registerCardReadingTools } from '../tavern-plugin/lib/tools/card-reading.js'
 
-const source = readFileSync(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
-const start = source.indexOf("      name: 'tavern_copy_card'")
-const end = source.indexOf('\n    }))', start)
-const definition = source.slice(start, end)
 test('copy tool declares outputs, checks workbench access and returns image status', async () => {
   let mode = 'story', called = 0
-  const tool = vm.runInNewContext('({' + definition + '})', {
+  let tool
+  registerCardReadingTools({
+    tools: { register(value) { if (value.name === 'tavern_copy_card') tool = value } },
     chatForSession: async () => ({ mode }),
     fileResources: { copyCard: async (path, name) => { called++; return { path: 'cards/' + name + '.json', sourcePath: path, imageCopied: true } } }
   })

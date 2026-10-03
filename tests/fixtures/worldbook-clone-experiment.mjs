@@ -1,5 +1,5 @@
 // Isolated benchmark experiment, never imported by production.
-// node --import ./tests/fixtures/worldbook-clone-experiment.mjs tests/fixtures/worldbook-template-benchmark.mjs OUTPUT large
+// node --import ./tests/fixtures/worldbook-clone-experiment.mjs tests/performance/worldbook-template-benchmark.mjs OUTPUT large
 // This preserves every production call path but substitutes only the clone
 // primitive in the worldbook module for this process. Not a compatibility claim.
 import { registerHooks } from 'node:module'

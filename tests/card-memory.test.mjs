@@ -62,6 +62,15 @@ test('play mode has no memory reads, writes or injections, including direct tool
   assert.deepEqual(await readdir(dataRoot), [])
 })
 
+test('the memory panel can view and edit memory from a play conversation', async t => {
+  const { memory, chat } = await fixture(t)
+  const story = { ...chat, mode: 'story' }
+  await memory.preference(story, { action: 'add', content: '面板手动添加' }, { manual: true })
+  assert.deepEqual((await memory.search(story, '', { manual: true })).preferences, ['面板手动添加'])
+  assert.equal((await memory.search(chat)).preferences[0], '面板手动添加')
+  await assert.rejects(memory.search(null, '', { manual: true }), /请先打开一个对话/)
+})
+
 test('changed preferences append after the query without modifying any previous request prefix', async t => {
   const { memory, chat } = await fixture(t)
   const query = text => ({ id: text, role: 'user', content: [{ type: 'text', text }] })

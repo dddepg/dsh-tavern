@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, readdir } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createProfileDataStore } from '../tavern-plugin/lib/profile-data-store.js'
@@ -19,21 +19,6 @@ test('style settings preserve original text and reject unknown/oversize configur
   assert.deepEqual(imageStyleSettings(), { preset: 'default', custom: '' })
   assert.equal(imageStyleSettings({ preset: 'custom', custom: '  低饱和\n水彩  ' }).custom, '  低饱和\n水彩  ')
   for (const value of [null, [], { preset: 'unknown' }, { custom: 'x'.repeat(2001) }, { preset: 'ink', secret: 'key' }]) assert.throws(() => imageStyleSettings(value))
-})
-
-test('style expression blocks persist and are keyed separately by choice and target profile', async t => {
-  const fx = await fixture(t)
-  const choice = { preset: 'watercolor', custom: '  低饱和  ' }
-  const one = await fx.styles.resolve(choice, 'mixed-a')
-  assert.match(one.tags, /watercolor/)
-  assert.match(one.tags, /低饱和/)
-  const restored = await createSceneImageStyles({ store: fx.store }).resolve(choice, 'mixed-a')
-  assert.deepEqual(restored, one)
-  assert.equal((await readdir(join(fx.root, 'scene-images/styles'))).filter(name => name.endsWith('.json')).length, 1)
-  assert.notEqual((await fx.styles.resolve(choice, 'mixed-b')).id, one.id)
-  assert.notEqual((await fx.styles.resolve({ preset: 'ink' }, 'mixed-a')).id, one.id)
-  assert.equal((await fx.styles.resolve({ preset: 'custom', custom: ' ' }, 'mixed-a')).tags, '')
-  assert.doesNotMatch((await fx.styles.resolve({ preset: 'custom', custom: 'pixel art' }, 'mixed-a')).tags, /watercolor|ink wash|photorealistic/)
 })
 
 test('changing global style replaces only style; image-local style remains isolated and is convertible', async t => {

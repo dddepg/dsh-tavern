@@ -1,3 +1,4 @@
+import { createSettlementProgressGuard } from '../tavern-plugin/lib/domain/settlement-progress-guard.js'
 import { readSettlementInput } from '../tavern-plugin/lib/domain/settlement-input.js'
 import {applyJsonChanges} from '../tavern-plugin/lib/domain/json-mutation.js'
 import { createSettlementJobs } from '../tavern-plugin/lib/domain/settlement-jobs.js'
@@ -46,7 +47,7 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
   }).chat
   const running = beginRunning ? await tasks.begin(current, 'settlement') : null
   const sandbox = vm.createContext({
-    readSettlementInput, chatPersistence: { readWindow: async () => null }, readOpeningWindow: async () => null,
+    createSettlementProgressGuard, readSettlementInput, chatPersistence: { readWindow: async () => null }, readOpeningWindow: async () => null,
     taskStateReader: { forSession: async () => projectChatSessionState(await store.readChat()) },
     collectMvuHelperContext, normalizeBackgroundTasks, pendingMvuSettlementState, structuredClone, Date, AbortController, console: { log() {}, error() {} },
     str: value => value == null ? '' : String(value),
@@ -87,6 +88,28 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
     sessions: { get: () => undefined }, scripts: {}, timeline, queueSettlement: async () => {}, present() {} })
   return { tasks, timeline, store, running, body, sandbox, history, onReady, reconciler: vm.runInContext('mvuSettlementReconciler', sandbox), get: () => structuredClone(current) }
 }
+
+test('首次结算失败后编辑正文并重试，变量提交到编辑后的版本且释放后台状态', async () => {
+  const run = await harness({ beginRunning: false })
+  run.sandbox.mvuSettlement.settleVariables = async () => { throw new Error('model unavailable') }
+  await run.sandbox.queueSettlement('chat')
+  assert.equal(run.get().settleStatus, 'failed')
+  const edited = run.timeline.apply({ chat: run.get(), intent: { kind: 'body.edit', turn: 2, patch: { text: '编辑后的正文' } } }).chat
+  await run.store.writeChat(edited)
+  run.sandbox.mvuSettlement.settleVariables = async input => {
+    const before = run.get(), after = structuredClone(before)
+    after.messages[1].variables[0].stat_data.hp = 9
+    return { receipt: { status: 'updated', changes: [] }, effect: createMvuSettlementEffect({ ...input, before, after }) }
+  }
+  await run.sandbox.retrySettlement('session', 2)
+  await run.sandbox.queueSettlement('chat')
+  assert.equal(run.get().settleStatus, 'done')
+  assert.equal(run.tasks.activity(run.get()).busy, false)
+  assert.equal(run.get().messages[1].text, '编辑后的正文')
+  assert.equal(run.get().messages[1].variables[0].stat_data.hp, 9)
+  assert.equal(run.get().timeline.checkpoints.length, 1)
+  run.reconciler.dispose()
+})
 
 test('普通卡忽略旧人物设计开关，只执行姿势结算', async () => {
   const run = await harness({ beginRunning: false, mvu: false })

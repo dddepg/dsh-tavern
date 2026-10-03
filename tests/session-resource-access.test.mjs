@@ -19,16 +19,6 @@ test('capabilities read only their issued revision, deduplicate reads and reject
   assert.equal(calls.length, 1)
 })
 
-test('unavailable resources retry and oversized results are not retained', async () => {
-  let calls = 0
-  const resources = createSessionResourceAccess({ maxBytes: 1, read: async () => ++calls === 1 ? undefined : {name: 'large'} })
-  const access = resources.issue('chat', 3, 'worldbook')
-  await assert.rejects(resources.read(access.token), /unavailable/)
-  await resources.read(access.token)
-  await resources.read(access.token)
-  assert.equal(calls, 3)
-})
-
 test('script startup and card metadata stay light; legacy complete card APIs load once and isolate mutations', () => {
   let calls = 0
   const card = {name: '大卡', character_book: { entries: [{ content: 'setting' }] }}

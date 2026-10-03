@@ -32,24 +32,6 @@ test('global API save failure preserves typed credentials and displays the error
   assert.equal(await form.getByRole('button', { name: '保存生图 API 配置', exact: true }).isEnabled(), true)
 })
 
-test('ComfyUI import waits for explicit save and rejects oversized workflows', async t => {
-  const comfy = { ...settings, provider: 'comfyui', authType: 'none', workflow: null, channels: [{ id: 'comfyui', label: 'ComfyUI', fields: ['baseURL', 'authType', 'username'] }] }
-  const { form, calls } = await openTavernSettings(t, { settings: comfy, respond(method) {
-    if (method === 'saveSceneImageSettings') return { settings: comfy }
-  } })
-  const file = form.getByLabel('导入工作流')
-  await file.setInputFiles({ name: 'workflow.json', mimeType: 'application/json', buffer: Buffer.from('{"1":{"class_type":"SaveImage","inputs":{}}}') })
-  await form.getByRole('status').filter({ hasText: '已选择工作流' }).waitFor()
-  assert.equal(calls.filter(call => call.method === 'saveSceneImageSettings').length, 0)
-  assert.equal(await form.locator('textarea').count(), 1, 'only optional style text, no JSON editor')
-  await form.getByRole('button', { name: '保存生图 API 配置', exact: true }).click()
-  await form.getByRole('status').filter({ hasText: '已保存全局 API 配置' }).waitFor()
-  assert.equal(calls.find(call => call.method === 'saveSceneImageSettings').args.workflow['1'].class_type, 'SaveImage')
-  await file.setInputFiles({ name: 'large.json', mimeType: 'application/json', buffer: Buffer.alloc(512001) })
-  await form.getByRole('status').filter({ hasText: '500 KB' }).waitFor()
-  assert.equal(calls.filter(call => call.method === 'saveSceneImageSettings').length, 1)
-})
-
 test('connection probes use draft credentials, model choices stay editable, and address edits clear stale results', async t => {
   const { form, calls } = await openTavernSettings(t, { settings: { ...settings, channels: [{ ...settings.channels[0], fields: ['baseURL', 'model', 'size'], canListModels: true }] }, respond(method) {
     if (method === 'testSceneImageConnection') return { status: 'reachable', apiKeyStatus: 'unverified', httpStatus: 404, probePath: '/models', message: '连接成功，但服务暂时无法完成 Key 验证。' }

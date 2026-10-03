@@ -15,7 +15,7 @@ for (const kind of ['standalone', 'card']) test(`世界书详情删除 ${kind}�
     React: { useState: value => [stateIndex++ === 2 ? { source: kind === 'card' ? { kind, cardPath: item.cardPath } : { kind, path: item.path }, view: { displayName: item.name } } : value, () => {}], useRef: () => ({}), useEffect() {}, createElement: (tag, props, ...children) => ({ tag, props, children }) },
     usePersistentError: () => [error, value => { error = value }], useTavernSessionMode: () => 'card',
     createWorldBookLibraryRefreshModule: () => ({ request() { refreshes++ }, whenIdle: async () => {} }),
-    WorldBookEditor() {}, useTavernConfirm: () => async () => confirm, window: {}, rpc: async (...args) => { calls.push(args); if (fail) throw Error('删除失败') },
+    WorldBookEditor() {}, useVisibleDataRefresh() {}, useTavernConfirm: () => async () => confirm, window: {}, rpc: async (...args) => { calls.push(args); if (fail) throw Error('删除失败') },
     notifyTavernDataChanged: (...args) => notifications.push(args)
   })
   const tree = Panel({ scope: { sessionId: 'session' }, tab: { id: 'book' }, ctx: { betterSidebar: { updateTab() {} } }, appendMention() {} })

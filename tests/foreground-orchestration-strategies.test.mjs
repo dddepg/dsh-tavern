@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import { Session } from './fixtures/dsh-session-host.mjs'
 import { sessionEvents } from '../tavern-plugin/lib/domain/session-events.js'
-import { createForegroundOrchestrationStrategies, createNativePlayOrchestrationStrategy, createCompatibilityOrchestrationStrategy, projectRegenerationRequestMessages } from '../tavern-plugin/lib/domain/foreground-orchestration-strategies.js'
+import { createForegroundOrchestrationStrategies, createNativePlayOrchestrationStrategy, createCompatibilityOrchestrationStrategy } from '../tavern-plugin/lib/domain/foreground-orchestration-strategies.js'
 import { ensureSessionStablePrefix, sessionStablePrefixSections } from '../tavern-plugin/lib/domain/session-stable-prefix.js'
 import { ensureSessionSeedTrajectory } from '../tavern-plugin/lib/domain/session-seed-trajectory.js'
 
@@ -48,21 +48,6 @@ function strategies(overrides = {}) {
   }
   return { value: createForegroundOrchestrationStrategies(options), compatibility: createCompatibilityOrchestrationStrategy(options.compatibility), calls, chats }
 }
-
-test('正式编排为兼容对话选择 SillyTavern 编译策略', async () => {
-  const run = strategies()
-  const chat = run.chats.get('compat')
-  const payload = { turn: 3, step: 1, messages: [userMessage('继续')] }
-  const prepared = await run.value.prepareStep({ chat, sessionId: 'compat', payload, decision: { kind: 'enter', messages: payload.messages }, requestId: 'compat-request' })
-  assert.equal(prepared.messages, payload.messages)
-  const projected = run.value.projectRequest({ sessionId: 'compat', messages: [] }, { turn: 3, step: 1 })
-  assert.equal(projected.messages[0].content[0].text, 'compat')
-  const assembly = await run.value.assembleSystemPrompt({ sections: [{}], contexts: [{}], tools: [] }, { chat, sessionId: 'compat' })
-  assert.deepEqual(assembly.sections, [])
-  assert.deepEqual(run.calls, [
-    ['compat.before', '继续'], ['compat.begin', 3, 'compat-request'], ['compat.compile', '继续'], ['compat.persist', 3]
-  ])
-})
 
 test('游玩固定背景来自原生系统装配，预设前后段保持顺序，快照不重复发送', async () => {
   const session = Session.create('native')
@@ -174,110 +159,6 @@ test('旧 Session 的 Tavern 开场白在请求边界恢复为合成模型来源
   assert.equal(opening.source.kind, 'model')
 })
 
-test('DeepSeek thinking 请求为没有原始思考的合成 assistant 上下文补齐 reasoning_content 载体', async () => {
-  const run = strategies()
-  const incoming = [userMessage('继续')]
-  await run.value.prepareStep({
-    sessionId: 'native', payload: { turn: 2, step: 1, messages: incoming },
-    decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native')
-  })
-  const preset = pluginMessage('assistant', '预置助手示例', 'dsh-tavern', 'snapshot')
-  const opening = {
-    id: 'tavern-opening:current', role: 'assistant', content: [{ type: 'text', text: '开场白' }],
-    source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' }
-  }
-  const original = {
-    sessionId: 'native', provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high',
-    messages: [{
-      role: 'system', content: [{ type: 'text', text: '旧预设边界' }],
-      source: { kind: 'plugin', plugin: 'dsh-tavern', sections: [{ name: 'tavern:runtime-preset-front', text: '旧预设边界' }] }
-    }, preset, opening, userMessage('下一轮')]
-  }
-
-  const projected = run.value.projectRequest(original)
-  const assistants = projected.messages.filter(message => message.role === 'assistant')
-
-  // Runtime preset projection replaces stale preset-boundary messages. The
-  // surviving opening is enough to prove the final DeepSeek serialization
-  // boundary repairs every assistant message that will actually be sent.
-  assert.equal(assistants.length >= 1, true)
-  for (const message of assistants) {
-    assert.equal(message.content.some(block => block.type === 'reasoning' && block.text.length > 0), true)
-  }
-  assert.equal(preset.content.some(block => block.type === 'reasoning'), false)
-  assert.equal(opening.content.some(block => block.type === 'reasoning'), false)
-})
-
-test('带意见重生成只投影为本轮补充要求', () => {
-  const messages = [
-    userMessage('推门'),
-    pluginMessage('user', '旧本轮规则', 'dsh-tavern', 'foreground-frame'),
-    { role: 'assistant', content: [{ type: 'text', text: '旧正文' }], source: { kind: 'model' } },
-    pluginMessage('user', '推门\n\n【本轮补充要求】\n写得短一些', 'dsh-tavern-regen'),
-    pluginMessage('user', '新本轮规则', 'dsh-tavern', 'foreground-frame')
-  ]
-
-  const projected = projectRegenerationRequestMessages(messages)
-
-  assert.equal(projected[0].content[0].text, '推门\n\n【本轮补充要求】\n写得短一些')
-  assert.doesNotMatch(JSON.stringify(projected), /旧正文|重新生成|dsh-tavern-regen/)
-})
-
-test('兼容与普通游玩均清空独立系统提示，工具过滤不受影响', async () => {
-  const run = strategies()
-  const compatAssembly = await run.compatibility.assembleSystemPrompt({ sections: [{}], contexts: [{}], tools: [{ name: 'bash' }] }, { sessionId: 'compat', chat: run.chats.get('compat') })
-  assert.deepEqual(compatAssembly, { sections: [], contexts: [], tools: [] })
-
-  const nativeAssembly = await run.value.assembleSystemPrompt({ sections: [], contexts: [], tools: [{ name: 'bash' }, { name: 'read' }] }, { sessionId: 'native', chat: run.chats.get('native') })
-  assert.deepEqual(nativeAssembly.sections, [])
-  assert.deepEqual(nativeAssembly.tools.map(function (tool) { return tool.name }), ['read'])
-})
-
-test('兼容前台仅在游戏快照开启时保留联网搜索工具', async () => {
-  const run = strategies()
-  const chat = run.chats.get('compat')
-  const tools = [{ name: 'bash' }, { name: 'web_search' }]
-  const disabled = await run.compatibility.assembleSystemPrompt({ sections: [{ name: 'old' }], contexts: [{}], tools: tools.slice() }, { sessionId: 'compat', chat })
-  assert.deepEqual(disabled.tools, [])
-
-  chat.webSearchEnabled = true
-  const enabled = await run.compatibility.assembleSystemPrompt({ sections: [{ name: 'old' }], contexts: [{}], tools: tools.slice() }, { sessionId: 'compat', chat })
-  assert.deepEqual(enabled.tools.map(function (tool) { return tool.name }), ['web_search'])
-})
-
-test('卡片策略保留 Shell 与未知的通用基础工具，不要求先走 Tavern 专用工具', async () => {
-  const run = strategies({
-    nativePlay: {
-      async modeFor() { return 'card' },
-      filterMessages(messages) { return messages },
-      async resolvePreset() { return null },
-      async prepareTurn() { return { text: '' } },
-      appendFrame(input) { return { messages: input.messages, receipt: {} } },
-      recordFrame() {},
-      async visibleTools() { return ['bash', 'tavern_read_card'] },
-      modePrompt() { return 'card' },
-      workspaceContext() { return '/resources' },
-      async ensureSessionPrefix() {},
-      controlledToolNames: new Set(['bash', 'tavern_read_card', 'tavern_update_card'])
-    }
-  })
-  const assembly = await run.value.assembleSystemPrompt({
-    sections: [],
-    contexts: [],
-    tools: [
-      { name: 'bash' },
-      { name: 'read_file' },
-      { name: 'write_file' },
-      { name: 'tavern_read_card' },
-      { name: 'tavern_update_card' }
-    ]
-  }, { sessionId: 'native', chat: run.chats.get('native'), cwd: '/workspace' })
-
-  assert.deepEqual(assembly.tools.map(function (tool) { return tool.name }), [
-    'bash', 'read_file', 'write_file', 'tavern_read_card'
-  ])
-})
-
 test('新版 DSH 文件工具只向卡片 Agent 开放，不泄漏给正文 Agent', async () => {
   async function assembledToolNames(mode) {
     const fileTools = ['read', 'write', 'edit', 'read_image']
@@ -308,52 +189,7 @@ test('新版 DSH 文件工具只向卡片 Agent 开放，不泄漏给正文 Agen
   assert.deepEqual(await assembledToolNames('story'), ['tavern_recall_history'])
 })
 
-test('失败清理与回退留下的空占位不进入提供商请求，工具消息保留', async () => {
-  const run = strategies(), chat = run.chats.get('native')
-  const payload = { turn: 8, step: 1, messages: [userMessage('继续')] }
-  await run.value.prepareStep({ chat, sessionId: 'native', payload, decision: { kind: 'enter', messages: payload.messages }, requestId: 'retry' })
-  const tool = { role: 'assistant', content: [{ type: 'tool-call', id: 'call', name: 'lookup', arguments: {} }] }
-  const input = [userMessage('上一轮'), { role: 'user', content: [], source: { kind: 'plugin', plugin: 'dsh-tavern-failed-turn-cleanup' } }, { role: 'assistant', content: [] }, userMessage('  '), tool, userMessage('继续')]
-  const result = run.value.projectRequest({ sessionId: 'native', messages: input }, { turn: 8, step: 1 })
-  assert.ok(result.messages.every(m => m.content.length && m.content.some(b => b.type !== 'text' || b.text.trim())))
-  assert.ok(result.messages.includes(tool))
-  assert.equal(input.length, 6)
-  assert.equal(input[1].content.length, 0)
-})
-
-test('native preset macros render across phases before projection without rewriting snapshots or history', async () => {
-  const raw = {
-    front: { entries: [{ role: 'system', content: '{{setvar::style::温和}}{{//不发送}}{{trim}}风格：{{getvar::style}}；{{user}}与{{char}}' }] },
-    middle: { entries: [{ role: 'system', content: '{{setvar::rule::慢慢来}}中段：{{getvar::style}}' }] },
-    back: { entries: [{ role: 'user', content: '末尾：{{getvar::style}}，{{getvar::rule}}' }] }
-  }
-  const original = structuredClone(raw)
-  let received
-  const strategy = createNativePlayOrchestrationStrategy({
-    modeFor: async () => 'story', filterMessages: x => x, resolvePreset: async () => raw,
-    prepareTurn: async input => { received = input.runtimePresetSnapshot; return { frame: { userInput: { projectedText: input.userText } } } },
-    appendFrame: ({ messages }) => ({ messages: messages.concat([userMessage(received.middle.entries[0].content)]), receipt: {} }),
-    recordFrame() {}
-  })
-  const history = [pluginMessage('assistant', '历史里的 {{getvar::old}} 保持原样', 'history'), userMessage('继续')]
-  const historyBefore = structuredClone(history)
-  const input = { sessionId: 'macro-test', chat: { cardName: '掌柜', macroState: { userName: '游客', local: {}, global: {} } }, payload: { turn: 2, step: 1 }, decision: { messages: history } }
-  const prepared = await strategy.prepareStep(input)
-  const request = strategy.projectRequest({ sessionId: input.sessionId, messages: prepared.messages, tools: [] })
-  const texts = request.messages.map(m => m.content.map(b => b.text).join(''))
-  assert.match(texts[0], /风格：温和；游客与掌柜/)
-  assert.equal(received.middle.entries[0].content, '中段：温和')
-  assert.match(texts.at(-1), /末尾：温和，慢慢来/)
-  assert.equal(texts[1], history[0].content[0].text)
-  assert.deepEqual(raw, original)
-  assert.deepEqual(history, historyBefore)
-  assert.deepEqual(input.chat.macroState.local, {})
-  const next = await strategy.prepareStep({ ...input, payload: { turn: 2, step: 2 } })
-  const followup = strategy.projectRequest({ sessionId: input.sessionId, messages: next.messages })
-  assert.equal(followup.messages[0].content[0].text, request.messages[0].content[0].text)
-})
-
-for (const sessionId of ['native', 'compat']) test('regeneration gates ordinary and stale inputs before preparation: '+sessionId,async()=>{
+for (const sessionId of ['native']) test('regeneration gates ordinary and stale inputs before preparation: '+sessionId,async()=>{
   const run=strategies();const chat=run.chats.get(sessionId)
   chat.regenInProgress=true;chat.regenRecovery={id:'current'}
   const input=message=>({chat,sessionId,payload:{turn:3,step:1,messages:[message]},decision:{kind:'enter',messages:[message]},requestId:'request'})

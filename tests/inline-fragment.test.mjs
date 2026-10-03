@@ -47,3 +47,33 @@ test('untrusted fragments, previews, active HTML and full documents retain ifram
     }
   }finally{h.dom.window.close()}
 })
+
+test('trusted fragments zoom with the DSH font preference without touching card DOM',async()=>{
+  const {chromium}=await import('playwright')
+  const browser=await chromium.launch()
+  try{
+    const page=await browser.newPage()
+    await page.setContent('<style>body{--dsh-content-font-size:14px}.card span{font-size:20px}</style><main></main>')
+    await page.addScriptTag({content:`let effect;const root=document.querySelector('main');
+      const React={createElement:(type,props,...children)=>({type,props,children}),useRef:()=>({current:root}),useLayoutEffect:run=>{effect=run}};
+      window.__ModuleLoader__={load:value=>{window.client=value.factory(name=>name==='react'?React:{})}};
+      window.mountFragment=content=>{const [part]=client.renderTavernProjection({parts:[{kind:'html',content}]},{trustedCardMode:true});part.type(part.props);return effect()};`})
+    await page.addScriptTag({content:await readFile(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')})
+    const state=()=>page.evaluate(()=>{const span=document.querySelector('.card span');return {zoom:document.querySelector('main').style.zoom,height:Math.round(span.getBoundingClientRect().height),cardStyle:span.getAttribute('style')}})
+    await page.evaluate(()=>{window.writes=0;window.cleanup=mountFragment('<div class="card"><span>正文</span></div>');new MutationObserver(r=>{window.writes+=r.length}).observe(document.querySelector('.card'),{subtree:true,attributes:true,childList:true,characterData:true})})
+    const base=await state()
+    assert.equal(base.zoom,'')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','21px'))
+    await page.waitForFunction(()=>document.querySelector('main').style.zoom==='1.5')
+    const zoomed=await state()
+    assert.ok(zoomed.height>base.height*1.4,'正文按比例放大')
+    assert.equal(zoomed.cardStyle,null)
+    assert.equal(await page.evaluate(()=>window.writes),0,'不改写卡片 DOM')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','14px'))
+    await page.waitForFunction(()=>document.querySelector('main').style.zoom==='')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','21px'))
+    await page.waitForFunction(()=>document.querySelector('main').style.zoom==='1.5')
+    await page.evaluate(()=>cleanup())
+    assert.equal(await page.evaluate(()=>document.querySelector('main').style.zoom),'')
+  }finally{await browser.close()}
+})

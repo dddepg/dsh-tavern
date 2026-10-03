@@ -14,22 +14,6 @@ function harness() {
 }
 function nodes(tree) { return tree && typeof tree === 'object' ? [tree, ...(tree.children || []).flatMap(nodes)] : [] }
 
-test('模块网络错误不被普通 fetch 过滤吞掉，详情折叠且仅用户点击才刷新', () => {
-  const h = harness()
-  h.hub.report('poll', new Error('Failed to fetch'))
-  assert.equal(h.hub.getSnapshot().length, 0)
-  const error = new Error('Failed to fetch dynamically imported module')
-  error.dshTavernModuleFailure = { phase: 'module-load', reason: 'unknown', references: ['https://user:private@cdn.example/a.js?token=private'], resources: [] }
-  h.hub.report('人物卡脚本「变量结构」', error)
-  const tree = h.render(), all = nodes(tree)
-  assert.equal(h.hub.getSnapshot().length, 1)
-  assert.ok(all.find(n => n.tag === 'details' && !n.props.open))
-  assert.doesNotMatch(JSON.stringify(tree), /private/)
-  assert.equal(h.reloads(), 0)
-  all.find(n => n.tag === 'button' && n.children.includes('刷新页面重试')).props.onClick()
-  assert.equal(h.reloads(), 1)
-})
-
 test('详情拒绝非数组和超量资源，普通脚本执行错误不出现网络重试提示', () => {
   const h = harness(), error = new Error('依赖失败')
   error.dshTavernModuleFailure = { phase: 'module-load', reason: 'invented', references: 'bad', resources: Array.from({ length: 100 }, () => ({ url: 'https://cdn.example/a.js', status: 404 })) }

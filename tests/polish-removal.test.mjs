@@ -7,6 +7,7 @@ import { prompt } from '../tavern-plugin/lib/prompt-catalog.js'
 
 const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
+const turnHooksSource = await readFile(new URL('../tavern-plugin/lib/hooks/turn-lifecycle.js', import.meta.url), 'utf8')
 const presetSource = await readFile(new URL('../presets/tavern/agent.cordis.yml', import.meta.url), 'utf8')
 
 test('正文直接生成成稿，不再进入第二轮精修', async () => {
@@ -20,7 +21,7 @@ test('正文直接生成成稿，不再进入第二轮精修', async () => {
   })
 
   assert.doesNotMatch(clientSource, /polish|精修/iu)
-  assert.doesNotMatch(serverSource, /polish|精修|draftText|polishedText/iu)
+  assert.doesNotMatch(serverSource + turnHooksSource, /polish|精修|draftText|polishedText/iu)
   assert.doesNotMatch(presetSource, /polish|精修|draftText|polishedText/iu)
   assert.doesNotMatch(context.text, /polish|精修|draftText|polishedText/iu)
   assert.match(context.text, /只输出小说正文/)
@@ -28,5 +29,5 @@ test('正文直接生成成稿，不再进入第二轮精修', async () => {
   assert.match(context.text, /不是已经发生的剧情/)
   assert.doesNotMatch(presetSource, /tavern_session|action=context|action=commit|assistantText/)
   assert.match(serverSource, /agent\/pre-step/)
-  assert.match(serverSource, /agent\/turn-stopping/)
+  assert.match(turnHooksSource, /agent\/turn-stopping/)
 })

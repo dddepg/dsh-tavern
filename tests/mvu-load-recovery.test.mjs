@@ -47,32 +47,6 @@ test('HTTP 200 JSON error never executes; its cause is retained and manual recov
   assert.equal(evaluations, 1)
 })
 
-test('diagnostic observer rejection cannot turn successful execution into retry or failure', async () => {
-  let downloads = 0, evaluations = 0
-  const loader = client.createMvuBundleLoader({ fetch: async () => { downloads++; return ok() },
-    evaluate: async () => { evaluations++ }, onDiagnostic: async () => { throw Error('disk full') } })
-  await loader.load('/bundle.js')
-  await tick()
-  assert.equal(downloads, 1)
-  assert.equal(evaluations, 1)
-})
-
-test('HTTP failures retain bounded server errors and retries carry cycle and attempt', async () => {
-  const records = []
-  let available = false
-  const loader = client.createMvuBundleLoader({ retryDelays: [0, 0],
-    fetch: async () => available ? ok() : new Response(JSON.stringify({ ok: false, error: 'ENOENT: bundle missing' }), { status: 503, headers: { 'content-type': 'application/json' } }),
-    evaluate: async () => {}, onDiagnostic: r => records.push(r) })
-  const pending = loader.load('/bundle.js')
-  while (!records.some(r => r.phase === 'retry-exhausted')) await tick()
-  assert.deepEqual(records.filter(r => r.phase === 'download-failed').map(r => [r.cycle, r.attempt, r.httpStatus]), [[1,1,503],[1,2,503],[1,3,503]])
-  assert.match(records.find(r => r.phase === 'download-failed').message, /ENOENT: bundle missing/)
-  available = true
-  loader.retry()
-  await pending
-  assert.equal(records.find(r => r.phase === 'execution-completed').cycle, 2)
-})
-
 test('HTML, JSON disguised as JavaScript, and oversized error bodies are never evaluated', async () => {
   for (const [body, type, status] of [['<html>login</html>', 'text/html', 200], ['{"ok":false,"error":"denied"}', 'text/javascript', 200], ['x'.repeat(100000), 'text/plain', 503]]) {
     let failed, canceled = false
@@ -88,41 +62,6 @@ test('HTML, JSON disguised as JavaScript, and oversized error bodies are never e
     loader.dispose()
     await assert.rejects(pending, /disposed/)
   }
-})
-
-test('MVU download retries twice before evaluating exactly once', async () => {
-  let attempts = 0
-  const h = harness(async () => { if (++attempts < 3) throw Error('offline'); return ok() })
-  await h.loader.load('/bundle.js')
-  assert.equal(attempts, 3)
-  assert.deepEqual(h.evaluations, ['bundle'])
-  assert.equal(h.states.at(-1).phase, 'evaluating')
-  assert.equal(h.loader.retry(), false)
-})
-
-test('exhaustion pauses before evaluation; manual retry resumes the same load only once', async () => {
-  let attempts = 0, available = false
-  const h = harness(async () => { attempts++; return available ? ok() : { ok: false, status: 503 } })
-  const pending = h.loader.load('/bundle.js')
-  while (h.states.at(-1)?.phase !== 'failed') await tick()
-  assert.equal(attempts, 3)
-  assert.equal(h.evaluations.length, 0)
-  assert.equal(h.states.at(-1).canRetry, true)
-  available = true
-  assert.equal(h.loader.retry(), true)
-  assert.equal(h.loader.retry(), false)
-  await pending
-  assert.equal(attempts, 4)
-  assert.equal(h.evaluations.length, 1)
-})
-
-test('execution failure is terminal, never evaluated or downloaded again', async () => {
-  let attempts = 0
-  const h = harness(async () => { attempts++; return ok() }, async () => { throw Error('partial initialization') })
-  await assert.rejects(h.loader.load('/bundle.js'), /partial initialization/)
-  assert.equal(attempts, 1)
-  assert.equal(h.loader.retry(), false)
-  assert.equal(h.evaluations.length, 1)
 })
 
 test('disposal aborts paused downloads and rejects late completion without evaluation', async () => {

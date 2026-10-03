@@ -56,7 +56,7 @@ macOS arm64、Node 22.22.0、headless Chromium 145。世界书 972839 字节、�
 
 ```sh
 node --test tests/immutable-json-projection.test.mjs tests/worldbook-snapshot-read.test.mjs tests/full-prompt-template-sync.test.mjs tests/full-prompt-template-state.test.mjs tests/worldbook-library.test.mjs tests/worldbook-resource.test.mjs tests/multi-worldbook-runtime.test.mjs
-node tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-snapshot-final large
+node tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-snapshot-final large
 node bin/test-tavern.mjs
 ```
 

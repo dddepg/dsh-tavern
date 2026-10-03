@@ -1,3 +1,4 @@
+import { applyOpeningCommand } from './opening-command.js'
 import { sessionEvents, appendSessionEvent } from './session-events.js'
 import { createHash } from 'node:crypto'
 import { cardOpeningChoices, resolveCardOpening } from './card-openings.js'
@@ -6,8 +7,9 @@ import { OFFICIAL_MVU_VERSION } from './official-mvu-assets.js'
 import { createScriptContinuity } from './script-continuity.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
 import { normalizeBackgroundModel } from './background-model-selection.js'
-import { normalizeBackgroundTasks } from './tavern-settings.js'
+import { normalizeBackgroundTasks, normalizePlayDefaults } from './tavern-settings.js'
 import { ensureSessionSeedTrajectory } from './session-seed-trajectory.js'
+import { defaultUserPreferenceProfile } from './user-preference-profile.js'
 
 function str(value) { return value === undefined || value === null ? '' : String(value) }
 function groupOfMode(mode) { return !mode || mode === 'story' || mode === 'script' ? 'play' : 'card' }
@@ -81,7 +83,9 @@ export function createConversationInitialization(options) {
   }
 
   async function initialize({ cardPath, sessionId, mode, openingId, userName, requestMode, preparation, cardTask, importDraft = false }) {
+    if (requestMode === 'sillytavern') throw new Error('silly 模式已停用')
     const currentSettings = await settings()
+    const defaults = normalizePlayDefaults(currentSettings.defaultPlaySettings)
     const effectiveRequestMode = requestMode === 'sillytavern' ? 'sillytavern' : 'dsh'
     const requestedMode = mode === 'card' || mode === 'revision' || mode === 'extract' ? 'card' : (mode === 'script' ? 'script' : (mode === 'story' ? 'story' : null))
     const card = str(cardPath) === '' && requestedMode === 'card' ? null : await cards.read(cardPath)
@@ -95,6 +99,7 @@ export function createConversationInitialization(options) {
     if (chatMode === 'story' && hasScript) chatMode = 'script'
     if (typeof sessionId === 'string' && sessionId !== '') {
       const current = await chats.resolve(sessionId)
+      if (current?.requestMode === 'sillytavern') throw new Error('silly 模式已停用')
       // 同一大模式（游玩/卡片）内复用当前会话；旧的自由故事会话不会被强行切换成剧本。
       if (current !== undefined && current.cardPath === str(cardPath) && groupOfMode(current.mode) === groupOfMode(chatMode)) {
         if (groupOfMode(current.mode) === 'play') await snapshots.ensure(current, card)
@@ -102,10 +107,9 @@ export function createConversationInitialization(options) {
         return await present(current, card)
       }
     }
-    const macroState = { userName: str(userName).trim().slice(0, 80) || '你', local: {}, global: {} }
+    const macroState = { userName: str(userName).trim().slice(0, 80) || defaults.playerName, local: {}, global: {} }
     const runtimePresetSnapshot = groupOfMode(chatMode) === 'play' ? await playPresetSnapshot() : null
-    const cardEditExperiment = chatMode === 'card' && cardTask === 'edit' && card !== null
-    let openingSourceText = chatMode === 'card' ? (cardEditExperiment ? '' : cardGreeting()) : resolveCardOpening(card, openingId)
+    let openingSourceText = chatMode === 'card' ? cardGreeting() : resolveCardOpening(card, openingId)
     const openingExtensions = chatMode === 'card' ? null : await cards.extensions(cardPath)
     const openingChoices = chatMode === 'card' ? [] : cardOpeningChoices(card)
     const selectedOpeningIndex = str(openingId) === '' ? 0 : Math.max(0, openingChoices.findIndex(function (choice) { return choice.id === str(openingId) }))
@@ -145,24 +149,27 @@ export function createConversationInitialization(options) {
     chat.runtimePresetSnapshot = runtimePresetSnapshot
     chat.runtimePresetPath = str(runtimePresetSnapshot && runtimePresetSnapshot.presetPath)
     chat.macroState = macroState
-    if (cardEditExperiment) chat.cardEditContext = { version: 1 }
+    // Card-bound card sessions, including the edit task, keep the card Agent persona
+    // and receive the foreground card + constant-worldbook snapshot, frozen at start.
+    // Sessions created by the retired edit experiment keep their cardEditContext.
+    if (chatMode === 'card' && card !== null) chat.cardReferenceContext = { version: 1 }
     if (preparation && groupOfMode(chatMode) === 'play') chat.openingWorldbookSnapshot = structuredClone(preparation.worldbookSnapshot)
     // The sidebar setting is the sole opt-in; opening previews and legacy clients cannot override it.
-    let profile = (groupOfMode(chat.mode) === 'play' || chat.mode === 'card') && options.userPreferenceProfile
+    const selectedProfile = options.userPreferenceProfile
       ? await options.userPreferenceProfile.read()
       : null
-    if (profile && groupOfMode(chat.mode) === 'play' && Object.hasOwn(profile, 'defaultProfileId')) {
-      profile = profile.defaultProfileId ? { ...await options.userPreferenceProfile.read(profile.defaultProfileId), defaultEnabled: true } : null
-    }
+    const profile = await defaultUserPreferenceProfile(options.userPreferenceProfile, selectedProfile)
+    if (chat.mode === 'card') chat.userProfileManagementId = selectedProfile?.profileId || 'default'
     chat.userProfileId = profile?.profileId || 'default'
-    chat.userProfileEnabled = (groupOfMode(chat.mode) === 'play' || chat.cardEditContext?.version === 1) && profile?.hasConfirmed === true && profile.defaultEnabled === true
-    chat.webSearchEnabled = false
-    chat.sceneImagesEnabled = false
+    chat.userProfileEnabled = profile?.hasConfirmed === true && profile.defaultEnabled === true
+    chat.webSearchEnabled = groupOfMode(chat.mode) === 'play' && defaults.webSearchEnabled
+    chat.sceneImagesEnabled = groupOfMode(chat.mode) === 'play' && defaults.sceneImagesEnabled
+    chat.statusBarPlacement = defaults.statusBarPlacement
     chat.conversationFeaturesVersion = 1
     chat.backgroundModelSelection = groupOfMode(chat.mode) === 'play' ? normalizeBackgroundModel(currentSettings.defaultBackgroundModel) : null
     chat.disabledWritingSkills = groupOfMode(chat.mode) === 'play' ? [...(currentSettings.defaultDisabledWritingSkills || [])] : []
     chat.backgroundConfigVersion = 1
-    chat.backgroundTasks = normalizeBackgroundTasks({})
+    chat.backgroundTasks = normalizeBackgroundTasks(groupOfMode(chat.mode) === 'play' ? defaults.backgroundTasks : {})
     chat.mvu = usesMvu ? {
       enabled: true,
       owner: 'official',
@@ -174,9 +181,7 @@ export function createConversationInitialization(options) {
         status: 'pending'
       }
     } : { enabled: false }
-    if (groupOfMode(chat.mode) === 'play' || chat.cardEditContext?.version === 1) {
-      await snapshots.prepare(chat, card)
-    }
+    await snapshots.prepare(chat, card)
     chat.openingText = greeting
     chat.presentationWarnings = openingProjection.warnings
     if (chat.mode === 'script') {
@@ -219,6 +224,7 @@ export function createConversationInitialization(options) {
         }
       }
     }
+    if (preparation && groupOfMode(chatMode) === 'play') applyOpeningCommand(chat, preparation.startCommand, preparation.messageVariables, now)
     delete chat.sceneOpeningWorldbook
     const hasSession = typeof sessionId === 'string' && sessionId !== ''
     if (importDraft) {
@@ -227,9 +233,11 @@ export function createConversationInitialization(options) {
       delete chat.sceneOpeningWorldbook
       return chat
     }
-    if (openingTarget && groupOfMode(chat.mode) === 'play' && currentSettings.defaultForegroundModel) {
-      await native.selectModel(openingTarget, currentSettings.defaultForegroundModel)
-    }
+    // The workbench default follows the foreground default unless set on its own.
+    const group = groupOfMode(chat.mode)
+    const defaultModel = group === 'play' ? currentSettings.defaultForegroundModel
+      : group === 'card' ? currentSettings.defaultWorkbenchModel || currentSettings.defaultForegroundModel : null
+    if (openingTarget && defaultModel) await native.selectModel(openingTarget, defaultModel)
     await chats.publish(chat)
     if (hasSession) await appendNativeOpening(sessionId, chat, card, openingTarget)
     return await present(chat, card)
@@ -311,7 +319,7 @@ export function createConversationInitialization(options) {
       await native.flush(target.session)
     }
     if (groupOfMode(chat.mode) === 'card') {
-      if (chat.cardEditContext?.version === 1) await native.ensurePrefix(target.session, await snapshots.ensure(chat, card))
+      await native.ensurePrefix(target.session, await snapshots.ensure(chat, card))
       await ensureSessionSeedTrajectory(target.session, chat.cardEditContext?.version === 1 ? 'story' : 'card')
       if (chat.cardEditContext?.version === 1) await native.ensureCardWorkspace(target.session, chat)
       await native.flush(target.session)

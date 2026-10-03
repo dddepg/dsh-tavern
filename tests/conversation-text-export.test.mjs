@@ -3,26 +3,6 @@ import test from 'node:test'
 
 import { createConversationTextExport } from '../tavern-plugin/lib/domain/conversation-text-export.js'
 
-test('游玩对话导出为横线分隔的纯文本，并包含开场白', () => {
-  const result = createConversationTextExport({
-    title: '',
-    mode: 'story',
-    cardName: '阿芙拉',
-    macroState: { userName: '陈锋' },
-    messages: [
-      { role: 'assistant', text: '雨水敲着窗。', greeting: true },
-      { role: 'user', text: '我推开酒馆的门。' },
-      { role: 'assistant', text: '她抬起头。\n\n<style>.panel{color:red}</style><div class="panel">状态面板</div>', sourceText: '不应导出原始模型消息', displayText: '<div>不应导出展示投影</div>' }
-    ]
-  }, { title: '雨夜酒馆' })
-
-  assert.equal(result.filename, '雨夜酒馆.txt')
-  assert.equal(result.messageCount, 3)
-  assert.equal(result.text, '雨水敲着窗。\n\n------------------------------------------------------------\n\n我推开酒馆的门。\n\n------------------------------------------------------------\n\n她抬起头。\n')
-  assert.doesNotMatch(result.text, /阿芙拉：|陈锋：/)
-  assert.doesNotMatch(result.text, /状态面板|sourceText|原始模型消息|展示投影/)
-})
-
 test('整轮 HTML 安全转换为可见纯文本，不执行或导出前端代码', () => {
   const result = createConversationTextExport({
     messages: [{

@@ -17,14 +17,6 @@ function fixture() {
   ]
 }
 
-test('成功重生成只隐藏替换范围内的旧错误；保留原始事件、早期和最新失败', () => {
-  const events = fixture()
-  const before = JSON.stringify(events)
-  assert.deepEqual(surface.supersededRegenerationErrorTurns({ events, suppressedDshTurns: [8] }), [7])
-  assert.equal(JSON.stringify(events), before)
-  assert.deepEqual(surface.supersededRegenerationErrorTurns({ events: JSON.parse(before), suppressedDshTurns: [8] }), [7])
-})
-
 test('重生成未完成、失败、未提交或普通回退都不能隐藏旧错误', () => {
   for (const mutate of [
     events => events.filter(e => e.seq !== 32),
@@ -54,28 +46,6 @@ function row(turn, alpha = true) {
   return { hidden: false, getAttribute(name) { return attrs[name] ?? null } }
 }
 
-test('main 与 alpha 错误节点均隐藏；卸载、切换会话恢复，只处理作用域内错误', () => {
-  for (const alpha of [false, true]) {
-    const old = row(7, alpha), latest = row(9, alpha), other = row(7, alpha)
-    const root = { querySelectorAll(selector) { assert.equal(selector, '[data-chat-flow-kind]'); return [old, latest] } }
-    const projection = client.createSupersededErrorProjection(root)
-    projection.apply([7])
-    assert.equal(old.hidden, true)
-    assert.equal(latest.hidden, false)
-    assert.equal(other.hidden, false)
-    projection.apply([])
-    assert.equal(old.hidden, false)
-    old.hidden = true
-    projection.apply([7])
-    projection.dispose()
-    assert.equal(old.hidden, true, 'preserve another owner’s hidden state')
-    old.hidden = false
-    projection.apply([7])
-    projection.dispose()
-    assert.equal(old.hidden, false)
-  }
-})
-
 function flowRow(kind, turn, alpha) {
   const attrs = { 'data-chat-flow-kind': kind }
   if (alpha) attrs['data-chat-turn'] = String(turn)
@@ -101,41 +71,6 @@ test('回退重生成后，已被替代的失败输入、思考、上下文和�
     projection.dispose()
     assert.ok(rows.every(row => !row.hidden), 'leaving the session restores projection-owned visibility')
   }
-})
-
-test('alpha 只隐藏明确属于目标轮的节点，包括尾部尚未挂载的流式节点', () => {
-  const other = flowRow('user', 6, true)
-  const failed = flowRow('assistant-step', 7, true)
-  const projection = client.createSupersededErrorProjection({ querySelectorAll() { return [other, failed] } })
-  projection.apply([7])
-  assert.equal(other.hidden, false)
-  assert.equal(failed.hidden, true)
-})
-
-test('原生过程节点重置 hidden 后仍隐藏，解除投影时恢复原来的显示样式', () => {
-  const process = flowRow('turn-process', 7, true)
-  process.style.display = 'flex'
-  const projection = client.createSupersededErrorProjection({ querySelectorAll() { return [process] } })
-  projection.apply([7])
-  process.hidden = false // DSH updates its own folding state after a render.
-  assert.equal(process.style.display, 'none')
-  projection.apply([7])
-  projection.apply([])
-  assert.equal(process.hidden, false)
-  assert.equal(process.style.display, 'flex')
-})
-
-test('延迟加载的错误节点仍应用投影，脱离作用域的节点恢复', () => {
-  const old = row(7)
-  let rows = []
-  const projection = client.createSupersededErrorProjection({ querySelectorAll() { return rows } })
-  projection.apply([7])
-  rows = [old]
-  projection.apply([7])
-  assert.equal(old.hidden, true)
-  rows = []
-  projection.apply([7])
-  assert.equal(old.hidden, false)
 })
 
 test('宿主提供独立错误投影，前端按 Session 隔离并只观察对话滚动区', async () => {

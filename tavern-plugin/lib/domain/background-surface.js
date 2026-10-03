@@ -1,6 +1,6 @@
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { restoredSurfaceSeqs } from './surface-restoration.js'
-import { sessionEvents, appendSessionEvent, surfaceReplacementRange } from './session-events.js'
+import { sessionEvents, surfaceReplacementRange } from './session-events.js'
 import { randomUUID } from 'node:crypto'
 
 export function rewindBackgroundSurface(session, boundary) {
@@ -34,7 +34,16 @@ export function rewindBackgroundSurface(session, boundary) {
       break
     }
   }
-  if (source === null) throw new Error('后台 Agent checkpoint 之后存在消息，但找不到可用的模型来源')
+  if (source === null) {
+    // The first model request can fail before any assistant message exists.
+    // This empty replacement is a Tavern surface edit, not provider output;
+    // use the same owned source as reply projections (including token metering).
+    source = { kind: 'model', provider: 'dsh-tavern', model: 'reply-projection' }
+    turn = 1
+    for (const group of groups) for (const seq of group) {
+      turn = Math.max(turn, Number(bySeq.get(seq)?.data?.turn) || 0)
+    }
+  }
   for (const shadowed of groups) replaceSessionSurface(session, 'assistant/message', {
     turn,
     step,

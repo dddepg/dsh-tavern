@@ -5,7 +5,11 @@ function installTavernBackgroundModel({ window, request }) {
     const model = '本局后台模型';
     const nativeFetch = window.fetch && window.fetch.bind(window);
     if (nativeFetch) window.fetch = async function (input, init) {
-        const url = new URL(typeof input === 'string' ? input : input?.url || String(input), window.location.href);
+        let url;
+        try {
+            // srcdoc inherits a usable document base, but its location is about:srcdoc.
+            url = new URL(typeof input === 'string' ? input : input?.url || String(input), window.document?.baseURI || window.location.href);
+        } catch (_) { return nativeFetch(input, init); }
         const completion = /\/chat\/completions\/?$/.test(url.pathname);
         const models = url.origin === 'https://dsh-background.invalid' && /\/models\/?$/.test(url.pathname);
         if (!completion && !models) return nativeFetch(input, init);
@@ -94,7 +98,10 @@ function installTavernBackgroundModel({ window, request }) {
     try { if (window.parent !== window && window.parent.document) adapt(window.parent.document); } catch (_) {}
     // Expose the actual host connection through MVU's public settings contract.
     // Serialization keeps the user's stored connection values, not adapter tokens.
-    const managedMvu = { 模型来源:'自定义', api地址:base, 密钥:'host-managed', 模型名称:model };
+    // MVU only emits its random Gemini header for a Gemini model name. The host
+    // connection does not use that path; expose its effective value, retaining the
+    // saved connection's preference through serialization and normalization.
+    const managedMvu = { 模型来源:'自定义', api地址:base, 密钥:'host-managed', 模型名称:model, 随机头部:false };
     const views = new WeakMap();
     function projectMvuSettings(value) {
         if (!value || typeof value !== 'object') return value;

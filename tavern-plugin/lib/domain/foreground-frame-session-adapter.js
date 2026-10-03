@@ -1,5 +1,6 @@
 import { foregroundFrameText } from './agent-input-frame.js'
 import { worldbookSnapshot } from './worldbook-snapshot.js'
+import { cardSystemPromptSnapshot, cardSystemPromptSource } from './card-system-prompt.js'
 
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
@@ -31,6 +32,15 @@ export function createForegroundFrameSessionAdapter(options = {}) {
       source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'worldbook-snapshot',
         worldbookSnapshot: snapshot, trace: { frameId: frame.frameId, turn: frame.turn, operationId: frame.operationId } }
     }] : []
+    if (typeof frame.source?.card?.systemPromptText === 'string') {
+      const update = cardSystemPromptSnapshot(input.session, frame.source.card.systemPromptText, input.historyMessages || messages, input.openingText)
+      if (update) snapshots.push({
+        id: makeId() + ':card-system-prompt', role: 'user',
+        content: [{ type: 'text', text: update.rendered }],
+        source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'card-system-prompt-update',
+          trace: { frameId: frame.frameId, turn: frame.turn, operationId: frame.operationId, ...cardSystemPromptSource(update) } }
+      })
+    }
     const text = foregroundFrameText({ contributions })
     if (text === '') return { messages: messages.concat(snapshots), receipt: { appended: snapshots.length > 0, reason: snapshots.length ? 'appended' : 'empty', frameId: frame.frameId } }
     const sections = contributions.map(function (item, index) {

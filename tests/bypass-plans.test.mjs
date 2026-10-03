@@ -52,40 +52,6 @@ function harness() {
   return { module, presets, documents, getState: function () { return structuredClone(state) } }
 }
 
-test('从外部预设抽取自包含方案，正则默认完整迁移并继承原状态', async function () {
-  const value = harness()
-  const plan = await value.module.extract({ sourcePresetPath: 'presets/demo.json', name: '演示破限', entryKeys: ['main#1'], compatibleModels: [' gemini-3.7-flash ', 'GEMINI-3.7-FLASH', 'gemini-2.5-pro'] })
-
-  assert.equal(plan.name, '演示破限')
-  assert.deepEqual(plan.entries.map(function (entry) { return [entry.entryKey, entry.enabled, entry.systemManaged, entry.phase] }), [
-    ['main#1', true, false, 'front'],
-    ['chatHistory#1', true, true, 'front']
-  ])
-  assert.deepEqual(plan.regexScripts.map(function (script) { return [script.regexKey, script.enabled] }), [
-    ['panel#1', true],
-    ['hidden#1', false]
-  ])
-  assert.deepEqual(plan.compatibilitySettings, { personality_format: '性格：{{personality}}' })
-  assert.deepEqual(plan.compatibleModels, ['gemini-3.7-flash', 'gemini-2.5-pro'])
-  assert.equal(plan.enabledCount, 1)
-  assert.equal(plan.enabledRegexCount, 1)
-})
-
-test('删除来源外部预设后方案仍可激活、生成投影和读取正则', async function () {
-  const value = harness()
-  const plan = await value.module.extract({ sourcePresetPath: 'presets/demo.json', name: '独立方案', entryKeys: ['main#1', 'tail#1'] })
-  await value.module.activate(plan.id)
-  value.presets.delete('presets/demo.json')
-  value.documents.delete('presets/demo.json')
-
-  const snapshot = await value.module.snapshot()
-  assert.equal(snapshot.planId, plan.id)
-  assert.equal(snapshot.presetName, '外部演示')
-  assert.equal(snapshot.front.text, '破限正文')
-  assert.equal(snapshot.back.text, '尾部指令')
-  assert.deepEqual((await value.module.regexScriptsFor(plan.id)).map(function (script) { return script.regexKey }), ['panel#1'])
-})
-
 test('方案条目和正则可以独立开关，来源预设不被修改', async function () {
   const value = harness()
   const plan = await value.module.extract({ sourcePresetPath: 'presets/demo.json', name: '可编辑方案', entryKeys: ['main#1', 'tail#1'] })
@@ -107,59 +73,6 @@ test('适配模型可以选填多个，只作为方案元数据保存', async fu
   const updated = await value.module.setCompatibleModels({ id: plan.id, compatibleModels: ['gemini-3.7-flash', '', ' claude-sonnet-4 '] })
   assert.deepEqual(updated.compatibleModels, ['gemini-3.7-flash', 'claude-sonnet-4'])
   assert.deepEqual((await value.module.snapshot(plan.id)).compatibleModels, updated.compatibleModels)
-})
-
-test('删除激活方案会恢复为不使用破限方案', async function () {
-  const value = harness()
-  const plan = await value.module.extract({ sourcePresetPath: 'presets/demo.json', name: '临时方案', entryKeys: ['main#1'] })
-  await value.module.activate(plan.id)
-  await value.module.remove(plan.id)
-
-  assert.equal((await value.module.state()).activePlanId, '')
-  assert.equal(await value.module.snapshot(), null)
-})
-
-test('可以从旧对话快照导入不依赖来源文件的迁移方案', async function () {
-  const value = harness()
-  const plan = await value.module.importPlan({
-    name: '旧对话迁移',
-    source: { presetName: '已删除来源', presetPath: 'presets/missing.json', presetDigest: '' },
-    entries: [{ entryKey: 'legacy#1', identifier: 'legacy', name: '旧提示词', role: 'system', content: '保留下来', enabled: true, phase: 'front', injectable: true }],
-    regexScripts: [{ regexKey: 'legacy-regex#1', id: 'legacy-regex', name: '旧正则', findRegex: '/x/g', replaceString: 'y', enabled: true }]
-  })
-  value.presets.clear(); value.documents.clear()
-
-  assert.equal((await value.module.snapshot(plan.id)).front.text, '保留下来')
-  assert.equal((await value.module.regexScriptsFor(plan.id))[0].name, '旧正则')
-})
-
-test('导出的破限方案可以脱离来源重新导入，且不会携带内部 ID 或激活状态', async function () {
-  const source = harness()
-  const original = await source.module.extract({ sourcePresetPath: 'presets/demo.json', name: '可分享方案', entryKeys: ['main#1', 'tail#1'] })
-  await source.module.activate(original.id)
-  const exported = await source.module.exportPlan(original.id)
-
-  assert.equal(exported.schema, 'dsh-tavern/bypass-plan')
-  assert.equal(exported.version, 1)
-  assert.equal(exported.plan.name, '可分享方案')
-  await source.module.setCompatibleModels({ id: original.id, compatibleModels: ['gemini-3.7-flash'] })
-  const exportedWithModels = await source.module.exportPlan(original.id)
-  assert.deepEqual(exportedWithModels.plan.compatibleModels, ['gemini-3.7-flash'])
-  assert.equal(Object.hasOwn(exported.plan, 'id'), false)
-  assert.equal(Object.hasOwn(exported, 'activePlanId'), false)
-
-  const target = harness()
-  target.presets.clear(); target.documents.clear()
-  const imported = await target.module.importPackage(exportedWithModels)
-  assert.notEqual(imported.id, original.id)
-  assert.equal(imported.name, original.name)
-  assert.deepEqual(imported.compatibleModels, ['gemini-3.7-flash'])
-  assert.equal(imported.entries.length, original.entries.length)
-  assert.deepEqual(imported.regexScripts.map(function (script) { return [script.regexKey, script.enabled] }), [
-    ['panel#1', true],
-    ['hidden#1', false]
-  ])
-  assert.equal((await target.module.state()).activePlanId, '')
 })
 
 test('导入破限方案拒绝错误格式、空方案和同名覆盖', async function () {

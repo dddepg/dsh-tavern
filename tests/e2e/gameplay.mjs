@@ -1,7 +1,9 @@
+import { backgroundFailureChecks } from './background-failure.mjs'
 import { createConversationPageStore } from '../../tavern-plugin/lib/domain/conversation-page-store.js'
 import { createConversationState } from '../../tavern-plugin/lib/domain/conversation-state.js'
 import { settlementPerformanceChecks, settlementPerformanceInitialVariables } from './settlement-performance.mjs'
 import {setupRealVariables,realVariableLookupChecks} from './real-variable-lookup.mjs'
+import { setupRealCharacterDesign, realCharacterDesignChecks } from './real-character-design.mjs'
 import { incrementalMvuChecks } from './mvu-incremental.mjs'
 import {openingUpdateChecks} from './opening-update.mjs'
 import { backgroundLifecycleChecks } from './background-lifecycle.mjs'
@@ -165,6 +167,7 @@ try {
     } }))
   })
   if(process.argv.includes('--real-variables')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealVariables({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
+  if(process.argv.includes('--real-character-design')) {report.scope='real isolated DSH + Chromium + configured live model';report.model=await setupRealCharacterDesign({root,profile,data,runtimeHome:join(homedir(),'.dsh-tavern')})}
   await step('启动真实 DSH 与酒馆', async () => {
     async function launchServer() {
       const logOffset = log.length
@@ -177,7 +180,7 @@ try {
           TAVERN_E2E_PERFORMANCE_DIR: process.argv.includes('--settlement-performance') ? output : '',
           TAVERN_PERF_HISTORY_READY: process.env.TAVERN_PERF_HISTORY_READY || '',
           TAVERN_PERF_BODY_REPEATS: process.env.TAVERN_PERF_BODY_REPEATS || '',
-          TAVERN_E2E_BACKGROUND_DIR: process.argv.includes('--background-lifecycle') ? output : '',
+          TAVERN_E2E_BACKGROUND_DIR: (process.argv.includes('--background-lifecycle') || process.argv.includes('--background-failure')) ? output : '',
           TAVERN_E2E_REQUEST_AUDIT: join(output, 'preset-requests.jsonl'),
           TAVERN_E2E_MEMORY_AUDIT: process.argv.includes('--card-memory') ? join(output, 'memory-requests.jsonl') : '',
           TAVERN_E2E_LLM_MODULE: join(modules, '@deepseek-ai/dsh-llm/lib/index.js'),
@@ -280,10 +283,14 @@ try {
       }
       assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
     })
+  } else if (process.argv.includes('--real-character-design')) {
+    await realCharacterDesignChecks({page,step,savedChat,root,data,output,report})
   } else if (process.argv.includes('--real-variables')) {
     await realVariableLookupChecks({page,step,savedChat,root,output,report})
   } else if (process.argv.includes('--opening-update')) {
     await openingUpdateChecks({page,step,savedChat,data,output,report,root})
+  } else if (process.argv.includes('--background-failure')) {
+    await backgroundFailureChecks({page,step,savedChat,output,report})
   } else if (recoveryScenario) {
     await surfaceRecoveryChecks({ page, step, savedChat, output, report, root, restartServer })
   } else {
@@ -432,7 +439,7 @@ try {
       await page.getByText('5 个候选项', { exact: true }).waitFor()
       assert.deepEqual(inspectSaved(await savedChat()), report.afterReload, '生成候选不能修改正文或金币')
       const candidates = page.locator('.dsh-tavern-candidate-question')
-      if (await candidates.getByTitle('展开', { exact: true }).isVisible()) await candidates.getByTitle('展开', { exact: true }).click()
+      if (await candidates.getByTitle('展开行动列表', { exact: true }).isVisible()) await candidates.getByTitle('展开行动列表', { exact: true }).click()
       await page.getByRole('button', { name: /再次领取奖励/ }).click()
       assert.equal(await candidates.locator('.dsh-tavern-question-option').count(), 5)
       await page.getByRole('button', { name: '追加到输入框', exact: true }).click()

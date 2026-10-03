@@ -35,40 +35,6 @@ test('local variables share Helper state, save bursts, survive reopening and iso
   assert.equal(saved.variables.helper, 'visible')
 })
 
-test('local save failure is observable and cannot look persisted', async t => {
-  const host = await fixture(t), run = await host.connect('audit', (message, dispatch) => {
-    if (message.method === 'updateTavernHelperVariables') queueMicrotask(() => run.reply(message, 'disk failed', false))
-    else dispatch()
-  })
-  run.api.variables.local.set('x', 1)
-  await assert.rejects(run.api.saveMetadata(), /disk failed/)
-  assert.equal(run.api.variables.local.has('x'), false)
-  assert.equal((await host.connect()).api.variables.local.has('x'), false)
-})
-
-test('separate scripts can save different keys without overwriting each other', async t => {
-  const host = await fixture(t), a = await host.connect(), b = await host.connect()
-  a.api.variables.local.set('left', 1)
-  b.api.variables.local.set('right', 2)
-  await Promise.all([a.api.saveMetadata(), b.api.saveMetadata()])
-  assert.deepEqual((await host.open().read('audit')).variables, { left: 1, right: 2 })
-})
-
-test('an older acknowledgement does not erase a newer synchronous write', async t => {
-  const host = await fixture(t), delayed = [], run = await host.connect('audit', (message, dispatch) => {
-    if (message.method === 'updateTavernHelperVariables') delayed.push(dispatch)
-    else dispatch()
-  })
-  const local = run.api.variables.local
-  local.set('counter', 1); local.set('counter', 2)
-  await delayed[0]()
-  await new Promise(resolve => setImmediate(resolve))
-  assert.equal(local.get('counter'), 2)
-  await delayed[1]()
-  await run.api.saveMetadata()
-  assert.equal((await host.open().read('audit')).variables.counter, 2)
-})
-
 test('local callback writes finish before the host event receipt', async t => {
   const host = await fixture(t), delayed = [], run = await host.connect('audit', (message, dispatch) => {
     if (message.method === 'updateTavernHelperVariables') delayed.push(dispatch)

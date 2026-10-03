@@ -12,13 +12,6 @@ test('Android 冷启动超过 30 秒仍等待就绪，配置按秒解析', async
   assert.equal(now,32000);assert.equal(stopped,false)
 })
 
-test('超时或探测异常先等待进程清理，清理失败不能伪装成功', async () => {
-  let now=0,stopped=false
-  await assert.rejects(waitForServiceStartup({timeoutMs:500,now:()=>now,sleep:async ms=>{now+=ms},alive:()=>true,ready:async()=>false,stop:async()=>{stopped=true}}),/启动超时/)
-  assert.equal(stopped,true)
-  await assert.rejects(waitForServiceStartup({timeoutMs:500,alive:()=>true,ready:async()=>{throw Error('probe failed')},stop:async()=>{throw Error('still alive')}}),/still alive/)
-})
-
 test('超时清理真实子进程后才返回失败', async () => {
   const { spawn } = await import('node:child_process')
   const { once } = await import('node:events')

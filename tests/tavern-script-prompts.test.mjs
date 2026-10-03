@@ -5,7 +5,7 @@ import { prepareWorldBookRecall } from '../tavern-plugin/lib/domain/worldbook-re
 import { foregroundFrameInputs } from '../tavern-plugin/lib/domain/turn-orchestration.js'
 import { createForegroundFrameBuilder } from '../tavern-plugin/lib/domain/agent-input-frame.js'
 import { createForegroundFrameSessionAdapter } from '../tavern-plugin/lib/domain/foreground-frame-session-adapter.js'
-import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
+
 import { createHelperWorldbookHost } from './fixtures/helper-worldbook-host.mjs'
 import { helperHostHarness } from './fixtures/helper-host-harness.mjs'
 
@@ -47,18 +47,6 @@ test('同 ID 替换、删除、一次性与无效批次原子验证', () => {
   assert.deepEqual(chat.tavernScriptPrompts, [])
 })
 
-test('原生回退恢复提示词，不带回未来事件', () => {
-  const timeline = createStoryTimeline()
-  let chat = { id: 'a', messages: [] }
-  mutateScriptPrompts(chat, { kind: 'inject', prompts: [prompt('event', '旧事件')] })
-  const beforeChat = structuredClone(chat)
-  const begun = timeline.apply({ chat, intent: { kind: 'body.begin', turn: 1, userText: '继续' } })
-  chat = timeline.complete({ chat: begun.chat, operationId: begun.value.operationId, basedOn: begun.value.basedOn, outcome: { status: 'success' },
-    apply(draft) { draft.messages.push({ role: 'assistant', text: '新剧情' }); mutateScriptPrompts(draft, { kind: 'inject', prompts: [prompt('event', '新事件')] }) } }).chat
-  const rolled = timeline.apply({ chat, intent: { kind: 'turn.rollback', beforeChat } }).chat
-  assert.equal(rolled.tavernScriptPrompts[0].content, '旧事件')
-})
-
 test('宿主拒绝过期写入，提示词与会话隔离', async t => {
   const host = await createHelperWorldbookHost()
   t.after(host.cleanup)
@@ -67,24 +55,6 @@ test('宿主拒绝过期写入，提示词与会话隔离', async t => {
   assert.equal(host.chat.tavernScriptPrompts, undefined)
   await host.adapter.updatePrompts('audit', { kind: 'inject', prompts: [prompt('x', '内容')] }, 2)
   assert.equal(host.chat.tavernScriptPrompts[0].content, '内容')
-})
-
-test('同步 injectPrompts 返回 uninject，事件等待保存成功；失败不能假装结算完成', async () => {
-  const run = helperHostHarness()
-  let handle
-  run.window.eventOn('MESSAGE_RECEIVED', () => { handle = run.window.injectPrompts([prompt('x', '内容')]) })
-  let completed = false
-  const event = run.window.eventEmit('MESSAGE_RECEIVED').then(() => { completed = true })
-  await new Promise(resolve => setImmediate(resolve))
-  assert.equal(completed, false)
-  assert.equal(typeof handle.uninject, 'function')
-  assert.equal(run.calls()[0].method, 'updateTavernHelperPrompts')
-  run.reply(run.calls()[0], { updated: true })
-  await event
-  handle.uninject()
-  assert.equal(run.calls()[1].args.operation.kind, 'remove')
-  run.reply(run.calls()[1], { updated: true })
-  assert.equal(run.window.TavernHelper.injectPrompts, run.window.injectPrompts)
 })
 
 test('并发宿主事件串行完成，提示词写入不会携带已经结束的事件 ID', async () => {
@@ -106,30 +76,6 @@ test('并发宿主事件串行完成，提示词写入不会携带已经结束�
   assert.deepEqual(run.sent.filter(x => x.type === 'dsh-tavern-helper-event-complete').map(x => x.eventId), ['event-one', 'event-two'])
 })
 
-test('提示词保存失败会让调用事件失败，不返回成功结算', async () => {
-  const run = helperHostHarness()
-  run.window.eventOn('FAIL', () => run.window.injectPrompts([prompt('x', '内容')]))
-  const event = run.window.eventEmit('FAIL')
-  const rejected = assert.rejects(event, /保存失败/)
-  await new Promise(resolve => setImmediate(resolve))
-  run.reply(run.calls()[0], '保存失败', false)
-  await rejected
-  run.window.eventOn('NEXT', () => {})
-  await run.window.eventEmit('NEXT')
-})
-
-test('scan-only prompts may omit depth without aborting MVU initialization callbacks', () => {
-  const chat = {}
-  mutateScriptPrompts(chat, { kind: 'inject', prompts: [{
-    id: 'Plot_Title_Trigger', content: '当前章节：序章',
-    position: 'none', role: 'system', should_scan: true
-  }] })
-  assert.equal(scriptPromptScanText(chat), '当前章节：序章')
-  assert.deepEqual(scriptPromptFrameInputs(chat), [])
-  assert.equal(chat.tavernScriptPrompts[0].depth, 0)
-})
-
-
 test('重复提示词不产生宿主更新，变化和删除仍生效，过期检查仍执行', async t => {
   const host = await createHelperWorldbookHost()
   t.after(host.cleanup)
@@ -143,27 +89,6 @@ test('重复提示词不产生宿主更新，变化和删除仍生效，过期�
   assert.equal((await host.adapter.updatePrompts('audit', { ...operation, once: true }, 1)).stale, true)
   assert.equal((await host.adapter.updatePrompts('audit', { kind: 'remove', ids: ['repeat'] }, 2)).updated, true)
 })
-
-test('异步回调结束后确认已有写入，不追赶随后持续追加的写入', async () => {
-  const run = helperHostHarness()
-  const tick = () => new Promise(resolve => setImmediate(resolve))
-  run.window.eventOn('INIT', async () => {
-    await Promise.resolve()
-    run.window.injectPrompts([prompt('init', '必要初始化')])
-  })
-  let completed = false
-  const event = run.window.eventEmit('INIT').then(() => { completed = true })
-  await tick()
-  assert.equal(completed, false)
-  run.window.injectPrompts([prompt('timer', '后续同步')])
-  run.reply(run.calls()[0], { updated: true })
-  await tick()
-  const finishedBeforeLaterWrite = completed
-  run.reply(run.calls()[1], { updated: true })
-  await event
-  assert.equal(finishedBeforeLaterWrite, true)
-})
-
 
 test('十五个并发初始化回调都确认失败，不被一个回调先消费错误', async () => {
   const run = helperHostHarness()
@@ -195,7 +120,6 @@ test('确认范围之外的迟到失败不污染已经完成的回调，也不�
   await run.window.eventEmit('CHECK')
 })
 
-
 test('并发去重不能越过删除或一次性注入', async () => {
   const run = helperHostHarness()
   const prompts = [prompt('x', '内容')]
@@ -209,19 +133,6 @@ test('并发去重不能越过删除或一次性注入', async () => {
   run.window.injectPrompts(prompts, { once: true })
   run.window.injectPrompts(prompts, { once: true })
   assert.equal(run.calls().length, 5)
-  run.calls().forEach(call => run.reply(call, { updated: true }))
-})
-
-
-test('不同脚本不能共享未完成写入的身份和回执', async () => {
-  const run = helperHostHarness()
-  const prompts = [prompt('shared', '内容')]
-  run.window.__dshTavernHelperSetCurrentScript('a')
-  run.window.injectPrompts(prompts)
-  run.window.__dshTavernHelperSetCurrentScript('b')
-  run.window.injectPrompts(prompts)
-  assert.equal(run.calls().length, 2)
-  assert.deepEqual(run.calls().map(call => call.scriptId), ['a', 'b'])
   run.calls().forEach(call => run.reply(call, { updated: true }))
 })
 

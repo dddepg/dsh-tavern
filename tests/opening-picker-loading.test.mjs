@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const source = readFileSync(new URL("../tavern-plugin/src/client/main.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../tavern-plugin/lib/client.js", import.meta.url), "utf8");
 const prepare = source.slice(source.indexOf("async function preparePlayConversation(card)"), source.indexOf("async function importCard(file)"));
 const start = source.indexOf('React.useEffect(function () {\n\t\t\t\tif (!openingPicker');
 const effect = source.slice(start, source.indexOf("React.useEffect", start + 20));
@@ -19,6 +19,7 @@ function harness() {
     setBusy: value => { state.busy = value; },
     setError: value => { state.error = value; },
     setOpeningPicker: value => { state.openingPicker = typeof value === "function" ? value(state.openingPicker) : value; },
+    rpc: async () => ({ settings: { defaultPlaySettings: { playerName: "你" } } }),
     call: () => { state.calls++; return pending; },
     React: { useEffect: fn => fn() },
   });
@@ -29,6 +30,7 @@ function harness() {
 test("shows pending picker before RPC completes and does not request initial openings twice", async () => {
   const h = harness();
   const running = h.run();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.state.busy, true);
   assert.equal(h.state.openingPicker.preparing, true);
   h.effect();
@@ -53,6 +55,7 @@ test("shows pending picker before RPC completes and does not request initial ope
 test("failed preparation returns to card selection without allowing an empty start", async () => {
   const h = harness();
   const running = h.run();
+  await new Promise(resolve => setImmediate(resolve));
   h.reject(new Error("fixture failure"));
   await running;
   assert.equal(h.state.openingPicker, null);

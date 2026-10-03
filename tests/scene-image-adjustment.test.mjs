@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { applyImageAdjustment, legacyImagePlan } from '../tavern-plugin/lib/domain/scene-image-adjustment.js'
+import { applyImageAdjustment } from '../tavern-plugin/lib/domain/scene-image-adjustment.js'
 
 const base = { id: 'original', profile: 'tags-a', description: '雨中人物', people: [{ id: 'p1', name: '林岚' }], blocks: [
   { id: 'hair', owner: 'p1', field: 'appearance', text: '黑色短发', tags: 'short black hair' },
@@ -20,12 +20,4 @@ test('conversion covers every nonempty block and cannot alter facts or invent ow
   assert.throws(() => applyImageAdjustment(base, update([{ ...patches[0], owner: 'stranger' }]), 'tags-a'), /不属于/)
   assert.throws(() => applyImageAdjustment(base, update([patches[0], patches[0]]), 'tags-a'), /只能修改一次/)
   assert.throws(() => applyImageAdjustment(base, update([{ ...patches[0], tags: '' }]), 'tags-a'), /同时清除/)
-})
-
-test('legacy saved prompts can be converted without truncating their facts', () => {
-  const legacy = legacyImagePlan({ prompt: 'long scene '.repeat(150) }, 'old')
-  const block = legacy.blocks[0]
-  const result = applyImageAdjustment(legacy, update([{ ...block, tags: 'converted complete scene' }]), 'new', 'convert')
-  assert.equal(result.blocks[0].text, legacy.prompt)
-  assert.equal(result.prompt, 'converted complete scene')
 })

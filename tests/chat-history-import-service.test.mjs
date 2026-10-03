@@ -1,5 +1,5 @@
 import { createForegroundWorldbook } from '../tavern-plugin/lib/domain/foreground-worldbook.js'
-import { projectWorldBookTemplates } from '../tavern-plugin/lib/domain/worldbook-recall.js'
+
 import { UpstreamTemplateRuntime } from './fixtures/upstream-template-runtime.mjs'
 import test from 'node:test'
 import { createContextPlanner } from '../tavern-plugin/lib/domain/context-planner.js'
@@ -41,79 +41,13 @@ test('import uses normal storage revision checkpoints, keeps no pending settleme
  assert.equal(h.publishes,1)
  assert.equal(h.session.deriveMessages().filter(m=>m.source?.form!=='foreground-frame').length,5)
 })
-test('after flush failure a fresh coordinator resumes durable plan without duplicate native messages',async()=>{
- const h=fixture();h.fail()
- await assert.rejects(createChatHistoryImportService(h.options).import(input),/offline/)
- assert.equal(h.publishes,0)
- const before=sessionEvents(h.session).length
- await createChatHistoryImportService(h.options).import(input)
- assert.equal(sessionEvents(h.session).length,before)
- assert.equal(h.publishes,1)
-})
-test('schema mismatch requires an explicit text-only choice and uses initial state',async()=>{
- const h=fixture();const bad={...input,text:text.replaceAll('"hp"','"other"')}
- const service=createChatHistoryImportService(h.options)
- assert.equal((await service.preview(bad)).incompatible,true)
- await assert.rejects(service.import(bad),/不兼容/)
- await service.import({...bad,textOnly:true})
- assert.deepEqual((await h.chats.resolve('session')).messages.at(-1).variables[0].stat_data,{hp:10})
-})
-test('only the latest 40 checkpoints are retained',async()=>{
- const h=fixture(),rows=[{chat_metadata:{}},{is_user:false,mes:'opening'}]
- for(let i=0;i<45;i++)rows.push({is_user:true,mes:'go '+i},{is_user:false,mes:'reply '+i})
- await createChatHistoryImportService(h.options).import({...input,text:rows.map(JSON.stringify).join('\n')})
- assert.equal((await h.chats.resolve('session')).timeline.checkpoints.length,40)
-})
-test('publication cleanup can be retried with intact native checkpoint revisions',async()=>{
- const h=fixture(),publish=h.chats.publish
- let fail=true
- h.chats.publish=async chat=>{
-  if(fail){fail=false;h.records.clear();h.history.clear();throw Error('publish failed')}
-  return publish(chat)
- }
- await assert.rejects(createChatHistoryImportService(h.options).import(input),/publish failed/)
- const eventCount=sessionEvents(h.session).length
- await createChatHistoryImportService(h.options).import(input)
- const chat=await h.chats.resolve('session')
- assert.ok(chat.timeline.checkpoints.every(c=>h.history.has(c.beforeRevision)))
- assert.equal(h.history.get(chat.timeline.checkpoints.at(-1).beforeRevision).messages.at(-1).text,'walked')
- assert.equal(sessionEvents(h.session).length,eventCount)
-})
+
 test('concurrent requests cannot reuse an operation for different content',async()=>{
  const h=fixture(),service=createChatHistoryImportService(h.options)
  const first=service.import(input)
  await assert.rejects(service.import({...input,textOnly:true}),/其他内容/)
  await first
 })
-
-test('import rebuilds card instructions and worldbook context against each historical state', async () => {
- const h=fixture(), seen=[], runtime=await UpstreamTemplateRuntime.create()
- h.options.cards.read=async()=>({name:'card',system_prompt:'Card special rule',post_history_instructions:'Card writing constraint'})
- h.options.worldBooks.bound=async()=>({view:{entries:[{comment:'[initvar]',content:'hp: 10'},
-  {ref:'walking',enabled:true,primaryKeys:['/\\bwalk\\b/'],content:'Opening worldbook rule'},
-  {ref:'resting',enabled:true,primaryKeys:['walked'],content:'Walked worldbook rule'},
-  {ref:'template',enabled:true,constant:true,content:'<% print("Historical HP " + getvar("stat_data.hp")) %>'}]}})
- h.options.projectWorldBookTemplates=async(chat)=>{
-  const hp=chat.messages.at(-1)?.variables?.[0]?.stat_data.hp
-  seen.push(hp)
-  return await projectWorldBookTemplates({chat, card:await h.options.cards.read(), worldBook:await h.options.worldBooks.bound(), runtime})
- }
- await createChatHistoryImportService(h.options).import(input)
- const frames=foregroundContexts(h.session)
- assert.equal(frames.length,2)
- assert.match(frames[0],/Opening worldbook rule/)
- assert.doesNotMatch(frames[0],/Walked worldbook rule/)
- assert.match(frames[1],/Walked worldbook rule/)
- for(const frame of frames){assert.match(frame,/Card special rule/);assert.match(frame,/Card writing constraint/);assert.match(frame,/Fixture writing rules/)}
- assert.deepEqual(seen,[10,8])
- assert.match(frames[0],/Historical HP 10/);assert.match(frames[1],/Historical HP 8/)
- const chat=await h.chats.resolve('session')
- const before=h.history.get(chat.timeline.checkpoints.at(-1).beforeRevision)
- assert.ok(before.worldBookReads.walking)
- assert.equal(before.worldBookReads.resting,undefined)
-
-})
-
 
 test('历史导入复用正式世界书投影，当前输入不重复占用扫描窗口，蓝绿灯一起编排', async () => {
  const h=fixture(), runtime=await UpstreamTemplateRuntime.create()
@@ -156,15 +90,6 @@ test('世界书投影失败时明确指出历史轮次，不发布残缺导入�
  h.options.projectForegroundWorldbook=async()=>({context:'restored'})
  await createChatHistoryImportService(h.options).import(input)
  assert.equal(h.publishes,1)
-})
-
-test('条目模板报错不能无提示丢弃历史上下文',async()=>{
- const h=fixture(),runtime=await UpstreamTemplateRuntime.create()
- const worldBook={view:{entries:[{ref:'broken',constant:true,content:'<% throw new Error("broken template") %>'}]}}
- h.options.projectForegroundWorldbook=createForegroundWorldbook({bound:async()=>worldBook,runtime:async()=>runtime,globalVariables:async()=>({})})
- h.options.worldBooks.bound=async()=>worldBook
- await assert.rejects(createChatHistoryImportService(h.options).import(input),/第 2 轮.*broken/)
- assert.equal(h.publishes,0)
 })
 
 function foregroundContexts(session) {

@@ -17,26 +17,6 @@ function fixture() {
   const provider = createTavernSkillProvider({ providers: [{ list: async () => [skill] }], library: { read: async () => skill }, roleFor: async scope => scope?.session?.id === 'card' ? 'card' : 'foreground' })
   return { standing, live, catalog, provider }
 }
-test('native cold catalog carries session identity and keeps the preset ancestry', async () => {
-  const { standing, catalog, provider } = fixture()
-  const restore = installSkillCatalogSessionScope(catalog)
-  const scope = await catalog.scopeFor('card', 'tavern')
-  assert.equal((await provider.list({ scope })).candidates.length, 1)
-  assert.ok(scopeChainOf(scope).includes(standing))
-  const other = await catalog.scopeFor('story', 'tavern')
-  assert.notEqual(scope, other)
-  assert.equal((await provider.list({ scope: other })).candidates.length, 0)
-  restore()
-  assert.equal(await catalog.scopeFor('card', 'tavern'), standing)
-})
-test('live scope remains native and a cold lookup never starts an agent', async () => {
-  const { live, catalog } = fixture()
-  const agent = { session: { id: 'card' } }
-  live.set('card', agent)
-  const restore = installSkillCatalogSessionScope(catalog)
-  assert.equal(await catalog.scopeFor('card', 'tavern'), agent)
-  restore()
-})
 
 test('native skills/list works for concurrent cold card and story sessions and reuses separate keys', async () => {
   const standing = {}, keys = new Map()

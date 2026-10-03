@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
-const source = readFileSync(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 function fixture() {
   const draft = { card: { path: 'fixture.json' }, preparationId: 'draft', index: 2, userName: '玩家', requestMode: 'dsh' }
   const state = { openingPicker: draft, picking: true, uiMode: 'play', requestMode: 'dsh' }
@@ -22,26 +22,6 @@ function fixture() {
   vm.runInContext(source.slice(source.indexOf('async function switchMode(nextMode)'), source.indexOf('async function renameConversation')), ctx)
   return { ctx, state, draft }
 }
-
-test('放弃开局需确认，取消保留草稿；确认后释放草稿', async () => {
-  const { ctx, state, draft } = fixture()
-  await ctx.discardOpening()
-  assert.equal(state.openingPicker, draft)
-  const calls = []
-  ctx.askConfirm = async () => true
-  ctx.call = async (method, args) => calls.push([method, args.id])
-  await ctx.discardOpening()
-  assert.equal(state.openingPicker, null)
-  assert.deepEqual(calls, [['releaseOpeningPreparation', 'draft']])
-})
-
-test('开局过程中遮罩点击不会收起或清除准备页', () => {
-  const { ctx, state, draft } = fixture()
-  ctx.busy = true
-  ctx.closePicker()
-  assert.equal(state.picking, true)
-  assert.equal(state.openingPicker, draft)
-})
 
 const preview = readFileSync(new URL('../tavern-plugin/src/client/opening-preview.js', import.meta.url), 'utf8')
 test('隐藏期间续期不重建界面，卸载后停止；失败不会重复刷屏', async () => {

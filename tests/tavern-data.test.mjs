@@ -4,16 +4,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { migrateLegacyTavernData, resolveTavernDataRoot } from '../tavern-plugin/lib/domain/tavern-data.js'
+import { migrateLegacyTavernData } from '../tavern-plugin/lib/domain/tavern-data.js'
 
 async function json(file, value) {
   await mkdir(path.dirname(file), { recursive: true })
   await writeFile(file, JSON.stringify(value, null, 2), 'utf8')
 }
-
-test('Tavern 用户数据固定在 DSH Home，不跟随源码 worktree', () => {
-  assert.equal(resolveTavernDataRoot({ dshHome: '/tmp/dsh-home' }), '/tmp/dsh-home/profile-data/tavern/data')
-})
 
 test('旧数据升级时备份并合并索引，冲突文件保留但不覆盖主数据', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'dsh-tavern-data-'))

@@ -1,5 +1,6 @@
 import { postureForContext } from './posture-context.js'
 import { projectAgentContent } from './runtime-content-projection.js'
+import { cardSystemPromptText } from './card-system-prompt.js'
 
 function str(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
@@ -47,7 +48,7 @@ export function createContextPlanner(options = {}) {
     }
     if (input.includeInstructions !== false) {
       if (input.includePostHistory !== false && str(input.card.post_history_instructions) !== '') instructionSections.push({ kind: 'card-instruction', required: true, text: '【附加要求】\n' + projectText(input.card.post_history_instructions) })
-      if (input.includeSystemPrompt !== false && str(input.card.system_prompt) !== '') instructionSections.push({ kind: 'card-instruction', required: true, text: '【特殊指令】\n' + projectText(input.card.system_prompt) })
+      if (input.includeSystemPrompt !== false && str(input.card.system_prompt) !== '') instructionSections.push({ kind: 'card-system-prompt', required: true, text: cardSystemPromptText(projectText(input.card.system_prompt)) })
     }
     if (input.stableFirst === true) {
       sections.push.apply(sections, cardInfoSections)
@@ -95,7 +96,8 @@ export function createContextPlanner(options = {}) {
         includePersonality: true,
         includeScenario: true,
         includeStyleExample: true,
-        includeInstructions: false,
+        includeInstructions: true,
+        includePostHistory: false,
         includeGuides: false,
         includePosture: false,
         stableFirst: true
@@ -118,16 +120,19 @@ export function createContextPlanner(options = {}) {
         includeScenario: false,
         includeStyleExample: false,
         includeInstructions: true,
-        includeSystemPrompt: true,
+        includeSystemPrompt: false,
         includePostHistory: true
       }, projectText))
+      const systemPromptText = projectText(input.card.system_prompt)
       if (input.scriptReference !== null && input.scriptReference !== undefined && str(input.scriptReference.text) !== '') {
         const order = Number(input.scriptReference.order)
         const position = Number.isInteger(order) && order >= 0 ? ' · 第 ' + (order + 1) + ' 块' : ''
         sections.push({ kind: 'script', required: true, text: '【本轮剧本参考' + position + '】\n' + projectText(input.scriptReference.text) })
         sections.push({ kind: 'script', required: true, text: prompt('script-story') })
       }
-      return resultOf(sections, warnings, [{ kind: 'stable-card-details', reason: '人物卡基本信息和常驻世界书已固定在游戏会话稳定前缀' }])
+      const result = resultOf(sections, warnings, [{ kind: 'stable-card-details', reason: '人物卡基本信息、系统提示和常驻世界书已固定在游戏会话稳定前缀；系统提示变化时另行追加' }])
+      result.systemPromptText = systemPromptText
+      return result
     }
 
     if (input.purpose === 'candidate') {
@@ -165,9 +170,9 @@ export function createContextPlanner(options = {}) {
         }
       }
       const systemPromptText = projectText(input.card.system_prompt)
+      if (systemPromptText.trim()) stableSections.push({ kind: 'card-system-prompt', required: true, text: cardSystemPromptText(systemPromptText) })
       const postHistoryText = projectText(input.card.post_history_instructions)
       const instructionSections = [
-        ...(systemPromptText ? [{ kind: 'card-system-prompt', required: true, text: '【人物卡系统提示】\n' + systemPromptText }] : []),
         ...(postHistoryText ? [{ kind: 'card-post-history', required: true, text: '【人物卡历史后指令】\n' + postHistoryText }] : [])
       ]
       const result = resultOf([taskSection].concat(stableSections, instructionSections, dynamicSections), warnings)

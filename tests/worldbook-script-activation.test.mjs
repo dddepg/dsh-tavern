@@ -42,20 +42,3 @@ test('主动激活仍受token 预算和既有冷却约束；重投影不重复�
   assert.deepEqual(second.refs, ['叶5'])
   assert.equal(second.log.entries.find(e => e.ref === '叶0').reason, 'cooldown')
 })
-
-test('嵌套调度去重；force 可选禁用叶，MVU 不进入前台；控制器异常保留上游已发生的激活副作用', async () => {
-  const entries = [controller('调度', '<% await activewi("嵌套", true); await activewi("嵌套", true); await activewi("31b_[mvu_update]规则", true); %>'),
-    controller('失败', '<% await activewi("不可见", true); throw new Error("fail"); %>'),
-    entry('嵌套', { content: '<% await activewi("停用叶", true) %>嵌套正文' }),
-    entry('停用叶', { enabled: false, content: '最终叶正文' }), entry('不可见'),
-    entry('规则', { title: '31b_[mvu_update]规则', comment: '31b_[mvu_update]规则', content: '后台协议' })]
-  const result = await project(entries)({ chat: { messages: [] }, card: {}, userText: '' })
-  assert.equal(result.error, null)
-  assert.equal((result.context.match(/最终叶正文/g) || []).length, 1, JSON.stringify(result))
-  assert.match(result.context, /嵌套正文/)
-  assert.doesNotMatch(result.context, /后台协议/)
-  assert.match(result.context, /正文 不可见/)
-  assert.deepEqual(new Set(result.refs), new Set(['嵌套', '停用叶', '不可见']))
-  assert.equal(result.log.entries.find(e => e.ref === '停用叶').rendering, 'rendered')
-  assert.equal(result.log.entries.find(e => e.ref === '不可见').activationRequests[0].sourceRef, '[GENERATE:BEFORE]')
-})

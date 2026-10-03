@@ -26,7 +26,13 @@ function TavernInlineFragment(props) {
         if (!root) return;
         const fragment = parseTavernInlineFragment(props.content, root.ownerDocument);
         if (fragment) root.replaceChildren(fragment);
-        return function () { root.replaceChildren(); };
+        // Zoom only our own wrapper: the card's DOM and styles are never written, and in
+        // the host page viewport units cannot feed back into the zoomed size.
+        const win = root.ownerDocument.defaultView;
+        function apply(theme) { root.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
+        const unsubscribe = subscribeTavernHostTheme(win, apply);
+        apply(currentTavernHostTheme(win));
+        return function () { unsubscribe(); root.style.zoom = ""; root.replaceChildren(); };
     }, [props.content]);
     return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});
 }

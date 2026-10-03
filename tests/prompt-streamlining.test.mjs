@@ -4,8 +4,12 @@ import test from 'node:test'
 
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 
+const cardToolsSource = await readFile(new URL('../tavern-plugin/lib/tools/card-editing.js', import.meta.url), 'utf8')
+const skillToolsSource = await readFile(new URL('../tavern-plugin/lib/tools/skills.js', import.meta.url), 'utf8')
+
 const orchestratorSource = await readFile(new URL('../tavern-plugin/lib/domain/turn-orchestration.js', import.meta.url), 'utf8')
 const orchestrationStrategiesSource = await readFile(new URL('../tavern-plugin/lib/domain/foreground-orchestration-strategies.js', import.meta.url), 'utf8')
+const turnLifecycleSource = await readFile(new URL('../tavern-plugin/lib/hooks/turn-lifecycle.js', import.meta.url), 'utf8')
 
 const tavernPresetSource = await readFile(new URL('../presets/tavern/agent.cordis.yml', import.meta.url), 'utf8')
 
@@ -22,13 +26,13 @@ function between(source, start, end) {
 }
 
 test('原版恢复工具只操作当前人物卡并要求固定确认文本', () => {
-  const restoreTool = between(serverSource, "name: 'tavern_restore_card'", "output:")
+  const restoreTool = between(cardToolsSource, "name: 'tavern_restore_card'", "output:")
 
   assert.match(restoreTool, /confirmation:/)
   assert.match(restoreTool, /enum: \['确认从原版恢复'\]/)
   assert.doesNotMatch(restoreTool, /path:/)
-  assert.match(serverSource, /restoreCurrentCard\(sessionId\)/)
-  assert.match(serverSource, /turnOrchestrator\.discard/)
+  assert.match(cardToolsSource, /restoreCurrentCard\(sessionId\)/)
+  assert.match(cardToolsSource, /turnOrchestrator\.discard/)
 })
 
 test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill 但不暴露文件编辑工具', () => {
@@ -47,7 +51,10 @@ test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill �
   assert.match(tavernPresetSource, /@deepseek-ai\/dsh-tool-cordis/)
   assert.match(tavernPresetSource, /text: ''/)
   assert.doesNotMatch(tavernPresetSource, /complete: true/)
-  assert.match(serverSource, /cardSystemPrompt: function \(\) \{ return prompt\('card-system'\) \}/)
+  assert.match(serverSource, /cardSystemPrompt: function \(\) \{ return runtimePrompt\('card-system'\) \}/)
+  // Panel overrides only apply through runtimePrompt(); the raw file catalog is for defaults.
+  assert.doesNotMatch(serverSource, /[^.\w]prompt\(/)
+  assert.equal([...serverSource.matchAll(/\bpromptFile\(/g)].length, 2)
   assert.doesNotMatch(serverSource, /runtimePrompt\('play-mode'\)/)
   assert.match(serverSource, /resourceWorkspaceContext\(cwd, projection, runtimePrompt\('card-workspace'\)\)/)
   assert.doesNotMatch(orchestrationStrategiesSource, /section\.name === 'tool:cordis'/)
@@ -59,15 +66,18 @@ test('卡片 Agent 以极简模式工具为底座，游玩 Agent 保留 Skill �
   assert.doesNotMatch(orchestratorSource, /if \(mode === 'script'\) return \[[^\]]*'bash'/)
 	assert.match(serverSource, /controlledToolNames = new Set\(\[[^\n]*'bash', 'pwsh', \.\.\.dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', \.\.\.cordisToolNames, 'tavern_user_profile_read'/)
 	assert.match(serverSource, /controlledToolNames = new Set\([^\n]*'tavern_test_response'/)
-  assert.match(serverSource, /name: 'tavern_save_skill'/)
+  assert.match(skillToolsSource, /name: 'tavern_save_skill'/)
   assert.doesNotMatch(serverSource, /name: 'tavern_bind_script'/)
 })
 
 // 本地修复（截断正文不算提交）回归：上游 18c2a3e8 精简掉了本用例所在的旧文件内容，
-// 这里按 v2.3 源码结构重新落一条最小断言。
+// 这里按 v2.3 源码结构重新落一条最小断言。v2.4 同步后上游把前台回合钩子抽到
+// hooks/turn-lifecycle.js，断言随之改锚到该模块，index.js 只保留接线检查。
 test('前台正文被截断时按失败尾部处理，不提交本轮', () => {
   const lifecycle = between(serverSource, '// ---------- DSH 回合生命周期 ----------', '// ---------- 模型可选工具 ----------')
-  const stopping = between(lifecycle, "ctx.on('agent/turn-stopping'", "ctx.on('agent/error'")
+  assert.match(lifecycle, /registerTurnLifecycleHooks\(\{/)
+
+  const stopping = between(turnLifecycleSource, "ctx.on('agent/turn-stopping'", "ctx.on('agent/error'")
 
   assert.match(stopping, /await turnOrchestrator\.assertCompleteReply\(\{/)
   assert.match(stopping, /streamFinishKind\(/)

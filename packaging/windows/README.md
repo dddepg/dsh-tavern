@@ -4,25 +4,26 @@
 
 ## 构建
 
-需要 Windows x64 和系统 .NET Framework C# 编译器，不需要安装 SDK。所有输入、测试和输出建议放在 D 盘独立目录。
+安装包 = 上游 DSH Desktop 2.0.13 + 外层启动器（自动安装 Tavern）。推荐用 GitHub Actions 的 `Windows Setup` 工作流（`.github/workflows/windows-setup.yml`）构建：它下载上游 `DSH-Desktop-2.0.13-x64-Setup.exe` 和 7-Zip extra 包并按 SHA-256 校验，生成 payload、编译启动器、运行 `test.ps1`，并把 EXE 作为 Actions 产物上传。可在 Actions 页面手动触发。
 
-从上游 Desktop Setup 生成在线安装 payload，再编译外层启动器：
+本地构建需要 Windows x64、完整版 7-Zip（读取 NSIS 安装包）和系统自带的 .NET Framework C# 编译器：
 
 ```powershell
-# 1) 下载 DSH-Desktop-2.0.13-x64-Setup.exe，并准备 7za.exe（可从旧 Portable 抽出）
+# 1) 由上游 Desktop Setup 生成 payload（-SevenZip 需完整版 7z.exe）
 ./packaging/windows/build-payload.ps1 `
   -DesktopSetup D:/build/DSH-Desktop-2.0.13-x64-Setup.exe `
-  -SevenZip D:/build/inputs/7za.exe `
+  -SevenZip 'C:/Program Files/7-Zip/7z.exe' `
   -OutputPayload D:/build/inputs/online-payload.7z `
   -WorkDirectory D:/build/payload-work
 
-# 2) 将上一步输出的 SHA256 写入 build.ps1 / extract-build-inputs.ps1 / Launcher.cs
-# 3) 编译 Setup.exe
+# 2) 编译 Setup.exe（-SevenZip 为嵌入 EXE 的独立 7za.exe，取自 7-Zip extra 包 x64/7za.exe）
 ./packaging/windows/build.ps1 -Payload D:/build/inputs/online-payload.7z -SevenZip D:/build/inputs/7za.exe -Output D:/build/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe
 ./packaging/windows/test.ps1 -Launcher D:/build/DSH-Tavern-Desktop-2.0.13-x64-Setup.exe -TestDirectory D:/build/new-test-directory
 ```
 
-也可继续从已发布的 Portable/Setup 中抽取 `online-payload.7z` 与 `7za.exe`：
+`build.ps1` 会把实际嵌入 payload 的 SHA-256 写入编译用的 `Launcher.cs` 副本（`PayloadSha256` 与 `Version` 前缀），无需手工同步哈希。payload 每次构建哈希都会变，因此新安装包总会使用新的运行时目录；`Launcher.cs` 中的值只是最近一次发布的默认值。
+
+旧方式仍可用：从已发布的 Setup 中抽取 `online-payload.7z` 与 `7za.exe`（只适用于哈希 `a272f20b…` 的旧 payload）：
 
 ```powershell
 ./packaging/windows/extract-build-inputs.ps1 -Launcher D:/build/Setup.exe -Destination D:/build/inputs
@@ -39,6 +40,7 @@
 - Desktop 2.0.13 使用 `resources/app` 目录布局，并已自带 UTF-8 代码页 prologue。`patch-runtime.cjs` 只注入 Windows 包管理隔离桥，并在新解压运行时内写入 ready 标记前执行。运行时版本后缀变更可避免修改正在运行的旧版文件；改补丁时必须同步提升后缀。
 - `setup2` 使用随安装包嵌入的 `setup-upgrade.mjs` 和 PowerShell 安装器，从 `main` 安装或更新 Tavern。旧 payload 中的实验性 `online-install.mjs` 不再作为安装入口。
 - `setup3` 取消准备完成后的整目录移动，并内置包含 `patches/` 的新版安装清单。安装包嵌入的补丁、安装脚本或包管理辅助文件变化时都须提升运行时后缀，避免复用旧目录中的过期脚本。
+- `setup5` 随包嵌入共享下载模块 `bin/download.cjs`（写到运行时 `resources/download.cjs`）：下载按“30 秒无数据”判定失败，并把 Windows 系统代理转换为 `HTTP(S)_PROXY` 供 Node、curl、git、pnpm 使用。
 - 显式运行安装包时，即使已有 Tavern 也会执行更新。升级先关闭所选安装根目录下的 Desktop 进程（先请求关闭，等待十秒后结束残留托盘进程），不操作其他安装；安装页面提醒用户先保存操作。
 - 数据目录中的 `.launcher-upgrade-ready` 只在成功后记录当前启动器版本。安装失败清除旧标记，下一次可重试；正常使用已成功升级的安装入口无需联网。新启动器首次运行也会执行一次升级，以补齐旧 Profile 的宿主依赖。
 - 旧 runtime 保留用于回退；不自动清理用户历史运行时和数据。新版首次准备需要额外磁盘空间。
@@ -51,9 +53,9 @@
 
 运行时发布回归：运行 `./packaging/windows/test-runtime-publish.ps1 -TestDirectory D:/build/publish-test`，验证持续文件占用下无需等待即可完成发布、中断恢复、旧目录兼容和标记写入失败保护。完整安装包回归：`./packaging/windows/test-runtime-lock.ps1 -Launcher D:/build/Setup.exe -TestDirectory D:/build/lock-test`，在真实解压期间持续锁定 EXE，直到准备及下一次启动入口均完成；同一测试可以复现旧安装包的 `Directory.Move / 0x80070005` 失败。此设计消除了整目录移动的共享锁故障，不绕过文件读取/写入/执行权限或安全软件明确拦截。
 
-Windows 包管理修复：`setup1` 在新运行时中加入 pnpm 入口桥，包管理使用安装目录内经过官方 SHA-256 校验的独立 Node；保留 Desktop 及 DSH 适配版本。`bin/desktop-package-manager.mjs` 同时供普通 Desktop 安装脚本与 Profile 安装使用，CLI 和非 Windows 平台跳过。
+Windows 包管理：`setup1`–`setup4` 曾用 pnpm 入口桥改用另行下载的 Node 22.22.3。`setup5` 起取消该隔离，运行时不再打补丁：`setup-upgrade.mjs` 调用 Desktop 的 `installDesktopPnpmRuntime`，与 Desktop 终端一样以 Electron 运行自带 pnpm。`Windows Setup` 工作流在 Windows 上用真实锁文件冷/热缓存各安装验证。
 
-真实入口回归：`node packaging/windows/test-package-manager.mjs <解压后的运行时目录> <新的测试目录>`，验证依赖安装退出和失败退出码。首次会下载校验后的 Node。
+真实入口回归：`node packaging/windows/test-package-manager.mjs <解压后的运行时目录> <新的测试目录>`，验证 Desktop 自带 pnpm 在 Electron 下的依赖安装退出和失败退出码。
 
 升级回归：`test-upgrade.ps1 -Launcher <安装包> -Runtime <准备后的运行时> -TestDirectory <空测试目录>` 检查旧插件不被跳过、失败重试、离线启动及进程关闭范围。`test-online-upgrade.ps1 -InstallDirectory <仅经过 prepare-only 的独立测试安装目录>` 执行联网覆盖安装，检查版本、数据哨兵和 Desktop smoke；不要对用户安装执行该测试。
 

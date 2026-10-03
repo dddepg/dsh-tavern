@@ -40,6 +40,7 @@ export function apply(ctx) {
       if (process.env.TAVERN_E2E_BACKGROUND_DIR && tools.has('mvu_submit_update')) {
         const file = process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-control.json'
         const control = JSON.parse(await readFile(file, 'utf8').catch(() => '{}'))
+        if (control.mode === 'fail') throw new Error('E2E background model unavailable')
         if (control.mode === 'hold') {
           heldAttempt = control.attempt
           await appendFile(process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-attempts.jsonl', JSON.stringify({attempt:control.attempt})+'\n')

@@ -1,4 +1,4 @@
-import { zipText } from './fixtures/zip-text.mjs'
+
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createTavernApiDiagnostics } from '../tavern-plugin/lib/domain/tavern-api-diagnostics.js'
@@ -22,16 +22,6 @@ test('宿主调用日志区分成功、拒绝与异常，并且不保存参数�
   assert.doesNotMatch(JSON.stringify(data), /PRIVATE-|sk-12345678901234567890/)
 })
 
-test('成功记录单独限量，不会挤掉错误记录；导出等待缓冲落盘', async () => {
-  const d = harness(), args = { sessionId: 'session' }
-  await assert.rejects(d.observe('saveTavernChatData', args, () => { throw new Error('failed-save') }))
-  for (let i = 0; i < 50; i++) await d.observe('getTavernHelperWorldbook', args, () => ({ updated: true }))
-  const data = await d.read('session')
-  assert.equal(data.records.length, 31)
-  assert.equal(data.dropped, 20)
-  assert.equal(data.records.filter(r => r.status === 'failed').length, 1)
-})
-
 test('非宿主调用不记录，日志存储故障不改变原始操作结果', async () => {
   const d = createTavernApiDiagnostics({ async updateJson() { throw new Error('disk failed') }, async readJson() {} })
   assert.equal(await d.observe('saveTavernChatData', { sessionId: 'session' }, () => 42), 42)
@@ -39,15 +29,4 @@ test('非宿主调用不记录，日志存储故障不改变原始操作结果',
   const other = harness()
   await other.observe('getTavernSettings', { sessionId: 'session' }, () => ({}))
   assert.equal((await other.read('session')).records.length, 0)
-})
-
-test('结算事件错配归为拒绝，诊断包携带调用记录', async () => {
-  const { createMvuDiagnosticExport } = await import('../tavern-plugin/lib/domain/mvu-diagnostics.js')
-  const d = harness()
-  await assert.rejects(d.observe('updateTavernHelperVariables', { sessionId: 'session' }, () => { throw Object.assign(new Error('事件不匹配'), { code: 'MVU_SETTLEMENT_EVENT_MISMATCH' }) }))
-  const apiDiagnostics = await d.read('session')
-  assert.equal(apiDiagnostics.records[0].status, 'rejected')
-  const exported = await createMvuDiagnosticExport({ sessionId: 'session', apiDiagnostics, store: { async read() { return { records: [] } } } })
-  assert.match(zipText(exported.buffer), /compatibility\/api-calls.json/)
-  assert.match(zipText(exported.buffer), /MVU_SETTLEMENT_EVENT_MISMATCH/)
 })

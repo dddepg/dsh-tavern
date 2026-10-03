@@ -1,10 +1,21 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/flizzywine/dsh-tavern/main/docs/assets/brand/dsh-tavern-lockup-on-dark.svg">
+    <img src="docs/assets/brand/dsh-tavern-lockup.svg" width="360" alt="DSH 酒馆">
+  </picture>
+</p>
+
 # dsh-tavern
 
 **基于 DeepSeek Harness（DSH）的文字游戏 Agent，支持导入 SillyTavern 人物卡。**
 
+> 所有模型都能用，不限于 DeepSeek 模型；云端服务和本地模型都可以在 DSH 中配置。
+
 选一张卡自由游玩，或绑定小说、剧本和大纲，让故事沿主线推进。也可以与 Agent 对话，从素材制作新卡，修改人物设定和世界书。
 
-[使用文档](https://flizzywine.github.io/dsh-tavern/) · [入门指南](https://flizzywine.github.io/dsh-tavern/#a02) · [宣传视频](https://www.bilibili.com/video/BV1NAeq6iELC/) · [安装与排错](https://flizzywine.github.io/dsh-tavern/#a02) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)
+[使用文档](https://flizzywine.github.io/dsh-tavern/) · [入门指南](https://flizzywine.github.io/dsh-tavern/#a02) · [宣传视频](https://www.bilibili.com/video/BV1MHaU6NE7S/) · [安装与排错](https://flizzywine.github.io/dsh-tavern/#a02) · [Discord 交流](https://discord.com/channels/1134557553011998840/1538577327028445194)
+
+[![观看 3 分钟实机演示：兼容酒馆生态，更快、更稳、更鲜活](docs/images/readme/promo-video.jpg)](https://www.bilibili.com/video/BV1MHaU6NE7S/)
 
 ![dsh-tavern：左侧会话、中间游玩、右侧人物状态](docs/images/readme/overview.png)
 
@@ -72,7 +83,7 @@
 
 ### Windows 一键安装
 
-**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.2/DSH-Tavern-Desktop-2.0.13-x64-Setup3.exe)**（Windows x64，修复运行目录移动时的访问拒绝）
+**[下载 Windows 安装 EXE](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)**（Windows x64，修复网络慢或开系统代理时安装超时）
 
 下载后双击运行，保持联网，按提示完成安装；以后从桌面「DSH Tavern」快捷方式打开。无需另装 Node.js 或 DSH Desktop。
 
@@ -131,7 +142,7 @@ Pocket 手机访问仅在 Desktop 版提供，CLI 安装和升级会移除 Pocke
 
 ## 开始游玩
 
-1. 在 **设置 → 模型** 中配置模型服务和 API 密钥。
+1. 在 **设置 → 模型** 中配置模型服务和 API 密钥。任意模型都可以，不限于 DeepSeek。
 2. 导入人物卡，选择人物卡开始游玩；也可以进入卡片工作台制作新卡。
 
 [完整使用指南](https://flizzywine.github.io/dsh-tavern/)提供详细操作、截图和样例下载，文档网站本身不是在线游戏服务。

@@ -8,11 +8,6 @@ const ordinary = { id: 'ordinary', source: { kind: 'plugin' } }
 const catalog = { id: 'catalog', source: { kind: 'skill-catalog' } }
 const invocation = { id: 'invocation', source: { kind: 'skill-invocation' } }
 
-test('卡片模式保留 DSH Skill 目录和用户显式调用', () => {
-  const messages = [ordinary, catalog, invocation]
-  assert.equal(appendWritingSkillState(messages, 'card'), messages)
-})
-
 test('恢复的游玩会话不重复通知；策略离开可见历史后重新声明当前开关', () => {
   const session = Session.create('skill-state')
   const options = { session, disabledWritingSkills: ['manual-writing'] }

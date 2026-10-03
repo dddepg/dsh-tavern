@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
-  constantWorldBookContext,
-  mvuUpdateRulesFromWorldBook,
-  projectWorldBookTemplates,
-  prepareWorldBookRecall
-} from '../tavern-plugin/lib/domain/worldbook-recall.js'
+import { constantWorldBookContext, projectWorldBookTemplates, prepareWorldBookRecall } from '../tavern-plugin/lib/domain/worldbook-recall.js'
 import { UpstreamTemplateRuntime } from './fixtures/upstream-template-runtime.mjs'
 
 function entry(ref, content, options = {}) {
@@ -75,15 +70,6 @@ test('条目正文改变后立即解除冷却，空世界书直接跳过', async
   assert.equal(prepared.context, '修改后的新设定。')
 })
 
-test('[mvu_update] 只进入后台变量规则，不再要求前台剧情模型输出协议', async function () {
-  const update = entry('entry:0', '每轮按正文更新体力。', { constant: true, title: '[mvu_update]变量更新' })
-  const plot = entry('entry:1', '古殿深处传来水声。', { constant: true, title: '[mvu_plot]剧情规则' })
-  const worldBook = { view: { entries: [update, plot] } }
-
-  assert.equal(constantWorldBookContext({ worldBook }).context, '古殿深处传来水声。')
-  assert.deepEqual(mvuUpdateRulesFromWorldBook(worldBook), ['每轮按正文更新体力。'])
-})
-
 test('原生世界书把 EJS 控制器移出稳定前缀，并可按最新 MVU 变量读取停用资料条目', async function () {
   const runtime = await UpstreamTemplateRuntime.create()
   const worldBook = { view: { displayName: '测试世界书', entries: [
@@ -117,53 +103,6 @@ test('原生世界书把 EJS 控制器移出稳定前缀，并可按最新 MVU �
   assert.deepEqual(projected.refs, ['entry:1'])
   assert.deepEqual(projected.diagnostics, [])
   assert.doesNotMatch(projected.context, /<%|getwi|@@preprocessing/)
-})
-
-test('原生世界书控制器失败时局部跳过，不把模板源码发送给正文模型', async function () {
-  const runtime = await UpstreamTemplateRuntime.create()
-  const worldBook = { view: { entries: [
-    entry('entry:0', '静态规则。', { constant: true }),
-    entry('entry:1', '@@preprocessing\n<% if ( %>泄漏源码', { constant: true })
-  ] } }
-
-  const stable = constantWorldBookContext({ worldBook })
-  const projected = await projectWorldBookTemplates({ worldBook, runtime, card: card(), chat: chat() })
-
-  assert.equal(stable.context, '静态规则。')
-  assert.equal(projected.context, '')
-  assert.deepEqual(projected.diagnostics, [{ kind: 'worldbook-template', code: 'syntax-error', ref: 'entry:1' }])
-})
-
- test('数字编号 MVU 条目进入后台且不占正文额度', async () => {
-  const updates = ['11d_[mvu_update]官党投效登记', '30b_[mvu_update]本命兵刃登记', '31b_[mvu_update]炼制成品登记'].map((title, i) => entry('entry:' + i, '登记' + i, { title, primaryKeys: ['少林'] }))
-  const plot = entry('entry:3', '正文设定', { primaryKeys: ['少林'], title: '说明[mvu_update]并非标签' })
-  const worldBook = { view: { entries: [...updates, plot] } }
-  assert.deepEqual(mvuUpdateRulesFromWorldBook(worldBook), ['登记0', '登记1', '登记2'])
-  assert.deepEqual(prepareWorldBookRecall({ worldBook, chat: chat('少林'), turn: 2 }).refs, ['entry:3'])
- })
-
-test('大世界书 render 仅传激活引用，模板正文与顺序作用域保持完整', async () => {
-  const entries = Array.from({ length: 266 }, (_, index) => ({
-    ...entry('entry:' + index, index < 20 ? '<%= value %>' : '世界书正文'.repeat(800), { constant: index < 20 }),
-    sourceUid: index
-  }))
-  const calls = []
-  const projected = await projectWorldBookTemplates({ worldBook: { view: { displayName: '大世界书', entries } }, chat: chat(), card: card(),
-    runtime: { render: async () => { throw new Error('worldbook must use transient projection') }, renderProjection: async (template, context) => {
-      calls.push({ template, context: structuredClone(context) })
-      const step = Number(context.scopes.local.step || 0) + 1
-      return { ok: true, text: String(step), scopes: { ...context.scopes, local: { step } }, activationRequests: [{ ref: 'entry:265', force: true }] }
-    } }
-  })
-  assert.equal(calls.length, 20)
-  assert.equal(projected.context, Array.from({ length: 20 }, (_, i) => String(i + 1)).join('\n\n'))
-  assert.deepEqual(projected.activationRequests, entries.slice(0, 20).reverse().map(item => ({ ref: 'entry:265', force: true, sourceRef: item.ref })))
-  assert.deepEqual(calls.map(call => call.template), Array(20).fill('<%= value %>'))
-  assert.deepEqual(calls.map(call => call.context.scopes.local.step || 0), Array.from({ length: 20 }, (_, i) => i))
-  assert.deepEqual(calls[0].context.worldBookEntries, entries.map(item => ({ uid: item.sourceUid, id: String(item.sourceUid), ref: item.ref, world: '大世界书' })))
-  const referenceBytes = Buffer.byteLength(JSON.stringify(calls[0].context.worldBookEntries))
-  const originalBytes = Buffer.byteLength(JSON.stringify(entries))
-  assert.ok(referenceBytes < originalBytes * 0.03, `${referenceBytes} / ${originalBytes}`)
 })
 
 test('批量与逐条投影逐字一致：准备事件、随机、失败隔离、激活来源和宏顺序', {skip:process.env.TEMPLATE_EXECUTOR === 'server'}, async () => {

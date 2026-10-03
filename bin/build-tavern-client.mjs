@@ -37,8 +37,13 @@ async function expand(source, seen) {
 export async function assembleTavernClient() {
   const template = normalized(await readFile(templatePath, 'utf8'))
   const css = await readFile(path.join(root, 'tavern-plugin/lib/client-assets/tavern.css'), 'utf8')
+  const brand = {}
+  for (const name of ['logo', 'lockup', 'lockup-dark']) {
+    const svg = await readFile(path.join(root, `tavern-plugin/lib/client-assets/${name}.svg`), 'utf8')
+    brand[name] = 'data:image/svg+xml,' + encodeURIComponent(svg.replace(/\s*\n\s*/g, ''))
+  }
   const expanded = await expand(template, new Set())
-  return banner + normalized(expanded.replace('__TAVERN_BUNDLED_CSS__', () => JSON.stringify(css)))
+  return banner + normalized(expanded.replace('__TAVERN_BUNDLED_CSS__', () => JSON.stringify(css)).replace('__TAVERN_BRAND_URLS__', () => JSON.stringify(brand)))
 }
 
 export async function buildTavernClient({ check = false } = {}) {

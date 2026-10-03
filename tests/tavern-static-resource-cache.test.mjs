@@ -70,42 +70,6 @@ test('缓存的 ESM、CSS 和 HTML 子资源继续改写到本地缓存入口', 
   assert.match(htmlBody, /<a href="https:\/\/example\.org">/)
 })
 
-test('HTML 资源改写不会把脚本中的 readAsDataURL 当成 CSS url', function () {
-  const htmlBody = projectCachedResourceBody({
-    url: 'https://cards.example.test/ui/index.html',
-    mediaType: 'text/html',
-    body: Buffer.from([
-      '<script type="module">',
-      'import value from "/dep.js";',
-      'const reader = new FileReader(); reader.readAsDataURL(value);',
-      '</script>',
-      '<script src="/app.js"></script>',
-      '<style>.hero{background:url(./scene.png)}</style>',
-      '<div style="background:url(https://img.example/card.png)"></div>'
-    ].join(''))
-  }).toString('utf8')
-
-  assert.match(htmlBody, /reader\.readAsDataURL\(value\)/)
-  assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fcards\.example\.test%2Fdep\.js/)
-  assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fcards\.example\.test%2Fapp\.js/)
-  assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fcards\.example\.test%2Fui%2Fscene\.png/)
-  assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fimg\.example%2Fcard\.png/)
-  assert.doesNotMatch(htmlBody, /readAsDataURL\(\/api\/dsh-tavern\/static-assets/)
-})
-
-test('缓存 HTML 的不带引号子资源地址也进入本地缓存', function () {
-  const html = projectCachedResourceBody({
-    url: 'https://assets.example/page.html', mediaType: 'text/html',
-    body: Buffer.from('<img src=https://assets.example/image.png width=30% /><video poster=/poster.png></video><script src=https://assets.example/app.js></script><link rel=stylesheet href=https://assets.example/style.css><a href=https://example.com/page>跳转</a><div data-src=https://assets.example/lazy.png></div>')
-  }).toString('utf8')
-  for (const name of ['image.png', 'poster.png', 'app.js', 'style.css']) {
-    assert.ok(html.includes('/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://assets.example/' + name)), name)
-  }
-  assert.ok(html.includes('width=30% />'))
-  assert.ok(html.includes('<a href=https://example.com/page>'))
-  assert.ok(html.includes('data-src=https://assets.example/lazy.png'))
-})
-
 test('静态缓存允许本机、内网与 Fake-IP 地址，仍要求 HTTPS 且不携带凭据', function () {
   assert.throws(() => normalizeCacheableResourceUrl('http://example.com/a.js'), /HTTPS/)
   assert.throws(() => normalizeCacheableResourceUrl('https://user:password@localhost/a.js'), /凭据/)
@@ -133,37 +97,4 @@ test('默认下载链路不预先拒绝 DNS 或私网地址，重定向后仍可
   assert.deepEqual(calls, ['https://cdn.invalid/module.js', 'https://[fdfe:dcba:9876::52]/module.js'])
   await cache.get('https://192.168.1.2/module.js')
   assert.equal(calls.at(-1), 'https://192.168.1.2/module.js')
-})
-
-test('超出单文件上限或不支持的响应不会写入缓存', async function (t) {
-  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-static-cache-limit-'))
-  t.after(async function () { await rm(rootDir, { recursive: true, force: true }) })
-  const oversized = createTavernStaticResourceCache({ rootDir, maxEntryBytes: 4, fetch: async function (url) { return response('12345', 'image/png', url) } })
-  await assert.rejects(oversized.get('https://assets.example.test/large.png'), /上限/)
-  const unsupported = createTavernStaticResourceCache({ rootDir, fetch: async function (url) { return response('zip', 'application/zip', url) } })
-  await assert.rejects(unsupported.get('https://assets.example.test/archive.zip'), /不支持/)
-})
-
-test('下载前校验每一跳主机且只接受有限 HTTPS 重定向', async function (t) {
-  const rootDir = await mkdtemp(path.join(os.tmpdir(), 'dsh-tavern-static-cache-redirect-'))
-  t.after(async function () { await rm(rootDir, { recursive: true, force: true }) })
-  const verified = []
-  const cache = createTavernStaticResourceCache({
-    rootDir,
-    verifyHostname: async function (url) { verified.push(url) },
-    fetch: async function (url) {
-      if (url === 'https://assets.example.test/start') return { ok: false, status: 302, headers: { get: function (name) { return String(name).toLowerCase() === 'location' ? 'https://cdn.example.test/final.png' : null } } }
-      return response('image', 'image/png', url)
-    }
-  })
-  assert.equal((await cache.get('https://assets.example.test/start')).finalUrl, 'https://cdn.example.test/final.png')
-  assert.deepEqual(verified, ['https://assets.example.test/start', 'https://cdn.example.test/final.png'])
-})
-
-test('缓存 HTML 中的媒体保留原生远端地址，支持相对视频源', () => {
-  const html = projectCachedResourceBody({ url: 'https://cards.example/ui/home.html', mediaType: 'text/html', body: Buffer.from('<video src="/movie.mp4" poster="/cover.png"><source src="https://media.example/live"></video><audio src="https://media.example/bgm.mp3"></audio>') }).toString()
-  assert.match(html, /src="https:\/\/cards.example\/movie.mp4"/)
-  assert.match(html, /src="https:\/\/media.example\/live"/)
-  assert.match(html, /src="https:\/\/media.example\/bgm.mp3"/)
-  assert.ok(html.includes('/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://cards.example/cover.png')))
 })

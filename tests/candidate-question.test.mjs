@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-const source = await readFile(new URL('../tavern-plugin/src/client/main.js', import.meta.url), 'utf8')
+const source = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
 const code = source.slice(source.indexOf('function CandidateQuestion(props)'), source.indexOf('function CandidateGuidePanel(props)'))
 function harness(initial = '', mode = 'after-send') {
   let draft = initial, cursor, running = false
@@ -14,6 +14,17 @@ function harness(initial = '', mode = 'after-send') {
   function buttons(node) { if (!node || typeof node !== 'object') return []; if (Array.isArray(node)) return node.flatMap(buttons); return [...(node.type === 'button' ? [node] : []), ...buttons(node.children)] }
   return { remount: () => { states[0] = -1; states[1] = false; render(); effects.forEach(effect => effect.fn()); }, render, buttons, draft: () => draft, panel: () => panel, states, effects, run: () => { running = true } }
 }
+test('行动列表用收起/展开文字按钮，点收起后列表消失', () => {
+  const h = harness()
+  const tree = h.render()
+  const close = h.buttons(tree).find(node => node.props.className === 'dsh-tavern-question-close')
+  assert.equal(close.children.includes('收起'), true)
+  assert.equal(close.props['aria-label'], '收起行动列表')
+  close.props.onClick({ stopPropagation() {} })
+  assert.equal(h.panel().expanded, false)
+  assert.equal(h.buttons(h.render()).find(node => node.props.className === 'dsh-tavern-question-close').children.includes('展开'), true)
+  assert.equal(h.buttons(h.render()).filter(node => node.props.className?.includes('question-option')).length, 0)
+})
 test('连续添加人物行为和场景变化保留草稿及完整候选列表', () => {
   const h = harness('手动写的内容')
   const add = () => h.buttons(h.render()).find(node => node.children.includes('追加到输入框')).props.onClick()

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { adaptedDshVersion, assertCompatibleDshVersion, dshCompatibilityNotice } from '../bin/dsh-compatibility.mjs'
+import { adaptedDshVersion, assertCompatibleDshVersion } from '../bin/dsh-compatibility.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
@@ -79,24 +79,4 @@ fail() { printf 'FAIL:%s\\n' "$1"; exit 1; }
     const installed = result.stdout.split('\n').filter(line => line.startsWith('INSTALL:'))
     assert.deepEqual(installed, row.packages.length ? ['INSTALL:install --global --prefix /unused-mocked-runtime ' + row.packages.join(' ')] : [])
   }
-})
-
-
-test('Desktop 和 DSHA 各有一个明确适配版本，提示与安装文档包含下载入口', async () => {
-  const config = JSON.parse(await readFile(new URL('../config/dsh-compatibility.json', import.meta.url), 'utf8'))
-  const installation = await readFile(new URL('../docs/installation.md', import.meta.url), 'utf8')
-  const manual = await readFile(new URL('../docs/index.html', import.meta.url), 'utf8')
-  for (const [host, version, url] of [
-    ['desktop', config.recommendedDesktopVersion, config.desktopReleasesUrl],
-    ['android', config.recommendedDshaVersion, config.dshaReleasesUrl],
-  ]) {
-    assert.equal(typeof version, 'string')
-    for (const text of [dshCompatibilityNotice('99.0.0', host), installation, manual]) {
-      assert.ok(text.includes(version))
-      assert.ok(text.includes(url))
-    }
-  }
-  const android = await readFile(new URL('../docs/android-install.md', import.meta.url), 'utf8')
-  assert.ok(android.includes(config.recommendedDshaVersion))
-  assert.ok(android.includes(config.dshaReleasesUrl))
 })

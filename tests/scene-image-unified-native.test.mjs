@@ -17,7 +17,8 @@ test('慢速生图不阻塞状态和关闭设置，关闭后仍可取消且不�
   runtime.holdNextImage()
   const started = await runtime.service.start('scene-parent', 1, target.key)
   try {
-    for (let n = 0; n < 100 && !runtime.imageRequests.length; n++) await new Promise(resolve => setTimeout(resolve, 20))
+    // Model/tool startup is separate from the non-blocking RPC assertions below.
+    await runtime.waitForImageRequest()
     assert.equal(runtime.imageRequests.length, 1, 'must reach the deliberately stalled image HTTP request')
     const status = await promptly(runtime.service.status('scene-parent', 1), 'status')
     assert.equal(status.status, 'running')

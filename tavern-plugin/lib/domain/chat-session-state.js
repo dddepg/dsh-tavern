@@ -183,8 +183,8 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
   return Object.freeze({ status, receipts: mvuReceiptsOf, rollback: rollbackViewFields, volatile: volatileSessionViewFields })
 }
 
-// Read-only capture input. Locate legacy turns with the same inferred-turn rule
-// as assistantMessageAtTurn, but detach only the selected diagnostic payload.
+// Read-only capture input. Infer legacy turns from user messages and detach
+// only the selected diagnostic payload.
 export function projectDisplayRuntimeState(chat, requestedTurn) {
   let inferred = 1, messageIndex = -1, latestTurn = 1
   const messages = Array.isArray(chat.messages) ? chat.messages : []

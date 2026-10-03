@@ -37,13 +37,20 @@ async function request(url) {
   }
   throw Error('无法下载最新安装文件，请检查网络后重试。'+last.message);
 }
-async function downloadFile(revision,item) {
+// raw.githubusercontent.com is often blocked alone. After one network failure,
+// later files try jsDelivr first instead of paying the retries again.
+const fileHosts=[revision=>`https://raw.githubusercontent.com/flizzywine/dsh-tavern/${revision}/`,revision=>`https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@${revision}/`];
+async function fromHosts(revision,file,check=()=>{}) {
   let last;
-  for(const base of [`https://raw.githubusercontent.com/flizzywine/dsh-tavern/${revision}/`,`https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@${revision}/`]) {
-    try {const bytes=await request(base+item.path.split('/').map(encodeURIComponent).join('/'));if(bytes.length!==item.size||digest(bytes)!==item.sha256)throw Error('文件校验不符：'+item.path);return bytes;}catch(e){last=e;}
+  for(const host of [...fileHosts]) {
+    let bytes;
+    try {bytes=await request(host(revision)+file.split('/').map(encodeURIComponent).join('/'));}
+    catch(e){last=e;if(fileHosts[0]===host)fileHosts.push(fileHosts.shift());continue;}
+    try {check(bytes);return bytes;}catch(e){last=e;}
   }
   throw last;
 }
+const downloadFile=(revision,item)=>fromHosts(revision,item.path,bytes=>{if(bytes.length!==item.size||digest(bytes)!==item.sha256)throw Error('文件校验不符：'+item.path);});
 function run(args,cwd) {
   return new Promise((resolve,reject)=>{
     const stream=fs.createWriteStream(log,{flags:'a'});
@@ -61,9 +68,14 @@ async function install() {
     status('继续上次未完成的安装…');
   } else {
     status('正在查询最新版酒馆…');
-    const head=JSON.parse(await request(`https://api.github.com/repos/flizzywine/dsh-tavern/commits/${encodeURIComponent(INSTALL_REF)}`));
-    if(!/^[a-f0-9]{40}$/.test(head.sha))throw Error('GitHub 返回的版本信息无效');
-    metadata=JSON.parse(await request(`https://raw.githubusercontent.com/flizzywine/dsh-tavern/${head.sha}/dsh-tavern-runtime.json`));
+    // GitHub API names the newest commit; jsDelivr's cached branch manifest is the fallback.
+    let ref=INSTALL_REF;
+    try {
+      const head=JSON.parse(await request(`https://api.github.com/repos/flizzywine/dsh-tavern/commits/${encodeURIComponent(INSTALL_REF)}`));
+      if(!/^[a-f0-9]{40}$/.test(head.sha))throw Error('GitHub 返回的版本信息无效');
+      ref=head.sha;
+    } catch(e){status('GitHub 暂不可达，改用 jsDelivr 查询最新版…');}
+    metadata=JSON.parse(await fromHosts(ref,'dsh-tavern-runtime.json'));
     if(metadata.schemaVersion!==2||!/^[a-f0-9]{40}$/.test(metadata.revision)||!Array.isArray(metadata.files))throw Error('暂不支持最新安装清单格式，请更新启动器');
     for(const item of metadata.files) {
       if(typeof item.path!=='string'||item.path.includes('\\')||item.path.split('/').some(p=>!p||p==='.'||p==='..')||item.path.includes(':')||!/^[a-f0-9]{64}$/.test(item.sha256)||!Number.isSafeInteger(item.size)||item.size<0)throw Error('安装清单包含无效文件');

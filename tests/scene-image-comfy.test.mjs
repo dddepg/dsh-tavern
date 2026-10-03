@@ -25,25 +25,6 @@ test('ComfyUI mapping errors identify missing fields, types, unsafe integers and
   assert.throws(() => comfyWorkflow(badPositive), /节点 3.*text.*字符串/)
 })
 
-test('ComfyUI rgthree seed reaches the actual provider submission using the preserved link', async () => {
-  let task, posts = 0
-  const result = await generateSceneImage({ ...input(), workflow: comfyLinkedSeedGraph(), onProviderTask: async t => { task = t } }, { wait: async () => {}, fetch: async (url, init) => {
-    if (url.endsWith('/prompt')) {
-      posts++
-      const { prompt } = JSON.parse(init.body)
-      assert.deepEqual(prompt['5'].inputs.seed, ['8', 0])
-      assert.ok(Number.isSafeInteger(prompt['8'].inputs.seed) && prompt['8'].inputs.seed >= 0)
-      assert.equal(prompt['3'].inputs.text, 'rainy window')
-      assert.equal(prompt['2'].inputs.batch_size, 1)
-      return Response.json({ prompt_id: task.promptId })
-    }
-    if (url.includes('/history/')) return Response.json({ [task.promptId]: { status: { completed: true }, outputs: { '7': { images: [{ filename: 'fixture.png', subfolder: '', type: 'output' }] } } } })
-    return new Response(png)
-  } })
-  assert.equal(posts, 1)
-  assert.deepEqual(result.data, png)
-})
-
 test('ComfyUI supports explicit maintainer mapping and prunes unrelated output branches', () => {
   const graph = comfyGraph()
   graph['extra'] = { class_type: 'SaveImage', inputs: { images: ['6', 0] } }

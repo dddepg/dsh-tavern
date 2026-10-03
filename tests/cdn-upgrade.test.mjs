@@ -9,6 +9,10 @@ import { promisify } from 'node:util'
 import test from 'node:test'
 import { parse } from 'yaml'
 import { adaptedDshVersion } from '../bin/dsh-compatibility.mjs'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+
+const { runtimeFiles } = createRequire(import.meta.url)('../bin/download.cjs')
 
 const execute = promisify(execFile)
 const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
@@ -16,13 +20,15 @@ const windows = await readFile(new URL('../install.ps1', import.meta.url), 'utf8
 const workspace = parse(await readFile(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8'))
 const patches = Object.values(workspace.patchedDependencies || {}).map(value => typeof value === 'string' ? value : value.path)
 
-test('两平台 CDN 下载过滤器允许运行文件并排除文档', () => {
-  const unixPattern = new RegExp(unix.match(/^const allowed = \/(.+)\/$/m)[1])
-  const windowsPattern = new RegExp(windows.match(/\$RuntimePattern = '([^']+)'/)[1])
-  for (const pattern of [unixPattern, windowsPattern]) {
-    for (const file of [...patches, 'config/dsh-compatibility.json']) assert.ok(pattern.test(file), `下载器过滤了 ${file}`)
-    assert.equal(pattern.test('docs/private.md'), false)
-  }
+test('CDN 下载过滤器允许运行文件并排除文档', () => {
+  const metadata = { revision: 'a'.repeat(40), files: [...patches, 'config/dsh-compatibility.json', 'docs/private.md', 'bin/docs/x.md'].map(file => ({ path: file, sha256: 'a'.repeat(64) })) }
+  const listed = runtimeFiles(metadata).map(file => file.path)
+  for (const file of [...patches, 'config/dsh-compatibility.json']) assert.ok(listed.includes(file), `下载器过滤了 ${file}`)
+  assert.ok(!listed.some(file => file.includes('docs')))
+})
+
+test('两平台安装脚本内嵌的下载模块与 bin/download.cjs 一致', async () => {
+  await execute(process.execPath, [fileURLToPath(new URL('../bin/build-installer-scripts.mjs', import.meta.url)), '--check'])
 })
 
 test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：运行文件落盘、用户数据不变、失败不误报成功', async t => {
@@ -40,8 +46,7 @@ test('旧版 Desktop 经最新安装脚本走 CDN 覆盖升级：运行文件落
     ['cordis.patch.yml', Buffer.from('[]\n')],
     ['install.sh', Buffer.from(unix)],
     ['install.ps1', Buffer.from(windows)],
-    // Stub dependency provisioning/execution and DSH boot; download, hashing and overwrite are real.
-    ['bin/desktop-package-manager.mjs', Buffer.from('console.log(' + JSON.stringify(mocks) + ');')],
+    // Stub DSH boot; pnpm comes from the mock PATH. Download, hashing and overwrite are real.
     ['bin/dsh-tavern.mjs', Buffer.from("import fs from 'node:fs'; fs.writeFileSync(new URL('../installed.txt', import.meta.url), process.argv.slice(2).join(' '));\n")],
   ])
   for (const file of [...patches, 'bin/dsh-compatibility.mjs', 'config/dsh-compatibility.json']) {

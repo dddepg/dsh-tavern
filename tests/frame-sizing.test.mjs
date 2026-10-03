@@ -34,6 +34,32 @@ test('real iframe sizing: constrained viewport, percentage roots, capped content
         frame.srcdoc = descriptor.html; document.querySelector('#host').append(frame); descriptor.ref(frame)
       }
     }, source)
+    // A viewport application owns its scrolling. Decorative particles crossing
+    // the bottom edge must not create a root scrollbar and shrink the form.
+    for (const mode of ['viewport', 'fixed']) {
+      await page.evaluate(mode => mount(`<meta name="dsh-tavern-frame" content="${mode}" data-height="700"><style>
+        html,body{height:100%;overflow:hidden}body{position:relative}
+        #app{position:absolute;top:5%;left:5%;width:90%;height:90%;overflow:auto}
+        #particle{position:absolute;top:100%;width:4px;height:4px}
+        ::-webkit-scrollbar{width:8px}
+      </style><div id="particle"></div><div id="app"><input value="preserve"><div style="height:1800px">form</div></div>`), mode)
+      await page.waitForFunction(() => frame.clientHeight === 700)
+      const appFrame = page.frames()[1]
+      await appFrame.locator('#app').waitFor()
+      const widths = await appFrame.evaluate(async () => {
+        const result = []
+        for (const y of [-10, 2, -10, 2]) {
+          document.querySelector('#particle').style.transform = `translateY(${y}px)`
+          await new Promise(resolve => requestAnimationFrame(resolve))
+          result.push(document.querySelector('#app').getBoundingClientRect().width)
+        }
+        return result
+      })
+      assert.equal(new Set(widths).size, 1, `${mode}: particle overflow must not change form width: ${widths}`)
+      assert.equal(await appFrame.evaluate(() => getComputedStyle(document.body).overflowY), 'hidden')
+      await appFrame.locator('#app').evaluate(x => { x.scrollTop = 500 })
+      assert.equal(await appFrame.locator('#app').evaluate(x => x.scrollTop), 500)
+    }
     await page.evaluate(() => mount('<meta name="dsh-tavern-frame" content="viewport"><style>#app{height:100%;overflow:auto}</style><div id="app"><input value="start"><div style="height:1800px">long app</div></div>'))
     await page.waitForFunction(() => frame.clientHeight === 700)
     await page.evaluate(() => { frame.style.height = '49px' })

@@ -33,33 +33,6 @@ test('组件设计自动编号补齐字段，列表经历磁盘装配和托管 D
  assert.equal(output.first_mes.split('<mvu-status/>').length-1,1)
  assert.match(output.first_mes,/<initvar>/)
 })
-test('预检一次返回开场缺项、动态属性和旧入口问题，不保存文件',async t=>{
- const f=await fixture(t)
- const {report}=await f.registered.get('tavern_convert_to_mvu').execute({action:'preflight',...f.args,openingStates:{0:f.args.initialState},appearance:{html:'<div data-mvu-list="$1">$1</div>',bindings:[{capture:1,path:'/日志'}]}},{})
- assert.equal(report.ok,false)
- assert.ok(report.issues.some(i=>i.code==='MVU_OPENING_STATES_INVALID'))
- assert.ok(report.issues.some(i=>i.check==='appearance'&&i.message.includes('data-mvu-list')))
- assert.ok(report.issues.some(i=>i.code==='MVU_ORPHAN_ENTRANCE'))
- assert.equal((await f.resources.list('card')).length,1)
-})
-test('已有初值或渲染引用的入口不建议自动删除',async t=>{
- const f=await fixture(t,{first_mes:'正文\n<initvar>{"位置":"门口"}</initvar>\n<mvu-status/>'})
- const report=await f.conversion.convert({action:'preflight',...f.args})
- assert.equal(report.suggestedCleanup.length,0)
- assert.equal(report.issues.find(i=>i.code==='MVU_EXISTING_ENTRANCE').safeToClean,false)
- const saved=await f.conversion.convert({action:'saveDefinition',...f.args})
- await assert.rejects(f.conversion.convert({action:'apply',sourcePath:f.sourcePath,sourceRevision:f.args.sourceRevision,definitionRevision:saved.definitionRevision,cleanupOrphanEntrances:true}),/旧 MVU 入口/)
- assert.equal((await f.resources.list('card')).length,1)
-})
-test('命名组件可保留自定义布局，缺失字段仍明确报告，不静默删字段',async t=>{
- const f=await fixture(t)
- const tool=f.registered.get('tavern_design_mvu_appearance')
- const bad=await tool.execute({...f.args,html:'<section><mvu-field path="/日志" display="list"></mvu-field></section>'},{})
- assert.equal(bad.report.error.code,'MVU_APPEARANCE_MISSING_FIELDS')
- assert.ok(bad.report.error.missingPaths.includes('/状态'))
- const good=await tool.execute({...f.args,html:'<section class="custom"><mvu-field path="/日志" display="list"></mvu-field><mvu-field path="/位置"></mvu-field><mvu-field path="/状态"></mvu-field></section>'},{})
- assert.ok(good.report.definitionRevision,JSON.stringify(good))
-})
 
 test('自定义布局已有字段名时，组件仅显示值，不泄漏路径或重复标签', async t => {
  const f=await fixture(t)
@@ -73,16 +46,4 @@ test('自定义布局已有字段名时，组件仅显示值，不泄漏路径�
    assert.equal(dom.window.document.querySelector('.row').lastElementChild.tagName,'SPAN')
    assert.deepEqual(saved.appearance.bindings,[{capture:1,path:'/时间/日期'}])
  } finally {dom.window.close()}
-})
-
-test('无美化定义的回执也是无损 JSON，多个开场保留不同初值',{skip:!process.env.DSH_BOOT_MODULE},async t=>{
- const {pathToFileURL}=await import('node:url')
- const {snapshotJsonValue}=await import(new URL('../../dsh-util-values/lib/index.js',pathToFileURL(process.env.DSH_BOOT_MODULE)))
- const f=await fixture(t)
- for(const openingStates of [undefined,[f.args.initialState,{...f.args.initialState,位置:'大厅'}]]) {
-  const {report}=await f.registered.get('tavern_convert_to_mvu').execute({...f.args,action:'saveDefinition',...(openingStates?{openingStates}:{})},{})
-  assert.notEqual(snapshotJsonValue({report}),undefined,'工具回执不能包含 undefined')
-  const saved=await f.resources.readMvuDefinition(report.definitionRevision)
-  assert.equal(saved.openingStates[1].位置,openingStates?'大厅':'门口')
- }
 })

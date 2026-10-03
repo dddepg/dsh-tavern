@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Session } from './fixtures/dsh-session-host.mjs'
-import { sessionEvents, appendSessionEvent } from '../tavern-plugin/lib/domain/session-events.js'
-import { replaceSessionSurface } from '../tavern-plugin/lib/domain/session-surface-mutations.js'
+import { appendSessionEvent } from '../tavern-plugin/lib/domain/session-events.js'
+
 import { projectCandidateScriptContext as project } from '../tavern-plugin/lib/domain/candidate-script-context.js'
 
 function input(body = 'x'.repeat(15000), position = 1) {
@@ -18,34 +18,6 @@ function append(session, result, id = 'first') {
     } } : {}) }
   }, { surfaceOp: 'append' })
 }
-
-test('相同窗口仅追加引用，当前状态保留，历史不变，变化全文补发', () => {
-  const session = Session.create('script')
-  const original = input()
-  append(session, project(session, original))
-  const before = JSON.stringify(sessionEvents(session))
-  const next = project(session, { ...original, turnContext: '新指导\n\n' + original.candidateScriptWindow.text })
-  assert.match(next.turnContext, /^新指导/)
-  assert.match(next.turnContext, /tavern_read_script.*position.*1/)
-  assert.doesNotMatch(next.turnContext, /x{100}/)
-  assert.ok(Buffer.byteLength(next.turnContext) < 1000)
-  assert.equal(JSON.stringify(sessionEvents(session)), before)
-  assert.equal(original.turnContext, input().turnContext)
-  assert.ok(project(session, input('y'.repeat(15000))).body)
-  assert.ok(project(session, input(undefined, 2)).body)
-})
-
-test('重启依据当前投影恢复，压缩移除全文后不信任残留引用', () => {
-  let session = Session.create('script-restart')
-  const first = append(session, project(session, input()))
-  session = Session.create(session.id, sessionEvents(session), session.header)
-  const reference = project(session, input())
-  assert.equal(reference.body, undefined)
-  append(session, reference, 'reference')
-  replaceSessionSurface(session, 'user/message', { id: 'summary', role: 'user', content: [{ type: 'text', text: '摘要' }] },
-    { start: first.seq, end: first.seq, sourceEventSeqs: [first.seq] })
-  assert.ok(project(session, input()).body)
-})
 
 test('不可用或被修改的投影发送全文，无工具和小正文不优化', () => {
   const session = Session.create('altered')

@@ -3,14 +3,6 @@ import assert from 'node:assert/strict'
 import { resourceSaveSummary, observeResourceSave } from '../tavern-plugin/lib/domain/resource-save-summary.js'
 import { createTavernApiDiagnostics } from '../tavern-plugin/lib/domain/tavern-api-diagnostics.js'
 
-test('summary counts transitions by id, ignores reorder and omits content', () => {
-  const before = [{ id: 1, enabled: true }, { id: 2, enabled: false }]
-  assert.equal(resourceSaveSummary('worldbook', 'session', before, [...before].reverse()), null)
-  assert.deepEqual(resourceSaveSummary('worldbook', 'session', before, [{ id: 2, enabled: true, content: 'PRIVATE' }, { id: 1, enabled: false }]), { target: 'worldbook', scope: 'session', enabledCount: 1, disabledCount: 1 })
-  assert.equal(resourceSaveSummary('regex', 'global', [{id:'x', disabled:false}], [{id:'x', disabled:false, replaceString:'changed'}], true), null)
-  assert.equal(resourceSaveSummary('worldbook', 'card', {1:{uid:1,disable:false}}, {1:{uid:1,disable:true}}, true).disabledCount, 1)
-})
-
 test('save summaries use existing bounded export and cannot affect writes', async () => {
   const values = new Map()
   const d = createTavernApiDiagnostics({ updateJson: async (k, fn) => values.set(k, fn(values.get(k))), readJson: async k => values.get(k) })

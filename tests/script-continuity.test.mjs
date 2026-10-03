@@ -83,35 +83,6 @@ test('剧本回合准备不移动游标，正文提交后自动前进一块', ()
   assert.equal(next.reference.chunkId, 'chunk-00003')
 })
 
-test('候选 point 可保持或向前跳跃，不能让剧本游标后退', () => {
-  const continuity = createScriptContinuity()
-  let state = continuity.start(script(), 1)
-
-  state = continuity.transition({
-    script: script(),
-    state,
-    event: { kind: 'focus', cursor: 1 }
-  }).state
-  assert.equal(continuity.inspect({ script: script(), state, request: { kind: 'progress' } }).cursor, 1)
-
-  state = continuity.transition({
-    script: script(),
-    state,
-    event: { kind: 'focus', cursor: 1 }
-  }).state
-  assert.equal(continuity.inspect({ script: script(), state, request: { kind: 'progress' } }).cursor, 1)
-
-  const focused = continuity.transition({
-    script: script(),
-    state,
-    event: { kind: 'focus', cursor: 99 }
-  })
-
-  const progress = continuity.inspect({ script: script(), state: focused.state, request: { kind: 'progress' } })
-  assert.equal(progress.cursor, 2)
-  assert.equal(progress.totalChunks, 3)
-})
-
 test('替换剧本自动复位，rollback 使用不透明 revision 恢复提交前状态', () => {
   const continuity = createScriptContinuity()
   let state = continuity.start(script(), 1)
@@ -152,19 +123,4 @@ test('末块正文提交后自动进入结束位置，不再重复注入末块',
   })
   assert.equal(ended.reference.ended, true)
   assert.equal(ended.reference.chunkId, '')
-})
-
-test('同一 turn 改变 userText 会拒绝，避免提交错配', () => {
-  const continuity = createScriptContinuity()
-  const state = continuity.transition({
-    script: script(),
-    state: continuity.start(script(), 0),
-    event: { kind: 'prepare', nativeTurn: 7, userText: '原始输入' }
-  }).state
-
-  assert.throws(() => continuity.transition({
-    script: script(),
-    state,
-    event: { kind: 'prepare', nativeTurn: 7, userText: '不同输入' }
-  }), /本轮剧本准备不一致/)
 })

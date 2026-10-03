@@ -5,7 +5,8 @@ function installTavernLandingStyles(doc) {
   const Observer = doc.defaultView && doc.defaultView.MutationObserver;
   if (!Observer || !doc.body) return function () {};
   const roots = new Map();
-  const slotSelector = '[data-slot="conversation"]';
+  // Current hosts mount the conversation at main.conversation; older ones used conversation.
+  const slotSelector = '[data-slot="main.conversation"], [data-slot="conversation"]';
   function watch(root) {
     let presetRow = null;
     function sync() {

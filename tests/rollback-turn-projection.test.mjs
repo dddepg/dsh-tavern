@@ -52,6 +52,18 @@ for (const alpha of [false, true]) {
     assert.ok(removed.every(row => row.style.display === 'none'), 'refresh/repeated projection remains stable')
   })
 
+  test(`${alpha ? 'alpha' : 'main'} 隐藏或恢复首个已加载回合时不越过“加载更早”等非会话行（#123）`, () => {
+    const pager = { style: { display: '' }, previousElementSibling: null, getAttribute: () => null, querySelector: () => null }
+    const suppressed = ['system-prompt', 'user', 'assistant-step', 'turn-tail'].map(kind => row(kind, 9, alpha))
+    const projection = harness([pager, ...suppressed])
+    projection.applySuppressedDshTurns([9])
+    assert.ok(suppressed.every(row => row.style.display === 'none'))
+    assert.equal(pager.style.display, '', '分页控件保持可见')
+    pager.style.display = 'flex'
+    projection.restore({ undoneRollback: { turn: 9 }, suppressedDshTurns: [] })
+    assert.equal(pager.style.display, 'flex', '恢复回合不改写分页控件')
+  })
+
   test(`${alpha ? 'alpha' : 'main'} 首轮或无用户输入的重生成轮也能完整隐藏`, () => {
     const removed = ['system-prompt', 'context', 'assistant-step', 'turn-tail'].map(kind => row(kind, 1, alpha))
     harness(removed).applySuppressedDshTurns([1])

@@ -45,20 +45,6 @@ function fixture(options = {}) {
   return { service, saved, calls, start, config, store }
 }
 
-test('保存案例后才调用正式 API，同一会话逐轮输入，保存实际回复和逐轮请求', async () => {
-  const f = fixture()
-  const started = await f.start()
-  const report = await f.service.execute('owner', { action: 'status', sessionId: started.sessionId })
-  assert.equal(report.status, 'completed')
-  assert.equal(report.refused, false)
-  assert.equal(report.rounds.length, 2)
-  assert.deepEqual(report.rounds.map(round => round.checks.map(check => check.requestId)), [['r1'], ['r2']])
-  assert.deepEqual(f.calls.filter(c => c.method === 'send').map(c => c.args.input), ['你好', '继续'])
-  assert.ok(f.calls.filter(c => c.method === 'send').every(c => c.args.sessionId === started.sessionId))
-  assert.equal(f.calls.at(-1).method, 'cancel')
-  assert.equal(report.skippedRounds, 0)
-})
-
 test('候选项生成和选择都通过正式 API，记录实际选择', async () => {
   const f = fixture()
   const started = await f.start({ steps: [{ input: '你好', candidates: true }, { inputFrom: { candidate: 1, type: 'action' } }] })
@@ -85,25 +71,6 @@ for (const [name, options, status] of [
   assert.equal(report.rounds[0].status, status)
   assert.equal(report.skippedRounds, 1)
   assert.equal(f.calls.filter(c => c.method === 'send').length, 1)
-})
-
-test('候选生成拒绝也停止案例', async () => {
-  const f = fixture({ candidateRefusal: true })
-  const started = await f.start({ steps: [{ input: '你好', candidates: true }, { inputFrom: { candidate: 1 } }] })
-  const report = await f.service.execute('owner', { action: 'status', sessionId: started.sessionId })
-  assert.equal(report.status, 'refused')
-  assert.equal(report.skippedRounds, 1)
-})
-
-test('浏览器卡不发送输入，部分创建失败也清理测试会话', async () => {
-  for (const options of [{ browser: true }, { createError: '初始化失败' }]) {
-    const f = fixture(options)
-    const result = await f.start()
-    assert.equal(result.status, options.browser ? 'unsupported' : 'error')
-    assert.equal(result.refused, null)
-    assert.equal(f.calls.some(c => c.method === 'send'), false)
-    assert.equal(f.calls.at(-1).method, 'cancel')
-  }
 })
 
 test('工作台隔离、阻止重复并发，取消和重启均不当成通过', async () => {

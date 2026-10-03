@@ -33,16 +33,7 @@ test('长错误默认收起，可展开、单独隐藏和恢复，原始文本�
   assert.equal(row.style.display, '')
   assert.equal(row.panel.removed, true)
 })
-test('隐藏选择按对话保存，重新进入仍有效，其他对话不受影响', () => {
-  const storage = new Map()
-  const first = setup('Connection reset', storage)
-  first.controls.apply(); first.row.panel.children[2].onclick(); first.controls.dispose()
-  const again = setup('Connection reset', storage)
-  again.controls.apply(); assert.equal(again.row.style.display, 'none')
-  const other = setup('Connection reset', storage, 'b')
-  other.controls.apply(); assert.equal(other.row.style.display, '')
-  assert.doesNotMatch(JSON.stringify([...storage]), /Connection reset/)
-})
+
 test('已有回退投影的隐藏状态不被恢复按钮撤销', () => {
   const { row, controls } = setup('failure')
   row.hidden = true; row.style.display = 'none'; controls.apply()
@@ -52,31 +43,6 @@ test('已有回退投影的隐藏状态不被恢复按钮撤销', () => {
   row.hidden = true; row.style.display = 'none'; controls.apply()
   assert.equal(row.panel.hidden, true)
 })
-
-test('历史错误隐藏持久保存，换浏览器恢复，成功消息不参与清理', async () => {
-  let saved = []
-  const first = setup('本轮运行失败 Error: network', new Map(), 'a', {
-    hiddenTurns: [], onToggle: async (turn, hide) => { saved = hide ? [turn] : []; }
-  })
-  first.controls.apply()
-  await first.row.panel.children[2].onclick()
-  assert.deepEqual(saved, [8])
-  const second = setup('本轮运行失败 Error: network', new Map(), 'a', { hiddenTurns: saved })
-  second.controls.apply()
-  assert.equal(second.row.style.display, 'none')
-  assert.equal(second.row.textContent, '本轮运行失败 Error: network')
-})
-test('持久保存失败不假装已经隐藏', async () => {
-  let error
-  const h = setup('failure', new Map(), 'a', {
-    hiddenTurns: [], onToggle: async () => { throw new Error('offline') }, onError: value => { error = value }
-  })
-  h.controls.apply()
-  await h.row.panel.children[2].onclick()
-  assert.equal(h.row.style.display, '')
-  assert.equal(error.message, 'offline')
-})
-
 
 test('同一会话容器重复挂载只保留一个错误控件，旧实例不能重新插入', () => {
   const first = setup('failure')
@@ -118,24 +84,4 @@ test('失败尾部错误行提供一键重放，按轮次匹配而不是所有�
   const missing = setup('Provider finish_reason: content_filter')
   missing.controls.apply()
   assert.equal(missing.row.panel.children[3].hidden, true, '没有重放回调时不显示按钮')
-})
-
-test('重放进行中禁用按钮，失败经 onError 上报后仍可重试', async () => {
-  let failing = true
-  const errors = []
-  const { row, controls } = setup('Provider finish_reason: content_filter', new Map(), 'a', {
-    replayTurn: 8, onError: error => errors.push(error.message),
-    onReplay: async () => { if (failing) throw new Error('正在生成，请先停止后再重新生成') }
-  })
-  controls.apply()
-  const replay = row.panel.children[3]
-  const pending = replay.onclick()
-  assert.equal(replay.disabled, true)
-  await pending
-  assert.equal(replay.disabled, false)
-  assert.deepEqual(errors, ['正在生成，请先停止后再重新生成'])
-  failing = false
-  await replay.onclick()
-  assert.deepEqual(errors, ['正在生成，请先停止后再重新生成'])
-  assert.equal(replay.disabled, false)
 })

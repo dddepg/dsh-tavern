@@ -42,7 +42,7 @@
 
 ```sh
 node --test tests/full-template-runtime.test.mjs tests/worldbook-recall.test.mjs tests/worldbook-random.test.mjs tests/template-session-tasks.test.mjs
-node tests/fixtures/worldbook-template-benchmark.mjs output/playwright/issue43-transient-after large
+node tests/performance/worldbook-template-benchmark.mjs output/playwright/issue43-transient-after large
 node bin/test-tavern.mjs
 ```
 
