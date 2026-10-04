@@ -293,6 +293,8 @@ try {
       await notice.waitFor()
       await page.reload(); await notice.waitFor()
       report.refusal = { textNotice: await notice.textContent() }
+      // The reply projection lands after the chat revision; its fork target must not wait for a later rebuild.
+      await page.locator('[data-chat-flow-kind="turn-tail"][data-chat-turn="2"] button[aria-label="从这一轮分叉"]').waitFor({ state: 'attached', timeout: 5000 })
       // Settlement of this round runs in the background; the next send must follow it.
       await page.locator('.dsh-tavern-mvu-receipt').filter({ visible: true }).last().waitFor()
       await page.getByText('后台结算已完成').first().waitFor({ timeout: 60000 }).catch(() => {})
@@ -305,6 +307,18 @@ try {
       await page.reload(); await label.waitFor()
       report.refusal.providerNotice = await label.textContent()
       await page.screenshot({ path: join(output, 'refusal-notices.png'), fullPage: true })
+    })
+    await step('失败轮次之后，每条回复仍可分叉，且分叉能开出新对话', async () => {
+      // Fork targets follow session events written after the chat revision (reply projection).
+      const tails = page.locator('[data-chat-flow-kind="turn-tail"]')
+      for (const turn of ['1', '2']) {
+        const tail = page.locator(`[data-chat-flow-kind="turn-tail"][data-chat-turn="${turn}"]`)
+        await tail.locator('button[aria-label="从这一轮分叉"]').waitFor({ state: 'attached' })
+      }
+      report.refusal.forkButtons = await tails.locator('button[aria-label="从这一轮分叉"]').count()
+      const before = await page.locator('.dsh-tavern-side-row').count()
+      await page.locator('[data-chat-flow-kind="turn-tail"][data-chat-turn="2"] button[aria-label="从这一轮分叉"]').click({ force: true })
+      await page.waitForFunction(count => document.querySelectorAll('.dsh-tavern-side-row').length > count, before, { timeout: 60000 })
     })
   } else if (helperApiScenario) {
     await helperApiChecks({ page, step, savedChat, output, report })

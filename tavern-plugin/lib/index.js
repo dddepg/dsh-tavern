@@ -151,6 +151,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
 import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
+import { forkTurnsByMessageId as forkTargetsFromSession } from './domain/conversation-fork-targets.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, replaceTavernHelperVariables, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
 import { projectTavernHelperWorldbook } from './domain/tavern-helper-worldbook.js'
@@ -1551,16 +1552,7 @@ export async function apply(ctx) {
     const liveSession = sessionStore.get(str(chat.sessionId)) || agentRegistry.get(str(chat.sessionId))?.session
     const latestAssistant = latestStoryTurn > 0 ? assistantResultForTurn(liveSession, latestStoryTurn) : null
     const latestAssistantMessageId = str(latestAssistant?.event?.data?.message?.id)
-    const forkTurnsByMessageId = {}
-    const visibleTurns = new Set(debugTurns.map(item => item.turn))
-    const messagesByTurn = new Map()
-    for (const event of sessionEvents(liveSession)) {
-      const turn = Number(event.data?.turn)
-      if (!visibleTurns.has(turn)) continue
-      if (event.type === 'turn/start') messagesByTurn.delete(turn)
-      if (event.type === 'assistant/message' && event.data?.message?.source?.kind === 'model') messagesByTurn.set(turn, event.data.message.id)
-    }
-    for (const [turn, messageId] of messagesByTurn) if (messageId) forkTurnsByMessageId[messageId] = turn
+    const forkTurnsByMessageId = forkTurnsForChat(chat)
     const {inputSources,inputTemplateDisplays}=inputFieldsProjection.project(persistedProjection ? chat : {...chat,_storageRevision:undefined}, options.inputChanges)
     const cardUpdate = ['story', 'script'].includes(chat.mode || 'story') && chat.requestMode !== 'sillytavern'
       ? await cardUpdateStatus(chat) : { available: false }
@@ -1745,7 +1737,14 @@ export async function apply(ctx) {
   })
   function mvuReceiptsOf(chat, changes) { return sessionStateView.receipts(chat, changes) }
   function rollbackViewFields(chat, evidence, changes) { return sessionStateView.rollback(chat, evidence, changes) }
-  function volatileSessionViewFields(chat, activity, changes) { return sessionStateView.volatile(chat, activity, changes) }
+  // Derived from live session events, which change without a chat revision (see conversation-fork-targets.js).
+  function forkTurnsForChat(chat) {
+    const session = sessionStore.get(str(chat?.sessionId)) || agentRegistry.get(str(chat?.sessionId))?.session
+    return forkTargetsFromSession(session, chat?.regeneratedDshTurns)
+  }
+  function volatileSessionViewFields(chat, activity, changes) {
+    return { ...sessionStateView.volatile(chat, activity, changes), forkTurnsByMessageId: forkTurnsForChat(chat) }
+  }
 
   async function projectCachedSessionView(chat, previous, activity) {
     const mode = chat.mode || 'story'
