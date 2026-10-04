@@ -192,6 +192,14 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
     let restored = false
     if (options.host === 'cli' && safeToRelease) {
       const appRoot = options.installedSourceRoot || process.env.DSH_TAVERN_APP_DIR || path.join(dshHome, 'apps/dsh-tavern')
+      // Cancellation ends the whole installer tree, so its own cleanup may not run.
+      // With the tree verified stopped, finish it here: undo an unfinished switch
+      // (no-op when the installer already did) and drop a leftover staging copy.
+      const stager = [appRoot, appRoot + '.previous'].map(root => path.join(root, 'bin/staged-app-install.mjs')).find(file => existsSync(file))
+      if (stager) {
+        try { await promisify(execFile)(process.execPath, [stager, 'rollback', '--app', appRoot], { windowsHide: true, timeout: 120_000 }) }
+        catch (rollbackError) { failure = new Error(`${String(failure?.message || failure)}\n恢复原版本失败：${String(rollbackError?.stderr || rollbackError?.message || rollbackError)}`) }
+      }
       restored = !!await readInstallationReceipt({ sourceRoot: appRoot, dshHome, host: options.host })
       if (existsSync(path.join(appRoot, 'bin/dsh-tavern.mjs'))) {
         try { await (options.startService || startUpdatedService)({ sourceRoot: appRoot, dshHome, log, noOpen: options.statusFile !== '' }) }

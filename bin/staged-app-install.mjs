@@ -45,9 +45,12 @@ function remove(target) {
 // a stale previous/staging copy. Restore a usable app before starting again.
 export function recover(app) {
   const paths = stagedPaths(app)
+  // Killed between the two renames: the previous app is complete, move it back.
   if (!existsSync(paths.app) && existsSync(paths.previous)) rename(paths.previous, paths.app)
+  // An unfinished switch still owns user files in previous: undo it properly.
+  if (existsSync(path.join(paths.app, SWAP_RECORD))) rollback(paths.app)
+  // Without a record, previous is what a committed switch had not yet deleted.
   if (existsSync(paths.previous)) remove(paths.previous)
-  if (existsSync(path.join(paths.app, SWAP_RECORD))) rmSync(path.join(paths.app, SWAP_RECORD), { force: true })
   if (existsSync(paths.staging)) remove(paths.staging)
 }
 
@@ -98,8 +101,11 @@ export function swap(app) {
   const moved = carriedEntries(paths.app, paths.staging)
   rename(paths.app, paths.previous)
   rename(paths.staging, paths.app)
+  // Record before moving anything: user files may still be in previous, so an
+  // interrupted swap must be rolled back, never cleaned up as a leftover copy.
   const record = path.join(paths.app, SWAP_RECORD)
   const done = []
+  writeFileSync(record, JSON.stringify({ fresh: false, moved: done }) + '\n')
   try {
     for (const relative of moved) {
       const target = path.join(paths.app, ...relative.split('/'))
@@ -126,6 +132,11 @@ export function rollback(app) {
     return false
   }
   const record = JSON.parse(readFileSync(recordFile, 'utf8'))
+  if (!record.fresh && !existsSync(paths.previous)) {
+    // commit() removes previous first: the switch was already committed.
+    rmSync(recordFile, { force: true })
+    return false
+  }
   const failed = paths.app + '.failed'
   remove(failed)
   if (record.fresh) {
@@ -149,8 +160,9 @@ export function rollback(app) {
 
 export function commit(app) {
   const paths = stagedPaths(app)
-  rmSync(path.join(paths.app, SWAP_RECORD), { force: true })
+  // Previous first: a record without previous then unambiguously means committed.
   if (existsSync(paths.previous)) remove(paths.previous)
+  rmSync(path.join(paths.app, SWAP_RECORD), { force: true })
 }
 
 export function discard(app) {

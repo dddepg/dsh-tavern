@@ -132,3 +132,33 @@ test('上次在切换中途被强制结束：下次安装先恢复可用的原�
   swap(app)
   assert.equal(read(app, 'data/chats/one.json'), '{"chat":1}')
 })
+
+test('切换中途（两次改名之后、搬运用户文件之前）被强制结束：恢复时不会删掉仍在旧目录里的用户数据', t => {
+  const { app, source } = fixture(t)
+  installV1(app, source)
+  const paths = stagedPaths(app)
+  release(source('v2'), 'v2', ['package.json', 'bin/dsh-tavern.mjs'])
+  prepare({ app, source: source('v2') })
+  // Simulate the swap being killed right after the record is written.
+  renameSync(app, paths.previous)
+  renameSync(paths.staging, app)
+  writeFileSync(path.join(app, '.dsh-tavern-swap.json'), JSON.stringify({ fresh: false, moved: [] }) + '\n')
+  release(source('v3'), 'v3', ['package.json'])
+  prepare({ app, source: source('v3') })
+  assert.equal(read(app, 'data/chats/one.json'), '{"chat":1}', '原版本连同用户数据一起恢复')
+  assert.equal(read(app, 'bin/dsh-tavern.mjs'), 'v1:bin/dsh-tavern.mjs')
+  assert.equal(existsSync(paths.previous), false)
+})
+
+test('提交删除旧目录后、清除记录前中断：回滚识别为已提交，不报错也不改动新版本', t => {
+  const { app, source } = fixture(t)
+  installV1(app, source)
+  release(source('v2'), 'v2', ['package.json', 'bin/dsh-tavern.mjs'])
+  prepare({ app, source: source('v2') })
+  swap(app)
+  rmSync(stagedPaths(app).previous, { recursive: true, force: true })
+  assert.equal(rollback(app), false)
+  assert.equal(read(app, 'bin/dsh-tavern.mjs'), 'v2:bin/dsh-tavern.mjs')
+  assert.equal(read(app, 'data/chats/one.json'), '{"chat":1}')
+  assert.equal(existsSync(path.join(app, '.dsh-tavern-swap.json')), false)
+})
