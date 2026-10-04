@@ -650,6 +650,7 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => displayPreferences.start(), "dsh-tavern: global display preferences");
 			ctx.effect(() => tavernInteractionDiagnostics.start(), "dsh-tavern: interaction diagnostics");
 			ctx.effect(() => syncTavernSubagentCatalogs(ctx.sessions), "dsh-tavern: subagent catalog synchronization");
+			ctx.effect(() => syncTavernCardAgentResources(ctx.sessions), "dsh-tavern: card Agent resource refresh");
 			const slots = ctx.slots;
 			if (slots === undefined) return;
             ctx.effect(() => slots.inject("conversation.view", () => slots.register({
@@ -840,6 +841,7 @@ window.__ModuleLoader__.load({
 		exports.buildTavernFrameDocument = buildTavernFrameDocument;
 		exports.openingPreviewSelection = openingPreviewSelection;
 		exports.syncTavernSubagentCatalogs = syncTavernSubagentCatalogs;
+		exports.syncTavernCardAgentResources = syncTavernCardAgentResources;
 		exports.applyTavernVariableReceipt = applyTavernVariableReceipt;
 		exports.createTavernHelperTransport = createTavernHelperTransport;
 		exports.createTavernInitializationTiming = createTavernInitializationTiming;

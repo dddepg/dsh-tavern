@@ -4224,6 +4224,37 @@ window.__ModuleLoader__.load({
 		  reconcile();
 		  return function () { disposed = true; stop(); };
 		}
+		// The card Agent edits cards, world books and presets on the server, often with
+		// generic file tools, so no page action announced the write. When a card
+		// workbench turn (or one of its child agents) ends, tell resource panels their
+		// data may have changed; hidden panels only mark themselves stale.
+		function syncTavernCardAgentResources(sessions, options = {}) {
+		  if (!sessions || !sessions.list) return function () {};
+		  const modes = options.modes || function () { return tavernSessionModes.values; };
+		  const notify = options.notify || notifyTavernDataChanged;
+		  const running = new Map();
+		  function isCardWork(row, byId) {
+		    for (let current = row, depth = 0; current && depth < 8; depth += 1) {
+		      if (modes()[current.id] === 'card') return true;
+		      if (current.origin !== 'subagent' || !current.parentId) return false;
+		      current = byId[current.parentId] || { id: current.parentId };
+		    }
+		    return false;
+		  }
+		  function reconcile() {
+		    const byId = sessions.list.getSnapshot().byId || {};
+		    let ended = false;
+		    for (const row of Object.values(byId)) {
+		      const now = row.running === true;
+		      if (running.get(row.id) === true && !now && isCardWork(row, byId)) ended = true;
+		      running.set(row.id, now);
+		    }
+		    if (ended) notify(['worldbooks', 'cards', 'presets', 'scripts'], 'card-agent');
+		  }
+		  const stop = sessions.list.subscribe(reconcile);
+		  reconcile();
+		  return stop;
+		}
 
 		function findTavernQuoteRanges(text) {
 		    // Match only complete same-line pairs, including the delimiters.
@@ -13199,12 +13230,15 @@ function bindTavernFontZoom(node, win) {
 					return next;
 				});
 			}
-			React.useEffect(function () { setDraft(JSON.parse(JSON.stringify(initial))); }, [props.record.view]);
+			// The library reloads a clean draft when the book changes elsewhere (e.g. the
+			// card Agent edited it); unsaved edits are never overwritten.
+			React.useEffect(function () { setDraft(JSON.parse(JSON.stringify(initial))); if (props.onDirty) props.onDirty(false); }, [props.record.view]);
+			function editDraft(next) { setDraft(next); if (props.onDirty) props.onDirty(true); }
 			const h = React.createElement;
 			function updateEntry(index, patch) {
 				const entries = (draft.entries || []).slice();
 				entries[index] = Object.assign({}, entries[index], patch);
-				setDraft(Object.assign({}, draft, { entries: entries }));
+				editDraft(Object.assign({}, draft, { entries: entries }));
 			}
 			function addEntry() {
 				const ref = "new:" + Date.now() + ":" + Math.random();
@@ -13215,13 +13249,13 @@ function bindTavernFontZoom(node, win) {
 					position: initial.format === "sillytavern-worldbook" ? 0 : "after_char", depth: 4, role: 0,
 					probabilityEnabled: true, probability: 100, caseSensitive: false, matchWholeWords: false,
 				}]);
-				setDraft(Object.assign({}, draft, { entries: entries }));
+				editDraft(Object.assign({}, draft, { entries: entries }));
 			}
 			async function removeEntry(index) {
 				const entry = (draft.entries || [])[index];
 				const title = entry && (entry.comment || entry.title) || "未命名条目";
 				if (!await askConfirm("删除世界书条目“" + title + "”？\n保存世界书后才会正式删除。")) return;
-				setDraft(Object.assign({}, draft, { entries: (draft.entries || []).filter(function (_entry, itemIndex) { return itemIndex !== index; }) }));
+				editDraft(Object.assign({}, draft, { entries: (draft.entries || []).filter(function (_entry, itemIndex) { return itemIndex !== index; }) }));
 			}
 			function entryPatch(entry) {
 				return {
@@ -13328,10 +13362,12 @@ function bindTavernFontZoom(node, win) {
 			const entryGroups = groupWorldBookEditorEntries(draft.entries, deferredQuery);
 			return h("div", { className: "dsh-tavern-library" },
 				h("div", { className: "dsh-tavern-status-head" }, h("button", { className: "dsh-tavern-btn", onClick: props.onBack }, "← 返回世界书库"), h("div", { className: "dsh-tavern-status-title" }, draft.displayName || "未命名世界书"), h("div", { className: "dsh-tavern-question-sub" }, props.record.source.kind === "card" ? "人物卡内置 · " + props.record.source.cardName : "独立世界书"), props.actions),
+				props.stale ? h("div", { className: "dsh-tavern-dock-error", role: "status" }, "这本世界书已在别处被修改（例如卡片 Agent），当前显示的不是最新内容。",
+					h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: props.onReload }, "重新加载（放弃未保存的修改）")) : null,
 				h("div", { className: "dsh-tavern-worldbook-editor" },
 					props.bindingPanel,
-					h("div", { className: "dsh-tavern-card-field" }, h("label", null, "世界书名称"), h("input", { value: draft.displayName || "", onChange: function (event) { setDraft(Object.assign({}, draft, { displayName: event.target.value })); } })),
-					h("div", { className: "dsh-tavern-card-field" }, h("label", null, "说明"), h("textarea", { value: draft.description || "", onChange: function (event) { setDraft(Object.assign({}, draft, { description: event.target.value })); } })),
+					h("div", { className: "dsh-tavern-card-field" }, h("label", null, "世界书名称"), h("input", { value: draft.displayName || "", onChange: function (event) { editDraft(Object.assign({}, draft, { displayName: event.target.value })); } })),
+					h("div", { className: "dsh-tavern-card-field" }, h("label", null, "说明"), h("textarea", { value: draft.description || "", onChange: function (event) { editDraft(Object.assign({}, draft, { description: event.target.value })); } })),
                     h("div", { className: "dsh-tavern-worldbook-summary" }, draft.entries.length + " 个条目 · " + draft.entries.filter(function (entry) { return entry.enabled !== false; }).length + " 个启用"),
 					(initial.diagnostics || []).map(function (item, index) { return h("div", { key: index, className: "dsh-tavern-dock-error" }, item.message); }),
 					h("div", { className: "dsh-tavern-worldbook-head" }, h("span", { className: "dsh-tavern-worldbook-title" }, "条目"), h("button", { className: "dsh-tavern-worldbook-add", onClick: addEntry }, "＋ 新增条目")),
@@ -13363,6 +13399,8 @@ function bindTavernFontZoom(node, win) {
 			const importInput = React.useRef(null);
 			const bindingDisclosure = React.useRef(null);
 			const refreshModule = React.useRef(null);
+			const draftDirty = React.useRef(false);
+			const [recordStale, setRecordStale] = React.useState(false);
 			const requestedSource = props.tab && props.tab.meta && props.tab.meta.worldBookSource ? props.tab.meta.worldBookSource : null;
 			const sessionMode = useTavernSessionMode(props.scope.sessionId);
 			const h = React.createElement;
@@ -13378,6 +13416,7 @@ function bindTavernFontZoom(node, win) {
 				return refreshModule.current.whenIdle();
 			}
 			function load(source) {
+				setRecordStale(false);
 				if (!source) { setRecord(null); setAssociations(null); setSelectedCardPath(""); return Promise.resolve(); }
 				setRecordLoading(true); setError("");
 				return Promise.all([
@@ -13399,7 +13438,17 @@ function bindTavernFontZoom(node, win) {
 					return relations;
 				});
 			}
-			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks"); }, refresh);
+			// An open book must follow external edits too, not only the catalog.
+			function refreshAll() {
+				const listed = refresh();
+				if (!record) return listed;
+				if (draftDirty.current) { setRecordStale(true); return listed; }
+				const source = record.source;
+				return Promise.all([listed, rpcWithTimeout("getWorldBook", { source: source }, props.scope.sessionId).then(function (result) {
+					setRecord(function (current) { return current && JSON.stringify(current.source) === JSON.stringify(source) && !draftDirty.current ? result : current; });
+				}, function () {})]);
+			}
+			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["worldbooks", "cards"], "worldbooks"); }, refreshAll);
 			React.useEffect(function () { return function () { refreshModule.current.dispose(); }; }, []);
 			React.useEffect(function () { if (requestedSource) load(requestedSource); }, [JSON.stringify(requestedSource)]);
 			function clear() { setRecord(null); setAssociations(null); setSelectedCardPath(""); if (props.ctx && props.tab) props.ctx.betterSidebar.updateTab(props.tab.id, { meta: null }); }
@@ -13476,7 +13525,7 @@ function bindTavernFontZoom(node, win) {
 			if (recordLoading) return h("div", { className: "dsh-tavern-library" }, h("div", { className: "dsh-tavern-empty" }, "正在读取世界书…"));
 			if (record) {
 				const actions = h("div", { className: "dsh-tavern-library-head-actions" }, h("button", { className: "dsh-tavern-btn", onClick: exportFile }, "导出"), record.source.kind === "standalone" ? h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: rename }, "重命名文件") : null, h("button", { className: "dsh-tavern-btn", disabled: busy || bindingBusy, onClick: function () { remove(record.source, record.view.displayName); } }, "删除世界书"), error ? h("div", { className: "dsh-tavern-dock-error" }, error) : null);
-				return h(WorldBookEditor, { record: record, sessionId: props.scope.sessionId, onBack: clear, actions: actions, bindingPanel: h(React.Fragment, null,
+				return h(WorldBookEditor, { record: record, sessionId: props.scope.sessionId, onBack: clear, actions: actions, stale: recordStale, onReload: function () { draftDirty.current = false; return load(record.source); }, onDirty: function (value) { draftDirty.current = value; if (!value) setRecordStale(false); }, bindingPanel: h(React.Fragment, null,
                     record.source.kind === "standalone" ? h("label", { className: "dsh-tavern-worldbook-global" + (record.globalEnabled === true ? " enabled" : "") },
                         h("span", { className: "dsh-tavern-worldbook-global-icon", "aria-hidden": "true" }, "🌐"),
                         h("span", { className: "dsh-tavern-settings-copy" },
@@ -16150,6 +16199,7 @@ function bindTavernFontZoom(node, win) {
 			ctx.effect(() => displayPreferences.start(), "dsh-tavern: global display preferences");
 			ctx.effect(() => tavernInteractionDiagnostics.start(), "dsh-tavern: interaction diagnostics");
 			ctx.effect(() => syncTavernSubagentCatalogs(ctx.sessions), "dsh-tavern: subagent catalog synchronization");
+			ctx.effect(() => syncTavernCardAgentResources(ctx.sessions), "dsh-tavern: card Agent resource refresh");
 			const slots = ctx.slots;
 			if (slots === undefined) return;
             ctx.effect(() => slots.inject("conversation.view", () => slots.register({
@@ -16340,6 +16390,7 @@ function bindTavernFontZoom(node, win) {
 		exports.buildTavernFrameDocument = buildTavernFrameDocument;
 		exports.openingPreviewSelection = openingPreviewSelection;
 		exports.syncTavernSubagentCatalogs = syncTavernSubagentCatalogs;
+		exports.syncTavernCardAgentResources = syncTavernCardAgentResources;
 		exports.applyTavernVariableReceipt = applyTavernVariableReceipt;
 		exports.createTavernHelperTransport = createTavernHelperTransport;
 		exports.createTavernInitializationTiming = createTavernInitializationTiming;

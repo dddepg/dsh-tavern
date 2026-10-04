@@ -139,6 +139,7 @@
 		// @include landing-styles.js
 		// @include brand.js
 		// @include subagent-catalog-sync.js
+		// @include card-agent-resource-sync.js
 
 		// @include text-colors.js
 

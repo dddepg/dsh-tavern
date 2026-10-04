@@ -21,3 +21,20 @@ test('首次看到目录时若缺少已知子代理则补刷一次', async () =>
   helperClient.syncTavernSubagentCatalogs({ list: { getSnapshot: () => snapshot, subscribe() { return () => {} } }, refreshSubagents(id) { calls.push(id) } })
   await tick(); assert.deepEqual(calls, ['parent'])
 })
+
+test('卡片工作台（含子代理）跑完一轮时通知资源库刷新，游玩对话不触发', () => {
+  const modes = { card: 'card', play: 'story' }
+  const snapshot = { byId: {
+    card: { id: 'card', running: true }, child: { id: 'child', origin: 'subagent', parentId: 'card', running: true },
+    play: { id: 'play', running: true } } }
+  let changed; const sent = []
+  const stop = helperClient.syncTavernCardAgentResources({ list: { getSnapshot: () => snapshot, subscribe(fn) { changed = fn; return () => {} } } },
+    { modes: () => modes, notify: (kinds, source) => sent.push([Array.from(kinds).join(','), source]) })
+  snapshot.byId.play.running = false; changed()
+  assert.equal(sent.length, 0, '游玩对话跑完不刷新资源库')
+  snapshot.byId.child.running = false; changed()
+  assert.deepEqual(sent, [['worldbooks,cards,presets,scripts', 'card-agent']], '子代理改完资源也通知')
+  changed(); assert.equal(sent.length, 1, '状态不变不重复通知')
+  snapshot.byId.card.running = false; changed(); assert.equal(sent.length, 2)
+  stop()
+})
