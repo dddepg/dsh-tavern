@@ -29,3 +29,10 @@ test('每轮第一步追加一次，作为插件上下文进入历史', () => {
   assert.equal(appendVariableChanges({ chat: current, payload: { step: 1 }, decision: first }).messages.length, 2)
   assert.equal(appendVariableChanges({ chat: current, payload: { step: 2 }, decision }).messages.length, 1)
 })
+
+test('单个变量最多 100 字，超出截断并标注', () => {
+  const diary = '今'.repeat(300)
+  const text = lastRoundVariableChanges(chat([message({ 日记: '—' }), message({ 日记: diary })]))
+  const line = text.split('\n').find(row => row.startsWith('/日记'))
+  assert.equal(line, '/日记 = "' + '今'.repeat(99) + '…（已截断）')
+})

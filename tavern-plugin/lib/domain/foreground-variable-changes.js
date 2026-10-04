@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
 
 const LIMIT = 6000
+// Long generated text (diaries, chat logs) only needs to be recognizable here.
+const VALUE_LIMIT = 100
 const escapeKey = key => key.replace(/~/g, '~0').replace(/\//g, '~1')
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
@@ -40,7 +42,9 @@ export function lastRoundVariableChanges(chat) {
   const lines = []
   let size = 0, omitted = 0
   for (const [path, value] of changes) {
-    const line = path + ' = ' + (value === undefined ? '（已删除）' : JSON.stringify(value))
+    const text = value === undefined ? '（已删除）' : JSON.stringify(value)
+    const chars = Array.from(text)
+    const line = path + ' = ' + (chars.length > VALUE_LIMIT ? chars.slice(0, VALUE_LIMIT).join('') + '…（已截断）' : text)
     if (size + line.length > LIMIT) { omitted++; continue }
     size += line.length
     lines.push(line)
