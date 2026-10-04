@@ -11,9 +11,12 @@ import { recordInstallationReceipt, readInstallationReceipt } from '../bin/insta
 
 const identity = { currentVersion: '2.4.0', currentCommit: 'a'.repeat(40) }
 const receiptModule = new URL('../bin/installation-receipt.mjs', import.meta.url).href
-async function fixture(t) {
+async function fixture(t, { beforeCleanup } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'tavern-update-lifecycle-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  t.after(async () => {
+    await beforeCleanup?.()
+    await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+  })
   const sourceRoot = path.join(root, 'apps/dsh-tavern')
   const profile = path.join(root, 'profiles/tavern')
   const dataRoot = path.join(root, 'profile-data/tavern/data')
@@ -240,14 +243,13 @@ test('bootstrap installers defer their persistent service when called by the upd
 
 test('Windows persistent service launched after cleanup survives successful updater completion', { skip: process.platform !== 'win32' }, async t => {
   let pid
-  // Hooks run in registration order. Stop the owned long-lived process before
-  // fixture() removes its Windows working directory, and wait for actual exit.
-  t.after(async () => {
+  // One cleanup callback establishes order across Node versions. Even after
+  // process exit, Windows may briefly retain the working-directory handle.
+  const f = await fixture(t, { async beforeCleanup() {
     if (!pid) return
     try { process.kill(pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
     await until(() => { try { process.kill(pid, 0); return false } catch (error) { if (error.code === 'ESRCH') return true; throw error } })
-  })
-  const f = await fixture(t)
+  } })
   const { startUpdatedService } = await import('../bin/application-update.mjs')
   const receiptScript = path.join(f.sourceRoot, 'receipt.mjs')
   await writeFile(receiptScript, `import {recordInstallationReceipt} from ${JSON.stringify(receiptModule)};await recordInstallationReceipt({sourceRoot:${JSON.stringify(f.sourceRoot)},dshHome:process.env.DSH_HOME,host:'cli',attemptId:process.env.DSH_TAVERN_INSTALL_ATTEMPT})`)

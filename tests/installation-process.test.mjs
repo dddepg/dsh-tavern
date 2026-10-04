@@ -93,6 +93,9 @@ test('POSIX EPERM with a live writer remains unsafe and reports its cleanup fail
   } finally {
     mock.mock.restore()
     if (wrapper) {
+      // The supervisor unrefs failed children; Node 22 needs an explicit ref
+      // while this fixture waits for its own cleanup exit event.
+      wrapper.ref()
       const exited = new Promise(resolve => wrapper.once('exit', resolve))
       try { kill(-wrapper.pid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
       if (wrapper.exitCode === null && wrapper.signalCode === null) await exited
