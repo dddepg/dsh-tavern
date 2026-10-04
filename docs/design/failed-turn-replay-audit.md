@@ -492,3 +492,16 @@ DSH_TAVERN_PORT=3091 ./dsh-tavern start
 ### 启动核对
 
 `service.starting` → `service.spawned`（PID 2878，cwd 为实例 `apps/dsh-tavern`）→ `service.ready` @ 2026-10-04T10:29:54Z，端口 3091。无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`。本次启动日志无迁移失败、无 error/warn。
+
+### 手工清理清单外残留（同日追加）
+
+按用户要求把清单外的旧文件清掉了。以实例 `.dsh-tavern-files.txt`（当前发布清单，941 条）为基准全量比对：清单文件**缺失 0**（先确认实例是清单的超集才动手），多余 349 个，保留 `.dsh-tavern-local.json` / `.dsh-tavern-release.json` 两个实例运行时文件，**删除 347 个**：
+
+- 310 个旧 webpack chunk（`st-prompt-template/host-build/artifact/`）+ 2 个退役 `lib/domain/{full-template-runtime,scene-image-settings}.js`（§13 已核实无引用）。
+- 4 个退役 `src/` 文件（`ejs-code-editor.js`、`modules/{history-window,story-ledger}.js`、`session-inventory.js`）。注意与活文件区分：`lib/domain/story-ledger.js` / `lib/domain/session-inventory.js` 是当前源码在用的同名模块，**不能**按文件名匹配删。
+- 旧补丁 `dsh-better-sidebar@0.17.1.patch`（已被 0.19.1 取代，新版在位）。
+- `card-to-mvu/assets/status.html`、`st-prompt-template/upstream/{docs,tests}` 5 个、`dsh-image-gen/{docs/assets,tests}` 24 个：这些在仓库侧有的仍存在，但**不在运行清单里**（清单定义发布集），属旧版安装器装上的残留，运行时不读取。
+
+删除前定向备份 `backups/stale-files-20261004.tar.gz`（12M，347 个文件）。删后复验：实例 = 清单 + 2 个运行时文件，缺失 0。`./dsh-tavern stop` → 删除 → `start`：`service.ready`（PID 4358，端口 3091），无 token 401、带 token 303、`runtime-generation` 返回 ok，本次启动日志 0 条 error/warn。
+
+结论：残留已清零；今后 prune 只需按清单机制正常工作，不会再积累这类残留（清单每轮重写，清单外新残留只可能来自旧版安装器行为变化）。
