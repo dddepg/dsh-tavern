@@ -54,6 +54,8 @@ command() {
     *) return 1 ;;
   esac
 }
+run_install() { shift 2; "$@"; }
+assert_installation_active() { :; }
 dsh() { node "\${SOURCE_DIR}/bin/dsh-compatibility.mjs" --version; }
 pnpm() {
   if [ "$HAS_PNPM" = 1 ]; then printf '%s\n' "$MOCK_PNPM_VERSION"; else return 127; fi

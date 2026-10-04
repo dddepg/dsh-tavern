@@ -11656,6 +11656,32 @@ function bindTavernFontZoom(node, win) {
 				finally { setBusy(false); }
 			}
 			const [updateStatus, setUpdateStatus] = React.useState({ phase: "loading", host: "cli" });
+			const updateStatusRef = React.useRef(updateStatus);
+			const updateActionRef = React.useRef({ pending: false, generation: 0 });
+			function publishUpdateStatus(next) {
+				updateStatusRef.current = next;
+				// Polls return fresh objects; unchanged status must not re-render the sidebar.
+				setUpdateStatus(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+			}
+			function isUpdateBusy(status) {
+				return ["loading", "checking", "running", "cancelling", "blocked"].includes(status.phase);
+			}
+			async function callUpdate(method) {
+				const controller = new AbortController();
+				let timer;
+				try {
+					// Stop waiting for a lost response, never replay a mutation. The next status read reconciles it.
+					const timeout = new Promise(function (_resolve, reject) {
+						timer = window.setTimeout(function () {
+							const error = new Error("更新服务请求超时，正在核实状态");
+							error.retryable = true;
+							reject(error);
+							controller.abort();
+						}, 30000);
+					});
+					return await Promise.race([call(method, undefined, { signal: controller.signal }), timeout]);
+				} finally { window.clearTimeout(timer); }
+			}
 			const updateStartedAtRef = React.useRef(0);
 			const updateRecoveryRef = React.useRef({ sawOffline: false, reloading: false });
 			const lastModeSession = React.useRef(null);
@@ -11698,7 +11724,7 @@ function bindTavernFontZoom(node, win) {
 				if (!latest || latest.source !== "左侧栏操作") return;
 				if (latest.message === "DSH Session 列表同步超时，请刷新页面后重试：" + current) setError("");
 			}, [current, summaries]);
-			function call(method, args) { return rpc(method, args); }
+			function call(method, args, requestOptions) { return rpc(method, args, undefined, requestOptions); }
 			function isMissingUpdateApiError(error) {
 				return String(error && error.message || error || "").indexOf("未知方法: getUpdateStatus") >= 0;
 			}
@@ -11745,29 +11771,30 @@ function bindTavernFontZoom(node, win) {
 				let pending = false;
 				let failures = 0;
 				async function refreshUpdateStatus() {
-					if (stopped || pending) return;
+					if (stopped || pending || updateActionRef.current.pending) return;
+					const generation = updateActionRef.current.generation;
 					pending = true;
 					try {
-						const result = await call("getUpdateStatus");
-						if (!stopped && result && result.status) {
+						const result = await callUpdate("getUpdateStatus");
+						if (!stopped && generation === updateActionRef.current.generation && !updateActionRef.current.pending && result && result.status) {
 							received = true;
 							failures = 0;
 							tavernErrorHub.resolve("更新状态");
 							const status = result.status;
 							const completedInThisPage = status.phase === "completed" && updateStartedAtRef.current > 0 && Number(status.completedAt || 0) >= updateStartedAtRef.current;
 							const next = status.phase === "completed" && !completedInThisPage ? { ...status, phase: "idle", host: status.host || "cli" } : status;
-							// The poll returns a fresh object every 2.5s; keep the old one when nothing changed so the sidebar does not re-render.
-							setUpdateStatus(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+							// Ignore reads begun before an update action, even if they finish afterward.
+							publishUpdateStatus(next);
 						}
 					} catch (err) {
-							if (stopped) return;
+							if (stopped || generation !== updateActionRef.current.generation || updateActionRef.current.pending) return;
 							failures += 1;
 							// Only this read-only poll gets a startup grace period. Never replay startUpdate.
 							if ((err && err.retryable || err instanceof TypeError) && failures < 3) return;
 							if (isMissingUpdateApiError(err)) {
-								if (!received) setUpdateStatus({ phase: "restart-required", host: "desktop" });
+								if (!received) publishUpdateStatus({ phase: "restart-required", host: "desktop" });
 							} else {
-								if (!received) setUpdateStatus({ phase: "failed", host: "cli", error: String(err && err.message || err) });
+								if (!received && !["running", "cancelling", "blocked"].includes(updateStatusRef.current.phase)) publishUpdateStatus({ phase: "failed", host: "cli", error: String(err && err.message || err) });
 								tavernErrorHub.report("更新状态", err);
 							}
 						} finally { pending = false; }
@@ -12293,27 +12320,62 @@ function bindTavernFontZoom(node, win) {
 				});
 			}, [history, summaries, busy]);
 			async function checkUpdate() {
-				if (updateStatus.phase === "checking" || updateStatus.phase === "running") return;
-				setUpdateStatus({ ...updateStatus, phase: "checking", host: updateStatus.host || "cli", checkedAt: Date.now(), error: "" });
+				const status = updateStatusRef.current;
+				if (updateActionRef.current.pending || isUpdateBusy(status) || ["restart-required", "installed-restart-required", "package-managed"].includes(status.phase)) return;
+				updateActionRef.current.pending = true;
+				updateActionRef.current.generation += 1;
+				publishUpdateStatus({ ...status, phase: "checking", host: status.host || "cli", checkedAt: Date.now(), error: "" });
 				try {
-					const result = await call("checkUpdate");
-					if (result && result.status) setUpdateStatus(result.status);
+					const result = await callUpdate("checkUpdate");
+					if (result && result.status) publishUpdateStatus(result.status);
 				} catch (err) {
-					setUpdateStatus({ ...updateStatus, phase: "check-failed", host: updateStatus.host || "cli", error: String(err && err.message || err) });
+					publishUpdateStatus({ ...status, phase: "check-failed", host: status.host || "cli", error: String(err && err.message || err) });
 					tavernErrorHub.report("检查更新", err);
+				} finally {
+					updateActionRef.current.pending = false;
+					updateActionRef.current.generation += 1;
 				}
 			}
 			async function performUpdate() {
-				if (updateStatus.phase !== "update-available") return;
-				if (!await askConfirm("更新期间会短暂断开，人物卡、资料和对话数据不会受到影响。\n确定更新到 GitHub 最新版吗？")) return;
-				updateStartedAtRef.current = Date.now();
-				setUpdateStatus({ ...updateStatus, phase: "running", host: updateStatus.host || "cli", startedAt: updateStartedAtRef.current });
+				const status = updateStatusRef.current;
+				if (updateActionRef.current.pending || !["update-available", "repair-required"].includes(status.phase)) return;
+				// Lock before opening the confirmation so repeated clicks cannot launch two requests.
+				updateActionRef.current.pending = true;
+				updateActionRef.current.generation += 1;
 				try {
-					const result = await call("startUpdate");
-					if (result && result.status) setUpdateStatus(result.status);
+					const repairing = status.phase === "repair-required";
+					if (!await askConfirm(repairing
+						? "将重新安装当前构建以修复上次未完成的更新，期间会短暂断开。人物卡、资料和对话数据会保留。\n确定修复安装吗？"
+						: "更新期间会短暂断开，人物卡、资料和对话数据不会受到影响。\n确定更新到 GitHub 最新版吗？")) return;
+					updateStartedAtRef.current = Date.now();
+					updateRecoveryRef.current = { sawOffline: false, reloading: false };
+					publishUpdateStatus({ ...status, phase: "running", host: status.host || "cli", startedAt: updateStartedAtRef.current, cancellable: false, error: "" });
+					const result = await callUpdate("startUpdate");
+					if (result && result.status) publishUpdateStatus(result.status);
 				} catch (err) {
-					setUpdateStatus({ phase: "failed", host: updateStatus.host || "cli", error: String(err && err.message || err) });
+					// A lost response does not prove that the installer stopped. Let the read-only poll reconcile it.
+					publishUpdateStatus({ ...updateStatusRef.current, error: "更新请求结果尚未确认，正在核实状态：" + String(err && err.message || err) });
 					tavernErrorHub.report("插件更新", err);
+				} finally {
+					updateActionRef.current.pending = false;
+					updateActionRef.current.generation += 1;
+				}
+			}
+			async function cancelUpdate() {
+				const status = updateStatusRef.current;
+				if (updateActionRef.current.pending || status.phase !== "running" || status.cancellable !== true) return;
+				updateActionRef.current.pending = true;
+				updateActionRef.current.generation += 1;
+				publishUpdateStatus({ ...status, phase: "cancelling", error: "" });
+				try {
+					const result = await callUpdate("cancelUpdate");
+					if (result && result.status) publishUpdateStatus(result.status);
+				} catch (err) {
+					publishUpdateStatus({ ...updateStatusRef.current, error: "取消请求结果尚未确认，正在核实状态：" + String(err && err.message || err) });
+					tavernErrorHub.report("取消更新", err);
+				} finally {
+					updateActionRef.current.pending = false;
+					updateActionRef.current.generation += 1;
 				}
 			}
 			const h = React.createElement;
@@ -12509,8 +12571,14 @@ function bindTavernFontZoom(node, win) {
 					? "✓ 未发现更新构建" + (updateStatus.checkWarning ? " · " + updateStatus.checkWarning : "")
 				: updateStatus.phase === "update-available"
 					? "发现新构建 " + ((updateStatus.latestCommit || "").slice(0, 7) || updateStatus.latestVersion || "") + (updateStatus.checkWarning ? " · " + updateStatus.checkWarning : "")
+				: updateStatus.phase === "repair-required"
+					? "当前构建需要修复安装" + (updateStatus.error ? "：" + updateStatus.error : "，没有发现更新构建。")
 				: updateStatus.phase === "running"
-				? "正在下载并安装，期间页面可能暂时断开… 如果较长时间仍未更新完成，建议重新安装一次；检测到 Git 时只会下载运行所需代码。"
+					? (updateStatus.stage ? "当前阶段：" + updateStatus.stage + "。" : "") + (updateStatus.error || (updateStatus.stalled ? "更新暂时没有新进展，安装进程仍在运行。请等待安全停止后再重试。" : "正在下载并安装，期间页面可能暂时断开…"))
+				: updateStatus.phase === "cancelling"
+					? (updateStatus.error || "正在取消更新并等待安装进程停止，请勿同时重新安装。")
+				: updateStatus.phase === "blocked"
+					? (updateStatus.error || "安装进程尚未确认停止，暂时不能重试。请等待安全停止后再操作。")
 				: updateStatus.phase === "installed-restart-required"
 					? (updateStatus.error || "程序文件已更新，但自动重启失败。请手动重启 DSH Tavern。")
 				: updateStatus.phase === "restart-required"
@@ -12527,17 +12595,19 @@ function bindTavernFontZoom(node, win) {
 			const currentVersionLabel = updateStatus.currentVersion && updateStatus.currentVersion !== "unknown" ? "v" + updateStatus.currentVersion : "版本未知";
 			const currentCommitLabel = (updateStatus.currentCommit || "").slice(0, 7) || "构建未知";
 			const updateHostLabel = updateStatus.phase === "package-managed" ? "插件安装版" : updateStatus.host === "desktop" ? "Desktop 版" : (updateStatus.host === "android" ? "Android 版" : "命令行版");
-			const checkingOrRunning = updateStatus.phase === "checking" || updateStatus.phase === "running" || updateStatus.phase === "loading";
+			const checkingOrRunning = isUpdateBusy(updateStatus);
+			const cancelSupported = ["running", "cancelling"].includes(updateStatus.phase) && updateStatus.cancellable === true;
 			const updateActions = updateStatus.phase === "package-managed"
 				? h("details", { className: "dsh-tavern-update-actions" },
 					h("summary", { className: "dsh-tavern-update-button" }, "查看更新命令"),
 					h("code", { style: { display: "block", overflowWrap: "anywhere", userSelect: "text" } }, updateStatus.updateCommand))
-				: updateStatus.phase === "update-available"
+				: updateStatus.phase === "update-available" || updateStatus.phase === "repair-required"
 				? h("div", { className: "dsh-tavern-update-actions" },
 					h("button", { className: "dsh-tavern-update-button", onClick: checkUpdate }, "检查更新"),
-					h("button", { className: "dsh-tavern-update-button primary", onClick: performUpdate }, "进行更新"))
+					h("button", { className: "dsh-tavern-update-button primary", onClick: performUpdate }, updateStatus.phase === "repair-required" ? "修复安装" : "进行更新"))
 				: h("div", { className: "dsh-tavern-update-actions" },
-					h("button", { className: "dsh-tavern-update-button", disabled: checkingOrRunning || updateStatus.phase === "restart-required" || updateStatus.phase === "installed-restart-required", onClick: checkUpdate }, updateStatus.phase === "checking" ? "正在检查…" : (updateStatus.phase === "running" ? "正在更新…" : (updateStatus.phase === "installed-restart-required" ? "请手动重启" : (updateStatus.phase === "restart-required" ? "重启 Desktop 后可用" : "检查更新")))));
+					h("button", { className: "dsh-tavern-update-button", disabled: checkingOrRunning || updateStatus.phase === "restart-required" || updateStatus.phase === "installed-restart-required", onClick: checkUpdate }, updateStatus.phase === "checking" ? "正在检查…" : (updateStatus.phase === "running" ? "正在更新…" : (updateStatus.phase === "cancelling" ? "正在取消…" : (updateStatus.phase === "blocked" ? "等待安全停止" : (updateStatus.phase === "installed-restart-required" ? "请手动重启" : (updateStatus.phase === "restart-required" ? "重启 Desktop 后可用" : "检查更新")))))),
+					cancelSupported ? h("button", { className: "dsh-tavern-update-button", disabled: updateStatus.phase === "cancelling", onClick: cancelUpdate }, updateStatus.phase === "cancelling" ? "正在取消…" : "取消更新") : null);
 			return h(React.Fragment, null, h(TavernErrorCenter), collapsedSidebar, h("div", { className: "dsh-tavern-sidebar", style: { display: collapsed ? "none" : undefined, position: "relative", width: props.embedded ? "100%" : props.width + "px" } },
 				h("div", { className: "dsh-tavern-side-head" }, h("div", { className: "dsh-tavern-side-brand dsh-tavern-lockup", role: "img", "aria-label": "DSH Tavern" }), props.embedded ? null : h("button", { className: "dsh-tavern-side-icon", title: "收起侧栏", onClick: props.toggleSidebar }, "◧")),
 				h("div", { className: "dsh-tavern-mode-switch" + (compatibilityAvailable ? " compatibility-enabled" : "") },
@@ -12564,7 +12634,7 @@ function bindTavernFontZoom(node, win) {
 						h("div", { className: "dsh-tavern-update-identity", title: "DSH Tavern " + currentVersionLabel + " · " + currentCommitLabel + " · " + updateHostLabel }, "DSH Tavern " + currentVersionLabel + " · " + currentCommitLabel),
 						updateActions),
                     h(TavernHostCompatibility),
-					updateStatus.phase === "idle" || updateStatus.phase === "loading" ? null : h("div", { className: "dsh-tavern-update-status" + (updateStatus.phase === "failed" || updateStatus.phase === "check-failed" ? " error" : "") }, updateMessage)
+					updateStatus.phase === "idle" || updateStatus.phase === "loading" ? null : h("div", { className: "dsh-tavern-update-status" + (updateStatus.phase === "failed" || updateStatus.phase === "check-failed" || updateStatus.phase === "blocked" || updateStatus.stalled ? " error" : "") }, updateMessage)
 				),
 				(openingPicker || (picking && uiMode === "play")) ? h("div", { key: "play-picker", className: "dsh-tavern-picker-overlay", style: { display: picking && uiMode === "play" ? undefined : "none" }, onMouseDown: function (event) { if (event.target === event.currentTarget) closePicker(); } }, playPicker) : null,
                 picking && uiMode === "card" ? h("div", { key: "card-picker", className: "dsh-tavern-picker-overlay", onMouseDown: function (event) { if (event.target === event.currentTarget) closePicker(); } }, cardPicker) : null

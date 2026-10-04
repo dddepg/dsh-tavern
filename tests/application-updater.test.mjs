@@ -32,7 +32,7 @@ afterEach(() => {
 function createApplicationUpdater(options) {
   return createUpdater({
     // Most fixtures model a direct child; Windows broker fixtures opt in below.
-    platform: 'linux',
+    platform: 'linux', dshHome: options.sourceRoot,
     // CDN fallback is explicit in each fixture; never fetch live metadata.
     fetchCdnMetadata: async () => { throw new Error('CDN unavailable in GitHub fixture') },
     ...options,
@@ -346,7 +346,7 @@ test('历史更新记录的宿主不覆盖当前运行环境', async t => {
   }
 })
 
-test('Windows helper 启动失败立即持久化错误，不伪报已开始更新', async t => {
+test('Windows helper 启动失败保留不确定状态，避免已启动的 WMI 更新器和重试并发', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'update-helper-error-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const updater = createApplicationUpdater({ ...verifiedUpdate, dataRoot: root, sourceRoot: root, dshHome: root, platform: 'win32',
@@ -360,11 +360,11 @@ test('Windows helper 启动失败立即持久化错误，不伪报已开始更�
   })
   await assert.rejects(updater.start, /WMI 访问被拒绝/)
   const saved = JSON.parse(await readFile(path.join(root, 'update-status.json'), 'utf8'))
-  assert.equal(saved.phase, 'failed')
+  assert.equal(saved.phase, 'blocked')
   assert.match(saved.error, /WMI 访问被拒绝/)
 })
 
-test('安装进程中断后即使源码已是目标提交也必须允许修复安装', async t => {
+test('旧更新器父进程消失不证明子进程退出，禁止直接重试', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'update-interrupted-repair-'))
   t.after(() => rm(root, {recursive:true, force:true}))
   await writeFile(path.join(root, 'update-status.json'), JSON.stringify({phase:'running', host:'cli', startedAt:1000, pid:4321}))
@@ -375,8 +375,8 @@ test('安装进程中断后即使源码已是目标提交也必须允许修复�
     spawnProcess() { spawned++; return {unref(){}} },
   })
   assert.equal((await updater.status()).repairRequired, true)
-  assert.equal((await updater.start()).phase, 'running')
-  assert.equal(spawned, 1)
+  await assert.rejects(updater.start(), /更新正在进行/)
+  assert.equal(spawned, 0)
 })
 
 test('jsDelivr 兜底：本地清单未核验时用提交比较，比较不可达时以本地清单序号为下界 (#125)', async () => {

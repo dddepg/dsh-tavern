@@ -146,7 +146,7 @@ export function resolveDshBootModule({ dsh, host = 'cli', env = process.env, exe
   return dependency.entry
 }
 
-export function installPluginDependencies({ pluginDirectory, run, ...hostOptions }) {
+export async function installPluginDependencies({ pluginDirectory, run, ...hostOptions }) {
   // Validate everything before changing the plugin's existing installation.
   const dependencies = resolveHostDependencies(hostOptions)
   const workspacePath = path.join(pluginDirectory, 'pnpm-workspace.yaml')
@@ -157,13 +157,17 @@ export function installPluginDependencies({ pluginDirectory, run, ...hostOptions
     workspace.setIn(['overrides', dependency.name], `link:${dependency.directory.replaceAll('\\', '/')}`)
   }
   const temporary = `${workspacePath}.tmp-${process.pid}`
+  let safeToRestore = true
   try {
     writeFileSync(temporary, workspace.toString(), 'utf8')
     renameSync(temporary, workspacePath)
-    run('pnpm', ['install', '--lockfile=false'], { cwd: pluginDirectory })
+    await run('pnpm', ['install', '--lockfile=false'], { cwd: pluginDirectory })
+  } catch (error) {
+    safeToRestore = !error.unsafeToRetry
+    throw error
   } finally {
-    if (existsSync(temporary)) unlinkSync(temporary)
-    writeFileSync(workspacePath, original, 'utf8')
+    if (safeToRestore && existsSync(temporary)) unlinkSync(temporary)
+    if (safeToRestore) writeFileSync(workspacePath, original, 'utf8')
   }
   return dependencies
 }
