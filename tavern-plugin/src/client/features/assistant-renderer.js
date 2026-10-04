@@ -468,6 +468,11 @@
 					executeSlash: props.executeSlash,
 					sessionId: props.sessionId,
 					turn: storyTurn,
+					scriptLayer: (function () {
+						const messageId = liveState.view?.tavernHelper?.turnMessageIds?.[String(storyTurn)];
+						return settled && !sessionTransitioning && Number.isSafeInteger(messageId) && liveState.view?.tavernRuntimePolicy?.trustedCardMode
+							? { sessionId: props.sessionId, messageId: messageId } : null;
+					})(),
 					renderMessageImages: props.renderMessageImages,
 					mentions: mentions,
 					t: props.t

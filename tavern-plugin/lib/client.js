@@ -3644,6 +3644,14 @@ function installTavernHelperUtilities(target) {
         const found = [], id = Number(messageId);
         if (!Number.isSafeInteger(id) || id < 0) return target.jQuery ? target.jQuery() : [];
         try {
+            // Trusted scripts reach the displayed message itself, as in SillyTavern.
+            const host = target.parent, session = target.frameElement && target.frameElement.__dshTavernSessionId;
+            if (host && host !== target && typeof host.__dshTavernScriptLayers === 'function') {
+                for (const layer of host.__dshTavernScriptLayers(session, id)) found.push(layer);
+                if (found.length) return target.jQuery ? target.jQuery(found) : found;
+            }
+        } catch (_) { /* Sandboxed frames cannot reach the host page. */ }
+        try {
             if (target.getIframeName().startsWith('TH-message--') && target.getMessageId(target.name) === id) found.push(target.document.body);
             else {
                 const session = target.frameElement && target.frameElement.__dshTavernSessionId;
@@ -6467,7 +6475,16 @@ function bindTavernFontZoom(node, win) {
 			window.SillyTavern = Object.freeze(sillyTavern);
 			window.getContext = sillyTavern.getContext;
 			window.errorCatched = function (factory) { return function () { try { return factory.apply(this, arguments); } catch (error) { console.error(error); return {}; } }; };
-			window.retrieveDisplayedMessage = function () { return window.jQuery ? window.jQuery() : []; };
+			// Trusted card scripts reach the displayed message like in SillyTavern.
+			window.retrieveDisplayedMessage = function (messageId) {
+				let found = [];
+				try {
+					const frame = window.frameElement, host = window.parent;
+					// Copy into this realm: jQuery treats another realm's array as one object.
+					if (frame && host && host !== window && typeof host.__dshTavernScriptLayers === "function") found = Array.prototype.slice.call(host.__dshTavernScriptLayers(frame.__dshTavernSessionId, Number(messageId)));
+				} catch (_) { /* Sandboxed scripts cannot reach the host page. */ }
+				return window.jQuery ? window.jQuery(found) : found;
+			};
 			window.toastr = { success: console.info, info: console.info, warning: console.warn, error: console.error };
 			return { sync: function (value, variableDelta) { chatData.sync(value, undefined, variableDelta); localVariables.sync(); }, flushVariables: localVariables.flush };
 		}
@@ -7631,6 +7648,59 @@ function bindTavernFontZoom(node, win) {
             return function () { observer.disconnect(); text.remove(); native.hidden = false; };
         }
 
+        // SillyTavern scripts rewrite the displayed message (phone bubbles, inline
+        // widgets) through retrieveDisplayedMessage. React owns the native tree, so
+        // scripts get a static copy; once they change it, the copy replaces the
+        // native part. A new text rebuilds the copy and announces the render again.
+        const tavernRenderedAnnouncements = new Map();
+        function announceTavernMessageRendered(view, sessionId, messageId) {
+            const key = String(sessionId) + ":" + String(messageId);
+            view.clearTimeout(tavernRenderedAnnouncements.get(key));
+            tavernRenderedAnnouncements.set(key, view.setTimeout(function () {
+                tavernRenderedAnnouncements.delete(key);
+                view.dispatchEvent(new view.CustomEvent("dsh-tavern-message-rendered", { detail: { sessionId: String(sessionId), messageId: Number(messageId) } }));
+            }, 80));
+        }
+        function mountTavernScriptLayer(options) {
+            const native = options.native, layer = options.layer;
+            const view = layer.ownerDocument.defaultView;
+            const Observer = options.MutationObserver || view.MutationObserver;
+            let takenOver = false, disposed = false;
+            layer.hidden = true;
+            native.hidden = false;
+            const layerObserver = new Observer(function () {
+                if (takenOver || disposed) return;
+                takenOver = true;
+                layer.hidden = false;
+                native.hidden = true;
+            });
+            function rebuild() {
+                if (takenOver || disposed) return;
+                layer.replaceChildren.apply(layer, Array.from(native.childNodes).map(function (node) { return node.cloneNode(true); }));
+                // Our own copy is not a script edit.
+                layerObserver.takeRecords();
+            }
+            const nativeObserver = new Observer(function () { rebuild(); });
+            rebuild();
+            layerObserver.observe(layer, { childList: true, subtree: true, characterData: true, attributes: true });
+            nativeObserver.observe(native, { childList: true, subtree: true, characterData: true });
+            announceTavernMessageRendered(view, options.sessionId, options.messageId);
+            return function () {
+                disposed = true;
+                layerObserver.disconnect();
+                nativeObserver.disconnect();
+                layer.replaceChildren();
+                layer.hidden = true;
+                native.hidden = false;
+            };
+        }
+        function tavernScriptLayers(document, sessionId, messageId) {
+            return Array.from(document.querySelectorAll("[data-dsh-script-layer]")).filter(function (node) {
+                return node.getAttribute("data-mesid") === String(messageId)
+                    && (!sessionId || node.getAttribute("data-session") === String(sessionId)) && node.isConnected;
+            });
+        }
+
 		function installTavernTrustedHostFacade(host, frameWindow, priority, names) {
 			// A visible mount root supports legacy host detection and panel mounting.
 			// Never fake send_textarea: scripts must reach the real composer.
@@ -8200,6 +8270,15 @@ function bindTavernFontZoom(node, win) {
                     post(record, envelope);
 				});
 			}
+			// The host renderer announces a settled message DOM; scripts that decorate
+			// messages (SillyTavern CHARACTER_MESSAGE_RENDERED) apply their edits then.
+			if (typeof hostWindow.addEventListener === "function") hostWindow.addEventListener("dsh-tavern-message-rendered", function (event) {
+				const detail = event && event.detail || {};
+				for (const record of records.values()) {
+					if (record.sessionId !== String(detail.sessionId || "") || !record.trustedCardMode) continue;
+					emitToRecord(record, "character_message_rendered", [Number(detail.messageId)]).catch(function () {});
+				}
+			});
 			async function emit(name, args, context, diagnostics, hostEventId) {
 				let current = clone(Array.isArray(args) ? args : []);
 				for (const record of records.values()) current = await emitToRecord(record, name, current, context, diagnostics, hostEventId);
@@ -10741,13 +10820,27 @@ function bindTavernFontZoom(node, win) {
 				return h(TavernMessageFrame, Object.assign({}, options, { key: "opening-runtime", content: content, partIndex: 0, eager: options.eagerFrame }));
 			}
 			return parts.map(function (part, index) {
-				if (part.kind === "markdown") return h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+				if (part.kind === "markdown") {
+					const markdown = h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+					return options.scriptLayer && !options.streaming ? h(TavernScriptLayerPart, { key: index, layer: options.scriptLayer, partIndex: index, text: String(part.text || "") }, markdown) : markdown;
+				}
 				const content = String(part.content !== undefined ? part.content : part.html || "");
                 if (options.trustedCardMode === true && !options.openingPreview && parseTavernInlineFragment(content, window.document)) {
                     return h(TavernInlineFragment, {key:index, content:content});
                 }
 				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, frameSizing: options.frameSizing, helperContext: options.helperContext, helperContextReader: options.helperContextReader, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
 			});
+		}
+
+		function TavernScriptLayerPart(props) {
+			const native = React.useRef(null), layer = React.useRef(null);
+			React.useLayoutEffect(function () {
+				return mountTavernScriptLayer({ native: native.current, layer: layer.current, sessionId: props.layer.sessionId, messageId: props.layer.messageId });
+			}, [props.layer.sessionId, props.layer.messageId, props.partIndex, props.text]);
+			// Visibility is toggled by the layer itself; React never sets `hidden` here.
+			return React.createElement("div", { className: "dsh-tavern-script-part" },
+				React.createElement("div", { ref: native }, props.children),
+				React.createElement("div", { ref: layer, className: "mes_text dsh-tavern-script-layer", "data-dsh-script-layer": "", "data-session": props.layer.sessionId, "data-mesid": String(props.layer.messageId) }));
 		}
 
 		function renderTavernAssistantBlocks(input) {
@@ -10770,7 +10863,7 @@ function bindTavernFontZoom(node, win) {
 				if (block.kind === "text") {
 					if (input.projection && projected) continue;
 					const projection = input.projection;
-					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
+					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash, scriptLayer: input.scriptLayer })));
 					else rendered.push(h(TavernColoredMarkdown, { key: index, text: String(block.text || ""), streaming: input.streaming, labels: { code: codeLabels, footnotes: "脚注" }, codeLabels: codeLabels, fileMentions: input.mentions }));
 					projected = true;
 					continue;
@@ -11285,6 +11378,11 @@ function bindTavernFontZoom(node, win) {
 					executeSlash: props.executeSlash,
 					sessionId: props.sessionId,
 					turn: storyTurn,
+					scriptLayer: (function () {
+						const messageId = liveState.view?.tavernHelper?.turnMessageIds?.[String(storyTurn)];
+						return settled && !sessionTransitioning && Number.isSafeInteger(messageId) && liveState.view?.tavernRuntimePolicy?.trustedCardMode
+							? { sessionId: props.sessionId, messageId: messageId } : null;
+					})(),
 					renderMessageImages: props.renderMessageImages,
 					mentions: mentions,
 					t: props.t
@@ -17681,6 +17779,9 @@ function bindTavernFontZoom(node, win) {
         exports.loadTavernHelperModule = loadTavernHelperModule;
         exports.installTavernBackgroundModel = installTavernBackgroundModel;
         exports.mountTavernLegacyMessage = mountTavernLegacyMessage;
+        exports.mountTavernScriptLayer = mountTavernScriptLayer;
+        exports.tavernScriptLayers = tavernScriptLayers;
+        window.__dshTavernScriptLayers = function (sessionId, messageId) { return tavernScriptLayers(window.document, sessionId, messageId); };
 		exports.releaseTavernHostJQueryHandlers = releaseTavernHostJQueryHandlers;
 		exports.tavernScriptRuntimeReady = tavernScriptRuntimeReady;
 		exports.clampTavernFrameHeight = clampTavernFrameHeight;

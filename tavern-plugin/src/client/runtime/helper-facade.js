@@ -567,7 +567,16 @@
 			window.SillyTavern = Object.freeze(sillyTavern);
 			window.getContext = sillyTavern.getContext;
 			window.errorCatched = function (factory) { return function () { try { return factory.apply(this, arguments); } catch (error) { console.error(error); return {}; } }; };
-			window.retrieveDisplayedMessage = function () { return window.jQuery ? window.jQuery() : []; };
+			// Trusted card scripts reach the displayed message like in SillyTavern.
+			window.retrieveDisplayedMessage = function (messageId) {
+				let found = [];
+				try {
+					const frame = window.frameElement, host = window.parent;
+					// Copy into this realm: jQuery treats another realm's array as one object.
+					if (frame && host && host !== window && typeof host.__dshTavernScriptLayers === "function") found = Array.prototype.slice.call(host.__dshTavernScriptLayers(frame.__dshTavernSessionId, Number(messageId)));
+				} catch (_) { /* Sandboxed scripts cannot reach the host page. */ }
+				return window.jQuery ? window.jQuery(found) : found;
+			};
 			window.toastr = { success: console.info, info: console.info, warning: console.warn, error: console.error };
 			return { sync: function (value, variableDelta) { chatData.sync(value, undefined, variableDelta); localVariables.sync(); }, flushVariables: localVariables.flush };
 		}

@@ -453,13 +453,27 @@
 				return h(TavernMessageFrame, Object.assign({}, options, { key: "opening-runtime", content: content, partIndex: 0, eager: options.eagerFrame }));
 			}
 			return parts.map(function (part, index) {
-				if (part.kind === "markdown") return h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+				if (part.kind === "markdown") {
+					const markdown = h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+					return options.scriptLayer && !options.streaming ? h(TavernScriptLayerPart, { key: index, layer: options.scriptLayer, partIndex: index, text: String(part.text || "") }, markdown) : markdown;
+				}
 				const content = String(part.content !== undefined ? part.content : part.html || "");
                 if (options.trustedCardMode === true && !options.openingPreview && parseTavernInlineFragment(content, window.document)) {
                     return h(TavernInlineFragment, {key:index, content:content});
                 }
 				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, frameSizing: options.frameSizing, helperContext: options.helperContext, helperContextReader: options.helperContextReader, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
 			});
+		}
+
+		function TavernScriptLayerPart(props) {
+			const native = React.useRef(null), layer = React.useRef(null);
+			React.useLayoutEffect(function () {
+				return mountTavernScriptLayer({ native: native.current, layer: layer.current, sessionId: props.layer.sessionId, messageId: props.layer.messageId });
+			}, [props.layer.sessionId, props.layer.messageId, props.partIndex, props.text]);
+			// Visibility is toggled by the layer itself; React never sets `hidden` here.
+			return React.createElement("div", { className: "dsh-tavern-script-part" },
+				React.createElement("div", { ref: native }, props.children),
+				React.createElement("div", { ref: layer, className: "mes_text dsh-tavern-script-layer", "data-dsh-script-layer": "", "data-session": props.layer.sessionId, "data-mesid": String(props.layer.messageId) }));
 		}
 
 		function renderTavernAssistantBlocks(input) {
@@ -482,7 +496,7 @@
 				if (block.kind === "text") {
 					if (input.projection && projected) continue;
 					const projection = input.projection;
-					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
+					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash, scriptLayer: input.scriptLayer })));
 					else rendered.push(h(TavernColoredMarkdown, { key: index, text: String(block.text || ""), streaming: input.streaming, labels: { code: codeLabels, footnotes: "脚注" }, codeLabels: codeLabels, fileMentions: input.mentions }));
 					projected = true;
 					continue;

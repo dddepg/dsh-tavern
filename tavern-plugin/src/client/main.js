@@ -808,6 +808,9 @@ window.__ModuleLoader__.load({
         exports.loadTavernHelperModule = loadTavernHelperModule;
         exports.installTavernBackgroundModel = installTavernBackgroundModel;
         exports.mountTavernLegacyMessage = mountTavernLegacyMessage;
+        exports.mountTavernScriptLayer = mountTavernScriptLayer;
+        exports.tavernScriptLayers = tavernScriptLayers;
+        window.__dshTavernScriptLayers = function (sessionId, messageId) { return tavernScriptLayers(window.document, sessionId, messageId); };
 		exports.releaseTavernHostJQueryHandlers = releaseTavernHostJQueryHandlers;
 		exports.tavernScriptRuntimeReady = tavernScriptRuntimeReady;
 		exports.clampTavernFrameHeight = clampTavernFrameHeight;

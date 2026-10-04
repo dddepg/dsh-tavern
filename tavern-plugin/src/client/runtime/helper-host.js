@@ -73,6 +73,59 @@
             return function () { observer.disconnect(); text.remove(); native.hidden = false; };
         }
 
+        // SillyTavern scripts rewrite the displayed message (phone bubbles, inline
+        // widgets) through retrieveDisplayedMessage. React owns the native tree, so
+        // scripts get a static copy; once they change it, the copy replaces the
+        // native part. A new text rebuilds the copy and announces the render again.
+        const tavernRenderedAnnouncements = new Map();
+        function announceTavernMessageRendered(view, sessionId, messageId) {
+            const key = String(sessionId) + ":" + String(messageId);
+            view.clearTimeout(tavernRenderedAnnouncements.get(key));
+            tavernRenderedAnnouncements.set(key, view.setTimeout(function () {
+                tavernRenderedAnnouncements.delete(key);
+                view.dispatchEvent(new view.CustomEvent("dsh-tavern-message-rendered", { detail: { sessionId: String(sessionId), messageId: Number(messageId) } }));
+            }, 80));
+        }
+        function mountTavernScriptLayer(options) {
+            const native = options.native, layer = options.layer;
+            const view = layer.ownerDocument.defaultView;
+            const Observer = options.MutationObserver || view.MutationObserver;
+            let takenOver = false, disposed = false;
+            layer.hidden = true;
+            native.hidden = false;
+            const layerObserver = new Observer(function () {
+                if (takenOver || disposed) return;
+                takenOver = true;
+                layer.hidden = false;
+                native.hidden = true;
+            });
+            function rebuild() {
+                if (takenOver || disposed) return;
+                layer.replaceChildren.apply(layer, Array.from(native.childNodes).map(function (node) { return node.cloneNode(true); }));
+                // Our own copy is not a script edit.
+                layerObserver.takeRecords();
+            }
+            const nativeObserver = new Observer(function () { rebuild(); });
+            rebuild();
+            layerObserver.observe(layer, { childList: true, subtree: true, characterData: true, attributes: true });
+            nativeObserver.observe(native, { childList: true, subtree: true, characterData: true });
+            announceTavernMessageRendered(view, options.sessionId, options.messageId);
+            return function () {
+                disposed = true;
+                layerObserver.disconnect();
+                nativeObserver.disconnect();
+                layer.replaceChildren();
+                layer.hidden = true;
+                native.hidden = false;
+            };
+        }
+        function tavernScriptLayers(document, sessionId, messageId) {
+            return Array.from(document.querySelectorAll("[data-dsh-script-layer]")).filter(function (node) {
+                return node.getAttribute("data-mesid") === String(messageId)
+                    && (!sessionId || node.getAttribute("data-session") === String(sessionId)) && node.isConnected;
+            });
+        }
+
 		function installTavernTrustedHostFacade(host, frameWindow, priority, names) {
 			// A visible mount root supports legacy host detection and panel mounting.
 			// Never fake send_textarea: scripts must reach the real composer.

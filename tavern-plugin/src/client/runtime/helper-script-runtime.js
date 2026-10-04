@@ -335,6 +335,15 @@
                     post(record, envelope);
 				});
 			}
+			// The host renderer announces a settled message DOM; scripts that decorate
+			// messages (SillyTavern CHARACTER_MESSAGE_RENDERED) apply their edits then.
+			if (typeof hostWindow.addEventListener === "function") hostWindow.addEventListener("dsh-tavern-message-rendered", function (event) {
+				const detail = event && event.detail || {};
+				for (const record of records.values()) {
+					if (record.sessionId !== String(detail.sessionId || "") || !record.trustedCardMode) continue;
+					emitToRecord(record, "character_message_rendered", [Number(detail.messageId)]).catch(function () {});
+				}
+			});
 			async function emit(name, args, context, diagnostics, hostEventId) {
 				let current = clone(Array.isArray(args) ? args : []);
 				for (const record of records.values()) current = await emitToRecord(record, name, current, context, diagnostics, hostEventId);

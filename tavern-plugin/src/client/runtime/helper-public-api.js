@@ -67,6 +67,14 @@ function installTavernHelperUtilities(target) {
         const found = [], id = Number(messageId);
         if (!Number.isSafeInteger(id) || id < 0) return target.jQuery ? target.jQuery() : [];
         try {
+            // Trusted scripts reach the displayed message itself, as in SillyTavern.
+            const host = target.parent, session = target.frameElement && target.frameElement.__dshTavernSessionId;
+            if (host && host !== target && typeof host.__dshTavernScriptLayers === 'function') {
+                for (const layer of host.__dshTavernScriptLayers(session, id)) found.push(layer);
+                if (found.length) return target.jQuery ? target.jQuery(found) : found;
+            }
+        } catch (_) { /* Sandboxed frames cannot reach the host page. */ }
+        try {
             if (target.getIframeName().startsWith('TH-message--') && target.getMessageId(target.name) === id) found.push(target.document.body);
             else {
                 const session = target.frameElement && target.frameElement.__dshTavernSessionId;
