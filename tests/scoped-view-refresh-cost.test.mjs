@@ -3,16 +3,17 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 function harness(){
- const context=vm.createContext({})
- const files=['../tavern-plugin/lib/domain/indexed-array.js','../tavern-plugin/lib/domain/ordered-numeric-index.js','../tavern-plugin/src/client/modules/session-view-sync.js','../tavern-plugin/src/client/modules/live-tavern-view.js']
+ const context=vm.createContext({AbortController})
+ const files=['../tavern-plugin/lib/domain/indexed-array.js','../tavern-plugin/lib/domain/ordered-numeric-index.js','../tavern-plugin/src/client/modules/session-view-sync.js','../tavern-plugin/src/client/modules/session-refresh-controller.js','../tavern-plugin/src/client/modules/live-tavern-view.js']
  vm.runInContext(files.map(path=>fs.readFileSync(new URL(path,import.meta.url),'utf8').replace(/^export .*$/gm,'')).join('\n'),context)
  return context
 }
 for(const count of [20,400,10000])test(`real delta routes only matching subscribers among ${count} turns`,async()=>{
  const h=harness(),begin=h.createSessionViewReader(),jobs=[]
+ let clock=0
  let cursor='a',sequence=0,edits=[],removals=[],fail=false
  const first=begin('s').accept({viewCursor:cursor,view:{inputSources:{},tavernHelper:{messages:[]}}}).view
- const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,schedule:run=>{jobs.push(run);return jobs.length},cancel(){},load:async()=>{
+ const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
   if(fail)throw new Error('offline')
   const next=String(++sequence),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:edits,remove:removals}})
   cursor=next;return result
@@ -46,9 +47,10 @@ for(const count of [20,400,10000])test(`real delta routes only matching subscrib
 
 test('overlapping dependencies notify once and unsubscribe removes path entries',async()=>{
  const h=harness(),begin=h.createSessionViewReader(),jobs=[]
+ let clock=0
  let cursor='a',sequence=0,edits=[]
  const first=begin('s').accept({viewCursor:cursor,view:{inputSources:{'1':'old'}}}).view
- const live=h.createLiveTavernViewModule({pollWhileBusy:false,schedule:run=>{jobs.push(run);return jobs.length},cancel(){},load:async()=>{
+ const live=h.createLiveTavernViewModule({pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
   const next=String(++sequence),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:edits,remove:[]}});cursor=next;return result
  }})
  live.setView('s',first)
@@ -72,9 +74,10 @@ test('overlapping selections preserve immutable parents and root selection retur
 
 for(const count of [20,400,10000])test(`Helper hydration does not broadcast to ${count} unrelated history subscribers`,async()=>{
  const h=harness(),jobs=[]
+ let clock=0
  let view={inputSources:{},tavernHelper:{messagesPending:{from:0,to:1}}}
  const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,
-  schedule:run=>{jobs.push(run);return jobs.length},cancel(){},
+  now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},
   load:async()=>({view}),
   hydrateHelperMessages:async(_id,current)=>({...current,tavernHelper:{messages:[{text:'hydrated'}]}})
  })
@@ -131,9 +134,10 @@ for(const count of [20,400,10000])test(`assistant field subscriptions exclude in
 
 for(const count of [20,400,10000])test(`keyed receipt delta wakes only its turn among ${count} subscribers`,async()=>{
  const h=harness(),begin=h.createSessionViewReader(),jobs=[]
+ let clock=0
  let cursor='base',seq=0,receiptDelta,sets=[]
  const first=begin('s').accept({viewCursor:cursor,receiptSync:1,view:{mvuReceipts:Array.from({length:count},(_,turn)=>({turn,receipt:{status:'unchanged'}}))}}).view
- const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,schedule:run=>{jobs.push(run);return jobs.length},cancel(){},load:async()=>{
+ const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
   const next=String(++seq),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:sets,remove:[],receiptDelta}});cursor=next;return result
  }})
  live.setView('s',first)
@@ -155,9 +159,10 @@ for(const count of [20,400,10000])test(`keyed receipt delta wakes only its turn 
 
 for(const count of [20,400,10000])test(`projection edits and newest ownership route by story turn across ${count} floors`,async()=>{
  const h=harness(),begin=h.createSessionViewReader(),jobs=[]
+ let clock=0
  let cursor='base',seq=0,sets=[],remove=[]
  const first=begin('s').accept({viewCursor:cursor,view:{replyProjections:Array.from({length:count},(_,turn)=>({turn:turn+1,version:2,parts:[]}))}}).view
- const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,schedule:run=>{jobs.push(run);return jobs.length},cancel(){},load:async()=>{
+ const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
   const next=String(++seq),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:sets,remove}});cursor=next;return result
  }})
  live.setView('s',first)
@@ -180,11 +185,12 @@ for(const count of [20,400,10000])test(`projection edits and newest ownership ro
 
 for(const count of [20,400,10000])test(`regeneration mapping updates only old and new host turns across ${count} entries`,async()=>{
  const h=harness(),begin=h.createSessionViewReader(),jobs=[]
+ let clock=0
  let cursor='base',seq=0,sets=[],remove=[],visits=0
  h.createSessionViewReader.onStoryLookupVisit=()=>visits++
  h.createSessionViewReader.onTurnFieldVisit=()=>visits++
  const first=begin('s').accept({viewCursor:cursor,view:{regeneratedDshTurns:Object.fromEntries(Array.from({length:count},(_,id)=>[id+1,id+100]))}}).view
- const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,schedule:run=>{jobs.push(run);return jobs.length},cancel(){},load:async()=>{
+ const live=h.createLiveTavernViewModule({deduplicateViews:true,pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
   const next=String(++seq),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:sets,remove}});cursor=next;return result
  }})
  live.setView('s',first)

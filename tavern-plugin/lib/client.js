@@ -790,6 +790,10 @@ window.__ModuleLoader__.load({
 		// Cached session views are immutable, like the React views returned by getSession.
 		function createSessionViewReader(maxSessions = 4) {
 		  const sessions = new Map();
+		  // Evict cached views, never an outstanding request's freshness watermark.
+		  // The pending map is bounded by actual in-flight work, and released on every
+		  // RPC outcome, including failures and cancellation.
+		  const pending = new Map();
 		  const index = createSessionViewReader.indexApi ||= createIndexedArrayApi();
 		  const receiptLookup = createSessionViewReader.receiptLookup ||= createTurnLookup(index,createSessionViewReader.onReceiptLookupVisit);
 		  const ordered = typeof createOrderedNumericIndex === "function" ? (createSessionViewReader.receiptOrderedIndex ||= createOrderedNumericIndex()) : null;
@@ -798,12 +802,28 @@ window.__ModuleLoader__.load({
 		  const storyTurnLookup = createSessionViewReader.storyTurnLookup ||= createStoryTurnLookup();
 		  let sequence = 0;
 		  return function begin(sessionId) {
-		    const base = sessions.get(sessionId);
+		    const owner = pending.get(sessionId) || sessions.get(sessionId) || { latest: null, count: 0 };
+		    const base = owner.latest;
+		    owner.count++;
+		    pending.set(sessionId, owner);
 		    const requestSequence = ++sequence;
+		    let released = false;
+		    function release() {
+		      if (released) return;
+		      released = true;
+		      if (--owner.count === 0 && pending.get(sessionId) === owner) pending.delete(sessionId);
+		    }
+		    function current() { return owner.latest && owner.latest.sequence > requestSequence ? owner.latest.result : null; }
 		    return {
-		      cursor: base && base.cursor,
+		      cursor: base?.cursor,
+		      current,
+		      release,
 		      receiptSync: ordered ? 1 : undefined,
 		      accept(result) {
+		        if (released) throw new Error("会话读取已取消");
+		        try {
+		        const newer = current();
+		        if (newer) return newer;
 		        let view = result.view, projectionChanges = null, storyChanges = null, storyKeys = null;
 		        if (result.viewDelta) {
 		          if (!base || result.viewDelta.baseCursor !== base.cursor) throw new Error("会话增量已过期，请重新读取");
@@ -936,13 +956,17 @@ window.__ModuleLoader__.load({
 		          if (value !== view?.[field]) view = {...view, [field]: value};
 		        }
 		        storyChanges = storyTurnLookup.remember(view?.regeneratedDshTurns, base?.view?.regeneratedDshTurns, storyKeys);
-		        const latest = sessions.get(sessionId);
-		        if (!latest || latest.sequence < requestSequence) {
-		          sessions.delete(sessionId);
-		          sessions.set(sessionId, { view, cursor: result.viewCursor, sequence: requestSequence });
-		          while (sessions.size > maxSessions) sessions.delete(sessions.keys().next().value);
-		        }
-		        return Object.assign({}, result, { view, viewBase: result.viewDelta ? base.view : undefined, projectionChanges, storyChanges });
+		        const accepted = Object.assign({}, result, { view, viewBase: result.viewDelta ? base.view : undefined, projectionChanges, storyChanges });
+		        // A stale caller receives a coherent full result, never a new view with
+		        // an old cursor, delta or changed-path hint from another request.
+		        const snapshot = Object.assign({}, accepted);
+		        for (const key of ["viewDelta", "viewBase", "projectionChanges", "storyChanges"]) delete snapshot[key];
+		        owner.latest = { view, cursor: result.viewCursor, sequence: requestSequence, result: snapshot };
+		        sessions.delete(sessionId);
+		        sessions.set(sessionId, owner);
+		        while (sessions.size > maxSessions) sessions.delete(sessions.keys().next().value);
+		        return accepted;
+		        } finally { release(); }
 		      }
 		    };
 		  };
@@ -1131,6 +1155,12 @@ window.__ModuleLoader__.load({
 				body: requestBody
 			};
 			if (requestOptions && requestOptions.signal) request.signal = requestOptions.signal;
+			// Release ownership even when a cancelled carrier never settles.
+			const releaseViewRead = viewRead ? () => viewRead.release() : null;
+			if (releaseViewRead && request.signal) {
+				if (request.signal.aborted) releaseViewRead();
+				else request.signal.addEventListener("abort", releaseViewRead, { once: true });
+			}
 			if (requestOptions && requestOptions.keepalive === true) request.keepalive = true;
 			if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "sent");
 			const responsePromise = controlChannel
@@ -1148,7 +1178,17 @@ window.__ModuleLoader__.load({
 				}
                 return result;
             });
+			function checkCancelled() {
+				if (request.signal && request.signal.aborted) {
+					if (typeof request.signal.throwIfAborted === "function") request.signal.throwIfAborted();
+					const error = new Error("会话读取已取消");
+					error.name = "AbortError";
+					throw error;
+				}
+			}
 			return responsePromise.then(function (result) {
+				checkCancelled();
+				result = viewRead && viewRead.current() || result;
 				tavernRuntimeGenerationMonitor.observe(result && result.runtimeGeneration);
 				if (!result || !result.ok) {
 					const error = new Error(result && result.error ? result.error : "操作失败");
@@ -1159,10 +1199,15 @@ window.__ModuleLoader__.load({
                 if (accepted.contextWindow) return {...accepted,context:expandTavernOpeningWindow(accepted.contextWindow).tavernHelper};
                 return accepted.view && accepted.view.historyWindow ? {...accepted,view:expandTavernOpeningWindow(accepted.view)} : accepted;
 			}).catch(function (error) {
+				checkCancelled();
+				const newer = viewRead && viewRead.current();
+				if (newer) return newer.view && newer.view.historyWindow ? {...newer,view:expandTavernOpeningWindow(newer.view)} : newer;
                 if (trace) trace.failed = true;
 				if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "failed", "rpc-error");
 				throw error;
 			}).finally(function () {
+				if (viewRead) viewRead.release();
+				if (releaseViewRead && request.signal) request.signal.removeEventListener("abort", releaseViewRead);
 				const elapsed = Date.now() - started;
                 if (trace) {
                     performanceActiveRequests--;
@@ -1361,6 +1406,108 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		// One owner for a session's asynchronous reads. Notifications request work;
+		// accepted replacements revoke it. Neither notification storms nor watchdogs
+		// may shorten the retry deadline or let retired work publish into a new lifetime.
+		function createSessionRefreshController(options) {
+			const now = options.now || Date.now;
+			const schedule = options.schedule || ((run, delay) => window.setTimeout(run, delay));
+			const cancel = options.cancel || (timer => window.clearTimeout(timer));
+			let active = false, epoch = 0, operation = null, timer = null, timerAt = 0;
+			let requested = false, retryAt = 0;
+			function clearTimer() {
+				const previous = timer;
+				timer = null;
+				if (previous !== null) cancel(previous.handle);
+			}
+			function revoke() {
+				epoch++;
+				clearTimer();
+				requested = false;
+				retryAt = 0;
+				const previous = operation;
+				operation = null;
+				if (previous) {
+					if (previous.deadline !== null) cancel(previous.deadline);
+					previous.controller.abort();
+				}
+			}
+			function request(delay = 0) {
+				if (!active) return;
+				if (operation) { requested = true; return; }
+				const due = Math.max(now() + Math.max(0, delay), retryAt);
+				// Keep an earlier wake-up: frequent invalidations cannot starve a read.
+				if (timer !== null && timerAt <= due) return;
+				clearTimer();
+				timerAt = due;
+				const pending = { handle: null };
+				timer = pending;
+				pending.handle = schedule(function () {
+					if (timer !== pending) return;
+					timer = null;
+					void run();
+				}, Math.max(0, due - now()));
+			}
+			async function run() {
+				if (!active) return;
+				if (operation) { requested = true; return; }
+				if (now() < retryAt) { request(); return; }
+				clearTimer();
+				const task = { epoch, controller: new AbortController(), deadline: null };
+				operation = task;
+				const current = () => active && operation === task && task.epoch === epoch;
+				let timedOut = false, next = null;
+				const scope = { signal: task.controller.signal, isCurrent: () => current() && !timedOut };
+				let abort;
+				try {
+					const cancelled = new Promise(function (_resolve, reject) {
+						abort = () => reject(new Error(timedOut ? "Tavern 状态同步超时" : "Tavern 状态同步已取消"));
+						task.controller.signal.addEventListener("abort", abort, { once: true });
+					});
+					if (options.loadTimeoutMs > 0) task.deadline = schedule(function () {
+						if (!current()) return;
+						timedOut = true;
+						task.controller.abort();
+					}, options.loadTimeoutMs);
+					const loading = Promise.race([Promise.resolve().then(() => {
+						if (!current()) throw new Error("会话读取已取消");
+						return options.load(scope);
+					}), cancelled]);
+					if (options.onStart) options.onStart(scope);
+					const result = await loading;
+					if (!current()) return;
+					// Hydration is part of this read's lifetime and deadline too.
+					next = await Promise.race([options.onResult(result, scope), cancelled]);
+					if (!current()) return;
+					retryAt = next && next.retry !== undefined ? now() + next.retry : 0;
+				} catch (error) {
+					if (!current()) return;
+					next = options.onError(error, { ...scope, timedOut });
+					if (!current()) return;
+					if (next && next.retry !== undefined) retryAt = now() + next.retry;
+					else { retryAt = 0; requested = false; }
+				} finally {
+					if (task.deadline !== null) cancel(task.deadline);
+					if (abort) task.controller.signal.removeEventListener("abort", abort);
+					// A retired task must not clear or reschedule its successor.
+					if (operation === task) {
+						operation = null;
+						const pending = requested;
+						requested = false;
+						if (pending) request();
+						else if (next) request(next.retry === undefined ? next.delay : next.retry);
+					}
+				}
+			}
+			return {
+				start() { if (!active) { active = true; epoch++; } },
+				stop() { active = false; revoke(); },
+				replace: revoke,
+				request,
+				// Watchdogs use the same scheduling/backoff gate as ordinary wake-ups.
+				refresh: run
+			};
+		}
 		function createLiveTavernViewModule(options) {
 			if (!options || typeof options.load !== "function") throw new Error("Live Tavern View 缺少 load adapter");
 			const records = new Map();
@@ -1379,7 +1526,11 @@ window.__ModuleLoader__.load({
 			function initialState() { return { phase: "idle", view: null, error: "", updatedAt: 0 }; }
 			function recordFor(sessionId) {
 				const id = String(sessionId || "");
-				if (!records.has(id)) records.set(id, { id: id, state: initialState(), listeners: new Set(), paths: dependencyNode(), timer: null, watchdog: null, loading: false, reloadRequested: false, optimisticBusy: false, eviction: null, controller: null });
+				if (!records.has(id)) {
+					const record = { id: id, state: initialState(), listeners: new Set(), paths: dependencyNode(), watchdog: null, optimisticBusy: false, eviction: null, refresh: null };
+					record.refresh = createRefresh(record);
+					records.set(id, record);
+				}
 				return records.get(id);
 			}
 			function dependencyNode() { return { exact: new Set(), all: new Set(), children: new Map() }; }
@@ -1479,94 +1630,56 @@ window.__ModuleLoader__.load({
 				record.state = state;
 				listeners.forEach(function (listener) { listener(state); });
 			}
-			function schedule(record, delay) {
-				if (records.get(record.id) !== record || record.listeners.size === 0) return;
-				if (record.timer !== null) cancelTimer(record.timer);
-				record.timer = scheduleTimer(function () {
-					record.timer = null;
-					void refresh(record);
-				}, delay);
-			}
-			async function refresh(record) {
-				if (records.get(record.id) !== record || record.listeners.size === 0) return;
-				if (record.loading) { record.reloadRequested = true; return; }
-				record.loading = true;
-				if (record.state.view === null) publish(record, Object.assign({}, record.state, { phase: "loading", error: "" }));
-				let deadlineExpired = false;
-				try {
-					let deadlineTimer = null;
-					let controller = null;
-					let load = null;
-					if (loadTimeoutMs > 0) {
-						controller = new AbortController();
-						record.controller = controller;
-						load = Promise.race([
-							Promise.resolve(options.load(record.id, { signal: controller.signal })),
-							new Promise(function (_resolve, reject) {
-								deadlineTimer = scheduleTimer(function () {
-									deadlineExpired = true;
-									controller.abort();
-									reject(new Error("Tavern 状态同步超时"));
-								}, loadTimeoutMs);
-							})
-						]);
-					} else load = options.load(record.id, {});
-					let result = null;
-					try { result = await load; }
-					finally { if (deadlineTimer !== null) cancelTimer(deadlineTimer); }
-					if (records.get(record.id) !== record) return;
-					let view = result && result.view ? result.view : null;
-					if (pollWhileBusy && record.optimisticBusy && !shouldPoll(view)) {
-						schedule(record, 200);
-						return;
-					}
-					if (shouldPoll(view)) record.optimisticBusy = false;
-					publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() }, result);
-					if (view && !view.historyWindow?.onDemand && !view.tavernHelper?.historyAccess && (view.historyWindow || view.tavernHelper && view.tavernHelper.messagesPending) && typeof options.hydrateHelperMessages === "function") {
-						try {
-							view = await options.hydrateHelperMessages(record.id, view) || view;
-							if (records.get(record.id) !== record) return;
-							publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
-						} catch (hydrateError) {
-							if (records.get(record.id) !== record) return;
-							publish(record, { phase: "retrying", view: view, error: String(hydrateError && hydrateError.message || hydrateError || "补全历史变量失败"), updatedAt: Date.now() });
-							schedule(record, 1500);
-							return;
+			function createRefresh(record) {
+				return createSessionRefreshController({
+					now: options.now, schedule: scheduleTimer, cancel: cancelTimer, loadTimeoutMs,
+					onStart: function () {
+						if (record.state.view === null) publish(record, Object.assign({}, record.state, { phase: "loading", error: "" }));
+					},
+					load: function (scope) { return options.load(record.id, { signal: scope.signal }); },
+					onResult: async function (result, scope) {
+						let view = result && result.view ? result.view : null;
+						if (pollWhileBusy && record.optimisticBusy && !shouldPoll(view)) return { delay: 200 };
+						if (shouldPoll(view)) record.optimisticBusy = false;
+						publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() }, result);
+						if (!scope.isCurrent()) return;
+						if (view && !view.historyWindow?.onDemand && !view.tavernHelper?.historyAccess && (view.historyWindow || view.tavernHelper && view.tavernHelper.messagesPending) && typeof options.hydrateHelperMessages === "function") {
+							try {
+								view = await options.hydrateHelperMessages(record.id, view, { signal: scope.signal }) || view;
+								if (!scope.isCurrent()) return;
+								publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
+							} catch (hydrateError) {
+								if (!scope.isCurrent()) return;
+								publish(record, { phase: "retrying", view: view, error: String(hydrateError && hydrateError.message || hydrateError || "补全历史变量失败"), updatedAt: Date.now() });
+								return { retry: 1500 };
+							}
 						}
-					}
-					if (pollWhileBusy && shouldPoll(view)) schedule(record, 200);
-					else if (idlePollIntervalMs > 0) schedule(record, idlePollIntervalMs);
-				} catch (error) {
-					const terminal = !deadlineExpired && isTerminalError(error);
-					if (terminal) publish(record, { phase: "unavailable", view: null, error: String(error && error.message || error || ""), updatedAt: record.state.updatedAt });
-					else {
-						publish(record, { phase: "retrying", view: record.state.view, error: deadlineExpired ? "" : String(error && error.message || error || ""), updatedAt: record.state.updatedAt });
-						const retryDelay = deadlineExpired && timeoutRetryDelayMs > 0
+						if (pollWhileBusy && shouldPoll(view)) return { delay: 200 };
+						if (idlePollIntervalMs > 0) return { delay: idlePollIntervalMs };
+					},
+					onError: function (error, scope) {
+						if (!scope.timedOut && isTerminalError(error)) {
+							publish(record, { phase: "unavailable", view: null, error: String(error && error.message || error || ""), updatedAt: record.state.updatedAt });
+							return null;
+						}
+						publish(record, { phase: "retrying", view: record.state.view, error: scope.timedOut ? "" : String(error && error.message || error || ""), updatedAt: record.state.updatedAt });
+						return { retry: scope.timedOut && timeoutRetryDelayMs > 0
 							? timeoutRetryDelayMs
-							: (pollWhileBusy && shouldPoll(record.state.view) ? 300 : (idlePollIntervalMs > 0 ? Math.min(1500, idlePollIntervalMs) : 1500));
-						schedule(record, retryDelay);
+							: (pollWhileBusy && shouldPoll(record.state.view) ? 300 : (idlePollIntervalMs > 0 ? Math.min(1500, idlePollIntervalMs) : 1500)) };
 					}
-				} finally {
-					record.loading = false;
-					record.controller = null;
-					if (record.reloadRequested) { record.reloadRequested = false; schedule(record, 0); }
-				}
+				});
 			}
 			function invalidate(sessionId) {
 				const targets = sessionId === undefined || sessionId === null || sessionId === "" ? Array.from(records.values()) : [recordFor(sessionId)];
-				targets.forEach(function (record) {
-					if (record.loading) record.reloadRequested = true;
-					else schedule(record, 0);
-				});
+				targets.forEach(function (record) { record.refresh.request(); });
 			}
 			function evict(sessionId) {
 				const record = records.get(String(sessionId || ""));
 				if (!record || record.listeners.size) return false;
 				records.delete(record.id);
-				if (record.timer !== null) cancelTimer(record.timer);
+				record.refresh.stop();
 				if (record.eviction !== null) cancelTimer(record.eviction);
 				if (record.watchdog !== null) stopWatchdog(record.watchdog);
-				if (record.controller) record.controller.abort();
 				return true;
 			}
 
@@ -1615,13 +1728,17 @@ window.__ModuleLoader__.load({
 				getSnapshot: function (sessionId) { return recordFor(sessionId).state; },
 				setView: function (sessionId, view) {
 					const record = recordFor(sessionId);
+					record.refresh.replace();
+					const owner = {};
+					record.optimisticOwner = owner;
 					record.optimisticBusy = shouldPoll(view);
 					publish(record, { phase: "ready", view: view, error: "", updatedAt: Date.now() });
-					if (pollWhileBusy && shouldPoll(view)) schedule(record, 0);
+					if (pollWhileBusy && shouldPoll(view)) record.refresh.request();
 					let released = false;
 					return function () {
 						if (released) return;
 						released = true;
+						if (record.optimisticOwner !== owner) return;
 						record.optimisticBusy = false;
 						if (records.get(record.id) === record) invalidate(sessionId);
 					};
@@ -1633,21 +1750,23 @@ window.__ModuleLoader__.load({
 					const unregister = register(record.paths, paths || [[]], listener);
 					record.listeners.add(listener);
 					listener(record.state);
-					if (firstSubscriber) schedule(record, 0);
+					if (firstSubscriber) { record.refresh.start(); record.refresh.request(); }
 					if (record.watchdog === null && (pollWhileBusy || idlePollIntervalMs > 0)) {
 						record.watchdog = startWatchdog(function () {
-							if (record.listeners.size > 0 && ((pollWhileBusy && shouldPoll(record.state.view)) || idlePollIntervalMs > 0)) void refresh(record);
+							if (record.listeners.size > 0 && ((pollWhileBusy && shouldPoll(record.state.view)) || idlePollIntervalMs > 0)) void record.refresh.refresh();
 						}, watchdogIntervalMs);
 					}
 					return function () {
 						unregister();
 						record.listeners.delete(listener);
 						if (record.listeners.size === 0) {
+							record.optimisticBusy = false;
+							record.optimisticOwner = null;
 							if (cacheRetentionMs > 0 && record.eviction === null) record.eviction = scheduleTimer(function () {
 								record.eviction = null;
 								if (records.get(record.id) === record) evict(record.id);
 							}, cacheRetentionMs);
-							if (record.timer !== null) { cancelTimer(record.timer); record.timer = null; }
+							record.refresh.stop();
 							if (record.watchdog !== null) { stopWatchdog(record.watchdog); record.watchdog = null; }
 						}
 					};
@@ -1887,11 +2006,11 @@ window.__ModuleLoader__.load({
 			return Object.assign({}, view, { tavernHelper: nextHelper });
 		}
 
-		async function hydrateLiveTavernHelperMessages(sessionId, view) {
+		async function hydrateLiveTavernHelperMessages(sessionId, view, request) {
             // First paint is independent of compatibility/history preparation.
             // A window must not be promoted to a complete view by filling only
             // Helper rows: historical display projections need their full read.
-            if (view && view.historyWindow) return (await rpc("getSession", {fullView:true}, sessionId)).view;
+            if (view && view.historyWindow) return (await rpc("getSession", {fullView:true}, sessionId, request)).view;
 			const pending = view && view.tavernHelper && view.tavernHelper.messagesPending;
 			if (!pending) return view;
 			const payload = await rpc("hydrateTavernHelperMessages", {
@@ -1899,7 +2018,7 @@ window.__ModuleLoader__.load({
                 revision: view.tavernHelper.stateRevision,
 				from: pending.from,
 				to: pending.to
-			}, sessionId);
+			}, sessionId, request);
 			return applyTavernHelperMessageHydration(view, payload);
 		}
 
@@ -1948,29 +2067,35 @@ window.__ModuleLoader__.load({
 				record.listeners.forEach(function (listener) { listener(state); });
 			}
 			function disconnect(record) {
-				if (record.connection && typeof record.connection.close === "function") record.connection.close();
+				const connection = record.connection;
 				record.connection = null;
+				if (connection && connection.handle) connection.handle.close();
 			}
 			function connect(record) {
 				if (record.listeners.size === 0 || record.connection !== null) return;
-				record.connection = options.connect(record.id, {
+				const owner = { handle: null };
+				record.connection = owner;
+				const current = () => record.connection === owner && record.listeners.size > 0;
+				owner.handle = options.connect(record.id, {
 					message: function (view) {
+						if (!current()) return;
 						publish(record, { phase: "ready", view: view || null, error: "", updatedAt: Date.now() });
-						if (typeof options.onView === "function") options.onView(record.id, view || null);
+						if (current() && typeof options.onView === "function") options.onView(record.id, view || null);
 					},
 					error: function (error) {
+						if (!current()) return;
 						publish(record, { phase: "retrying", view: record.state.view, error: String(error && error.message || ""), updatedAt: record.state.updatedAt });
 					}
 				});
-				// Session Signals are lossy wake-ups, not state. Always establish the
-				// coordination view from its authoritative source after (re)connecting.
-				if (record.connection && typeof record.connection.refresh === "function") void record.connection.refresh();
+				if (!current()) { owner.handle?.close(); return; }
+				// Reconcile even when subscribe synchronously replays a cached snapshot.
+				if (owner.handle && typeof owner.handle.refresh === "function") owner.handle.refresh();
 			}
 			function invalidate(sessionId) {
 				const targets = sessionId === undefined || sessionId === null || sessionId === "" ? Array.from(records.values()) : [recordFor(sessionId)];
 				targets.forEach(function (record) {
-					if (record.connection && typeof record.connection.refresh === "function") {
-						void record.connection.refresh();
+					if (record.connection?.handle && typeof record.connection.handle.refresh === "function") {
+						record.connection.handle.refresh();
 						return;
 					}
 					disconnect(record);
@@ -1984,6 +2109,7 @@ window.__ModuleLoader__.load({
 				getSnapshot: function (sessionId) { return recordFor(sessionId).state; },
 				setView: function (sessionId, view) {
 					const record = recordFor(sessionId);
+					record.connection?.handle?.supersede?.();
 					publish(record, { phase: "ready", view: view || null, error: "", updatedAt: Date.now() });
 				},
 				subscribe: function (sessionId, listener) {
@@ -2000,6 +2126,49 @@ window.__ModuleLoader__.load({
 			};
 		}
 
+		// HTTP and signal snapshots share the same publication owner. Reconnect always
+		// requests an authoritative HTTP baseline after any synchronous cached replay.
+		function createTavernCoordinationConnection(options) {
+			let active = true, reconcile = true;
+			const view = options.view || (result => result);
+			const controller = createSessionRefreshController({
+				now: options.now, schedule: options.schedule, cancel: options.cancel,
+				loadTimeoutMs: options.loadTimeoutMs === undefined ? 10000 : options.loadTimeoutMs,
+				load: scope => options.load({ signal: scope.signal }),
+				onResult(result) {
+					reconcile = false;
+					options.handlers.message(view(result));
+				},
+				onError(error) {
+					options.handlers.error(error);
+					return { retry: options.retryDelayMs || 5000 };
+				}
+			});
+			controller.start();
+			const stop = options.subscribe(function (signal) {
+				if (!active) return;
+				if (signal && signal.snapshot) {
+					controller.replace();
+					options.handlers.message(view(signal.snapshot));
+					if (reconcile) controller.request();
+				} else controller.request();
+			}, function (error) {
+				if (!active) return;
+				options.handlers.error(error);
+				controller.request();
+			}, function () {
+				if (!active) return;
+				reconcile = true;
+				controller.replace();
+				controller.request();
+			});
+			return {
+				refresh: () => controller.request(),
+				supersede: () => { reconcile = false; controller.replace(); },
+				close() { if (!active) return; active = false; controller.stop(); stop(); }
+			};
+		}
+
 		const coordinatedCardPaths = new Map();
 		const tavernCoordination = createTavernCoordinationEventModule({
 			onView: function (sessionId, view) {
@@ -2011,33 +2180,12 @@ window.__ModuleLoader__.load({
 				if (observed && previous === "" && cardPath !== "") notifyTavernDataChanged(["cards", "sessions"], "coordination");
 			},
 			connect: function (sessionId, handlers) {
-				let active = true;
-				let loading = false;
-				let reloadRequested = false;
-				async function load() {
-					if (!active) return;
-					if (loading) { reloadRequested = true; return; }
-					loading = true;
-					try {
-						const result = await rpc("syncSession", { kind: "candidate" }, sessionId);
-						if (active) handlers.message(coordinationView(result, sessionId));
-					} catch (error) {
-						if (active) handlers.error(error);
-					} finally {
-						loading = false;
-						if (active && reloadRequested) { reloadRequested = false; void load(); }
-					}
-				}
-				const stop = tavernSessionSignals.subscribe(sessionId, "tavern-state", function (signal) {
-					if (signal && signal.snapshot) {
-						handlers.message(coordinationView(signal.snapshot, sessionId));
-						return;
-					}
-					void load();
-				}, handlers.error, function () {
-					void load();
+				return createTavernCoordinationConnection({
+					load: request => rpc("syncSession", { kind: "candidate" }, sessionId, request),
+					subscribe: (message, error, connected) => tavernSessionSignals.subscribe(sessionId, "tavern-state", message, error, connected),
+					view: result => coordinationView(result, sessionId),
+					handlers
 				});
-				return { close: function () { active = false; stop(); }, refresh: load };
 			}
 		});
 
@@ -4755,7 +4903,9 @@ window.__ModuleLoader__.load({
 			// Content that grows by exactly as much as the frame just did is sized by the frame
 			// (e.g. a 100vh panel below a header). No height fits it, so keep the frame and
 			// scroll inside instead of feeding the measurement back forever.
-			let reporter = '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var viewportFloor=' + tavernFrameViewportFloor.toString() + ';var last=0;var queued=false;var active=true;var lastFrame=0,lastGap=null,lockGap=null;function measure(){var body=document.body;if(!body)return 48;var bodyRect=body.getBoundingClientRect();var scrollY=window.scrollY||0;var height=Math.max(body.scrollHeight||0,Math.ceil(bodyRect.bottom+scrollY),48,viewportFloor());function visit(node,clipTop,clipBottom){var style;try{style=getComputedStyle(node);}catch(e){return;}if(style.display==="none")return;if(style.visibility!=="hidden"&&style.position!=="fixed"){var rect=node.getBoundingClientRect();if(rect.width!==0||rect.height!==0){var top=Math.max(rect.top,clipTop),bottom=Math.min(rect.bottom+Math.max(0,parseFloat(style.marginBottom)||0),clipBottom);if(bottom>top)height=Math.max(height,Math.ceil(bottom+scrollY));}}if(String(style.overflowY||style.overflow||"visible")!=="visible"){var own=node.getBoundingClientRect();clipTop=Math.max(clipTop,own.top);clipBottom=Math.min(clipBottom,own.bottom);if(clipBottom<=clipTop)return;}var children=node.children;if(String(node.tagName||"").toLowerCase()==="details"&&!node.open){var summary=node.querySelector("summary");children=summary?[summary]:[];}for(var i=0;i<children.length;i+=1)visit(children[i],clipTop,clipBottom);}visit(body,-Infinity,Infinity);return height;}function report(){queued=false;if(!active)return;var frame=window.innerHeight,height=measure(),gap=height-frame;if(lockGap!==null&&Math.abs(gap-lockGap)>1)lockGap=null;if(lockGap===null&&gap>1&&lastGap!==null&&frame!==lastFrame&&Math.abs(gap-lastGap)<=1)lockGap=gap;lastFrame=frame;lastGap=gap;if(lockGap!==null)height=frame;document.documentElement.toggleAttribute("data-dsh-tavern-scroll",height>=32000||lockGap!==null);if(height===last)return;last=height;parent.postMessage({type:"dsh-tavern-frame-height",token:token,height:height},"*");}function schedule(){if(!active||queued)return;queued=true;if(typeof requestAnimationFrame==="function")requestAnimationFrame(report);else setTimeout(report,0);}if(typeof ResizeObserver==="function"){var observer=new ResizeObserver(schedule);observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}addEventListener("load",schedule);addEventListener("toggle",schedule,true);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(schedule);var paintOnly={transform:1,"transform-origin":1,translate:1,rotate:1,scale:1,opacity:1,color:1,"background-color":1,filter:1,"box-shadow":1};function layoutChanged(record){if(record.type==="characterData")return false;if(record.type==="childList"){var nodes=Array.prototype.slice.call(record.addedNodes).concat(Array.prototype.slice.call(record.removedNodes));for(var n=0;n<nodes.length;n+=1)if(nodes[n].nodeType!==3)return true;return false;}if(record.attributeName!=="style")return true;var after=record.target.style;if(!after)return true;var before=document.createElement("span").style;before.cssText=record.oldValue||"";var names=Array.prototype.slice.call(before).concat(Array.prototype.slice.call(after));for(var k=0;k<names.length;k+=1){if(paintOnly[names[k]])continue;if(before.getPropertyValue(names[k])!==after.getPropertyValue(names[k])||before.getPropertyPriority(names[k])!==after.getPropertyPriority(names[k]))return true;}return false;}var mutations=new MutationObserver(function(records){for(var r=0;r<records.length;r+=1)if(layoutChanged(records[r])){schedule();return;}});function observe(){mutations.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeOldValue:true,characterData:true});if(typeof observer!=="undefined"){observer.observe(document.documentElement);if(document.body)observer.observe(document.body);}}addEventListener("message",function(event){var data=event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-frame-measure-active")return;active=data.active!==false;if(active){observe();schedule();}else{mutations.disconnect();if(typeof observer!=="undefined")observer.disconnect();}});observe();schedule();})();<\/script>';
+			// Card scripts can briefly remove the root. Skip that measurement; the next
+			// activation reattaches observers to the current root without a polling watcher.
+			let reporter = '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var viewportFloor=' + tavernFrameViewportFloor.toString() + ';var last=0;var queued=false;var active=true;var lastFrame=0,lastGap=null,lockGap=null;function measure(){var body=document.body;if(!body)return 48;var bodyRect=body.getBoundingClientRect();var scrollY=window.scrollY||0;var height=Math.max(body.scrollHeight||0,Math.ceil(bodyRect.bottom+scrollY),48,viewportFloor());function visit(node,clipTop,clipBottom){var style;try{style=getComputedStyle(node);}catch(e){return;}if(style.display==="none")return;if(style.visibility!=="hidden"&&style.position!=="fixed"){var rect=node.getBoundingClientRect();if(rect.width!==0||rect.height!==0){var top=Math.max(rect.top,clipTop),bottom=Math.min(rect.bottom+Math.max(0,parseFloat(style.marginBottom)||0),clipBottom);if(bottom>top)height=Math.max(height,Math.ceil(bottom+scrollY));}}if(String(style.overflowY||style.overflow||"visible")!=="visible"){var own=node.getBoundingClientRect();clipTop=Math.max(clipTop,own.top);clipBottom=Math.min(clipBottom,own.bottom);if(clipBottom<=clipTop)return;}var children=node.children;if(String(node.tagName||"").toLowerCase()==="details"&&!node.open){var summary=node.querySelector("summary");children=summary?[summary]:[];}for(var i=0;i<children.length;i+=1)visit(children[i],clipTop,clipBottom);}visit(body,-Infinity,Infinity);return height;}function report(){queued=false;var root=document.documentElement;if(!active||!root)return;var frame=window.innerHeight,height=measure(),gap=height-frame;if(lockGap!==null&&Math.abs(gap-lockGap)>1)lockGap=null;if(lockGap===null&&gap>1&&lastGap!==null&&frame!==lastFrame&&Math.abs(gap-lastGap)<=1)lockGap=gap;lastFrame=frame;lastGap=gap;if(lockGap!==null)height=frame;root.toggleAttribute("data-dsh-tavern-scroll",height>=32000||lockGap!==null);if(height===last)return;last=height;parent.postMessage({type:"dsh-tavern-frame-height",token:token,height:height},"*");}function schedule(){if(!active||queued)return;queued=true;if(typeof requestAnimationFrame==="function")requestAnimationFrame(report);else setTimeout(report,0);}if(typeof ResizeObserver==="function")var observer=new ResizeObserver(schedule);addEventListener("load",schedule);addEventListener("toggle",schedule,true);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(schedule);var paintOnly={transform:1,"transform-origin":1,translate:1,rotate:1,scale:1,opacity:1,color:1,"background-color":1,filter:1,"box-shadow":1};function layoutChanged(record){if(record.type==="characterData")return false;if(record.type==="childList"){var nodes=Array.prototype.slice.call(record.addedNodes).concat(Array.prototype.slice.call(record.removedNodes));for(var n=0;n<nodes.length;n+=1)if(nodes[n].nodeType!==3)return true;return false;}if(record.attributeName!=="style")return true;var after=record.target.style;if(!after)return true;var before=document.createElement("span").style;before.cssText=record.oldValue||"";var names=Array.prototype.slice.call(before).concat(Array.prototype.slice.call(after));for(var k=0;k<names.length;k+=1){if(paintOnly[names[k]])continue;if(before.getPropertyValue(names[k])!==after.getPropertyValue(names[k])||before.getPropertyPriority(names[k])!==after.getPropertyPriority(names[k]))return true;}return false;}var mutations=new MutationObserver(function(records){for(var r=0;r<records.length;r+=1)if(layoutChanged(records[r])){schedule();return;}});function observe(){var root=document.documentElement;if(!root)return;mutations.observe(root,{subtree:true,childList:true,attributes:true,attributeOldValue:true,characterData:true});if(typeof observer!=="undefined"){observer.observe(root);if(document.body)observer.observe(document.body);}}addEventListener("message",function(event){var data=event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-frame-measure-active")return;active=data.active!==false;if(active){observe();schedule();}else{mutations.disconnect();if(typeof observer!=="undefined")observer.disconnect();}});observe();schedule();})();<\/script>';
 			// Animated/polling cards may never become DOM-idle; bound the wait so
 			// their authenticated variable channel can start receiving updates.
 			const readyReporter = '<script data-dsh-tavern-frame-ready>(function(){var token=' + token + ',armed=false,timer=0,deadline=0,reported=false;function report(){if(reported)return;reported=true;clearTimeout(timer);clearTimeout(deadline);observer.disconnect();var finish=function(){parent.postMessage({type:"dsh-tavern-frame-ready",token:token},"*");};if(typeof requestAnimationFrame==="function")requestAnimationFrame(function(){requestAnimationFrame(finish);});else setTimeout(finish,0);}function schedule(){if(!armed||reported)return;if(timer)clearTimeout(timer);timer=setTimeout(report,240);}var observer=new MutationObserver(schedule);observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});addEventListener("load",schedule);Promise.resolve(window.__dshTavernHelperReady).catch(function(){return false;}).then(function(){armed=true;deadline=setTimeout(report,1000);schedule();});})();<\/script>';
@@ -16382,6 +16532,8 @@ function bindTavernFontZoom(node, win) {
         exports.createSessionViewReader = createSessionViewReader;
 		exports.applyBodyRegenerationResult = applyBodyRegenerationResult;
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
+		exports.createTavernCoordinationConnection = createTavernCoordinationConnection;
+		exports.createSessionRefreshController = createSessionRefreshController;
 		exports.describeTavernActivity = describeTavernActivity;
 		exports.deleteTavernCards = deleteTavernCards;
 		exports.deleteTavernChats = deleteTavernChats;
