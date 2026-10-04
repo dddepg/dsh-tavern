@@ -186,8 +186,21 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
     if (outputFile !== '' && existsSync(outputFile)) {
       try { unlinkSync(outputFile) } catch {}
     }
+    // A staged CLI install restores the previous app when it fails after the switch.
+    // Its earlier receipt still matching proves that build is intact. The installer
+    // job has ended, so the service may be started outside it, as on success.
+    let restored = false
+    if (options.host === 'cli' && safeToRelease) {
+      const appRoot = options.installedSourceRoot || process.env.DSH_TAVERN_APP_DIR || path.join(dshHome, 'apps/dsh-tavern')
+      restored = !!await readInstallationReceipt({ sourceRoot: appRoot, dshHome, host: options.host })
+      if (existsSync(path.join(appRoot, 'bin/dsh-tavern.mjs'))) {
+        try { await (options.startService || startUpdatedService)({ sourceRoot: appRoot, dshHome, log, noOpen: options.statusFile !== '' }) }
+        catch (startError) { failure = new Error(`${String(failure?.message || failure)}\n${String(startError?.message || startError)}`) }
+      }
+    }
     await writeUpdateStatus({
-      phase: safeToRelease ? 'failed' : 'blocked', attemptId, repairRequired: true, repairSince: Date.now(), host: options.host, failedAt: Date.now(), error: String(failure?.message || failure),
+      phase: safeToRelease ? 'failed' : 'blocked', attemptId, ...(restored ? {} : { repairRequired: true, repairSince: Date.now() }), host: options.host, failedAt: Date.now(),
+      error: (restored ? '更新未完成，已恢复原版本并继续运行。' : '') + String(failure?.message || failure),
       ...(targetCommit ? { targetCommit } : {}),
     })
     throw failure

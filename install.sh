@@ -80,6 +80,10 @@ TEMP_DIR=$(mktemp -d "${TMP_BASE}/dsh-tavern-install.XXXXXX")
 TARGET_COMMIT=${DSH_TAVERN_TARGET_COMMIT:-}
 
 INSTALL_COMPLETED=0
+STAGED_INSTALL=0
+APP_SWAPPED=0
+PREVIOUS_APP=0
+STAGER=
 INSTALL_LOCK_CREATED=0
 INSTALL_INTERRUPTED=0
 cleanup() {
@@ -88,6 +92,18 @@ cleanup() {
   if [ "$install_exit" -eq 0 ] && [ "${INSTALL_COMPLETED:-0}" -ne 1 ]; then install_exit=1; fi
   trap - EXIT HUP INT TERM
   if command -v update_log >/dev/null 2>&1; then update_log installer.finished bootstrap "$install_exit" '' ''; fi
+  if [ "${STAGED_INSTALL:-0}" -eq 1 ] && [ "$install_exit" -ne 0 ]; then
+    if [ "${APP_SWAPPED:-0}" -eq 1 ]; then
+      echo "安装未完成，正在恢复原版本……" >&2
+      # UI updates restart the service from the updater after this job has ended.
+      if node "${STAGER}" rollback --app "${APP_DIR}" >&2 && [ "${PREVIOUS_APP:-0}" -eq 1 ] && [ "${DSH_TAVERN_DEFER_SERVICE_START:-0}" != "1" ]; then
+        DSH_HOME=${DSH_ROOT} node "${APP_DIR}/bin/dsh-tavern.mjs" start >&2 || echo "原版本已恢复，但服务启动失败，请运行 dsh-tavern start。" >&2
+      fi
+    else
+      # The running app was never touched; only drop the unused staging copy.
+      node "${STAGER}" discard --app "${APP_DIR}" >&2 || true
+    fi
+  fi
   if [ "${INSTALL_LOCK_CREATED:-0}" -eq 1 ]; then
     if [ "${INSTALL_INTERRUPTED:-0}" -eq 1 ]; then
       node "${TEMP_DIR}/installation-state.cjs" retain --home "$DSH_ROOT" --attempt "$DSH_TAVERN_INSTALL_ATTEMPT" --reason 'Bootstrap interrupted; descendant cleanup is unverified' >&2 || true
@@ -889,30 +905,56 @@ if [ "${INSTALL_HOST}" != "cli" ]; then
   node "${SOURCE_DIR}/bin/dsh-compatibility.mjs" --check "${INSTALL_HOST}" "${CURRENT_DSH_VERSION}"
 fi
 
-if [ "${INSTALL_HOST}" = "cli" ] && [ -f "${APP_DIR}/bin/dsh-tavern.mjs" ]; then
-  DSH_HOME=${DSH_ROOT} node "${APP_DIR}/bin/dsh-tavern.mjs" stop >/dev/null 2>&1 || true
+STAGER=${SOURCE_DIR}/bin/staged-app-install.mjs
+if [ "${INSTALL_HOST}" = "cli" ] && [ -f "${STAGER}" ]; then
+  # Prepare beside the running app; only the final switch stops the service, and a
+  # failure after it restores the previous directory (see bin/staged-app-install.mjs).
+  echo "正在准备新版本（当前版本继续运行）……"
+  STAGED_INSTALL=1
+  node "${STAGER}" prepare --app "${APP_DIR}" --source "${SOURCE_DIR}" --commit "${TARGET_COMMIT}" >/dev/null
+
+  echo "正在安装程序依赖……"
+  run_install dependencies.install 600000 pnpm --dir "${APP_DIR}.staging" install --frozen-lockfile
+
+  if [ -f "${APP_DIR}/bin/dsh-tavern.mjs" ]; then
+    PREVIOUS_APP=1
+    DSH_HOME=${DSH_ROOT} node "${APP_DIR}/bin/dsh-tavern.mjs" stop >/dev/null 2>&1 || true
+  fi
+  APP_SWAPPED=1
+  node "${STAGER}" swap --app "${APP_DIR}"
+  # Re-link in place: Windows junctions and pnpm metadata record absolute paths.
+  run_install dependencies.relink 300000 pnpm --dir "${APP_DIR}" install --frozen-lockfile --offline
+
+  echo "正在配置 Tavern……"
+  DSH_HOME=${DSH_ROOT} run_install profile.install 1200000 node "${APP_DIR}/bin/dsh-tavern.mjs" install --host "${INSTALL_HOST}"
+  node "${STAGER}" commit --app "${APP_DIR}"
+  APP_SWAPPED=0
+else
+  if [ "${INSTALL_HOST}" = "cli" ] && [ -f "${APP_DIR}/bin/dsh-tavern.mjs" ]; then
+    DSH_HOME=${DSH_ROOT} node "${APP_DIR}/bin/dsh-tavern.mjs" stop >/dev/null 2>&1 || true
+  fi
+
+  mkdir -p "${APP_DIR}"
+  # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data/ 用户数据会保留。
+  # 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
+  if [ -f "${SOURCE_DIR}/bin/prune-installed-files.mjs" ]; then
+    node "${SOURCE_DIR}/bin/prune-installed-files.mjs" "${SOURCE_DIR}" "${APP_DIR}" || echo "警告：旧版本遗留文件清理失败，继续安装。" >&2
+  fi
+  cp -R "${SOURCE_DIR}/." "${APP_DIR}/"
+  if [ "${USED_CDN}" -eq 1 ]; then rm -f -- "${APP_DIR}/.dsh-tavern-release.json"; fi
+  case ${TARGET_COMMIT} in
+    *[!0-9a-fA-F]*|'') ;;
+    ????????????????????????????????????????)
+      printf '{"commit":"%s","installedAt":"%s"}\n' "${TARGET_COMMIT}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${APP_DIR}/.dsh-tavern-release.json"
+      ;;
+  esac
+
+  echo "正在安装程序依赖……"
+  run_install dependencies.install 600000 pnpm --dir "${APP_DIR}" install --frozen-lockfile
+
+  echo "正在配置 Tavern……"
+  DSH_HOME=${DSH_ROOT} run_install profile.install 1200000 node "${APP_DIR}/bin/dsh-tavern.mjs" install --host "${INSTALL_HOST}"
 fi
-
-mkdir -p "${APP_DIR}"
-# 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data/ 用户数据会保留。
-# 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
-if [ -f "${SOURCE_DIR}/bin/prune-installed-files.mjs" ]; then
-  node "${SOURCE_DIR}/bin/prune-installed-files.mjs" "${SOURCE_DIR}" "${APP_DIR}" || echo "警告：旧版本遗留文件清理失败，继续安装。" >&2
-fi
-cp -R "${SOURCE_DIR}/." "${APP_DIR}/"
-if [ "${USED_CDN}" -eq 1 ]; then rm -f -- "${APP_DIR}/.dsh-tavern-release.json"; fi
-case ${TARGET_COMMIT} in
-  *[!0-9a-fA-F]*|'') ;;
-  ????????????????????????????????????????)
-    printf '{"commit":"%s","installedAt":"%s"}\n' "${TARGET_COMMIT}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${APP_DIR}/.dsh-tavern-release.json"
-    ;;
-esac
-
-echo "正在安装程序依赖……"
-run_install dependencies.install 600000 pnpm --dir "${APP_DIR}" install --frozen-lockfile
-
-echo "正在配置 Tavern……"
-DSH_HOME=${DSH_ROOT} run_install profile.install 1200000 node "${APP_DIR}/bin/dsh-tavern.mjs" install --host "${INSTALL_HOST}"
 
 if [ "${INSTALL_HOST}" = "desktop" ]; then
   echo "DSH Tavern Desktop 版安装完成。"

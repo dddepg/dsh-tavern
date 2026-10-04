@@ -749,6 +749,10 @@ $PreviousNpmRegistry = $env:npm_config_registry
 $PreviousPnpmRegistry = $env:pnpm_config_registry
 $PreviousPnpmUpdateNotifier = $env:pnpm_config_update_notifier
 $AddedProxyNames = @()
+$StagedInstall = $false
+$AppSwapped = $false
+$PreviousApp = $false
+$Stager = $null
 try {
   [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
   $OutputEncoding = [Console]::OutputEncoding
@@ -1074,38 +1078,68 @@ try {
     Assert-LastCommand '宿主 DSH 版本不兼容，尚未覆盖程序文件。'
   }
 
+  $Stager = Join-Path $SourceDir.FullName 'bin\staged-app-install.mjs'
   $OldLauncher = Join-Path $AppDir 'bin\dsh-tavern.mjs'
-  if ($InstallHost -eq 'cli' -and (Test-Path $OldLauncher)) {
-    & node $OldLauncher stop *> $null
-  }
+  if ($InstallHost -eq 'cli' -and (Test-Path -LiteralPath $Stager -PathType Leaf)) {
+    # Prepare beside the running app; only the final switch stops the service, and a
+    # failure after it restores the previous directory (see bin/staged-app-install.mjs).
+    $StagedInstall = $true
+    Write-InstallStatus '本地处理：正在准备新版本，当前版本继续运行…'
+    & node $Stager prepare --app $AppDir --source $SourceDir.FullName --commit $TargetCommit | Out-Null
+    Assert-LastCommand '准备新版本失败，当前版本未改动。'
+    Write-InstallStatus '安装依赖：正在连接软件包仓库，已有缓存将直接复用…'
+    Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', "$AppDir.staging", 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
 
-  Write-InstallStatus '本地处理：正在更新程序文件，保留用户数据…'
-  New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-  # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data\ 用户数据会保留。
-  # 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
-  $PruneScript = Join-Path $SourceDir.FullName 'bin\prune-installed-files.mjs'
-  if (Test-Path -LiteralPath $PruneScript) {
-    & node $PruneScript $SourceDir.FullName $AppDir
-    if ($LASTEXITCODE -ne 0) { Write-Warning '旧版本遗留文件清理失败，继续安装。' }
-  }
-  Get-ChildItem -LiteralPath $SourceDir.FullName -Force | Copy-Item -Destination $AppDir -Recurse -Force
-  Assert-InstallFiles $AppDir
-  $PathsFile = Join-Path $TempDir 'install-paths.txt'
-  [IO.File]::WriteAllText($PathsFile, "Host=$InstallHost`nDSH_HOME=$DshRoot`nAppDir=$AppDir`nSource=$($SourceDir.FullName)`nCommit=$TargetCommit`nNode=$((Get-Command node).Source)", (New-Object Text.UTF8Encoding($false)))
-  Write-UpdateLog 'installer.paths' 'files.copy' '0' '' $PathsFile
-  if ($UsedCdn -and (Test-Path (Join-Path $AppDir '.dsh-tavern-release.json'))) {
-    Remove-Item -LiteralPath (Join-Path $AppDir '.dsh-tavern-release.json') -Force
-  }
-  if ($TargetCommit -match '^[0-9a-fA-F]{40}$') {
-    $ReleaseJson = @{ commit = $TargetCommit; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json
-    [IO.File]::WriteAllText((Join-Path $AppDir '.dsh-tavern-release.json'), $ReleaseJson, (New-Object Text.UTF8Encoding($false)))
-  }
+    if (Test-Path $OldLauncher) {
+      $PreviousApp = $true
+      & node $OldLauncher stop *> $null
+    }
+    Write-InstallStatus '本地处理：正在切换到新版本，保留用户数据…'
+    $AppSwapped = $true
+    & node $Stager swap --app $AppDir
+    Assert-LastCommand '切换新版本失败，已恢复原版本。'
+    # Re-link in place: Windows junctions and pnpm metadata record absolute paths.
+    Invoke-InstallCommand 'dependencies.relink' $PnpmCommand @('--dir', $AppDir, 'install', '--offline', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000') -TimeoutMs 300000
 
-  Write-InstallStatus '安装依赖：正在连接软件包仓库，已有缓存将直接复用…'
-  Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
+    Write-InstallStatus '本地配置：正在注册 Tavern 并检查兼容性…'
+    Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost) -TimeoutMs 1200000
+    & node $Stager commit --app $AppDir
+    $AppSwapped = $false
+  }
+  else {
+    $OldLauncher = Join-Path $AppDir 'bin\dsh-tavern.mjs'
+    if ($InstallHost -eq 'cli' -and (Test-Path $OldLauncher)) {
+      & node $OldLauncher stop *> $null
+    }
 
-  Write-InstallStatus '本地配置：正在注册 Tavern 并检查兼容性…'
-  Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost) -TimeoutMs 1200000
+    Write-InstallStatus '本地处理：正在更新程序文件，保留用户数据…'
+    New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+    # 覆盖程序文件但不删除旧目录，因此未被发布包跟踪的 data\ 用户数据会保留。
+    # 新版本自带的清理脚本只删除上次安装放入、而新版本已不再包含的文件；失败不影响安装。
+    $PruneScript = Join-Path $SourceDir.FullName 'bin\prune-installed-files.mjs'
+    if (Test-Path -LiteralPath $PruneScript) {
+      & node $PruneScript $SourceDir.FullName $AppDir
+      if ($LASTEXITCODE -ne 0) { Write-Warning '旧版本遗留文件清理失败，继续安装。' }
+    }
+    Get-ChildItem -LiteralPath $SourceDir.FullName -Force | Copy-Item -Destination $AppDir -Recurse -Force
+    Assert-InstallFiles $AppDir
+    $PathsFile = Join-Path $TempDir 'install-paths.txt'
+    [IO.File]::WriteAllText($PathsFile, "Host=$InstallHost`nDSH_HOME=$DshRoot`nAppDir=$AppDir`nSource=$($SourceDir.FullName)`nCommit=$TargetCommit`nNode=$((Get-Command node).Source)", (New-Object Text.UTF8Encoding($false)))
+    Write-UpdateLog 'installer.paths' 'files.copy' '0' '' $PathsFile
+    if ($UsedCdn -and (Test-Path (Join-Path $AppDir '.dsh-tavern-release.json'))) {
+      Remove-Item -LiteralPath (Join-Path $AppDir '.dsh-tavern-release.json') -Force
+    }
+    if ($TargetCommit -match '^[0-9a-fA-F]{40}$') {
+      $ReleaseJson = @{ commit = $TargetCommit; installedAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json
+      [IO.File]::WriteAllText((Join-Path $AppDir '.dsh-tavern-release.json'), $ReleaseJson, (New-Object Text.UTF8Encoding($false)))
+    }
+
+    Write-InstallStatus '安装依赖：正在连接软件包仓库，已有缓存将直接复用…'
+    Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
+
+    Write-InstallStatus '本地配置：正在注册 Tavern 并检查兼容性…'
+    Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost) -TimeoutMs 1200000
+  }
   if ($InstallHost -eq 'desktop') {
     Write-Host 'DSH Tavern Desktop 版安装完成。'
     Write-Host '请重启 DSH Desktop，再从托盘的 Profile 菜单切换到 tavern。'
@@ -1122,6 +1156,23 @@ try {
 }
 catch {
   $InstallFailure = $_
+  if ($StagedInstall) {
+    try {
+      if ($AppSwapped) {
+        Write-Host '安装未完成，正在恢复原版本……'
+        & node $Stager rollback --app $AppDir
+        # UI updates restart the service from the updater after this job has ended.
+        if ($LASTEXITCODE -eq 0 -and $PreviousApp -and $env:DSH_TAVERN_DEFER_SERVICE_START -ne '1') {
+          & node (Join-Path $AppDir 'bin\dsh-tavern.mjs') start
+          if ($LASTEXITCODE -ne 0) { Write-Warning '原版本已恢复，但服务启动失败，请运行 dsh-tavern start。' }
+        }
+      }
+      else {
+        # The running app was never touched; only drop the unused staging copy.
+        & node $Stager discard --app $AppDir
+      }
+    } catch { Write-Warning ('恢复原版本失败：' + $_.Exception.Message) }
+  }
   try {
     if (Test-Path $UpdateLogger) {
       $FailureFile = Join-Path $TempDir 'installer.error'

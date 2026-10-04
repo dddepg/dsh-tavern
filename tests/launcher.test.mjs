@@ -105,15 +105,21 @@ test('Desktop 安装复用内置运行时，不启动独立 3081 服务', () => 
 })
 
 test('一键安装先安装下载包依赖，再运行 Tavern 安装器', () => {
-  const unixDependencies = unixInstaller.indexOf('pnpm --dir "${APP_DIR}" install --frozen-lockfile')
-  const unixLauncher = unixInstaller.indexOf('node "${APP_DIR}/bin/dsh-tavern.mjs" install')
-  assert.ok(unixDependencies >= 0)
-  assert.ok(unixDependencies < unixLauncher)
-
-  const windowsDependencies = windowsInstaller.indexOf("Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile'")
-  const windowsLauncher = windowsInstaller.indexOf("Invoke-InstallCommand 'profile.install' 'node'")
-  assert.ok(windowsDependencies >= 0)
-  assert.ok(windowsDependencies < windowsLauncher)
+  // CLI: dependencies install beside the running app, then switch, re-link and configure.
+  const order = (text, markers) => {
+    const positions = markers.map(marker => text.indexOf(marker))
+    positions.forEach((position, index) => assert.ok(position >= 0, '缺少步骤：' + markers[index]))
+    for (let index = 1; index < positions.length; index++) assert.ok(positions[index - 1] < positions[index], markers[index - 1] + ' 应在 ' + markers[index] + ' 之前')
+  }
+  order(unixInstaller, ['pnpm --dir "${APP_DIR}.staging" install --frozen-lockfile', 'dsh-tavern.mjs" stop', 'node "${STAGER}" swap',
+    'pnpm --dir "${APP_DIR}" install --frozen-lockfile --offline', 'node "${APP_DIR}/bin/dsh-tavern.mjs" install', 'node "${STAGER}" commit'])
+  order(windowsInstaller, ["Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', \"$AppDir.staging\", 'install', '--frozen-lockfile'",
+    '& node $OldLauncher stop', '& node $Stager swap', "Invoke-InstallCommand 'dependencies.relink'", "Invoke-InstallCommand 'profile.install' 'node'", '& node $Stager commit'])
+  // Desktop and releases without the stager keep installing in place.
+  const legacyUnix = unixInstaller.slice(unixInstaller.indexOf('node "${STAGER}" commit'))
+  order(legacyUnix, ['pnpm --dir "${APP_DIR}" install --frozen-lockfile\n', 'node "${APP_DIR}/bin/dsh-tavern.mjs" install'])
+  const legacyWindows = windowsInstaller.slice(windowsInstaller.indexOf('& node $Stager commit'))
+  order(legacyWindows, ["Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile'", "Invoke-InstallCommand 'profile.install' 'node'"])
 })
 
 test('一键安装直接启动 Tavern，不通过包管理器托管后台进程', () => {
