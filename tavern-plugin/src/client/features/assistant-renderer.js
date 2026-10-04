@@ -463,6 +463,7 @@
                     frameSizing: liveState.view?.tavernRuntimePolicy?.frameSizing,
                     helperContextReader: () => liveTavernView.getSnapshot(props.sessionId).view?.tavernHelper,
 					trustedCardMode: Boolean(liveState.view && liveState.view.tavernRuntimePolicy && liveState.view.tavernRuntimePolicy.trustedCardMode),
+					htmlSketches: Boolean(liveState.view && groupOfMode(liveState.view.mode) === "card"),
 					frameOwner: props.frameOwner,
                     eagerFrame: storyTurn > 0 && storyTurn === latestProjectionTurn,
 					executeSlash: props.executeSlash,

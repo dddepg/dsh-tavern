@@ -88,6 +88,12 @@ body.dsh-tavern-shell-active,
 .dsh-tavern-assistant-reasoning { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }
 .dsh-tavern-assistant-reasoning summary { cursor: pointer; user-select: none; }
 .dsh-tavern-assistant-reasoning pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.dsh-tavern-html-sketch { margin: 8px 0; border: 1px solid var(--dsh-tavern-accent-border); border-radius: 8px; overflow: hidden; }
+.dsh-tavern-html-sketch figcaption { padding: 4px 10px; background: var(--dsh-tavern-accent-soft); color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.dsh-tavern-html-sketch iframe { display: block; width: 100%; border: 0; background: #fff; }
+.dsh-tavern-html-sketch details { padding: 4px 10px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-html-sketch summary { cursor: pointer; user-select: none; }
+.dsh-tavern-html-sketch pre { max-height: 240px; overflow: auto; margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dsh-tavern-assistant-stopped { align-self: flex-start; border-radius: 6px; padding: 0 6px; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; }
 .dsh-tavern-message-fork { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
 .dsh-tavern-message-fork:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
