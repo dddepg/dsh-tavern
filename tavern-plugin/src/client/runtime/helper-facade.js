@@ -549,7 +549,12 @@
 				saveMetadata: saveChatData,
 				saveMetadataDebounced: saveChatData,
 				updateChatMetadata: chatData.updateMetadata,
-				saveSettingsDebounced: saveExtensionSettings
+				saveSettingsDebounced: saveExtensionSettings,
+				// ST answers from the device class; scripts use it to pick a layout.
+				isMobile: function () {
+					try { return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.matchMedia("(pointer: coarse) and (max-width: 1000px)").matches; }
+					catch (_) { return false; }
+				}
 			};
 			Object.defineProperties(sillyTavern, {
 				chatId: { enumerable: true, get: function () { return String(context().chatId || ""); } },

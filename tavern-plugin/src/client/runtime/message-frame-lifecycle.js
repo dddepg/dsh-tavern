@@ -393,6 +393,19 @@
 					// The pending frame initializes its private draft before it becomes visible.
 					if (sourceDocument.key !== desired.key) return;
                     if (data.method === "triggerTavernSlash") {
+                        // Only a pipe ending in /trigger starts the game. Scripts also query
+                        // (/pass {{user}}) or notify (/echo); answer those without starting.
+                        const line = String(data.args && data.args.line || "");
+                        if (!/(?:^|\|)\s*\/trigger(?:\s[^|]*)?\s*$/.test(line)) {
+                            const query = /^\s*\/pass\s+([\s\S]*)$/.exec(line);
+                            const names = { user: String(helperContext && helperContext.playerName || "你"), char: String(helperContext && helperContext.characterName || "角色") };
+                            const result = query ? { pipe: query[1].replace(/{{\s*(user|char)\s*}}/gi, function (_, key) { return names[key.toLowerCase()]; }).replace(/{{[^{}]*}}/g, "") }
+                                : /^\s*\/echo\b/.test(line) ? { pipe: "" } : null;
+                            if (current()) event.source.postMessage(result
+                                ? { type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }
+                                : { type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: "开局准备页只执行以 /trigger 结束的开局命令" }, "*");
+                            return;
+                        }
                         if (!sourceDocument.openingCommandStart) {
                             sourceDocument.openingCommandStart = Promise.resolve().then(async function () {
                                 if (!current() || sourceDocument !== visible) throw new Error("开场预览已失效，请重新打开");
