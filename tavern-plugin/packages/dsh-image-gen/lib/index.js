@@ -2028,6 +2028,24 @@ const NOVELAI_UC_PRESETS = Object.freeze([
 	"heavy",
 	"human-focus"
 ]);
+const NOVELAI_SAMPLERS = Object.freeze([
+	"k_euler_ancestral",
+	"k_euler",
+	"k_dpmpp_2s_ancestral",
+	"k_dpmpp_2m",
+	"k_dpmpp_2m_sde",
+	"k_dpmpp_sde",
+	"ddim_v3"
+]);
+const NOVELAI_NOISE_SCHEDULES = Object.freeze([
+	"karras",
+	"native",
+	"exponential",
+	"polyexponential"
+]);
+const LIBRARY_ID = /^[a-z0-9]{1,12}$/;
+const MAX_ENDPOINTS = 10;
+const MAX_ARTISTS = 50;
 const QUALITY_PRESET_TAGS = {
 	"nai-diffusion-5-full": "very aesthetic, masterpiece, no text",
 	"nai-diffusion-5-curated": "very aesthetic, masterpiece, no text",
@@ -2077,6 +2095,106 @@ const UC_PRESET_INDEX = {
 };
 const NOVELAI_TEXT_TAG = /(?:^|[\s,;|])Text\s*:\s*\S/i;
 const BASE64_IMAGE = /^[A-Za-z0-9+/]+={0,2}$/;
+function libraryText(value, limit, label) {
+	if (value !== void 0 && typeof value !== "string") throw new Error(label + "须为文本");
+	const text = (value || "").trim();
+	if (text.length > limit) throw new Error(label + "过长");
+	return text;
+}
+function libraryEntries(value, limit, label) {
+	if (value === void 0 || value === null) return [];
+	if (!Array.isArray(value) || value.length > limit) throw new Error(label + "最多 " + limit + " 条");
+	const ids = /* @__PURE__ */ new Set();
+	return value.map((entry) => {
+		if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.id !== "string" || !LIBRARY_ID.test(entry.id) || ids.has(entry.id)) throw new Error(label + "格式不正确");
+		ids.add(entry.id);
+		return entry;
+	});
+}
+/** Named NovelAI endpoints (official site or same-protocol relays). Each keeps
+* its own key; the active one's address is the channel baseURL, so switching
+* endpoints changes only where requests go, never model or prompt settings.
+* Older single-endpoint configurations become the `default` entry. */
+function novelaiEndpoints(value, active, baseURL) {
+	const endpoints = libraryEntries(value, MAX_ENDPOINTS, "NovelAI 接入点").map((entry) => {
+		const url = libraryText(entry.baseURL, 2e3, "接入点地址");
+		let parsed;
+		try {
+			parsed = url ? new URL(url) : void 0;
+		} catch {
+			throw new Error("接入点地址须为 HTTP(S) API 根地址");
+		}
+		if (parsed && (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash)) throw new Error("接入点地址须为不含密钥、查询参数的 HTTP(S) API 根地址");
+		return {
+			id: entry.id,
+			name: libraryText(entry.name, 40, "接入点名称") || "未命名接入点",
+			baseURL: url
+		};
+	});
+	if (!endpoints.length) endpoints.push({
+		id: "default",
+		name: "默认",
+		baseURL
+	});
+	const id = active || endpoints[0].id;
+	const current = endpoints.find((entry) => entry.id === id);
+	if (!current) throw new Error("所选 NovelAI 接入点不存在");
+	current.baseURL = baseURL;
+	return {
+		endpoints,
+		endpoint: id
+	};
+}
+/** Named artist strings, each optionally carrying its own quality and negative
+* tags that replace the channel-level ones while selected. Older free-text
+* settings (one artist string, or the JSON presets) migrate into entries once. */
+function novelaiArtists(value) {
+	let source = value.artists;
+	if (source === void 0) {
+		source = [];
+		let presets = {};
+		try {
+			presets = value.promptPresets ? JSON.parse(value.promptPresets) : {};
+		} catch {}
+		if (presets && typeof presets === "object" && !Array.isArray(presets)) for (const [name, preset] of Object.entries(presets)) {
+			if (!preset || typeof preset !== "object" || source.length >= MAX_ARTISTS) continue;
+			source.push({
+				id: "p" + source.length,
+				name,
+				prompt: preset.artistString,
+				quality: preset.qualityTags,
+				negative: preset.negativePrompt
+			});
+		}
+		if (typeof value.artistString === "string" && value.artistString.trim() && source.length < MAX_ARTISTS) {
+			source.push({
+				id: "legacy",
+				name: "我的画师串",
+				prompt: value.artistString
+			});
+			return {
+				artists: novelaiArtists({ artists: source }).artists,
+				activeArtist: "legacy"
+			};
+		}
+	}
+	return { artists: libraryEntries(source, MAX_ARTISTS, "画师串库").map((entry) => ({
+		id: entry.id,
+		name: libraryText(entry.name, 40, "画师串名称") || "未命名画师串",
+		prompt: libraryText(typeof entry.prompt === "string" ? entry.prompt : void 0, 1e3, "画师串"),
+		quality: libraryText(typeof entry.quality === "string" ? entry.quality : void 0, 600, "画师串质量词"),
+		negative: libraryText(typeof entry.negative === "string" ? entry.negative : void 0, 4e3, "画师串负面词")
+	})) };
+}
+/** The selected artist entry; its non-empty quality/negative tags take over. */
+function novelaiArtist(config) {
+	const entry = (config.artists || []).find((artist) => artist.id === config.activeArtist);
+	return {
+		prompt: entry?.prompt || "",
+		quality: entry?.quality || config.qualityTags || "",
+		negative: entry?.negative || config.negativePrompt || ""
+	};
+}
 function novelaiSettings(config) {
 	if (!Object.hasOwn(models, config.model)) throw new Error("NovelAI 请选择已接入的 V5、V4.5、V4 或 Anime V3 模型");
 	const dimensions = config.size.match(/^(\d+)x(\d+)$/);
@@ -2197,14 +2315,14 @@ function imageStrength(config) {
 * adjustments live in blocks; stale person.fields must not override them.
 * Names identify records but aren't repeated as invented visual subjects. */
 function novelaiPrompts(input, config = {}) {
-	const plan = input.plan;
+	const plan = input.plan, artist = novelaiArtist(config);
 	if (!plan || !Array.isArray(plan.blocks)) {
 		if (typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 16e3) throw new Error("NovelAI 画面提示词为空或过长");
 		return {
 			base: assembleBase({
-				quality: config.qualityTags,
+				quality: artist.quality,
 				scene: input.prompt,
-				artist: config.artistString
+				artist: artist.prompt
 			}, config),
 			characters: []
 		};
@@ -2219,10 +2337,10 @@ function novelaiPrompts(input, config = {}) {
 	const style = plan.styleOverride?.tags ?? plan.style?.tags ?? "";
 	const scene = plan.blocks.filter((block) => block.owner === "scene" && block.tags).map((block) => block.tags).join(", ");
 	const base = assembleBase({
-		quality: config.qualityTags,
+		quality: artist.quality,
 		scene,
 		style,
-		artist: config.artistString
+		artist: artist.prompt
 	}, config);
 	if (!base.trim() && !characters.length) throw new Error("NovelAI 画面提示词为空");
 	if (base.length + characters.reduce((sum, person) => sum + person.caption.length, 0) > 16e3) throw new Error("NovelAI 组合提示词过长");
@@ -2231,12 +2349,18 @@ function novelaiPrompts(input, config = {}) {
 		characters
 	};
 }
+/** Variety Boost skips CFG at high noise levels, scaled by image area as in
+* NovelAI's own frontend. V5 has no such switch, so it is never sent there. */
+function varietyBoostSigma(model, width, height) {
+	return Math.sqrt(width * height / 1011712) * (model.startsWith("nai-diffusion-4-5") ? 58 : 19);
+}
 function novelaiRequest(input, config) {
 	const { width, height, guidance, characters: limit } = novelaiSettings(config);
 	const prompt = novelaiPrompts(input, config);
 	if (limit && prompt.characters.length > limit) throw new Error("当前 NovelAI 模型最多支持 " + limit + " 人，请选择 V5 或调整画面");
 	const seed = config.seed ? Number(config.seed) : randomInt(0, 4294967296);
-	const negative = mergeTags(config.negativePrompt, novelaiNegativeTags(config));
+	const negative = mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config));
+	const sampler = config.sampler || "k_euler_ancestral";
 	const reference = referenceImageBytes(config.referenceImage);
 	const captions = prompt.characters.map((person) => ({
 		char_caption: person.caption,
@@ -2269,17 +2393,20 @@ function novelaiRequest(input, config) {
 			height,
 			scale: config.guidance ? Number(config.guidance) : guidance,
 			steps: config.steps ? Number(config.steps) : 23,
-			sampler: "k_euler_ancestral",
-			noise_schedule: "karras",
+			sampler,
+			noise_schedule: config.noiseSchedule || "karras",
 			n_samples: 1,
 			seed,
 			negative_prompt: negative,
-			cfg_rescale: 0,
+			cfg_rescale: config.cfgRescale ? Number(config.cfgRescale) : 0,
 			dynamic_thresholding: false,
 			legacy: false,
 			legacy_v3_extend: false,
-			deliberate_euler_ancestral_bug: false,
-			prefer_brownian: true,
+			...sampler === "k_euler_ancestral" ? {
+				deliberate_euler_ancestral_bug: false,
+				prefer_brownian: true
+			} : {},
+			...config.varietyBoost === "true" && !config.model.startsWith("nai-diffusion-5") ? { skip_cfg_above_sigma: varietyBoostSigma(config.model, width, height) } : {},
 			...presets,
 			...reference ? {
 				image: reference,
@@ -2691,22 +2818,25 @@ const IMAGE_ADVANCED_FIELDS = [
 	"guidance"
 ];
 const IMAGE_NOVELAI_PROMPT_FIELDS = [
-	"artistString",
 	"qualityTags",
 	"qualityPreset",
 	"ucPreset",
 	"promptOrder",
 	"sectionWeights",
 	"useOrder",
-	"promptPresets",
 	"seed",
 	"referenceImage",
-	"imageStrength"
+	"imageStrength",
+	"sampler",
+	"noiseSchedule",
+	"cfgRescale",
+	"varietyBoost",
+	"endpoint",
+	"activeArtist"
 ];
 const IMAGE_FIELD_LIMITS = {
 	negativePrompt: 4e3,
 	baseURL: 2e3,
-	artistString: 1e3,
 	qualityTags: 600,
 	qualityPreset: 16,
 	ucPreset: 16,
@@ -2714,9 +2844,14 @@ const IMAGE_FIELD_LIMITS = {
 	promptOrder: 120,
 	sectionWeights: 120,
 	useOrder: 8,
-	promptPresets: 1e4,
 	seed: 20,
-	referenceImage: 5e4
+	referenceImage: 5e4,
+	sampler: 32,
+	noiseSchedule: 32,
+	cfgRescale: 8,
+	varietyBoost: 8,
+	endpoint: 16,
+	activeArtist: 16
 };
 for (const channel of channels) {
 	const advanced = channel.id === "novelai" ? [...IMAGE_ADVANCED_FIELDS, ...IMAGE_NOVELAI_PROMPT_FIELDS] : ["webui", "comfyui"].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === "qwen" ? ["negativePrompt"] : [];
@@ -2786,12 +2921,6 @@ function channelSettings(value = {}, id = value.provider || "openai") {
 			if (!["true", "false"].includes(result.useOrder.toLowerCase())) throw new Error("useOrder 须填 true 或 false");
 			result.useOrder = result.useOrder.toLowerCase();
 		}
-		if (result.promptPresets) try {
-			const presets = JSON.parse(result.promptPresets);
-			if (typeof presets !== "object" || Array.isArray(presets) || presets === null) throw new Error("not object");
-		} catch {
-			throw new Error("promptPresets 须为有效 JSON 对象");
-		}
 		if (result.seed && (!/^\d+$/.test(result.seed) || Number(result.seed) > 4294967295)) throw new Error("种子须为 0–4294967295 的非负整数");
 		result.qualityPreset = (result.qualityPreset || "none").toLowerCase();
 		if (!NOVELAI_QUALITY_PRESETS.includes(result.qualityPreset)) throw new Error("官方质量词预设只能选择 none、light 或 standard");
@@ -2801,6 +2930,18 @@ function channelSettings(value = {}, id = value.provider || "openai") {
 			if (!/^\d+(?:\.\d+)?$/.test(result.imageStrength) || Number(result.imageStrength) > 1) throw new Error("图片参考强度须为 0–1 的数值");
 			result.imageStrength = String(Number(result.imageStrength));
 		}
+		result.sampler ||= "k_euler_ancestral";
+		if (!NOVELAI_SAMPLERS.includes(result.sampler)) throw new Error("请选择有效的 NovelAI 采样器");
+		if (result.sampler === "ddim_v3" && result.model.startsWith("nai-diffusion-5")) throw new Error("V5 不支持 DDIM 采样器，请换用其他采样器");
+		result.noiseSchedule ||= "karras";
+		if (!NOVELAI_NOISE_SCHEDULES.includes(result.noiseSchedule)) throw new Error("请选择有效的 NovelAI 噪声表");
+		if (result.cfgRescale) {
+			if (!/^\d+(?:\.\d+)?$/.test(result.cfgRescale) || Number(result.cfgRescale) > 1) throw new Error("CFG Rescale 须为 0–1 的数值");
+			result.cfgRescale = String(Number(result.cfgRescale));
+		}
+		if (result.varietyBoost && !["true", "false"].includes(result.varietyBoost)) throw new Error("Variety Boost 须为开启或关闭");
+		Object.assign(result, novelaiEndpoints(value.endpoints, result.endpoint, result.baseURL), novelaiArtists(value));
+		if (result.activeArtist && !result.artists.some((artist) => artist.id === result.activeArtist)) result.activeArtist = "";
 		novelaiSettings(result);
 	}
 	if (id === "comfyui") {
@@ -3726,6 +3867,26 @@ async function generateSceneImage(input, deps = {}) {
 		throw error;
 	}
 }
+const NOVELAI_BUSY_RETRIES = 3;
+function novelaiRetryDelay(response, attempt, baseMs = 2e3) {
+	const header = Number(response.headers?.get?.("retry-after"));
+	const backoff = baseMs * 2 ** attempt * (.5 + Math.random() / 2);
+	return Math.min(3e4, Math.max(Number.isFinite(header) ? header * 1e3 : 0, backoff));
+}
+function abortableDelay(ms, signal) {
+	return new Promise((resolve, reject) => {
+		if (signal?.aborted) return reject(signal.reason);
+		const timer = setTimeout(() => {
+			signal?.removeEventListener("abort", abort);
+			resolve();
+		}, ms);
+		function abort() {
+			clearTimeout(timer);
+			reject(signal.reason);
+		}
+		signal?.addEventListener("abort", abort, { once: true });
+	});
+}
 async function requestSceneImage(input, deps) {
 	if (input.provider === "comfyui") return generateComfyImage(input, {
 		...deps,
@@ -3735,13 +3896,19 @@ async function requestSceneImage(input, deps) {
 	const request = deps.fetch || fetch;
 	const maxBytes = input.maxBytes || 20971520;
 	const spec = imageChannelRequest(input);
-	const response = await request(spec.url, {
+	const send = () => request(spec.url, {
 		method: "POST",
 		redirect: "error",
 		signal: input.signal,
 		headers: spec.headers,
 		body: JSON.stringify(spec.body)
 	});
+	let response = await send();
+	for (let attempt = 0; input.provider === "novelai" && response.status === 429 && attempt < NOVELAI_BUSY_RETRIES; attempt++) {
+		await response.body?.cancel();
+		await abortableDelay(novelaiRetryDelay(response, attempt, deps.retryBaseMs), input.signal);
+		response = await send();
+	}
 	if (!response.ok) {
 		let detail = {};
 		try {
@@ -3882,7 +4049,8 @@ function extras(value) {
 		throw new Error("插件渠道配置损坏，请检查设置");
 	}
 }
-function ref(id, authType) {
+function ref(id, authType, endpoint) {
+	if (id === "novelai" && endpoint && endpoint !== "default") return "DSH_TAVERN_IMAGE_NOVELAI_" + endpoint.toUpperCase() + "_API_KEY";
 	return mapped[id]?.[3] || imageCredentialRef(id, authType);
 }
 function endpoint(value) {
@@ -3907,11 +4075,23 @@ function createImageConfiguration({ read, write, restore = void 0, credentials, 
 		pending = result.catch(() => {});
 		return result;
 	}
-	async function inspect(id, resolveKey = true) {
+	/** `endpoint` reads a saved NovelAI endpoint other than the active one, for
+	* read-only checks of an endpoint the user picked but has not saved yet. */
+	async function inspect(id, resolveKey = true, endpoint = void 0) {
 		const value = await read();
 		if (!id || id === "dsh-image-gen") id = Object.keys(mapped).find((id) => mapped[id][0] === value.provider) || "openai";
-		const config = readChannel(value, id);
-		const key = resolveKey && channelNeedsKey(config) ? await credentials.resolve(ref(id, config.authType)) : void 0;
+		let config = readChannel(value, id);
+		const other = endpoint && config.endpoints?.find((entry) => entry.id === endpoint && entry.id !== config.endpoint);
+		if (other) config = {
+			...config,
+			endpoint: other.id,
+			baseURL: other.baseURL
+		};
+		const key = resolveKey && channelNeedsKey(config) ? await credentials.resolve(ref(id, config.authType, config.endpoint)) : void 0;
+		if (config.endpoints && resolveKey) config.endpoints = await Promise.all(config.endpoints.map(async (entry) => ({
+			...entry,
+			hasKey: entry.id === config.endpoint ? Boolean(key?.value) : Boolean((await credentials.resolve(ref(id, config.authType, entry.id)))?.value)
+		})));
 		return {
 			...config,
 			backend: "dsh-image-gen",
@@ -3930,8 +4110,9 @@ function createImageConfiguration({ read, write, restore = void 0, credentials, 
 		if (input.apiKey !== void 0 && typeof input.apiKey !== "string") throw new Error("API Key 必须是文本");
 		const supplied = next.authType === "basic" ? input.apiKey : input.apiKey?.trim();
 		if (supplied && /[\r\n]/.test(supplied)) throw new Error("鉴权信息格式不正确");
-		const keyRef = ref(id, next.authType), previousKey = await credentials.resolve(keyRef);
-		const identityChanged = endpoint(next.baseURL) !== endpoint(current.baseURL) || next.authType !== current.authType || next.username !== current.username;
+		const keyRef = ref(id, next.authType, next.endpoint), previousKey = await credentials.resolve(keyRef);
+		const savedBaseURL = next.endpoint && next.endpoint !== current.endpoint ? current.endpoints?.find((entry) => entry.id === next.endpoint)?.baseURL ?? "" : current.baseURL;
+		const identityChanged = endpoint(next.baseURL) !== endpoint(savedBaseURL) || next.authType !== current.authType || next.username !== current.username;
 		if (channelNeedsKey(next) && previousKey?.value && identityChanged && !supplied) throw new Error("地址或鉴权身份已修改，请重新填写 API Key；旧密钥不会发送到新地址");
 		const writeKey = Boolean(supplied && channelNeedsKey(next) && supplied !== previousKey?.value);
 		if (writeKey) {
@@ -3963,11 +4144,11 @@ function createImageConfiguration({ read, write, restore = void 0, credentials, 
 		}
 		return inspect(id);
 	}
-	const connection = createSceneImageConnection({
-		settings: inspect,
+	const connection = (input) => createSceneImageConnection({
+		settings: (id) => inspect(id, true, input?.endpoint),
 		credentials: () => ({ resolve: (oldRef) => {
 			const id = [...ids].find((id) => imageCredentialRef(id) === oldRef);
-			return credentials.resolve(id && mapped[id] ? mapped[id][3] : oldRef);
+			return credentials.resolve(id === "novelai" ? ref(id, "bearer", input?.endpoint) : id && mapped[id] ? mapped[id][3] : oldRef);
 		} }),
 		fetchImpl,
 		onDiagnostic
@@ -3981,11 +4162,11 @@ function createImageConfiguration({ read, write, restore = void 0, credentials, 
 			const active = await inspect(id);
 			return {
 				active,
-				apiKey: (channelNeedsKey(active) ? await credentials.resolve(ref(active.provider, active.authType)) : void 0)?.value || ""
+				apiKey: (channelNeedsKey(active) ? await credentials.resolve(ref(active.provider, active.authType, active.endpoint)) : void 0)?.value || ""
 			};
 		}),
-		test: (input) => serial(() => connection.test(input)),
-		models: (input) => serial(() => connection.models(input)),
+		test: (input) => serial(() => connection(input).test(input)),
+		models: (input) => serial(() => connection(input).models(input)),
 		generate: async (input) => {
 			const request = await serial(async () => {
 				input.signal?.throwIfAborted();

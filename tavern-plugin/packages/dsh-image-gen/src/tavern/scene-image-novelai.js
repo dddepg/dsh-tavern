@@ -17,6 +17,12 @@ export const NOVELAI_BASE_SECTIONS = Object.freeze(['quality', 'scene', 'style',
 // Langbai NovelAI Studio v2.4.7 tables (mobile/lib/services/nai_api.dart).
 export const NOVELAI_QUALITY_PRESETS = Object.freeze(['none', 'light', 'standard'])
 export const NOVELAI_UC_PRESETS = Object.freeze(['none', 'light', 'heavy', 'human-focus'])
+// Samplers and noise schedules NovelAI's image API accepts; the first entries
+// are the defaults earlier versions always sent.
+export const NOVELAI_SAMPLERS = Object.freeze(['k_euler_ancestral', 'k_euler', 'k_dpmpp_2s_ancestral', 'k_dpmpp_2m', 'k_dpmpp_2m_sde', 'k_dpmpp_sde', 'ddim_v3'])
+export const NOVELAI_NOISE_SCHEDULES = Object.freeze(['karras', 'native', 'exponential', 'polyexponential'])
+const LIBRARY_ID = /^[a-z0-9]{1,12}$/
+const MAX_ENDPOINTS = 10, MAX_ARTISTS = 50
 const QUALITY_PRESET_TAGS = {
   'nai-diffusion-5-full': 'very aesthetic, masterpiece, no text',
   'nai-diffusion-5-curated': 'very aesthetic, masterpiece, no text',
@@ -61,6 +67,75 @@ const UC_PRESET_INDEX = { heavy: 0, light: 1, 'human-focus': 2, none: 3 }
 // NovelAI drops the official `no text` tag when the prompt already asks for text.
 const NOVELAI_TEXT_TAG = /(?:^|[\s,;|])Text\s*:\s*\S/i
 const BASE64_IMAGE = /^[A-Za-z0-9+/]+={0,2}$/
+
+function libraryText(value, limit, label) {
+  if (value !== undefined && typeof value !== 'string') throw new Error(label + '须为文本')
+  const text = (value || '').trim()
+  if (text.length > limit) throw new Error(label + '过长')
+  return text
+}
+function libraryEntries(value, limit, label) {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value) || value.length > limit) throw new Error(label + '最多 ' + limit + ' 条')
+  const ids = new Set()
+  return value.map(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.id !== 'string' || !LIBRARY_ID.test(entry.id) || ids.has(entry.id)) throw new Error(label + '格式不正确')
+    ids.add(entry.id)
+    return entry
+  })
+}
+
+/** Named NovelAI endpoints (official site or same-protocol relays). Each keeps
+ * its own key; the active one's address is the channel baseURL, so switching
+ * endpoints changes only where requests go, never model or prompt settings.
+ * Older single-endpoint configurations become the `default` entry. */
+export function novelaiEndpoints(value, active, baseURL) {
+  const endpoints = libraryEntries(value, MAX_ENDPOINTS, 'NovelAI 接入点').map(entry => {
+    const url = libraryText(entry.baseURL, 2000, '接入点地址')
+    let parsed
+    try { parsed = url ? new URL(url) : undefined } catch { throw new Error('接入点地址须为 HTTP(S) API 根地址') }
+    if (parsed && (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash)) throw new Error('接入点地址须为不含密钥、查询参数的 HTTP(S) API 根地址')
+    return { id: entry.id, name: libraryText(entry.name, 40, '接入点名称') || '未命名接入点', baseURL: url }
+  })
+  if (!endpoints.length) endpoints.push({ id: 'default', name: '默认', baseURL })
+  const id = active || endpoints[0].id
+  const current = endpoints.find(entry => entry.id === id)
+  if (!current) throw new Error('所选 NovelAI 接入点不存在')
+  current.baseURL = baseURL
+  return { endpoints, endpoint: id }
+}
+
+/** Named artist strings, each optionally carrying its own quality and negative
+ * tags that replace the channel-level ones while selected. Older free-text
+ * settings (one artist string, or the JSON presets) migrate into entries once. */
+export function novelaiArtists(value) {
+  let source = value.artists
+  if (source === undefined) {
+    source = []
+    let presets = {}
+    try { presets = value.promptPresets ? JSON.parse(value.promptPresets) : {} } catch {}
+    if (presets && typeof presets === 'object' && !Array.isArray(presets)) for (const [name, preset] of Object.entries(presets)) {
+      if (!preset || typeof preset !== 'object' || source.length >= MAX_ARTISTS) continue
+      source.push({ id: 'p' + source.length, name, prompt: preset.artistString, quality: preset.qualityTags, negative: preset.negativePrompt })
+    }
+    if (typeof value.artistString === 'string' && value.artistString.trim() && source.length < MAX_ARTISTS) {
+      source.push({ id: 'legacy', name: '我的画师串', prompt: value.artistString })
+      return { artists: novelaiArtists({ artists: source }).artists, activeArtist: 'legacy' }
+    }
+  }
+  const artists = libraryEntries(source, MAX_ARTISTS, '画师串库').map(entry => ({ id: entry.id,
+    name: libraryText(entry.name, 40, '画师串名称') || '未命名画师串',
+    prompt: libraryText(typeof entry.prompt === 'string' ? entry.prompt : undefined, 1000, '画师串'),
+    quality: libraryText(typeof entry.quality === 'string' ? entry.quality : undefined, 600, '画师串质量词'),
+    negative: libraryText(typeof entry.negative === 'string' ? entry.negative : undefined, 4000, '画师串负面词') }))
+  return { artists }
+}
+
+/** The selected artist entry; its non-empty quality/negative tags take over. */
+function novelaiArtist(config) {
+  const entry = (config.artists || []).find(artist => artist.id === config.activeArtist)
+  return { prompt: entry?.prompt || '', quality: entry?.quality || config.qualityTags || '', negative: entry?.negative || config.negativePrompt || '' }
+}
 
 export function novelaiSettings(config) {
   if (!Object.hasOwn(models, config.model)) throw new Error('NovelAI 请选择已接入的 V5、V4.5、V4 或 Anime V3 模型')
@@ -191,10 +266,10 @@ function imageStrength(config) {
  * adjustments live in blocks; stale person.fields must not override them.
  * Names identify records but aren't repeated as invented visual subjects. */
 export function novelaiPrompts(input, config = {}) {
-  const plan = input.plan
+  const plan = input.plan, artist = novelaiArtist(config)
   if (!plan || !Array.isArray(plan.blocks)) {
     if (typeof input.prompt !== 'string' || !input.prompt.trim() || input.prompt.length > 16000) throw new Error('NovelAI 画面提示词为空或过长')
-    return { base: assembleBase({ quality: config.qualityTags, scene: input.prompt, artist: config.artistString }, config), characters: [] }
+    return { base: assembleBase({ quality: artist.quality, scene: input.prompt, artist: artist.prompt }, config), characters: [] }
   }
   const people = plan.people || [], ids = new Set(people.map(person => person.id))
   if (ids.size !== people.length || plan.blocks.some(block => block.owner !== 'scene' && !ids.has(block.owner))) throw new Error('NovelAI 人物方案包含重复或未知人物')
@@ -205,10 +280,16 @@ export function novelaiPrompts(input, config = {}) {
   if (characters.some(person => !person.caption)) throw new Error('NovelAI 人物方案缺少人物描述')
   const style = plan.styleOverride?.tags ?? plan.style?.tags ?? ''
   const scene = plan.blocks.filter(block => block.owner === 'scene' && block.tags).map(block => block.tags).join(', ')
-  const base = assembleBase({ quality: config.qualityTags, scene, style, artist: config.artistString }, config)
+  const base = assembleBase({ quality: artist.quality, scene, style, artist: artist.prompt }, config)
   if (!base.trim() && !characters.length) throw new Error('NovelAI 画面提示词为空')
   if (base.length + characters.reduce((sum, person) => sum + person.caption.length, 0) > 16000) throw new Error('NovelAI 组合提示词过长')
   return { base: base || characters.length + ' people', characters }
+}
+
+/** Variety Boost skips CFG at high noise levels, scaled by image area as in
+ * NovelAI's own frontend. V5 has no such switch, so it is never sent there. */
+function varietyBoostSigma(model, width, height) {
+  return Math.sqrt(width * height / 1011712) * (model.startsWith('nai-diffusion-4-5') ? 58 : 19)
 }
 
 export function novelaiRequest(input, config) {
@@ -216,7 +297,8 @@ export function novelaiRequest(input, config) {
   const prompt = novelaiPrompts(input, config)
   if (limit && prompt.characters.length > limit) throw new Error('当前 NovelAI 模型最多支持 ' + limit + ' 人，请选择 V5 或调整画面')
   const seed = config.seed ? Number(config.seed) : randomInt(0, 0x100000000)
-  const negative = mergeTags(config.negativePrompt, novelaiNegativeTags(config))
+  const negative = mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config))
+  const sampler = config.sampler || 'k_euler_ancestral'
   const reference = referenceImageBytes(config.referenceImage)
   const captions = prompt.characters.map(person => ({ char_caption: person.caption, centers: [{ x: 0.5, y: 0.5 }] }))
   // Only send the official preset switches when one is actually selected, so an
@@ -234,9 +316,10 @@ export function novelaiRequest(input, config) {
     action: reference ? 'img2img' : 'generate',
     parameters: {
       params_version: 4, width, height, scale: config.guidance ? Number(config.guidance) : guidance, steps: config.steps ? Number(config.steps) : 23,
-      sampler: 'k_euler_ancestral', noise_schedule: 'karras', n_samples: 1, seed,
-      negative_prompt: negative, cfg_rescale: 0, dynamic_thresholding: false, legacy: false, legacy_v3_extend: false,
-      deliberate_euler_ancestral_bug: false, prefer_brownian: true,
+      sampler, noise_schedule: config.noiseSchedule || 'karras', n_samples: 1, seed,
+      negative_prompt: negative, cfg_rescale: config.cfgRescale ? Number(config.cfgRescale) : 0, dynamic_thresholding: false, legacy: false, legacy_v3_extend: false,
+      ...(sampler === 'k_euler_ancestral' ? { deliberate_euler_ancestral_bug: false, prefer_brownian: true } : {}),
+      ...(config.varietyBoost === 'true' && !config.model.startsWith('nai-diffusion-5') ? { skip_cfg_above_sigma: varietyBoostSigma(config.model, width, height) } : {}),
       ...presets,
       ...(reference ? { image: reference, strength: imageStrength(config), noise: 0, extra_noise_seed: Math.max(0, seed - 1) } : {}),
       ...(limit ? {

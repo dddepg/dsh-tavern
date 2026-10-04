@@ -115,12 +115,54 @@ test('failed migration write preserves original config and does not change crede
 
 test('NovelAI prompt controls persist through settings and restarts', async t => {
   const f = await fixture(t)
-  const controls = { qualityTags: 'masterpiece', artistString: 'artist:wlop', sectionWeights: '1.5,1,1,1', seed: '42', qualityPreset: 'standard', ucPreset: 'light',
-    promptPresets: JSON.stringify({ 日常: { qualityTags: 'masterpiece' } }) }
-  await f.setup.configure({ provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216', ...controls })
+  const controls = { qualityTags: 'masterpiece', sectionWeights: '1.5,1,1,1', seed: '42', qualityPreset: 'standard', ucPreset: 'light',
+    sampler: 'k_dpmpp_2m', noiseSchedule: 'exponential', cfgRescale: '0.2', varietyBoost: 'true', activeArtist: 'a' }
+  const artists = [{ id: 'a', name: '水彩', prompt: 'artist:wlop', quality: '', negative: '' }]
+  await f.setup.configure({ provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216', ...controls, artists })
   const ui = await f.create().setup.settings()
   for (const [field, value] of Object.entries(controls)) assert.equal(ui[field], value, field)
+  assert.deepEqual(ui.artists, artists)
   const { active } = await f.create().setup.capture()
   for (const [field, value] of Object.entries(controls)) assert.equal(active[field], value, field)
   await assert.rejects(f.setup.configure({ sectionWeights: '0' }), /正数/)
+})
+
+test('NovelAI endpoints keep separate keys; switching sends only the selected endpoint key to its own address', async t => {
+  const f = await fixture(t)
+  const official = { id: 'default', name: '官方', baseURL: 'https://image.novelai.net' }
+  await f.setup.configure({ provider: 'novelai', apiKey: 'official-key', model: 'nai-diffusion-4-5-full', size: '832x1216', endpoint: 'default', endpoints: [official] })
+  const relay = { id: 'relay1', name: '中转', baseURL: 'https://relay.example' }
+  // A new endpoint needs its own key; the official key is never reused for it.
+  let ui = await f.setup.configure({ provider: 'novelai', endpoint: 'relay1', baseURL: relay.baseURL, endpoints: [official, relay] })
+  assert.equal(ui.hasKey, false)
+  ui = await f.setup.configure({ provider: 'novelai', endpoint: 'relay1', baseURL: relay.baseURL, endpoints: [official, relay], apiKey: 'relay-key' })
+  assert.equal(ui.endpoint, 'relay1')
+  assert.deepEqual(ui.endpoints.map(entry => [entry.id, entry.baseURL, entry.hasKey]), [['default', 'https://image.novelai.net', true], ['relay1', 'https://relay.example', true]])
+  let snapshot = await f.create().setup.capture()
+  assert.equal(snapshot.active.baseURL, 'https://relay.example')
+  assert.equal(snapshot.apiKey, 'relay-key')
+  // Switching back restores the official address and key without retyping it.
+  ui = await f.setup.configure({ provider: 'novelai', endpoint: 'default', baseURL: official.baseURL, endpoints: ui.endpoints })
+  snapshot = await f.create().setup.capture()
+  assert.equal(snapshot.active.baseURL, 'https://image.novelai.net')
+  assert.equal(snapshot.apiKey, 'official-key')
+  // A connection test of the inactive relay uses the relay's own key and address.
+  f.requests.length = 0
+  await f.setup.testConnection({ provider: 'novelai', endpoint: 'relay1', baseURL: relay.baseURL }).catch(() => {})
+  assert.ok(f.requests.length > 0)
+  for (const request of f.requests) {
+    assert.equal(new URL(request.url).origin, 'https://relay.example')
+    assert.equal(request.init.headers.authorization, 'Bearer relay-key')
+  }
+  // Editing an endpoint's address still requires its key again.
+  await assert.rejects(f.setup.configure({ provider: 'novelai', endpoint: 'relay1', baseURL: 'https://other.example', endpoints: ui.endpoints }), /重新填写 API Key/)
+})
+
+test('older single-endpoint NovelAI settings read as one default endpoint with the original key', async t => {
+  const f = await fixture(t)
+  await f.setup.configure({ provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216' })
+  const ui = await f.create().setup.settings()
+  assert.equal(ui.endpoint, 'default')
+  assert.deepEqual(ui.endpoints, [{ id: 'default', name: '默认', baseURL: 'https://image.novelai.net', hasKey: true }])
+  assert.ok(f.keys.has('DSH_TAVERN_IMAGE_NOVELAI_API_KEY'))
 })

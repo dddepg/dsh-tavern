@@ -95,8 +95,6 @@
 			const [models, setModels] = React.useState([]);
 			const [modelNotice, setModelNotice] = React.useState("");
 			const [checking, setChecking] = React.useState("");
-			const [presetName, setPresetName] = React.useState("");
-			const [selectedPreset, setSelectedPreset] = React.useState("");
 			React.useEffect(function () {
 				let active = true;
 				rpc("getSceneImageSettings").then(function (result) { if (active) setForm(result.settings); }, function (e) { if (active) setNotice(String(e.message || e)); });
@@ -109,6 +107,7 @@
 					const input = patch ? Object.assign({ provider: form.provider }, patch) : { provider: form.provider, style: form.style, apiKey: key };
 					if (!patch) channel.fields.forEach(function (field) { input[field] = form[field]; });
 					if (!patch && form.provider === "comfyui") input.workflow = form.workflow;
+					if (!patch && form.provider === "novelai") { input.endpoints = syncedEndpoints(form); input.artists = form.artists || []; }
 					let result = await rpc("saveSceneImageSettings", input); setForm(result.settings); setKey(""); setDirty(false);
 					window.dispatchEvent(new CustomEvent("dsh-tavern-image-settings-changed"));
 					setNotice("已保存全局 API 配置；请在本局设置中开启场景生图。");
@@ -135,7 +134,7 @@
 				setBusy(true); setChecking(listModels ? "models" : "connection"); setNotice("");
 				if (listModels) setModelNotice(""); else setConnection(null);
 				try {
-					const result = await rpc(listModels ? "listSceneImageModels" : "testSceneImageConnection", { provider: form.provider, baseURL: form.baseURL, authType: form.authType, username: form.username, apiKey: key });
+					const result = await rpc(listModels ? "listSceneImageModels" : "testSceneImageConnection", { provider: form.provider, endpoint: form.endpoint, baseURL: form.baseURL, authType: form.authType, username: form.username, apiKey: key });
 					if (listModels) { setModels(result.models || []); setModelNotice(result.message); }
 					else setConnection(result);
 				} catch (e) {
@@ -155,82 +154,97 @@
 				} catch (e) { setNotice(String(e.message || e)); }
 				finally { setBusy(false); event.target.value = ""; }
 			}
-			// Presets store the values the panel edits, keyed by name. Image-to-image stays
-			// hidden until references are uploaded files, not pasted base64 text.
-			const PROMPT_PRESET_FIELDS = ["qualityTags", "qualityPreset", "artistString", "promptOrder", "sectionWeights", "useOrder", "negativePrompt", "ucPreset", "steps", "guidance", "seed"];
-			function readPresets() {
-				if (!form || !form.promptPresets) return {};
-				try {
-					const parsed = JSON.parse(form.promptPresets);
-					return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-				} catch (_) { return {}; }
+			// NovelAI endpoints and the artist library are lists edited in place; only
+			// the save button writes them. Ids only need to be unique and stable.
+			function libraryId() { return Math.random().toString(36).slice(2, 10); }
+			function syncedEndpoints(current) {
+				return (current.endpoints || []).map(function (entry) { return entry.id === current.endpoint ? Object.assign({}, entry, { baseURL: current.baseURL }) : entry; });
 			}
-			const presetNames = Object.keys(readPresets());
-			// Derive a short name from the prompt itself when the box is left empty.
-			function defaultPresetName() {
-				const fallback = "正面提示词 " + (presetNames.length + 1);
-				const compact = [form.qualityTags, form.artistString].filter(Boolean).join(", ").replace(/\s+/g, " ").trim().replace(/^[,，、;；]+|[,，、;；]+$/g, "");
-				if (!compact) return fallback;
-				const parts = compact.split(/[,，、;；]+/).map(function (part) { return part.trim(); }).filter(Boolean);
-				let candidate = parts.length ? parts[0] : compact;
-				for (let index = 1; index < parts.length; index++) { const next = candidate + ", " + parts[index]; if (next.length > 28) break; candidate = next; }
-				if (candidate.length > 28) candidate = candidate.slice(0, 28).trim();
-				return candidate || fallback;
+			const endpoints = form && form.endpoints || [];
+			const currentEndpoint = form && endpoints.find(function (entry) { return entry.id === form.endpoint; });
+			// Each save writes only the shown endpoint's key, so a typed key must be saved before leaving it.
+			function keyPending() {
+				if (!key) return false;
+				setNotice("请先保存当前接入点的 API Key，再切换或新建接入点。");
+				return true;
 			}
-			function savePreset() {
-				const name = presetName.trim() || defaultPresetName();
-				if (!name) { setNotice("请先填写预设名称。"); return; }
-				let store = {};
-				if (form.promptPresets) {
-					try {
-						const parsed = JSON.parse(form.promptPresets);
-						if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not object");
-						store = parsed;
-					} catch (_) { setNotice("现有预设配置不是有效 JSON 对象，未覆盖；请先修正后再保存。"); return; }
-				}
-				const existed = Object.hasOwn(store, name);
-				const entry = {};
-				PROMPT_PRESET_FIELDS.forEach(function (field) { entry[field] = form[field] || ""; });
-				store[name] = entry;
-				setDirty(true);
-				setForm(function (current) { return Object.assign({}, current, { promptPresets: JSON.stringify(store, null, 2) }); });
-				setSelectedPreset(name);
-				setNotice("已" + (existed ? "更新" : "新增") + "预设「" + name + "」；仍需点击下方保存按钮写入配置。");
-			}
-			function applyPreset() {
-				if (!selectedPreset) { setNotice("请先选择要应用的预设。"); return; }
-				const entry = readPresets()[selectedPreset];
-				if (!entry || typeof entry !== "object" || Array.isArray(entry)) { setNotice("预设「" + selectedPreset + "」不存在或格式不正确。"); return; }
-				const patch = {};
-				PROMPT_PRESET_FIELDS.forEach(function (field) {
-					const value = entry[field];
-					if (typeof value === "string") patch[field] = value;
-					else if (typeof value === "number" && Number.isFinite(value)) patch[field] = String(value);
+			function switchEndpoint(id) {
+				setDirty(true); setKey(""); resetConnection();
+				setForm(function (current) {
+					const list = syncedEndpoints(current), next = list.find(function (entry) { return entry.id === id; });
+					return Object.assign({}, current, { endpoints: list, endpoint: id, baseURL: next ? next.baseURL : "", hasKey: Boolean(next && next.hasKey) });
 				});
+			}
+			function addEndpoint() {
+				if (keyPending()) return;
+				const entry = { id: libraryId(), name: "接入点 " + (endpoints.length + 1), baseURL: "", hasKey: false };
+				setForm(function (current) { return Object.assign({}, current, { endpoints: syncedEndpoints(current).concat([entry]) }); });
+				switchEndpoint(entry.id);
+				setNotice("已新增接入点，请填写地址和 API Key 后保存。");
+			}
+			function removeEndpoint() {
+				if (endpoints.length < 2) return;
+				const rest = endpoints.filter(function (entry) { return entry.id !== form.endpoint; });
+				setForm(function (current) { return Object.assign({}, current, { endpoints: rest }); });
+				switchEndpoint(rest[0].id);
+				setNotice("已删除接入点「" + (currentEndpoint ? currentEndpoint.name : "") + "」；保存后生效。");
+			}
+			function renameEndpoint(name) {
 				setDirty(true);
-				setForm(function (current) { return Object.assign({}, current, patch); });
-				setNotice("已应用预设「" + selectedPreset + "」；仍需点击保存按钮写入配置。");
+				setForm(function (current) { return Object.assign({}, current, { endpoints: (current.endpoints || []).map(function (entry) { return entry.id === current.endpoint ? Object.assign({}, entry, { name: name }) : entry; }) }); });
+			}
+			const artists = form && form.artists || [];
+			const currentArtist = form && artists.find(function (entry) { return entry.id === form.activeArtist; });
+			function updateArtists(list, active) {
+				setDirty(true);
+				setForm(function (current) { return Object.assign({}, current, { artists: list }, active === undefined ? {} : { activeArtist: active }); });
+			}
+			function addArtist() {
+				const entry = { id: libraryId(), name: "画师串 " + (artists.length + 1), prompt: "", quality: "", negative: "" };
+				updateArtists(artists.concat([entry]), entry.id);
+			}
+			function removeArtist() {
+				if (!currentArtist) return;
+				updateArtists(artists.filter(function (entry) { return entry.id !== currentArtist.id; }), "");
+				setNotice("已删除画师串「" + currentArtist.name + "」；保存后生效。");
+			}
+			function editArtist(field, value) {
+				updateArtists(artists.map(function (entry) { return entry.id === form.activeArtist ? Object.assign({}, entry, { [field]: value }) : entry; }));
+			}
+			function artistLibrary() {
+				return React.createElement("div", { className: "dsh-tavern-image-presets" },
+					React.createElement("label", null, "画师串", React.createElement("select", { value: form.activeArtist || "", disabled: busy, onChange: function (e) { updateArtists(artists, e.target.value); } },
+						[React.createElement("option", { key: "", value: "" }, "不使用")].concat(artists.map(function (entry) { return React.createElement("option", { key: entry.id, value: entry.id }, entry.name); })))),
+					React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || artists.length >= 50, onClick: addArtist }, "新建画师串"),
+					currentArtist ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: removeArtist }, "删除此画师串") : null,
+					currentArtist ? React.createElement("label", null, "名称", React.createElement("input", { value: currentArtist.name, maxLength: 40, disabled: busy, onChange: function (e) { editArtist("name", e.target.value); } })) : null,
+					currentArtist ? React.createElement("label", null, "画师与风格标签", React.createElement("textarea", { value: currentArtist.prompt, rows: 2, maxLength: 1000, placeholder: "例如：artist:wlop, artist:ciloranko", disabled: busy, onChange: function (e) { editArtist("prompt", e.target.value); } })) : null,
+					currentArtist ? React.createElement("label", null, "质量词（选填，填写后替代正面提示词）", React.createElement("textarea", { value: currentArtist.quality, rows: 2, maxLength: 600, disabled: busy, onChange: function (e) { editArtist("quality", e.target.value); } })) : null,
+					currentArtist ? React.createElement("label", null, "负面词（选填，填写后替代负面提示词）", React.createElement("textarea", { value: currentArtist.negative, rows: 2, maxLength: 4000, disabled: busy, onChange: function (e) { editArtist("negative", e.target.value); } })) : null);
 			}
 			function channelField(field) {
 				if (field === "username" && form.authType !== "basic") return null;
-				const labels = { baseURL: "API 根地址", model: "生图模型名称", size: "图片尺寸／分辨率", aspectRatio: "画面比例", authType: "服务鉴权", username: "鉴权用户名", negativePrompt: "负面提示词（不希望出现的内容）", steps: "生成步数", guidance: "提示词引导强度（CFG）", qualityTags: "正面提示词", qualityPreset: "官方质量词预设", ucPreset: "官方负面预设", artistString: "画师串", promptOrder: "段落排列顺序", sectionWeights: "段落权重", useOrder: "保留用户顺序", seed: "随机种子", referenceImage: "图片参考（Base64，img2img）", imageStrength: "图片参考强度", promptPresets: "预设配置（JSON）" };
-				const placeholders = { negativePrompt: "留空沿用默认；例如：模糊、水印、多余的手指", qualityTags: "留空沿用默认；支持通配符 {选项A|选项B}", artistString: "例如：artist:wlop, artist:ciloranko", promptOrder: "留空沿用默认 quality,scene,style,artist", sectionWeights: "留空不改权重；例如：1.5,1,1,0.75", seed: "留空每次随机；填写后相同种子可复现", referenceImage: "留空为纯文生图；只接受 base64，可带 data:image/...;base64, 前缀，不会代下载网址", imageStrength: "留空按 0.7；越小越贴近参考图", promptPresets: "{\n  \"日常风格\": { \"qualityTags\": \"masterpiece, best quality\" }\n}" };
-				const limits = { baseURL: 2000, qualityTags: 600, artistString: 1000, qualityPreset: 16, ucPreset: 16, imageStrength: 8, promptOrder: 120, sectionWeights: 120, useOrder: 8, negativePrompt: 4000, seed: 20, referenceImage: 50000, promptPresets: 10000 };
-				const rows = { negativePrompt: 3, qualityTags: 2, artistString: 2, promptPresets: 4 };
+				const labels = { baseURL: "API 根地址", model: "生图模型名称", size: "图片尺寸／分辨率", aspectRatio: "画面比例", authType: "服务鉴权", username: "鉴权用户名", negativePrompt: "负面提示词（不希望出现的内容）", steps: "生成步数", guidance: "提示词引导强度（CFG）", qualityTags: "正面提示词", qualityPreset: "官方质量词预设", ucPreset: "官方负面预设", sampler: "采样器", noiseSchedule: "噪声表", cfgRescale: "CFG Rescale", varietyBoost: "Variety Boost", promptOrder: "段落排列顺序", sectionWeights: "段落权重", useOrder: "保留用户顺序", seed: "随机种子", referenceImage: "图片参考（Base64，img2img）", imageStrength: "图片参考强度" };
+				const placeholders = { negativePrompt: "留空沿用默认；例如：模糊、水印、多余的手指", qualityTags: "留空沿用默认；支持通配符 {选项A|选项B}", promptOrder: "留空沿用默认 quality,scene,style,artist", sectionWeights: "留空不改权重；例如：1.5,1,1,0.75", seed: "留空每次随机；填写后相同种子可复现", referenceImage: "留空为纯文生图；只接受 base64，可带 data:image/...;base64, 前缀，不会代下载网址", imageStrength: "留空按 0.7；越小越贴近参考图", cfgRescale: "留空为 0；0–1，可减轻高 CFG 的过饱和" };
+				const limits = { baseURL: 2000, qualityTags: 600, cfgRescale: 8, qualityPreset: 16, ucPreset: 16, imageStrength: 8, promptOrder: 120, sectionWeights: 120, useOrder: 8, negativePrompt: 4000, seed: 20, referenceImage: 50000 };
+				const rows = { negativePrompt: 3, qualityTags: 2 };
 				// Enumerated controls; the empty string means "not chosen yet", and the
 				// fallback value below is the same default the backend applies.
 				const choices = {
 					authType: [["none", "无需鉴权"], ["basic", "用户名和密码"], ["bearer", "Bearer Token（反向代理）"]],
 					useOrder: [["true", "保留（按段落顺序提交）"], ["false", "不保留（由模型自行排序）"]],
 					qualityPreset: [["none", "不追加"], ["light", "轻量"], ["standard", "标准"]],
-					ucPreset: [["none", "不追加"], ["light", "轻量"], ["heavy", "重度"], ["human-focus", "人物向"]]
+					ucPreset: [["none", "不追加"], ["light", "轻量"], ["heavy", "重度"], ["human-focus", "人物向"]],
+					sampler: [["k_euler_ancestral", "Euler Ancestral（默认）"], ["k_euler", "Euler"], ["k_dpmpp_2s_ancestral", "DPM++ 2S Ancestral"], ["k_dpmpp_2m", "DPM++ 2M"], ["k_dpmpp_2m_sde", "DPM++ 2M SDE"], ["k_dpmpp_sde", "DPM++ SDE"], ["ddim_v3", "DDIM（V5 不支持）"]],
+					noiseSchedule: [["karras", "Karras（默认）"], ["native", "Native"], ["exponential", "Exponential"], ["polyexponential", "Polyexponential"]],
+					varietyBoost: [["false", "关闭"], ["true", "开启（画面更多样，V5 无此选项）"]]
 				};
-				const choiceDefaults = { authType: "none", useOrder: "true", qualityPreset: "none", ucPreset: "none" };
+				const choiceDefaults = { authType: "none", useOrder: "true", qualityPreset: "none", ucPreset: "none", sampler: "k_euler_ancestral", noiseSchedule: "karras", varietyBoost: "false" };
 				function change(event) { const value = event.target.value; setDirty(true); if (["baseURL", "authType", "username"].includes(field)) resetConnection(); if (field === "authType") setKey(""); setForm(function (current) { return Object.assign({}, current, { [field]: value }, field === "authType" ? { hasKey: false } : {}); }); }
 				let control;
 				if (choices[field]) control = React.createElement("select", { value: form[field] || choiceDefaults[field], disabled: busy, onChange: change }, choices[field].map(function (option) { return React.createElement("option", { key: option[0], value: option[0] }, option[1]); }));
 				else if (rows[field]) control = React.createElement("textarea", { value: form[field] || "", rows: rows[field], maxLength: limits[field], placeholder: placeholders[field], disabled: busy, onChange: change });
-				else if (["steps", "guidance", "seed", "imageStrength"].includes(field)) control = React.createElement("input", { value: form[field] || "", type: "number", min: field === "steps" ? undefined : 0, max: field === "seed" ? 4294967295 : field === "imageStrength" ? 1 : undefined, step: ["guidance", "imageStrength"].includes(field) ? "0.1" : "1", placeholder: placeholders[field] || "留空沿用默认", disabled: busy, onChange: change });
+				else if (["steps", "guidance", "seed", "imageStrength", "cfgRescale"].includes(field)) control = React.createElement("input", { value: form[field] || "", type: "number", min: field === "steps" ? undefined : 0, max: field === "seed" ? 4294967295 : ["imageStrength", "cfgRescale"].includes(field) ? 1 : undefined, step: field === "cfgRescale" ? "0.05" : ["guidance", "imageStrength"].includes(field) ? "0.1" : "1", placeholder: placeholders[field] || "留空沿用默认", disabled: busy, onChange: change });
 				else control = React.createElement("input", { value: form[field] || "", type: "text", maxLength: limits[field], placeholder: placeholders[field], disabled: busy, onChange: change });
 				return React.createElement("label", { key: field }, labels[field] || field, control);
 			}
@@ -241,6 +255,12 @@
 					form ? React.createElement("label", null, "提供商", React.createElement("select", { value: form.provider, disabled: busy, onChange: function (e) { return chooseChannel(e.target.value); } }, (form.channels || []).map(function (item) { return React.createElement("option", { key: item.id, value: item.id }, item.label); }))) : null,
 					selectedChannel ? React.createElement("p", null, selectedChannel.hint) : null,
 					form && form.migrationPending ? React.createElement("p", { role: "status" }, "检测到旧配置。保存后将迁入生图模块；旧密钥不会显示或发送到新地址。") : null,
+					form && form.provider === "novelai" ? React.createElement("div", { className: "dsh-tavern-image-presets" },
+						React.createElement("label", null, "接入点", React.createElement("select", { value: form.endpoint || "", disabled: busy, onChange: function (e) { if (!keyPending()) switchEndpoint(e.target.value); } }, endpoints.map(function (entry) { return React.createElement("option", { key: entry.id, value: entry.id }, entry.name + (entry.hasKey ? "" : "（未配置 Key）")); }))),
+						React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || endpoints.length >= 10, onClick: addEndpoint }, "新建接入点"),
+						endpoints.length > 1 ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: removeEndpoint }, "删除此接入点") : null,
+						currentEndpoint ? React.createElement("label", null, "接入点名称", React.createElement("input", { value: currentEndpoint.name, maxLength: 40, disabled: busy, onChange: function (e) { renameEndpoint(e.target.value); } })) : null,
+						React.createElement("p", null, "官方站和各个同协议中转站可各存一条、各记各的 Key；切换只改变请求地址，模型和提示词设置不变。")) : null,
 					selectedChannel ? selectedChannel.fields.filter(function (field) { return ["baseURL", "authType", "username"].includes(field); }).map(channelField) : null,
 					form && form.provider !== "dsh-image-gen" && !(["webui", "comfyui"].includes(form.provider) && form.authType === "none") ? React.createElement("label", null, (form.authType === "basic" ? "鉴权密码" : "API Key") + (form.hasKey ? "（已配置，留空保留；更换地址需重新填写）" : ""), React.createElement("input", { type: "password", autoComplete: "new-password", value: key, disabled: busy, onChange: function (e) { setKey(e.target.value); setDirty(true); resetConnection(); } })) : null,
 					form && form.provider === "dsh-image-gen" ? React.createElement("div", null,
@@ -262,15 +282,11 @@
 					form && selectedChannel && (form.provider === "novelai" || selectedChannel.fields.some(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field); })) ? React.createElement("details", { open: true },
 						React.createElement("summary", null, "提示词与生成参数"),
 						React.createElement("p", null, "选填，留空沿用默认。步数越高通常越慢，也可能增加费用；不保证画质更好。保存后用于下一次生图和重画。"),
-						form.provider === "novelai" ? React.createElement("p", null, "正面提示词与画师串支持 {选项A|选项B} 通配符，每次随机取一个；单独的 {标签} 会作为 NovelAI 权重语法原样提交。段落顺序须为 quality、scene、style、artist 的完整排列；段落权重为不超过四个正数（例如 1.5,1,1,0.75），作用于整段而非单个标签；V4 及以上按数值生效，Anime V3 只分加强、不变、减弱三档。官方预设不选则不追加，选了会把该模型的标准质量词或负面词并入对应段落，并与手写内容自动去重。") : null,
-						form.provider === "novelai" ? ["qualityTags", "qualityPreset", "artistString", "promptOrder", "sectionWeights", "useOrder"].map(channelField) : null,
-						form.provider === "novelai" ? React.createElement("div", { className: "dsh-tavern-image-presets" },
-							React.createElement("label", null, "预设名称", React.createElement("input", { value: presetName, type: "text", maxLength: 80, placeholder: "例如：日常风格", disabled: busy, onChange: function (e) { setPresetName(e.target.value); } })),
-							React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: savePreset }, "保存为预设"),
-							React.createElement("label", null, "已存预设", React.createElement("select", { value: selectedPreset, disabled: busy, onChange: function (e) { setSelectedPreset(e.target.value); } }, [React.createElement("option", { key: "", value: "" }, presetNames.length ? "请选择预设" : "暂无预设")].concat(presetNames.map(function (name) { return React.createElement("option", { key: name, value: name }, name); })))),
-							React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || !selectedPreset, onClick: applyPreset }, "应用预设")) : null,
+						form.provider === "novelai" ? React.createElement("p", null, "画师串可存多套、下拉切换，选中的画师串拼入 artist 段。正面提示词与画师串支持 {选项A|选项B} 通配符，每次随机取一个；单独的 {标签} 会作为 NovelAI 权重语法原样提交。段落顺序须为 quality、scene、style、artist 的完整排列；段落权重为不超过四个正数（例如 1.5,1,1,0.75），作用于整段而非单个标签；V4 及以上按数值生效，Anime V3 只分加强、不变、减弱三档。官方预设不选则不追加，选了会把该模型的标准质量词或负面词并入对应段落，并与手写内容自动去重。") : null,
+						form.provider === "novelai" ? artistLibrary() : null,
+						form.provider === "novelai" ? ["qualityTags", "qualityPreset", "promptOrder", "sectionWeights", "useOrder"].map(channelField) : null,
 						form.provider === "comfyui" ? React.createElement("p", null, "显示已映射的参数；更换工作流后，未映射的旧设置需清空。没有选项时请先保存新工作流，或请维护者补充映射。") : null,
-						form.provider === "novelai" ? ["negativePrompt", "ucPreset", "steps", "guidance", "seed", "promptPresets"].map(channelField) : selectedChannel.fields.filter(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field) && (form.provider !== "comfyui" || form[field] || form.workflow && form.workflow.bindings && form.workflow.bindings[field === "negativePrompt" ? "negative" : field] && form.workflow.bindings[field === "negativePrompt" ? "negative" : field].length); }).map(channelField)) : null,
+						form.provider === "novelai" ? ["negativePrompt", "ucPreset", "steps", "guidance", "sampler", "noiseSchedule", "cfgRescale", "varietyBoost", "seed"].map(channelField) : selectedChannel.fields.filter(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field) && (form.provider !== "comfyui" || form[field] || form.workflow && form.workflow.bindings && form.workflow.bindings[field === "negativePrompt" ? "negative" : field] && form.workflow.bindings[field === "negativePrompt" ? "negative" : field].length); }).map(channelField)) : null,
 					form ? React.createElement("details", null,
 					React.createElement("summary", null, "绘图选项（风格、尺寸）"),
 					selectedChannel && form.provider !== "dsh-image-gen" ? selectedChannel.fields.filter(function (field) { return ["size", "aspectRatio"].includes(field); }).map(channelField) : null,

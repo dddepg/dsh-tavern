@@ -1,4 +1,4 @@
-import { novelaiSettings, novelaiRequest, NOVELAI_MODELS, NOVELAI_BASE_SECTIONS, NOVELAI_QUALITY_PRESETS, NOVELAI_UC_PRESETS } from './scene-image-novelai.js'
+import { novelaiSettings, novelaiRequest, novelaiArtists, novelaiEndpoints, NOVELAI_MODELS, NOVELAI_BASE_SECTIONS, NOVELAI_QUALITY_PRESETS, NOVELAI_UC_PRESETS, NOVELAI_SAMPLERS, NOVELAI_NOISE_SCHEDULES } from './scene-image-novelai.js'
 import { comfyWorkflow } from './scene-image-comfy-workflow.js'
 import { imageReferenceCapability } from './scene-image-reference.js'
 
@@ -17,18 +17,20 @@ const channels = [
 ]
 // Advanced controls are optional strings, like the existing form fields.
 export const IMAGE_ADVANCED_FIELDS = ['negativePrompt', 'steps', 'guidance']
-// NovelAI-only prompt controls: positive prompt, official quality/undesired-content
-// presets, section ordering, image-to-image and reproducibility. Kept separate so
-// other channels never grow these fields.
-export const IMAGE_NOVELAI_PROMPT_FIELDS = ['artistString', 'qualityTags', 'qualityPreset', 'ucPreset', 'promptOrder', 'sectionWeights', 'useOrder', 'promptPresets', 'seed', 'referenceImage', 'imageStrength']
+// NovelAI-only controls: positive prompt, official quality/undesired-content
+// presets, section ordering, sampling, image-to-image and reproducibility, plus
+// the selected endpoint and artist-library entry. The endpoint and artist lists
+// themselves are structured values, validated like a ComfyUI workflow.
+export const IMAGE_NOVELAI_PROMPT_FIELDS = ['qualityTags', 'qualityPreset', 'ucPreset', 'promptOrder', 'sectionWeights', 'useOrder', 'seed', 'referenceImage', 'imageStrength',
+  'sampler', 'noiseSchedule', 'cfgRescale', 'varietyBoost', 'endpoint', 'activeArtist']
 // Per-field length ceilings; unlisted extended fields keep the historical 200-character cap.
 const IMAGE_FIELD_LIMITS = {
   negativePrompt: 4000, baseURL: 2000,
-  artistString: 1000, qualityTags: 600,
+  qualityTags: 600,
   qualityPreset: 16, ucPreset: 16, imageStrength: 8,
   promptOrder: 120, sectionWeights: 120,
-  useOrder: 8, promptPresets: 10000,
-  seed: 20, referenceImage: 50000
+  useOrder: 8, seed: 20, referenceImage: 50000,
+  sampler: 32, noiseSchedule: 32, cfgRescale: 8, varietyBoost: 8, endpoint: 16, activeArtist: 16
 }
 for (const channel of channels) {
   const advanced = channel.id === 'novelai' ? [...IMAGE_ADVANCED_FIELDS, ...IMAGE_NOVELAI_PROMPT_FIELDS] : ['webui', 'comfyui'].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === 'qwen' ? ['negativePrompt'] : []
@@ -84,12 +86,6 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
       if (!['true', 'false'].includes(result.useOrder.toLowerCase())) throw new Error('useOrder 须填 true 或 false')
       result.useOrder = result.useOrder.toLowerCase()
     }
-    if (result.promptPresets) {
-      try {
-        const presets = JSON.parse(result.promptPresets)
-        if (typeof presets !== 'object' || Array.isArray(presets) || presets === null) throw new Error('not object')
-      } catch { throw new Error('promptPresets 须为有效 JSON 对象') }
-    }
     if (result.seed && (!/^\d+$/.test(result.seed) || Number(result.seed) > 0xFFFFFFFF)) throw new Error('种子须为 0–4294967295 的非负整数')
     // Official presets stay opt-in: 'none' keeps the prompt the user typed alone.
     result.qualityPreset = (result.qualityPreset || 'none').toLowerCase()
@@ -100,6 +96,18 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
       if (!/^\d+(?:\.\d+)?$/.test(result.imageStrength) || Number(result.imageStrength) > 1) throw new Error('图片参考强度须为 0–1 的数值')
       result.imageStrength = String(Number(result.imageStrength))
     }
+    result.sampler ||= 'k_euler_ancestral'
+    if (!NOVELAI_SAMPLERS.includes(result.sampler)) throw new Error('请选择有效的 NovelAI 采样器')
+    if (result.sampler === 'ddim_v3' && result.model.startsWith('nai-diffusion-5')) throw new Error('V5 不支持 DDIM 采样器，请换用其他采样器')
+    result.noiseSchedule ||= 'karras'
+    if (!NOVELAI_NOISE_SCHEDULES.includes(result.noiseSchedule)) throw new Error('请选择有效的 NovelAI 噪声表')
+    if (result.cfgRescale) {
+      if (!/^\d+(?:\.\d+)?$/.test(result.cfgRescale) || Number(result.cfgRescale) > 1) throw new Error('CFG Rescale 须为 0–1 的数值')
+      result.cfgRescale = String(Number(result.cfgRescale))
+    }
+    if (result.varietyBoost && !['true', 'false'].includes(result.varietyBoost)) throw new Error('Variety Boost 须为开启或关闭')
+    Object.assign(result, novelaiEndpoints(value.endpoints, result.endpoint, result.baseURL), novelaiArtists(value))
+    if (result.activeArtist && !result.artists.some(artist => artist.id === result.activeArtist)) result.activeArtist = ''
     novelaiSettings(result)
   }
   if (id === 'comfyui') {
