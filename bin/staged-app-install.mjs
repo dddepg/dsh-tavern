@@ -13,10 +13,11 @@
 // User files are everything in the app directory that the previous release did
 // not install (recorded in INVENTORY) and the new release does not ship, e.g.
 // legacy data/. They are moved, never copied, so large data costs nothing.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { INVENTORY, sourceFiles } from './prune-installed-files.mjs'
+import { copyTreeSync, removeTreeSync } from './portable-fs.mjs'
 
 const SWAP_RECORD = '.dsh-tavern-swap.json'
 const RELEASE_RECORD = '.dsh-tavern-release.json'
@@ -38,7 +39,7 @@ function rename(from, to) {
 }
 
 function remove(target) {
-  rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 })
+  removeTreeSync(target, { retries: 10, retryDelay: 250 })
 }
 
 // An interrupted earlier attempt may leave the app missing (killed mid-swap) or
@@ -57,8 +58,8 @@ export function recover(app) {
 export function prepare({ app, source, commit = '' }) {
   const paths = stagedPaths(app)
   recover(paths.app)
-  cpSync(path.resolve(source), paths.staging, { recursive: true, force: true })
-  rmSync(path.join(paths.staging, RELEASE_RECORD), { force: true })
+  copyTreeSync(path.resolve(source), paths.staging)
+  removeTreeSync(path.join(paths.staging, RELEASE_RECORD))
   if (/^[0-9a-f]{40}$/i.test(commit)) {
     writeFileSync(path.join(paths.staging, RELEASE_RECORD), JSON.stringify({ commit, installedAt: new Date().toISOString() }) + '\n')
   }
@@ -134,7 +135,7 @@ export function rollback(app) {
   const record = JSON.parse(readFileSync(recordFile, 'utf8'))
   if (!record.fresh && !existsSync(paths.previous)) {
     // commit() removes previous first: the switch was already committed.
-    rmSync(recordFile, { force: true })
+    removeTreeSync(recordFile)
     return false
   }
   const failed = paths.app + '.failed'
@@ -162,7 +163,7 @@ export function commit(app) {
   const paths = stagedPaths(app)
   // Previous first: a record without previous then unambiguously means committed.
   if (existsSync(paths.previous)) remove(paths.previous)
-  rmSync(path.join(paths.app, SWAP_RECORD), { force: true })
+  removeTreeSync(path.join(paths.app, SWAP_RECORD))
 }
 
 export function discard(app) {

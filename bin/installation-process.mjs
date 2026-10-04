@@ -1,8 +1,9 @@
 import { spawn, execFile } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { removeTreeSync } from './portable-fs.mjs'
 
 const moduleFile = fileURLToPath(import.meta.url)
 const DIRECTORY_ENV = 'DSH_TAVERN_INSTALL_PROCESS_DIR'
@@ -168,7 +169,7 @@ async function cleanTree({ directory, pid, root, childExited, killGraceMs, clean
     try {
       for (const processId of known) {
         writeFileSync(path.join(directory, `stopped-${processId}`), '')
-        rmSync(path.join(directory, `${processId}.json`), { force: true })
+        removeTreeSync(path.join(directory, `${processId}.json`))
       }
     } catch (error) { safe = false; failures.push(error.message) }
   }
@@ -300,7 +301,7 @@ export async function runInstallationProcess(command, args = [], options = {}) {
       ...metadata, unsafeToRetry: true, cause: result.error, originalCode: result.error?.code,
     })
   }
-  if (removeDirectory) { try { rmSync(directory, { recursive: true, force: true }) } catch {} }
+  if (removeDirectory) { try { removeTreeSync(directory) } catch {} }
   if (result.error) {
     const error = result.error instanceof Error ? result.error : makeError(result.error.code || 'INSTALLATION_SPAWN_FAILED', result.error.message)
     throw Object.assign(error, { unsafeToRetry: false }, metadata)

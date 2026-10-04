@@ -1,7 +1,8 @@
-import { copyFileSync, symlinkSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, symlinkSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { adaptedDshVersion } from './dsh-compatibility.mjs'
+import { copyTreeSync, removeTreeSync } from './portable-fs.mjs'
 
 export function cliRuntimeCommand(root, platform = process.platform) {
   return platform === 'win32' ? path.join(root, 'dsh.cmd') : path.join(root, 'bin', 'dsh')
@@ -62,18 +63,18 @@ export async function installCliRuntime({ root, run, platform = process.platform
     promoted = true
     return {
       command: cliRuntimeCommand(root, platform),
-      commit() { settled = true; if (backedUp) rmSync(backup, { recursive: true, force: true }) },
+      commit() { settled = true; if (backedUp) removeTreeSync(backup) },
       rollback() {
         if (settled) return
         settled = true
-        rmSync(root, { recursive: true, force: true })
+        removeTreeSync(root)
         if (backedUp) renameSync(backup, root)
       },
     }
   } catch (error) {
     if (error.unsafeToRetry) throw error
     if (!promoted && backedUp) renameSync(backup, root)
-    rmSync(staging, { recursive: true, force: true })
+    removeTreeSync(staging)
     throw error
   }
 }
@@ -106,9 +107,9 @@ export function migrateCliHome({ source, target }) {
     mkdirSync(path.dirname(to), { recursive: true })
     const staging = `${to}.migration-${process.pid}`
     try {
-      cpSync(from, staging, { recursive: true, dereference: true })
+      copyTreeSync(from, staging, { dereference: true })
       renameSync(staging, to)
-    } finally { rmSync(staging, { recursive: true, force: true }) }
+    } finally { removeTreeSync(staging) }
   }
   writeFileSync(marker, JSON.stringify({ source, migratedAt: new Date().toISOString() }) + '\n')
   return true
