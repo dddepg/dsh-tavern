@@ -130,11 +130,15 @@ test('Android 入口在 Tavern 离线时仍可启动更新或修复', async (t) 
     online: false,
     update: { phase: 'idle', host: 'android', currentVersion: '1.1.0', currentCommit },
   })
-  assert.deepEqual(await manager.update(), {
-    installed: true,
-    online: false,
-    update: { phase: 'running', host: 'android', startedAt: 456, currentVersion: '1.1.0', currentCommit, latestVersion: '1.1.0', latestCommit, checkSource: 'github', checkWarning: undefined },
-  })
+  const started = await manager.update()
+  assert.equal(started.installed, true)
+  assert.equal(started.online, false)
+  // The installation lock owns the attempt identity and start time.
+  const { attemptId, startedAt, ...update } = started.update
+  assert.match(attemptId, /^[0-9a-f-]{36}$/)
+  assert.ok(Number.isFinite(startedAt))
+  assert.deepEqual({ ...update, stage: update.stage, progressAt: update.progressAt }, { phase: 'running', host: 'android', currentVersion: '1.1.0', currentCommit,
+    latestVersion: '1.1.0', latestCommit, checkSource: 'github', cancellable: false, pid: 0, stage: undefined, progressAt: undefined, stalled: false })
   assert.deepEqual(calls[0].args.slice(0, 4), [launcher, 'update', '--host', 'android'])
 })
 
