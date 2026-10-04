@@ -884,6 +884,9 @@ window.__ModuleLoader__.load({
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
 		exports.describeTavernActivity = describeTavernActivity;
 		exports.deleteTavernCards = deleteTavernCards;
+		exports.deleteTavernChats = deleteTavernChats;
+		exports.askTavernCardChatRemoval = askTavernCardChatRemoval;
+		exports.removeTavernCardChats = removeTavernCardChats;
 		exports.groupTavernHistory = groupTavernHistory;
 		exports.createPlayWorkspaceResolver = createPlayWorkspaceResolver;
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
@@ -893,6 +896,7 @@ window.__ModuleLoader__.load({
         exports.createTavernComposerWindow = createTavernComposerWindow;
         exports.parseTavernInlineFragment = parseTavernInlineFragment;
         exports.TavernInlineFragment = TavernInlineFragment;
+        exports.bindTavernFontZoom = bindTavernFontZoom;
         exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;

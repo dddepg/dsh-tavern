@@ -7,7 +7,7 @@
 			const [card, setCard] = React.useState(null);
 			const [loading, setLoading] = React.useState(false);
 						const [busy, setBusy] = React.useState(false);
-			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refreshCards);
+			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refreshCards, props.archiveSession);
 			const organization = useCardOrganization(cards, busy, refreshCards, error => setError(error), cardBatch);
 			const [error, setError] = usePersistentError("人物卡库");
 			const importInput = React.useRef(null);
@@ -110,8 +110,17 @@
 			}
 			async function deleteCardFile() {
 				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？")) return;
+				let chats;
+				try { chats = await askTavernCardChatRemoval([card.path], askConfirm); }
+				catch (err) { setError("读取游玩记录失败，未删除人物卡：" + String(err && err.message || err)); return; }
 				setBusy(true); setError("");
-				try { await rpc("deleteCard", { path: card.path }); setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards"); }
+				try {
+					await rpc("deleteCard", { path: card.path });
+					const chatRemoval = await removeTavernCardChats(chats, [{ path: card.path, ok: true }], props.archiveSession);
+					announceTavernChatsRemoved(chatRemoval.sessionIds);
+					setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards");
+					if (chatRemoval.notice.indexOf("失败") >= 0) setError(chatRemoval.notice);
+				}
 				catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
 			}
@@ -499,6 +508,7 @@
 				component: function (props) {
 					return React.createElement(CardLibraryTab, Object.assign({}, props, {
 						appendMention: function (path, label) { appendMention(props.scope.sessionId, "card", path, label); },
+						archiveSession: function (sessionId) { return ctx.workspaces.archiveSession(sessionId); },
 						openWorldBook: function (source) {
 							openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks", meta: { worldBookSource: source } }, { sessionId: props.scope.sessionId });
 						}

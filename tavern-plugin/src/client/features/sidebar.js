@@ -23,7 +23,7 @@
 			}, [historyGroupState]);
 			const [picking, setPicking] = React.useState(false);
 			const [busy, setBusy] = React.useState(false);
-			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refresh);
+			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refresh, props.archiveSession);
 			const organization = useCardOrganization(cards, busy, refresh, error => setError(error), cardBatch);
 			const [error, setError] = usePersistentError("左侧栏操作");
 			const [uiMode, setUiMode] = React.useState("play");
@@ -61,6 +61,12 @@
 			const [selectedChats, setSelectedChats] = React.useState([]);
 			const [deleteNotice, setDeleteNotice] = React.useState("");
 			React.useEffect(function () { setSelectedChats([]); setManaging(false); setDeleteNotice(""); }, [uiMode, requestMode]);
+			const removedChatsHandler = React.useRef(null);
+			React.useEffect(function () {
+				function onRemoved(event) { if (removedChatsHandler.current) removedChatsHandler.current(event.detail && event.detail.sessionIds || []); }
+				window.addEventListener("dsh-tavern-chats-removed", onRemoved);
+				return function () { window.removeEventListener("dsh-tavern-chats-removed", onRemoved); };
+			}, []);
 			function toggleChatSelection(chatId) {
 				if (busy) return;
 				setSelectedChats(function (ids) { return ids.includes(chatId) ? ids.filter(function (id) { return id !== chatId; }) : ids.concat(chatId); });
@@ -70,20 +76,9 @@
 				if (busy || !items.length || !await askConfirm("删除这 " + items.length + " 个对话？\n删除后无法恢复，人物卡和世界书会保留。")) return;
 				setBusy(true); setError(""); setDeleteNotice("");
 				try {
-					const prepared = await call("prepareDeleteChats", { chatIds: items.map(function (item) { return item.chatId; }) });
-					const failures = prepared.results.filter(function (result) { return !result.ok; });
-					const ready = [];
-					for (const item of items) {
-						if (!prepared.results.some(function (result) { return result.chatId === item.chatId && result.ok; })) continue;
-						try {
-							try { await props.archiveSession(item.sessionId); }
-							catch (archiveError) { if (!isMissingSessionArchiveError(archiveError)) throw archiveError; }
-							ready.push(item.chatId);
-						} catch (error) { failures.push({ chatId: item.chatId, error: String(error.message || error) }); }
-					}
-					const deleted = await call("deleteChats", { chatIds: ready });
-					failures.push.apply(failures, deleted.results.filter(function (result) { return !result.ok; }));
-					const removed = deleted.results.filter(function (result) { return result.ok; }).map(function (result) { return result.chatId; });
+					const outcome = await deleteTavernChats(items, props.archiveSession);
+					const failures = outcome.failures;
+					const removed = outcome.removed;
 					setSelectedChats(failures.map(function (result) { return result.chatId; }));
 					setDeleteNotice("已删除 " + removed.length + " 个" + (failures.length ? "，" + failures.length + " 个失败，可重试" : ""));
 					if (failures.length) setError(failures.map(function (result) { const item = items.find(function (item) { return item.chatId === result.chatId; }); return (item && (item.title || item.cardName) || result.chatId) + "：" + result.error; }).join("\n"));
@@ -672,10 +667,6 @@
 				catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
 			}
-			function isMissingSessionArchiveError(error) {
-				const message = String(error && error.message || error || "").toLowerCase();
-				return message.indexOf("session-not-found") >= 0 || (message.indexOf("cannot archive session") >= 0 && message.indexOf("no such session") >= 0);
-			}
 			async function deleteConversation(item, currentTitle) {
 				setMenuSession(null);
 				if (!await askConfirm("确定删除对话“" + (currentTitle || item.cardName + "的新对话") + "”吗？\n删除后将从酒馆历史中移除。")) return;
@@ -773,6 +764,14 @@
 				if (uiMode !== "play") return true;
 				return (item.requestMode === "sillytavern" ? "sillytavern" : "dsh") === requestMode;
 			});
+			// Deleting a card elsewhere may remove the chat open here; never leave it on screen.
+			removedChatsHandler.current = function (sessionIds) {
+				if (!sessionIds.includes(current)) return;
+				props.sessions.clear();
+				const next = visibleHistory.find(function (item) { return !sessionIds.includes(item.sessionId); });
+				if (next) openSessionWhenReady(next.sessionId).catch(function (err) { setError(String(err && err.message || err)); });
+				else openPicker("cards");
+			};
 			function renderHistoryRow(item) {
 				const summary = summaries[item.sessionId];
 				const title = item.title || (summary && summary.displayTitle ? summary.displayTitle : (item.cardName + "的新对话"));

@@ -282,6 +282,11 @@
 					title: "第 " + props.turn + " 轮 · 面板 " + (Number(props.partIndex) + 1),
 					node: slotRef.current, home: homeRef.current, pinned: false });
 			}, [movable, props.sessionId, props.content]);
+			React.useLayoutEffect(function () {
+				// Story frames follow the reading font size; status panels keep their layout.
+				if (props.persistent || !slotRef.current) return;
+				return bindTavernFontZoom(slotRef.current, window);
+			}, [props.persistent]);
 			const frames = activated ? [renderFrame(visibleDocument, false), renderFrame(pendingDocument, true)] : null;
 			return React.createElement("div", null,
 				movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {

@@ -21,9 +21,9 @@ function askTavernConfirm(message, options) {
         const actions = document.createElement('div');
         actions.className = 'dsh-tavern-prompt-actions';
         const cancel = document.createElement('button');
-        cancel.type = 'button'; cancel.className = 'dsh-tavern-btn'; cancel.textContent = '取消';
+        cancel.type = 'button'; cancel.className = 'dsh-tavern-btn'; cancel.textContent = opts.cancelText || '取消';
         const confirm = document.createElement('button');
-        confirm.type = 'button'; confirm.className = 'dsh-tavern-btn primary'; confirm.textContent = '确认';
+        confirm.type = 'button'; confirm.className = 'dsh-tavern-btn primary'; confirm.textContent = opts.confirmText || '确认';
         actions.append(cancel, confirm); panel.append(title, description, actions); dialog.append(panel);
         let settled = false;
         function finish(value, restoreFocus = true) {
@@ -71,13 +71,13 @@ function useTavernConfirm(scope) {
             state.current.pending = null;
         };
     }, [scope]);
-    return async message => {
+    return async (message, options) => {
         const owner = state.current;
         if (!owner.mounted || owner.scope !== scope || owner.pending) return false;
         const controller = new AbortController();
         owner.pending = controller;
         try {
-            const accepted = await askTavernConfirm(message, { signal: controller.signal });
+            const accepted = await askTavernConfirm(message, { ...options, signal: controller.signal });
             return accepted && owner.mounted && owner.scope === scope && !controller.signal.aborted;
         } finally {
             if (owner.pending === controller) owner.pending = null;

@@ -77,3 +77,27 @@ test('trusted fragments zoom with the DSH font preference without touching card 
     assert.equal(await page.evaluate(()=>document.querySelector('main').style.zoom),'')
   }finally{await browser.close()}
 })
+
+test('story iframes zoom from their slot so card text and viewport scale together',async()=>{
+  const {chromium}=await import('playwright')
+  const browser=await chromium.launch()
+  try{
+    const page=await browser.newPage({viewport:{width:390,height:844}})
+    await page.setContent('<style>body{margin:0;--dsh-content-font-size:14px}</style><div id="slot"><iframe style="width:100%;height:200px;border:0" srcdoc="<body style=margin:0><p style=font-size:16px;margin:0>正文</p><div id=vw style=width:100vw></div></body>"></iframe></div>')
+    await page.addScriptTag({content:`window.__ModuleLoader__={load:value=>{window.client=value.factory(()=>({}))}};`})
+    await page.addScriptTag({content:await readFile(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')})
+    await page.waitForFunction(()=>document.querySelector('iframe').contentDocument?.querySelector('#vw'))
+    const state=()=>page.evaluate(()=>{const f=document.querySelector('iframe'),w=f.contentWindow,scale=f.getBoundingClientRect().width/w.innerWidth
+      return {zoom:document.querySelector('#slot').style.zoom,text:+(w.document.querySelector('p').getBoundingClientRect().height*scale).toFixed(1),vw:Math.round(w.document.querySelector('#vw').getBoundingClientRect().width*scale),frameWidth:Math.round(f.getBoundingClientRect().width)}})
+    await page.evaluate(()=>{window.unbind=client.bindTavernFontZoom(document.querySelector('#slot'),window)})
+    const base=await state()
+    assert.equal(base.zoom,'')
+    await page.evaluate(()=>document.body.style.setProperty('--dsh-content-font-size','21px'))
+    await page.waitForFunction(()=>document.querySelector('#slot').style.zoom==='1.5')
+    const zoomed=await state()
+    assert.ok(zoomed.text>base.text*1.4,'卡片正文按比例放大')
+    assert.equal(zoomed.vw,zoomed.frameWidth,'100vw 仍等于框宽，不会横向溢出')
+    await page.evaluate(()=>unbind())
+    assert.equal(await page.evaluate(()=>document.querySelector('#slot').style.zoom),'')
+  }finally{await browser.close()}
+})

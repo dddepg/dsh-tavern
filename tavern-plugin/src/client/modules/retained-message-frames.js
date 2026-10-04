@@ -26,6 +26,7 @@ function createRetainedTavernFrames(options) {
         if (record.forget) record.forget();
         if (record.stop) record.stop();
         if (record.unpin) record.unpin();
+        if (record.unzoom) record.unzoom();
         for (const item of record.frames.values()) item.descriptor.ref(null);
         record.frames.clear();
         record.node.remove();
@@ -71,6 +72,8 @@ function createRetainedTavernFrames(options) {
             parked().appendChild(node);
             record = { key: id, sessionId: props.sessionId, panelId: props.panelId, persistent: props.persistent, owner: props.frameOwner, node: node, frames: new Map(), unmount: null, unpin: null };
             records.set(id, record);
+            // Story frames follow the reading font size; status panels keep their layout.
+            if (!props.persistent) record.unzoom = bindTavernFontZoom(node, host);
             record.lifecycle = options.createLifecycle(props);
             paint(record, record.lifecycle.snapshot());
             record.stop = record.lifecycle.start(function (state) { paint(record, state); });

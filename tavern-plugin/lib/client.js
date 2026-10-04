@@ -2586,9 +2586,9 @@ window.__ModuleLoader__.load({
 		        const actions = document.createElement('div');
 		        actions.className = 'dsh-tavern-prompt-actions';
 		        const cancel = document.createElement('button');
-		        cancel.type = 'button'; cancel.className = 'dsh-tavern-btn'; cancel.textContent = '取消';
+		        cancel.type = 'button'; cancel.className = 'dsh-tavern-btn'; cancel.textContent = opts.cancelText || '取消';
 		        const confirm = document.createElement('button');
-		        confirm.type = 'button'; confirm.className = 'dsh-tavern-btn primary'; confirm.textContent = '确认';
+		        confirm.type = 'button'; confirm.className = 'dsh-tavern-btn primary'; confirm.textContent = opts.confirmText || '确认';
 		        actions.append(cancel, confirm); panel.append(title, description, actions); dialog.append(panel);
 		        let settled = false;
 		        function finish(value, restoreFocus = true) {
@@ -2636,13 +2636,13 @@ window.__ModuleLoader__.load({
 		            state.current.pending = null;
 		        };
 		    }, [scope]);
-		    return async message => {
+		    return async (message, options) => {
 		        const owner = state.current;
 		        if (!owner.mounted || owner.scope !== scope || owner.pending) return false;
 		        const controller = new AbortController();
 		        owner.pending = controller;
 		        try {
-		            const accepted = await askTavernConfirm(message, { signal: controller.signal });
+		            const accepted = await askTavernConfirm(message, { ...options, signal: controller.signal });
 		            return accepted && owner.mounted && owner.scope === scope && !controller.signal.aborted;
 		        } finally {
 		            if (owner.pending === controller) owner.pending = null;
@@ -4832,6 +4832,16 @@ function subscribeTavernHostTheme(win, listener) {
         tavernHostThemeObserver = null;
         tavernHostTheme = null;
     };
+}
+
+// Card iframes keep their own typography (their text is never rewritten). Zoom
+// the plugin-owned slot instead: the frame's viewport shrinks by the same factor,
+// so the card reflows at a larger scale and viewport units cannot overflow.
+function bindTavernFontZoom(node, win) {
+    function apply(theme) { node.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
+    const unsubscribe = subscribeTavernHostTheme(win, apply);
+    apply(currentTavernHostTheme(win));
+    return function () { unsubscribe(); node.style.zoom = ""; };
 }
 
 		function createTavernHelperTransport(options) {
@@ -8924,6 +8934,7 @@ function subscribeTavernHostTheme(win, listener) {
 		        if (record.forget) record.forget();
 		        if (record.stop) record.stop();
 		        if (record.unpin) record.unpin();
+		        if (record.unzoom) record.unzoom();
 		        for (const item of record.frames.values()) item.descriptor.ref(null);
 		        record.frames.clear();
 		        record.node.remove();
@@ -8969,6 +8980,8 @@ function subscribeTavernHostTheme(win, listener) {
 		            parked().appendChild(node);
 		            record = { key: id, sessionId: props.sessionId, panelId: props.panelId, persistent: props.persistent, owner: props.frameOwner, node: node, frames: new Map(), unmount: null, unpin: null };
 		            records.set(id, record);
+		            // Story frames follow the reading font size; status panels keep their layout.
+		            if (!props.persistent) record.unzoom = bindTavernFontZoom(node, host);
 		            record.lifecycle = options.createLifecycle(props);
 		            paint(record, record.lifecycle.snapshot());
 		            record.stop = record.lifecycle.start(function (state) { paint(record, state); });
@@ -9461,6 +9474,11 @@ function subscribeTavernHostTheme(win, listener) {
 					title: "第 " + props.turn + " 轮 · 面板 " + (Number(props.partIndex) + 1),
 					node: slotRef.current, home: homeRef.current, pinned: false });
 			}, [movable, props.sessionId, props.content]);
+			React.useLayoutEffect(function () {
+				// Story frames follow the reading font size; status panels keep their layout.
+				if (props.persistent || !slotRef.current) return;
+				return bindTavernFontZoom(slotRef.current, window);
+			}, [props.persistent]);
 			const frames = activated ? [renderFrame(visibleDocument, false), renderFrame(pendingDocument, true)] : null;
 			return React.createElement("div", null,
 				movable && !pinned ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: function () {
@@ -9644,11 +9662,8 @@ function subscribeTavernHostTheme(win, listener) {
                 if (fragment) root.replaceChildren(fragment);
                 // Zoom only our own wrapper: the card's DOM and styles are never written, and in
                 // the host page viewport units cannot feed back into the zoomed size.
-                const win = root.ownerDocument.defaultView;
-                function apply(theme) { root.style.zoom = theme.fontSize === 14 ? "" : String(theme.fontSize / 14); }
-                const unsubscribe = subscribeTavernHostTheme(win, apply);
-                apply(currentTavernHostTheme(win));
-                return function () { unsubscribe(); root.style.zoom = ""; root.replaceChildren(); };
+                const unbind = bindTavernFontZoom(root, root.ownerDocument.defaultView);
+                return function () { unbind(); root.replaceChildren(); };
             }, [props.content]);
             return React.createElement('div', {ref, className:'mes_text dsh-tavern-inline-fragment'});
         }
@@ -10239,6 +10254,66 @@ function subscribeTavernHostTheme(win, listener) {
 			return results;
 		}
 
+		function isMissingSessionArchiveError(error) {
+			const message = String(error && error.message || error || "").toLowerCase();
+			return message.indexOf("session-not-found") >= 0 || (message.indexOf("cannot archive session") >= 0 && message.indexOf("no such session") >= 0);
+		}
+
+		// Stop Tavern work first, then archive the DSH session, then remove the record;
+		// a chat whose session cannot be archived is kept so it never becomes a hidden orphan.
+		async function deleteTavernChats(items, archiveSession, call = rpc) {
+			const failures = [];
+			const ready = [];
+			if (!items.length) return { removed: [], failures };
+			const prepared = await call("prepareDeleteChats", { chatIds: items.map(item => item.chatId) });
+			failures.push(...prepared.results.filter(result => !result.ok));
+			for (const item of items) {
+				if (!prepared.results.some(result => result.chatId === item.chatId && result.ok)) continue;
+				try {
+					try { await archiveSession(item.sessionId); }
+					catch (archiveError) { if (!isMissingSessionArchiveError(archiveError)) throw archiveError; }
+					ready.push(item.chatId);
+				} catch (error) { failures.push({ chatId: item.chatId, error: String(error && error.message || error) }); }
+			}
+			const deleted = await call("deleteChats", { chatIds: ready });
+			failures.push(...deleted.results.filter(result => !result.ok));
+			return { removed: deleted.results.filter(result => result.ok).map(result => result.chatId), failures };
+		}
+
+		function tavernCardPathKey(path) {
+			return String(path || "").replace(/\\/g, "/");
+		}
+
+		// Play history survives its card unless the user opts in; card workbench chats are kept.
+		async function askTavernCardChatRemoval(paths, askConfirm, call = rpc) {
+			const wanted = new Set(paths.map(tavernCardPathKey));
+			const listed = await call("listSessions");
+			const chats = (listed.sessions || []).filter(entry => entry.chatId && groupOfMode(entry.mode) === "play" && wanted.has(tavernCardPathKey(entry.cardPath)));
+			if (!chats.length) return [];
+			const counts = new Map();
+			for (const entry of chats) { const key = tavernCardPathKey(entry.cardPath); counts.set(key, { name: entry.cardName || key, count: (counts.get(key)?.count || 0) + 1 }); }
+			const lines = paths.length > 1 ? "\n\n" + Array.from(counts.values()).slice(0, 20).map(item => "• " + item.name + "：" + item.count + " 个").join("\n") + (counts.size > 20 ? "\n……共 " + counts.size + " 张卡" : "") : "";
+			const accepted = await askConfirm((paths.length > 1 ? "所选人物卡中有 " + counts.size + " 张" : "这张人物卡") + "还有 " + chats.length + " 个游玩记录，要一起删除吗？" + lines + "\n\n删除后无法恢复。", { confirmText: "一起删除", cancelText: "保留游玩记录" });
+			return accepted ? chats : [];
+		}
+
+		// Only history of cards that were actually deleted is removed.
+		async function removeTavernCardChats(chats, results, archiveSession, call = rpc) {
+			const deletedPaths = new Set(results.filter(item => item.ok).map(item => tavernCardPathKey(item.path)));
+			const items = chats.filter(entry => deletedPaths.has(tavernCardPathKey(entry.cardPath)));
+			if (!items.length) return { notice: "", sessionIds: [] };
+			let outcome;
+			try { outcome = await deleteTavernChats(items, archiveSession, call); }
+			catch (error) { return { notice: "游玩记录删除失败：" + String(error && error.message || error), sessionIds: [] }; }
+			const sessionIds = items.filter(entry => outcome.removed.includes(entry.chatId)).map(entry => entry.sessionId);
+			return { notice: "游玩记录删除 " + outcome.removed.length + " 个" + (outcome.failures.length ? "，" + outcome.failures.length + " 个失败，可在左侧历史中重试" : ""), sessionIds };
+		}
+
+		// The sidebar listens so an open chat of a deleted card does not stay on screen.
+		function announceTavernChatsRemoved(sessionIds) {
+			if (sessionIds.length) window.dispatchEvent(new CustomEvent("dsh-tavern-chats-removed", { detail: { sessionIds } }));
+		}
+
 		// popover 位于顶层，不受抽屉的滚动裁剪；坐标仍须使用键盘上方的可视区域。
 		function trackTavernPopover(popup, anchor, align = 'start', limit = Infinity) {
 		  const view = popup.ownerDocument.defaultView, vv = view.visualViewport;
@@ -10468,7 +10543,7 @@ function subscribeTavernHostTheme(win, listener) {
 		  return { visible, toolbar, rowMenu, detailSettings, addCardsFooter, renderCards: render => visible.map(render) };
 		}
 
-		function useCardBatchDeletion(cards, busy, setBusy, refresh) {
+		function useCardBatchDeletion(cards, busy, setBusy, refresh, archiveSession) {
             const askConfirm = useTavernConfirm();
 			const [managing, setManaging] = React.useState(false);
 			const [paths, setPaths] = React.useState([]);
@@ -10482,12 +10557,18 @@ function subscribeTavernHostTheme(win, listener) {
 				if (busy || running.current || !selected.length) return;
 				const names = selected.slice(0, 20).map(card => "• " + card.name + "（" + card.path + "）").join("\n");
 				if (!await askConfirm("删除所选的 " + selected.length + " 张人物卡吗？\n\n" + names + (selected.length > 20 ? "\n……共 " + selected.length + " 张" : "") + "\n\n此操作不可撤销。")) return;
+				let chats;
+				try { chats = archiveSession ? await askTavernCardChatRemoval(selected.map(card => card.path), askConfirm) : []; }
+				catch (error) { setNotice("读取游玩记录失败，未删除人物卡：" + String(error && error.message || error)); return; }
 				running.current = true; setBusy(true); setNotice("");
 				try {
 					const results = await deleteTavernCards(selected, path => rpc("deleteCard", { path }));
 					const failed = results.filter(item => !item.ok);
+					const chatRemoval = await removeTavernCardChats(chats, results, archiveSession);
+					const chatNotice = chatRemoval.notice;
+					announceTavernChatsRemoved(chatRemoval.sessionIds);
 					setPaths(failed.map(item => item.path));
-					setNotice("已删除 " + (results.length - failed.length) + " 张" + (failed.length ? "，" + failed.length + " 张失败，可重试：" + failed.map(item => item.name + "：" + item.error).join("；") : "。"));
+					setNotice("已删除 " + (results.length - failed.length) + " 张" + (failed.length ? "，" + failed.length + " 张失败，可重试：" + failed.map(item => item.name + "：" + item.error).join("；") : "。") + (chatNotice ? " " + chatNotice + "。" : ""));
 					await refresh();
 					notifyTavernDataChanged(["cards", "sessions"], "cards");
 				} catch (error) { setNotice(previous => previous + " 刷新失败：" + String(error && error.message || error)); }
@@ -10590,7 +10671,7 @@ function subscribeTavernHostTheme(win, listener) {
 			}, [historyGroupState]);
 			const [picking, setPicking] = React.useState(false);
 			const [busy, setBusy] = React.useState(false);
-			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refresh);
+			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refresh, props.archiveSession);
 			const organization = useCardOrganization(cards, busy, refresh, error => setError(error), cardBatch);
 			const [error, setError] = usePersistentError("左侧栏操作");
 			const [uiMode, setUiMode] = React.useState("play");
@@ -10628,6 +10709,12 @@ function subscribeTavernHostTheme(win, listener) {
 			const [selectedChats, setSelectedChats] = React.useState([]);
 			const [deleteNotice, setDeleteNotice] = React.useState("");
 			React.useEffect(function () { setSelectedChats([]); setManaging(false); setDeleteNotice(""); }, [uiMode, requestMode]);
+			const removedChatsHandler = React.useRef(null);
+			React.useEffect(function () {
+				function onRemoved(event) { if (removedChatsHandler.current) removedChatsHandler.current(event.detail && event.detail.sessionIds || []); }
+				window.addEventListener("dsh-tavern-chats-removed", onRemoved);
+				return function () { window.removeEventListener("dsh-tavern-chats-removed", onRemoved); };
+			}, []);
 			function toggleChatSelection(chatId) {
 				if (busy) return;
 				setSelectedChats(function (ids) { return ids.includes(chatId) ? ids.filter(function (id) { return id !== chatId; }) : ids.concat(chatId); });
@@ -10637,20 +10724,9 @@ function subscribeTavernHostTheme(win, listener) {
 				if (busy || !items.length || !await askConfirm("删除这 " + items.length + " 个对话？\n删除后无法恢复，人物卡和世界书会保留。")) return;
 				setBusy(true); setError(""); setDeleteNotice("");
 				try {
-					const prepared = await call("prepareDeleteChats", { chatIds: items.map(function (item) { return item.chatId; }) });
-					const failures = prepared.results.filter(function (result) { return !result.ok; });
-					const ready = [];
-					for (const item of items) {
-						if (!prepared.results.some(function (result) { return result.chatId === item.chatId && result.ok; })) continue;
-						try {
-							try { await props.archiveSession(item.sessionId); }
-							catch (archiveError) { if (!isMissingSessionArchiveError(archiveError)) throw archiveError; }
-							ready.push(item.chatId);
-						} catch (error) { failures.push({ chatId: item.chatId, error: String(error.message || error) }); }
-					}
-					const deleted = await call("deleteChats", { chatIds: ready });
-					failures.push.apply(failures, deleted.results.filter(function (result) { return !result.ok; }));
-					const removed = deleted.results.filter(function (result) { return result.ok; }).map(function (result) { return result.chatId; });
+					const outcome = await deleteTavernChats(items, props.archiveSession);
+					const failures = outcome.failures;
+					const removed = outcome.removed;
 					setSelectedChats(failures.map(function (result) { return result.chatId; }));
 					setDeleteNotice("已删除 " + removed.length + " 个" + (failures.length ? "，" + failures.length + " 个失败，可重试" : ""));
 					if (failures.length) setError(failures.map(function (result) { const item = items.find(function (item) { return item.chatId === result.chatId; }); return (item && (item.title || item.cardName) || result.chatId) + "：" + result.error; }).join("\n"));
@@ -11239,10 +11315,6 @@ function subscribeTavernHostTheme(win, listener) {
 				catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
 			}
-			function isMissingSessionArchiveError(error) {
-				const message = String(error && error.message || error || "").toLowerCase();
-				return message.indexOf("session-not-found") >= 0 || (message.indexOf("cannot archive session") >= 0 && message.indexOf("no such session") >= 0);
-			}
 			async function deleteConversation(item, currentTitle) {
 				setMenuSession(null);
 				if (!await askConfirm("确定删除对话“" + (currentTitle || item.cardName + "的新对话") + "”吗？\n删除后将从酒馆历史中移除。")) return;
@@ -11340,6 +11412,14 @@ function subscribeTavernHostTheme(win, listener) {
 				if (uiMode !== "play") return true;
 				return (item.requestMode === "sillytavern" ? "sillytavern" : "dsh") === requestMode;
 			});
+			// Deleting a card elsewhere may remove the chat open here; never leave it on screen.
+			removedChatsHandler.current = function (sessionIds) {
+				if (!sessionIds.includes(current)) return;
+				props.sessions.clear();
+				const next = visibleHistory.find(function (item) { return !sessionIds.includes(item.sessionId); });
+				if (next) openSessionWhenReady(next.sessionId).catch(function (err) { setError(String(err && err.message || err)); });
+				else openPicker("cards");
+			};
 			function renderHistoryRow(item) {
 				const summary = summaries[item.sessionId];
 				const title = item.title || (summary && summary.displayTitle ? summary.displayTitle : (item.cardName + "的新对话"));
@@ -13451,7 +13531,7 @@ function subscribeTavernHostTheme(win, listener) {
 			const [card, setCard] = React.useState(null);
 			const [loading, setLoading] = React.useState(false);
 						const [busy, setBusy] = React.useState(false);
-			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refreshCards);
+			const cardBatch = useCardBatchDeletion(cards, busy, setBusy, refreshCards, props.archiveSession);
 			const organization = useCardOrganization(cards, busy, refreshCards, error => setError(error), cardBatch);
 			const [error, setError] = usePersistentError("人物卡库");
 			const importInput = React.useRef(null);
@@ -13554,8 +13634,17 @@ function subscribeTavernHostTheme(win, listener) {
 			}
 			async function deleteCardFile() {
 				if (!card || !await askConfirm("从人物卡库删除“" + card.name + "”吗？")) return;
+				let chats;
+				try { chats = await askTavernCardChatRemoval([card.path], askConfirm); }
+				catch (err) { setError("读取游玩记录失败，未删除人物卡：" + String(err && err.message || err)); return; }
 				setBusy(true); setError("");
-				try { await rpc("deleteCard", { path: card.path }); setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards"); }
+				try {
+					await rpc("deleteCard", { path: card.path });
+					const chatRemoval = await removeTavernCardChats(chats, [{ path: card.path, ok: true }], props.archiveSession);
+					announceTavernChatsRemoved(chatRemoval.sessionIds);
+					setSelectedPath(""); setCard(null); await refreshCards(); notifyTavernDataChanged(["cards", "sessions"], "cards");
+					if (chatRemoval.notice.indexOf("失败") >= 0) setError(chatRemoval.notice);
+				}
 				catch (err) { setError(String(err && err.message || err)); }
 				finally { setBusy(false); }
 			}
@@ -13943,6 +14032,7 @@ function subscribeTavernHostTheme(win, listener) {
 				component: function (props) {
 					return React.createElement(CardLibraryTab, Object.assign({}, props, {
 						appendMention: function (path, label) { appendMention(props.scope.sessionId, "card", path, label); },
+						archiveSession: function (sessionId) { return ctx.workspaces.archiveSession(sessionId); },
 						openWorldBook: function (source) {
 							openTavernSidebarTab(ctx, { type: "dsh-tavern:worldbooks", meta: { worldBookSource: source } }, { sessionId: props.scope.sessionId });
 						}
@@ -15155,7 +15245,9 @@ function subscribeTavernHostTheme(win, listener) {
 				} finally { setRolling(false); liveTavernView.invalidate(props.sessionId); tavernCoordination.invalidate(props.sessionId); }
 			}
 			if (!canRollback) {
-                const reason = rollbackViewState.view && rollbackViewState.view.rollbackUnavailableReason;
+                // While a reply is streaming, the surface has no settled target yet; the
+                // server's "not in the message stream" reason would wrongly read as permanent.
+                const reason = blocked && !rolling ? "正在生成或后台处理中，完成或停止后才能回退" : rollbackViewState.view && rollbackViewState.view.rollbackUnavailableReason;
                 return reason ? React.createElement("button", { type: "button", role: "menuitem", disabled: true, className: "dsh-tavern-menu-unavailable", title: reason },
                     React.createElement("span", null, "回退本轮"),
                     React.createElement("small", null, reason.includes("没有可回退") ? "暂无可回退轮次" : reason)) : null;
@@ -16292,6 +16384,9 @@ function subscribeTavernHostTheme(win, listener) {
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
 		exports.describeTavernActivity = describeTavernActivity;
 		exports.deleteTavernCards = deleteTavernCards;
+		exports.deleteTavernChats = deleteTavernChats;
+		exports.askTavernCardChatRemoval = askTavernCardChatRemoval;
+		exports.removeTavernCardChats = removeTavernCardChats;
 		exports.groupTavernHistory = groupTavernHistory;
 		exports.createPlayWorkspaceResolver = createPlayWorkspaceResolver;
 		exports.createSessionListRecoveryModule = createSessionListRecoveryModule;
@@ -16301,6 +16396,7 @@ function subscribeTavernHostTheme(win, listener) {
         exports.createTavernComposerWindow = createTavernComposerWindow;
         exports.parseTavernInlineFragment = parseTavernInlineFragment;
         exports.TavernInlineFragment = TavernInlineFragment;
+        exports.bindTavernFontZoom = bindTavernFontZoom;
         exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;
