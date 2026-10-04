@@ -206,6 +206,12 @@ window.__ModuleLoader__.load({
 				body: requestBody
 			};
 			if (requestOptions && requestOptions.signal) request.signal = requestOptions.signal;
+			// Release ownership even when a cancelled carrier never settles.
+			const releaseViewRead = viewRead ? () => viewRead.release() : null;
+			if (releaseViewRead && request.signal) {
+				if (request.signal.aborted) releaseViewRead();
+				else request.signal.addEventListener("abort", releaseViewRead, { once: true });
+			}
 			if (requestOptions && requestOptions.keepalive === true) request.keepalive = true;
 			if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "sent");
 			const responsePromise = controlChannel
@@ -223,7 +229,17 @@ window.__ModuleLoader__.load({
 				}
                 return result;
             });
+			function checkCancelled() {
+				if (request.signal && request.signal.aborted) {
+					if (typeof request.signal.throwIfAborted === "function") request.signal.throwIfAborted();
+					const error = new Error("会话读取已取消");
+					error.name = "AbortError";
+					throw error;
+				}
+			}
 			return responsePromise.then(function (result) {
+				checkCancelled();
+				result = viewRead && viewRead.current() || result;
 				tavernRuntimeGenerationMonitor.observe(result && result.runtimeGeneration);
 				if (!result || !result.ok) {
 					const error = new Error(result && result.error ? result.error : "操作失败");
@@ -234,10 +250,15 @@ window.__ModuleLoader__.load({
                 if (accepted.contextWindow) return {...accepted,context:expandTavernOpeningWindow(accepted.contextWindow).tavernHelper};
                 return accepted.view && accepted.view.historyWindow ? {...accepted,view:expandTavernOpeningWindow(accepted.view)} : accepted;
 			}).catch(function (error) {
+				checkCancelled();
+				const newer = viewRead && viewRead.current();
+				if (newer) return newer.view && newer.view.historyWindow ? {...newer,view:expandTavernOpeningWindow(newer.view)} : newer;
                 if (trace) trace.failed = true;
 				if (method === "generateSceneImage") recordImageInteraction(payload.sessionId, payload.turn, payload.requestId, "failed", "rpc-error");
 				throw error;
 			}).finally(function () {
+				if (viewRead) viewRead.release();
+				if (releaseViewRead && request.signal) request.signal.removeEventListener("abort", releaseViewRead);
 				const elapsed = Date.now() - started;
                 if (trace) {
                     performanceActiveRequests--;
@@ -328,6 +349,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		// @include modules/session-refresh-controller.js
 		// @include modules/live-tavern-view.js
 
 		function isMissingTavernCardError(value) {
@@ -359,11 +381,11 @@ window.__ModuleLoader__.load({
 			return Object.assign({}, view, { tavernHelper: nextHelper });
 		}
 
-		async function hydrateLiveTavernHelperMessages(sessionId, view) {
+		async function hydrateLiveTavernHelperMessages(sessionId, view, request) {
             // First paint is independent of compatibility/history preparation.
             // A window must not be promoted to a complete view by filling only
             // Helper rows: historical display projections need their full read.
-            if (view && view.historyWindow) return (await rpc("getSession", {fullView:true}, sessionId)).view;
+            if (view && view.historyWindow) return (await rpc("getSession", {fullView:true}, sessionId, request)).view;
 			const pending = view && view.tavernHelper && view.tavernHelper.messagesPending;
 			if (!pending) return view;
 			const payload = await rpc("hydrateTavernHelperMessages", {
@@ -371,7 +393,7 @@ window.__ModuleLoader__.load({
                 revision: view.tavernHelper.stateRevision,
 				from: pending.from,
 				to: pending.to
-			}, sessionId);
+			}, sessionId, request);
 			return applyTavernHelperMessageHydration(view, payload);
 		}
 
@@ -406,71 +428,7 @@ window.__ModuleLoader__.load({
 
 		let tavernSessionSignals;
 
-		function createTavernCoordinationEventModule(options) {
-			if (!options || typeof options.connect !== "function") throw new Error("Tavern Coordination Event 缺少 SSE adapter");
-			const records = new Map();
-			function initialState() { return { phase: "connecting", view: null, error: "", updatedAt: 0 }; }
-			function recordFor(sessionId) {
-				const id = String(sessionId || "");
-				if (!records.has(id)) records.set(id, { id: id, state: initialState(), listeners: new Set(), connection: null });
-				return records.get(id);
-			}
-			function publish(record, state) {
-				record.state = state;
-				record.listeners.forEach(function (listener) { listener(state); });
-			}
-			function disconnect(record) {
-				if (record.connection && typeof record.connection.close === "function") record.connection.close();
-				record.connection = null;
-			}
-			function connect(record) {
-				if (record.listeners.size === 0 || record.connection !== null) return;
-				record.connection = options.connect(record.id, {
-					message: function (view) {
-						publish(record, { phase: "ready", view: view || null, error: "", updatedAt: Date.now() });
-						if (typeof options.onView === "function") options.onView(record.id, view || null);
-					},
-					error: function (error) {
-						publish(record, { phase: "retrying", view: record.state.view, error: String(error && error.message || ""), updatedAt: record.state.updatedAt });
-					}
-				});
-				// Session Signals are lossy wake-ups, not state. Always establish the
-				// coordination view from its authoritative source after (re)connecting.
-				if (record.connection && typeof record.connection.refresh === "function") void record.connection.refresh();
-			}
-			function invalidate(sessionId) {
-				const targets = sessionId === undefined || sessionId === null || sessionId === "" ? Array.from(records.values()) : [recordFor(sessionId)];
-				targets.forEach(function (record) {
-					if (record.connection && typeof record.connection.refresh === "function") {
-						void record.connection.refresh();
-						return;
-					}
-					disconnect(record);
-					if (record.listeners.size > 0) {
-						publish(record, { phase: "connecting", view: record.state.view, error: "", updatedAt: record.state.updatedAt });
-						connect(record);
-					}
-				});
-			}
-			return {
-				getSnapshot: function (sessionId) { return recordFor(sessionId).state; },
-				setView: function (sessionId, view) {
-					const record = recordFor(sessionId);
-					publish(record, { phase: "ready", view: view || null, error: "", updatedAt: Date.now() });
-				},
-				subscribe: function (sessionId, listener) {
-					const record = recordFor(sessionId);
-					record.listeners.add(listener);
-					listener(record.state);
-					connect(record);
-					return function () {
-						record.listeners.delete(listener);
-						if (record.listeners.size === 0) disconnect(record);
-					};
-				},
-				invalidate: invalidate
-			};
-		}
+		// @include modules/tavern-coordination.js
 
 		const coordinatedCardPaths = new Map();
 		const tavernCoordination = createTavernCoordinationEventModule({
@@ -483,33 +441,12 @@ window.__ModuleLoader__.load({
 				if (observed && previous === "" && cardPath !== "") notifyTavernDataChanged(["cards", "sessions"], "coordination");
 			},
 			connect: function (sessionId, handlers) {
-				let active = true;
-				let loading = false;
-				let reloadRequested = false;
-				async function load() {
-					if (!active) return;
-					if (loading) { reloadRequested = true; return; }
-					loading = true;
-					try {
-						const result = await rpc("syncSession", { kind: "candidate" }, sessionId);
-						if (active) handlers.message(coordinationView(result, sessionId));
-					} catch (error) {
-						if (active) handlers.error(error);
-					} finally {
-						loading = false;
-						if (active && reloadRequested) { reloadRequested = false; void load(); }
-					}
-				}
-				const stop = tavernSessionSignals.subscribe(sessionId, "tavern-state", function (signal) {
-					if (signal && signal.snapshot) {
-						handlers.message(coordinationView(signal.snapshot, sessionId));
-						return;
-					}
-					void load();
-				}, handlers.error, function () {
-					void load();
+				return createTavernCoordinationConnection({
+					load: request => rpc("syncSession", { kind: "candidate" }, sessionId, request),
+					subscribe: (message, error, connected) => tavernSessionSignals.subscribe(sessionId, "tavern-state", message, error, connected),
+					view: result => coordinationView(result, sessionId),
+					handlers
 				});
-				return { close: function () { active = false; stop(); }, refresh: load };
 			}
 		});
 
@@ -891,6 +828,8 @@ window.__ModuleLoader__.load({
         exports.createSessionViewReader = createSessionViewReader;
 		exports.applyBodyRegenerationResult = applyBodyRegenerationResult;
 		exports.createTavernCoordinationEventModule = createTavernCoordinationEventModule;
+		exports.createTavernCoordinationConnection = createTavernCoordinationConnection;
+		exports.createSessionRefreshController = createSessionRefreshController;
 		exports.describeTavernActivity = describeTavernActivity;
 		exports.deleteTavernCards = deleteTavernCards;
 		exports.deleteTavernChats = deleteTavernChats;
