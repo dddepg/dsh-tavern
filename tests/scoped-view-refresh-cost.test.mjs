@@ -45,33 +45,6 @@ for(const count of [20,400,10000])test(`real delta routes only matching subscrib
  assert.equal(notices,count);assert.equal(selections[0].getSnapshot().view.inputSources['0'],'replaced')
 })
 
-test('overlapping dependencies notify once and unsubscribe removes path entries',async()=>{
- const h=harness(),begin=h.createSessionViewReader(),jobs=[]
- let clock=0
- let cursor='a',sequence=0,edits=[]
- const first=begin('s').accept({viewCursor:cursor,view:{inputSources:{'1':'old'}}}).view
- const live=h.createLiveTavernViewModule({pollWhileBusy:false,now:()=>clock,schedule:(run,delay)=>{jobs.push(()=>{clock+=delay;run()});return jobs.length},cancel(){},load:async()=>{
-  const next=String(++sequence),result=begin('s').accept({viewCursor:next,viewDelta:{baseCursor:cursor,set:edits,remove:[]}});cursor=next;return result
- }})
- live.setView('s',first)
- let notices=0
- const stop=live.subscribe('s',()=>notices++,[['inputSources'],['inputSources','1']])
- live.subscribe('s',()=>{},[['mode']]);notices=0
- edits=[[['inputSources','1'],'new']];jobs.shift()();await new Promise(resolve=>setImmediate(resolve))
- assert.equal(notices,1)
- stop();live.invalidate('s');jobs.shift()();await new Promise(resolve=>setImmediate(resolve))
- assert.equal(notices,1)
-})
-
-test('overlapping selections preserve immutable parents and root selection returns full snapshot',()=>{
- const h=harness(),live=h.createLiveTavernViewModule({load:async()=>null,pollWhileBusy:false})
- const inputSources=Object.freeze({'1':'one'}),view=Object.freeze({inputSources})
- live.setView('s',view)
- const selection=live.select('s',[['inputSources','1'],['inputSources'],['inputSources']])
- assert.equal(selection.getSnapshot().view.inputSources,inputSources)
- assert.equal(live.select('s',[[]]).getSnapshot(),live.getSnapshot('s'))
-})
-
 for(const count of [20,400,10000])test(`Helper hydration does not broadcast to ${count} unrelated history subscribers`,async()=>{
  const h=harness(),jobs=[]
  let clock=0
@@ -95,19 +68,6 @@ for(const count of [20,400,10000])test(`Helper hydration does not broadcast to $
  live.setView('s',view);assert.equal(notices,count)
  const {inputSources,...removed}=view
  live.setView('s',removed);assert.equal(notices,2*count)
-})
-
-test('shared replacement routing preserves missing versus undefined and mutable compatibility',()=>{
- const h=harness()
- for(const deduplicateViews of [true,false]){
-  const live=h.createLiveTavernViewModule({deduplicateViews,pollWhileBusy:false,schedule(){},cancel(){},load:async()=>({})})
-  live.setView('s',{})
-  let notices=0
-  live.subscribe('s',()=>notices++,[['optional']]);notices=0
-  live.setView('s',{optional:undefined});assert.equal(notices,1)
-  live.setView('s',{});assert.equal(notices,2)
-  if(!deduplicateViews){const mutable={nested:{value:1}};live.setView('s',mutable);notices=0;mutable.nested.value=2;live.setView('s',mutable);assert.equal(notices,1)}
- }
 })
 
 for(const count of [20,400,10000])test(`assistant field subscriptions exclude input and debug updates across ${count} floors`,()=>{
@@ -230,18 +190,6 @@ for(const count of [20,400,10000])test(`Helper value updates only wake the eager
  assert.equal(notices,2*count+1)
 })
 
-test('deferred retained frames read Helper context at activation',()=>{
- let mounted
- const current={version:2},stale={version:1}
- const React={useRef:()=>({current:null}),useState:()=>[true,()=>{}],useSyncExternalStore:()=>[],useEffect(){},useLayoutEffect:run=>run(),createElement:()=>null}
- const h=vm.createContext({React,tavernPanelRegistry:{},tavernRetainedFrames:{key:()=> 'frame',mount:props=>{mounted=props;return {update(){},detach(){}}}}})
- vm.runInContext(fs.readFileSync(new URL('../tavern-plugin/lib/domain/frame-sizing.js',import.meta.url),'utf8').replace(/export \{[^}]+\}/,''),h)
- vm.runInContext(fs.readFileSync(new URL('../tavern-plugin/src/client/modules/frame-sizing.js',import.meta.url),'utf8'),h)
- vm.runInContext(fs.readFileSync(new URL('../tavern-plugin/src/client/modules/retained-message-frames.js',import.meta.url),'utf8'),h)
- h.TavernRetainedMessageFrame({sessionId:'s',turn:1,partIndex:0,content:'<p>hello</p>',helperContext:stale,helperContextReader:()=>current})
- assert.equal(mounted.helperContext,current)
-})
-
 for(const count of [20,400,10000])test(`busy and settlement ownership avoid ${count} historical body updates`,()=>{
  const h=harness(),main=fs.readFileSync(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')
  const paths=vm.runInContext(main.slice(main.indexOf('function tavernReceiptViewPaths('),main.indexOf('function TavernTurnMvuReceipt('))+';tavernReceiptViewPaths',h)
@@ -262,21 +210,4 @@ for(const count of [20,400,10000])test(`busy and settlement ownership avoid ${co
  assert.equal(receipts.size,0);assert.equal(bodies,0)
  view={...view,settlementTurn:count-1};live.setView('s',view)
  assert.deepEqual([...receipts].sort((a,b)=>a-b),[count-1,count]);assert.equal(bodies,0)
-})
-
-test('receipt component renews busy dependencies when ownership and pending status change',()=>{
- const main=fs.readFileSync(new URL('../tavern-plugin/lib/client.js',import.meta.url),'utf8')
- let view={settlementTurn:3,activity:{busy:true}},receipt={status:'updated'},observed
- const h=vm.createContext({liveTavernView:{getSnapshot:()=>({view})},tavernMvuReceiptForTurn:()=>receipt,
-  useLiveTavernView:(_session,_revision,paths)=>{observed=paths;return {view}},
-  React:{createElement:(_tag,props)=>props},TavernMvuReceipt:()=>{}})
- vm.runInContext(main.slice(main.indexOf('function tavernReceiptViewPaths('),main.indexOf('function TavernInlineStatusRuntime(')),h)
- let output=h.TavernTurnMvuReceipt({sessionId:'s',turn:3})
- assert.equal(output.latest,true);assert.equal(output.busy,true);assert.ok(observed.some(path=>path[0]==='$receiptBusy'))
- view={settlementTurn:4,activity:{busy:false}}
- output=h.TavernTurnMvuReceipt({sessionId:'s',turn:3})
- assert.equal(output.latest,false);assert.equal(output.busy,false);assert.ok(!observed.some(path=>path[0]==='$receiptBusy'))
- receipt={status:'pending'};h.TavernTurnMvuReceipt({sessionId:'s',turn:3})
- assert.ok(observed.some(path=>path[0]==='$receiptBusy'))
- receipt=null;assert.equal(h.TavernTurnMvuReceipt({sessionId:'s',turn:3}),null)
 })

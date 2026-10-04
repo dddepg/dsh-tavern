@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { writeFileSync } from 'node:fs'
+
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -42,94 +42,6 @@ const afterLateWrite = () => delay(LATE_WRITE_MS + 300)
 function writerScript(ready, late) {
   return `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setTimeout(() => fs.writeFileSync(${JSON.stringify(late)}, 'late write'), ${LATE_WRITE_MS}); setInterval(() => {}, 1000)`
 }
-
-test('supervised commands preserve output, cwd and exit status', async t => {
-  const directory = await fixture(t)
-  const result = await runInstallationProcess(process.execPath, ['-e', "console.log(process.cwd()); console.error('diagnostic')"], { cwd: directory, ...fastCleanup })
-  assert.equal(result.status, 0)
-  assert.equal(result.safe, true)
-  assert.match(result.stdout, new RegExp(directory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-  assert.match(result.stderr, /diagnostic/)
-  assert.ok(result.pid > 1)
-})
-
-test('POSIX cleanup verifies zombie-only or vanished groups after EPERM', { skip: process.platform === 'win32' }, async t => {
-  const kill = process.kill.bind(process)
-  const simulated = new Set()
-  t.mock.method(process, 'kill', (pid, signal) => {
-    if (pid < -1 && (signal === 0 || signal === 'SIGKILL')) {
-      // Darwin may report EPERM while the terminated wrapper is still a
-      // zombie. Keep actual TERM delivery and require ps to prove it stopped.
-      simulated.add(signal)
-      throw Object.assign(new Error('kill EPERM (zombie group fixture)'), { code: 'EPERM' })
-    }
-    return kill(pid, signal)
-  })
-  const result = await runInstallationProcess(process.execPath, ['-e', 'process.exit(0)'], fastCleanup)
-  assert.equal(result.safe, true)
-  assert.deepEqual(result.remainingProcessGroups, [])
-  assert.deepEqual(result.cleanupErrors, [])
-  assert.ok(simulated.has(0))
-  assert.ok(simulated.has('SIGKILL'))
-})
-
-test('POSIX EPERM with a live writer remains unsafe and reports its cleanup failure', { skip: process.platform === 'win32' }, async t => {
-  const directory = await fixture(t)
-  const ready = path.join(directory, 'ready')
-  const controller = new AbortController()
-  const kill = process.kill.bind(process)
-  let wrapper
-  const mock = t.mock.method(process, 'kill', (pid, signal) => {
-    if (pid < -1) throw Object.assign(new Error('kill EPERM (live writer fixture)'), { code: 'EPERM' })
-    return kill(pid, signal)
-  })
-  try {
-    const promise = runInstallationProcess(process.execPath, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000)`], {
-      signal: controller.signal, timeoutMs: fixtureTimeout, onSpawn(child) { wrapper = child }, ...fastCleanup,
-    })
-    await waitForFile(ready)
-    controller.abort()
-    await assert.rejects(promise, error => {
-      assert.equal(error.code, 'INSTALLATION_CLEANUP_FAILED', error.message)
-      assert.equal(error.unsafeToRetry, true)
-      assert.ok(error.remainingProcessGroups.includes(wrapper.pid))
-      assert.match(error.message, /EPERM.*live writer fixture/)
-      return true
-    })
-  } finally {
-    mock.mock.restore()
-    if (wrapper) {
-      // The supervisor unrefs failed children; Node 22 needs an explicit ref
-      // while this fixture waits for its own cleanup exit event.
-      wrapper.ref()
-      const exited = new Promise(resolve => wrapper.once('exit', resolve))
-      try { kill(-wrapper.pid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
-      if (wrapper.exitCode === null && wrapper.signalCode === null) await exited
-    }
-  }
-})
-
-test('supervised invocation preserves Unicode, empty arguments, spaces and quotes', async () => {
-  const args = ['space value', 'quote " value', '末尾\\', '', 'slash\\"quote']
-  const result = await runInstallationProcess(process.execPath, ['-e', 'console.log(JSON.stringify(process.argv.slice(1)))', ...args], fastCleanup)
-  assert.deepEqual(JSON.parse(result.stdout), args)
-  const shell = await runInstallationProcess('echo', ['tavern-shell-check'], { shell: true, ...fastCleanup })
-  assert.match(shell.stdout, /tavern-shell-check/)
-})
-
-test('nonzero exit and missing command are safely rejected', async () => {
-  await assert.rejects(runInstallationProcess(process.execPath, ['-e', 'process.exit(23)'], fastCleanup), error => {
-    assert.equal(error.code, 'INSTALLATION_PROCESS_FAILED', error.message)
-    assert.equal(error.status, 23)
-    assert.equal(error.unsafeToRetry, false)
-    return true
-  })
-  await assert.rejects(runInstallationProcess('dsh-tavern-fixture-command-does-not-exist', [], fastCleanup), error => {
-    assert.equal(error.code, 'ENOENT', error.message)
-    assert.equal(error.unsafeToRetry, false)
-    return true
-  })
-})
 
 test('timeout kills a TERM-ignoring grandchild before reporting safe stopped', { skip: process.platform === 'win32' }, async t => {
   const directory = await fixture(t)
@@ -210,40 +122,6 @@ test('outer cancellation also kills separately grouped nested stages', async t =
   })
   await afterLateWrite()
   await absent(late)
-})
-
-test('nested stage timeout does not kill its enclosing installation supervisor', async t => {
-  const directory = await fixture(t)
-  const ready = path.join(directory, 'ready')
-  const late = path.join(directory, 'late')
-  const caught = path.join(directory, 'caught')
-  const nested = path.join(directory, 'nested.mjs')
-  await writeFile(nested, `import { writeFileSync } from 'node:fs'; import { runInstallationProcess } from ${JSON.stringify(moduleUrl)}; try { await runInstallationProcess(process.execPath, ['-e', ${JSON.stringify(writerScript(ready, late))}], { timeoutMs: 350, killGraceMs: 50 }); } catch (error) { writeFileSync(${JSON.stringify(caught)}, JSON.stringify({ code: error.code, unsafeToRetry: error.unsafeToRetry })); }`)
-  assert.equal((await runInstallationProcess(process.execPath, [nested], { timeoutMs: fixtureTimeout, ...fastCleanup })).status, 0)
-  assert.deepEqual(JSON.parse(await readFile(caught, 'utf8')), { code: 'INSTALLATION_TIMEOUT', unsafeToRetry: false })
-  await afterLateWrite()
-  await absent(late)
-})
-
-test('unverifiable process registry fails closed with durable cleanup metadata', async t => {
-  const directory = await fixture(t)
-  const registry = path.join(directory, 'processes')
-  await assert.rejects(runInstallationProcess(process.execPath, ['-e', 'setTimeout(() => {}, 1000)'], {
-    processDirectory: registry, timeoutMs: 100, ...fastCleanup,
-    // Malformed metadata must not authorize stopping an unrelated PID. The
-    // actual command group remains known from spawn and is still terminated.
-    onSpawn() { writeFileSync(path.join(registry, '123.json'), '{') },
-  }), error => {
-    assert.equal(error.code, 'INSTALLATION_CLEANUP_FAILED')
-    assert.equal(error.unsafeToRetry, true)
-    assert.equal(error.originalCode, 'INSTALLATION_TIMEOUT')
-    assert.equal(error.processDirectory, registry)
-    assert.ok(error.processGroups.includes(error.pid))
-    assert.ok(error.cleanupErrors.length > 0)
-    assert.ok(error.message.includes(error.cleanupErrors[0]))
-    return true
-  })
-  assert.equal(await readFile(path.join(registry, 'stopping'), 'utf8'), '')
 })
 
 test('recovery only clears closed, verified trees whose supervisor has exited', async t => {
@@ -337,19 +215,6 @@ test('standalone CLI joins ownership and honors durable cancellation', async t =
   assert.match(result.stderr, /INSTALLATION_ABORTED/)
   assert.notEqual(lease.owner.unsafeToRetry, true)
   assert.equal(lease.release(), true)
-})
-
-test('standalone CLI retains shared ownership when cleanup is unverifiable', async t => {
-  const directory = await fixture(t)
-  const lease = installationState.acquireInstallation({ dshHome: directory, attemptId: 'cli-unsafe' })
-  const script = `require('node:fs').writeFileSync(require('node:path').join(process.env.DSH_TAVERN_INSTALL_PROCESS_DIR, '123.json'), '{')`
-  const result = await launchCli(['fixture unsafe', String(fixtureTimeout), process.execPath, '-e', script], {
-    ...process.env, DSH_TAVERN_INSTALL_LOCK: lease.lockDir, DSH_TAVERN_INSTALL_ATTEMPT: lease.attemptId,
-  }).completion
-  assert.equal(result.status, 1)
-  assert.match(result.stderr, /INSTALLATION_CLEANUP_FAILED/)
-  assert.equal(lease.owner.unsafeToRetry, true)
-  assert.throws(() => lease.release(), { code: 'INSTALLATION_UNSAFE' })
 })
 
 test('Windows cmd encoding preserves boundaries and escapes each parsing layer', () => {

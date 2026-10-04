@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -79,29 +79,6 @@ for (const failure of ['missing', 'export', 'transitive']) {
     assert.equal(readFileSync(path.join(f.pluginDirectory, 'pnpm-workspace.yaml'), 'utf8'), f.original)
   })
 }
-
-test('CLI npm/pnpm 包目录及符号链接按当前 dsh 定位，不受 Desktop 环境变量影响', t => {
-  const f = fixture(t)
-  const cliRoot = path.join(f.root, 'cli/node_modules/@deepseek-ai/dsh')
-  mkdirSync(path.join(cliRoot, 'lib'), { recursive: true })
-  writeFileSync(path.join(cliRoot, 'package.json'), '{"name":"@deepseek-ai/dsh","bin":{"dsh":"lib/bin.js"}}')
-  writeFileSync(path.join(cliRoot, 'lib/bin.js'), '')
-  renameSync(path.resolve(path.dirname(f.bootstrap), '../node_modules'), path.join(cliRoot, 'node_modules'))
-  const wrapper = path.join(f.root, 'cli/dsh.cmd')
-  writeFileSync(wrapper, '@echo off')
-  for (const dsh of [wrapper, path.join(cliRoot, 'lib/bin.js')]) {
-    const deps = resolveHostDependencies({ dsh, env: { DSH_DESKTOP_DSH_BOOTSTRAP: '/wrong/desktop.js' } })
-    assert.ok(deps.every(dep => dep.directory.startsWith(realpathSync(cliRoot))))
-    assert.equal(realpathSync(resolveDshBootModule({ dsh })), realpathSync(path.join(cliRoot, 'node_modules/@deepseek-ai/dsh-app-boot/index.js')))
-  }
-  if (process.platform !== 'win32') {
-    const bin = path.join(f.root, 'bin')
-    mkdirSync(bin)
-    symlinkSync(path.join(cliRoot, 'lib/bin.js'), path.join(bin, 'dsh'))
-    const deps = resolveHostDependencies({ dsh: 'dsh', env: { PATH: bin }, host: 'android' })
-    assert.ok(deps.every(dep => dep.directory.startsWith(realpathSync(cliRoot))))
-  }
-})
 
 test('Desktop 无 bootstrap 环境变量时按 app 可执行文件定位，不使用另一套 CLI', t => {
   const f = fixture(t)

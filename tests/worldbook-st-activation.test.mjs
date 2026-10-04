@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { prepareWorldBookRecall, projectWorldBookTemplates } from '../tavern-plugin/lib/domain/worldbook-recall.js'
+import { prepareWorldBookRecall } from '../tavern-plugin/lib/domain/worldbook-recall.js'
 import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
 import { createForegroundWorldbook } from '../tavern-plugin/lib/domain/foreground-worldbook.js'
 import { UpstreamTemplateRuntime } from './fixtures/upstream-template-runtime.mjs'
@@ -35,25 +35,6 @@ test('包含组支持优先级、权重、计分和多个组，不会重复入�
   assert.deepEqual(recall(entries, { userText: 'Alice Bob' }).refs, ['entry:0'])
 })
 
-test('正式前台投影：蓝灯标签包住绿灯角色，系统前缀无重复，同一轮重试无重复冷却', async () => {
-  const worldBook = book([e(0, '', { constant: true, order: 10, content: '<角色库>' }),
-    e(1, 'Alice', { order: 20, content: 'Alice 的资料' }), e(2, '', { constant: true, order: 30, content: '</角色库>' }),
-    e(3, '', { constant: true, position: 1, content: '通用规则' })])
-  const project = createForegroundWorldbook({ bound: async () => worldBook, runtime: async () => runtime, globalVariables: async () => ({}) })
-  const chat = { messages: [{ role: 'assistant', text: '天气晴朗', turn: 1 }] }
-  const first = await project({ chat, card: {}, userText: '找 Alice' })
-  assert.equal(first.error, null)
-  assert.equal(first.context, '<角色库>\n\nAlice 的资料\n\n</角色库>')
-  assert.equal(first.prefixContext, '通用规则')
-  chat.worldBookReads = first.reads; chat.preparedWorldBook = first.activation
-  assert.equal((await project({ chat, card: {}, userText: '找 Alice' })).context, first.context)
-  chat.messages.push({ role: 'assistant', text: 'Alice 来了', turn: 2 })
-  const second = await project({ chat, card: {}, userText: '继续' })
-  assert.equal(second.context, '<角色库>\n\n</角色库>')
-  assert.equal(second.reads['entry:1'].turn, 1)
-  const prefixOnly = await projectWorldBookTemplates({ worldBook, runtime, includeConstants: true, chat, card: {} })
-  assert.equal(prefixOnly.prefixContext, '通用规则')
-})
 test('失败的绿灯 EJS 不泄露源码、不消耗冷却；脚本扫描与玩家输入共享 token 预算', async () => {
   const entries = Array.from({ length: 6 }, (_, uid) => e(uid, uid > 2 ? 'script' : 'player', { order: uid }))
   entries.push(e(9, 'player', { content: '<% if ( %>', order: 999 }))

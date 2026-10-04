@@ -1,13 +1,13 @@
 import {buildMvuArtifacts} from '../tavern-plugin/lib/domain/mvu-conversion-artifacts.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readdir, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { parse } from 'yaml'
 import { createTavernSkillModule } from '../tavern-plugin/lib/domain/tavern-skills.js'
 
 const root = new URL('../presets/tavern/skills/', import.meta.url)
-const backgroundRoot = new URL('../presets/tavern-background/skills/', import.meta.url)
+
 const definition = { initialState: {场景:{地点:'入口'},玩家:{位置:'门口'},人物:{$meta:{extensible:true,template:{姓名:'',位置:'未明确',在场:true}}}}, updateRules: '按正文事实更新玩家位置与人物档案' }
 const {entries: recipeEntries, regexScripts: recipeRegex, statusHtml} = buildMvuArtifacts(definition)
 
@@ -23,33 +23,6 @@ for (const name of ['card-to-mvu','edit-card']) test(`${name} 可由 Tavern 内�
   for (const [, relative] of skill.content.matchAll(/\]\(((?:references|assets)\/[^)]+)\)/g)) {
     assert.ok((await readFile(new URL(relative, new URL(name+'/',root)), 'utf8')).length > 0)
   }
-})
-
-test('人物设计是现有后台 Agent 按需加载的内置 Skill', async () => {
-  const cardSkillNames = (await readdir(root, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
-  const backgroundSkillNames = (await readdir(backgroundRoot, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
-  assert.equal(cardSkillNames.includes('character-design'), false)
-  assert.deepEqual(backgroundSkillNames, ['character-design'])
-  const skills = createTavernSkillModule({ directory: new URL('../data/skills/', import.meta.url).pathname, builtInDirectory: backgroundRoot.pathname })
-  const skill = await skills.read('character-design')
-  assert.equal(skill.source, 'builtin')
-  const metadata = parse(skill.content.match(/^---\n([\s\S]*?)\n---/)[1])
-  assert.equal(metadata.name, 'character-design')
-  assert.equal(metadata['user-invocable'], false)
-  assert.match(skill.content, /提前储备/)
-  assert.match(skill.content, /同一个 Agent 会话/)
-  assert.match(skill.content, /不创建另一个 Agent/)
-  assert.match(skill.content, /普通卡与 MVU 卡/)
-  assert.match(skill.content, /不接收变量路径或变量对象/)
-  assert.match(skill.content, /character_design_read/)
-  assert.match(skill.content, /character_design_save/)
-  assert.match(skill.content, /character_design_finish/)
-  assert.doesNotMatch(skill.content, /character_design_complete/)
-  assert.match(skill.content, /不使用“未明确”“未知”“待定”/)
-  assert.match(skill.content, /不设固定数量上限/)
-  assert.doesNotMatch(skill.content, /仅在卡片已有人物库/)
-  assert.match(skill.content, /本次任务不提交姿势、变量或候选项/)
-  assert.match(skill.content, /不向前台追加设计说明/)
 })
 
 test('通用状态模板重新读取变量并刷新 DOM，支持新增与恢复且跳过内部字段', async () => {

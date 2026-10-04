@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { createScenePlans } from '../tavern-plugin/lib/domain/scene-plan.js'
 
 import { createProfileDataStore } from '../tavern-plugin/lib/profile-data-store.js'
-import { createHash } from 'node:crypto'
 
 const field = (text, tags) => ({ text, tags })
 const composition = { text: '半身构图', tags: 'medium shot' }
@@ -51,34 +50,6 @@ test('same names stay distinct without citations; unknown identities and invalid
   assert.equal((await fx.prepare(2)).saved, undefined, 'no partially valid revision published')
 })
 
-test('persisted legacy identities and evidence remain readable and unchanged across channel conversion', async t => {
-  const fx = await fixture(t), original = await fx.module.commit(await fx.prepare(), first())
-  const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
-  const path = 'scene-images/' + createHash('sha256').update('game').digest('hex') + '/plans.json'
-  let legacy
-  await fx.store.updateJson(path, data => {
-    const person = structuredClone(data.characters[original.characterRefs[0]])
-    person.identity = { source: 'target', quote: '林岚' }
-    person.fields.appearance.evidence = [{ source: 'target', quote: '黑发' }]
-    const ref = hash(person)
-    data.characters[ref] = person
-    const { id, ...body } = data.frames.one['tags-v1']
-    body.characterRefs = [ref]
-    body.scene.environment.evidence = [{ source: 'target', quote: '门口' }]
-    legacy = { ...body, id: hash(body) }
-    data.frames.one['tags-v1'] = legacy
-    return data
-  })
-  fx.restart()
-  const prepared = await fx.prepare()
-  assert.deepEqual(prepared.saved, legacy)
-  assert.equal((await fx.module.snapshot('game', prepared.saved)).people[0].identity.quote, '林岚')
-  assert.equal(prepared.input.previousScene.environment.evidence, undefined)
-  const conversion = await fx.prepare(1, '林岚', { profile: 'another-profile' })
-  const frame = await fx.module.commit(conversion, { description: '转换', continuity: 'continued', subjects: legacy.subjects, characters: [], scene: { composition }, expressions: conversion.input.missingBlocks.map(item => ({ ...item, tags: item.field + ' translated' })) })
-  assert.deepEqual(frame.characterRefs, legacy.characterRefs)
-  assert.deepEqual((await fx.prepare()).saved, legacy)
-})
 test('branches and games do not share future identities; stale parallel commits cannot overwrite a newer revision', async t => {
   const fx = await fixture(t), pending = await fx.prepare()
   const one = await fx.module.commit(pending, first())

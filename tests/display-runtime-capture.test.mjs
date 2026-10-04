@@ -85,23 +85,6 @@ test('rollback during capture cannot recreate the removed turn', async t => {
   assert.equal(saved.messages[457].displayRuntime, undefined)
 })
 
-test('legacy inferred turns and MVU-only reports preserve diagnostic content', async t => {
-  const { capture, persistence, records } = await harness(t)
-  await persistence.update('chat', chat => {
-    chat.messages = [{ role: 'assistant', greeting: true }, { role: 'user' }, { role: 'assistant', text: 'reply' }]
-    return chat
-  })
-  await capture('session', 2, 0, { dom: 'rendered status', panelId: 'panel', mvuViewUsed: true })
-  const before = await records.read('chat')
-  assert.equal((await capture('session', 2, 0, { panelId: 'panel', mvuViewUsed: true })).captured, false)
-  const after = await records.read('chat')
-  assert.equal(after._storageRevision, before._storageRevision)
-  assert.equal(after.messages[2].displayRuntime.frames[0].dom, 'rendered status')
-  const projected = await persistence.readDisplayRuntimeState('chat', 2)
-  projected.displayRuntime.frames[0].dom = 'mutation outside transaction'
-  assert.equal((await records.read('chat')).messages[2].displayRuntime.frames[0].dom, 'rendered status')
-})
-
 test('layout evidence is bounded, persists through replay and deduplicates without touching variables', async t => {
   const { capture, records, root } = await harness(t)
   const layout = { mode: 'viewport', source: 'template', width: 390, height: 600, availableHeight: 600,

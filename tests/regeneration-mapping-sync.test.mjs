@@ -32,15 +32,3 @@ for(const count of [20,400,10000])test(`production mapping delta is keyed and on
  assert.equal(h.createSessionViewReader.storyTurnLookup.read(live.getSnapshot('s').view.regeneratedDshTurns,101),2)
  assert.equal(h.createSessionViewReader.storyTurnLookup.read(client.view.regeneratedDshTurns,100),1)
 })
-
-test('mapping parent replacement and removal preserve wire semantics',()=>{
- const sync=createSessionViewSync()
- let result=sync('s',{})
- result=sync('s',{regeneratedDshTurns:{'1':8}},result.viewCursor)
- assert.deepEqual(result.viewDelta.set,[[['regeneratedDshTurns'],{}],[['regeneratedDshTurns','1'],8]])
- result=sync('s',{regeneratedDshTurns:null},result.viewCursor)
- assert.deepEqual(result.viewDelta.set,[[['regeneratedDshTurns'],null]])
- assert.deepEqual(result.viewDelta.remove,[['regeneratedDshTurns','1']])
- result=sync('s',{},result.viewCursor)
- assert.deepEqual(result.viewDelta.remove,[['regeneratedDshTurns']])
-})

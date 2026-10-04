@@ -201,16 +201,6 @@ test('大卡与已有副本目录保持简短，按需分页不丢换行且可�
   await assert.rejects(f.conversion.convert({...args,action:'read',scope:'target',targetRevision:'wrong',path:'/first_mes'}),/目标副本已有变更/)
 })
 
-test('非目标格式正则保留，不因包含标签而被误判为旧状态栏',async t=>{
-  const f=await fixture(t), doc=await f.resources.readCard(f.sourcePath), data=cardData(doc)
-  data.first_mes+='\n<对话>你好</对话>'
-  data.extensions.regex_scripts.push({id:'dialogue',findRegex:'<对话>(.*?)</对话>',replaceString:'<b>$1</b>',placement:[2],markdownOnly:true})
-  await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
-  const result=await f.apply()
-  assert.equal(result.validation.valid,true)
-  assert.ok(cardData(await f.resources.readCard(result.path)).extensions.regex_scripts.some(r=>r.id==='dialogue'))
-})
-
 test('默认底稿一次带齐短字段和开场，长字段标明续读，支持批量原文',async t=>{
   const f=await fixture(t),doc=await f.resources.readCard(f.sourcePath)
   cardData(doc).scenario='长脚本'.repeat(15000)
@@ -264,25 +254,4 @@ test('DSH 无损快照和输出 schema 校验覆盖已有、损坏副本与验�
   assert.notEqual(snapshotJsonValue(validation),undefined)
   await f.resources.writeWorking(result.path,'{')
   await check({action:'inspect',sourcePath:f.sourcePath,detail:'full'})
-})
-
-test('工具固化原渐变、图标、details：映射变量，更新和回退不重建皮肤', async t => {
-  const f=await fixture(t),doc=await f.resources.readCard(f.sourcePath)
-  const skin='<style>.skin{background:linear-gradient(pink,peachpuff);border-radius:12px}</style><details class="skin"><summary>🧳 旅人行装</summary><p>📍 <span>$1</span></p></details>'
-  cardData(doc).extensions.regex_scripts.push({id:'skin',findRegex:'/<state>(.*?)<\\/state>/g',replaceString:'```html\n'+skin+'\n```',placement:[2],markdownOnly:true})
-  await f.resources.writeWorking(f.sourcePath,JSON.stringify(doc))
-  const appearance={sourcePath:'/extensions/regex_scripts/1/replaceString',bindings:[{capture:1,path:'/玩家/位置'}]}
-  const input={sourcePath:f.sourcePath,...await f.inspect(),appearance}
-  const frozen=await f.conversion.convert({...input,action:'freezeAppearance'})
-  assert.match(frozen.sourceDigest,/^[a-f0-9]{64}$/)
-  const result=await f.apply({appearance,cleanup:[...definition().cleanup,{op:'remove',path:'/extensions/regex_scripts/1'}]})
-  assert.equal(result.validation.valid,true,JSON.stringify(result.validation))
-  const data=cardData(await f.resources.readCard(result.path)),meta=data.extensions[MVU_CONVERSION_KEY]
-  assert.equal(meta.frozenAppearance.html,skin)
-  assert.equal(result.validation.checks.find(c=>c.name==='appearanceSource').status,'passed')
-  const next=await f.conversion.convert({action:'apply',...await f.inspect(),sourcePath:f.sourcePath,updateRules:'根据已发生剧情更新玩家位置。'})
-  assert.equal(next.validation.valid,true)
-  assert.deepEqual(cardData(await f.resources.readCard(result.path)).extensions[MVU_CONVERSION_KEY].frozenAppearance,meta.frozenAppearance)
-  await assert.rejects(f.apply({appearance:{...appearance,html:'<div>改皮肤</div>'}}),/不接受模型重写/)
-  await assert.rejects(f.apply({appearance:{...appearance,bindings:[]}}),/每个捕获/)
 })

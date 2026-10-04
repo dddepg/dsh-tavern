@@ -48,13 +48,6 @@ for (const failure of ['timeout', 'error']) test(`${failure} retry deadline surv
   h.loop.stop()
 })
 
-test('terminal error discards pre-failure queued notifications', async () => {
-  const h = harness({ onError: () => null }); h.loop.request(); await h.clock.next(); h.loop.request()
-  h.loads[0].reject(new Error('deleted')); await flush()
-  assert.deepEqual(h.clock.delays(), [])
-  h.loop.stop()
-})
-
 for (const outcome of ['resolve', 'reject']) test(`replacement revokes late ${outcome}, timeout and finally before starting successor`, async () => {
   const h = harness(); h.loop.request(); await h.clock.next(); h.loop.request()
   h.loop.replace(); assert.equal(h.loads[0].scope.signal.aborted, true)

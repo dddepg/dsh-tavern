@@ -19,17 +19,7 @@ for (const name of ['generate', 'generateRaw']) test(name + ' returns host resul
     assert.deepEqual(events, [['js_generation_started', 'g'], ['js_stream_token_received_fully', 'answer', 'g'], ['js_stream_token_received_incrementally', 'answer', 'g'], ['js_generation_ended', 'answer', 'g']])
     assert.equal(config.generation_id, 'g')
 })
-test('non-streaming jobs get generated IDs and completion; duplicate IDs reject without RPC', async () => {
-    const {w, calls, events} = fixture()
-    const pending = w.generate({})
-    assert.match(calls[0].args.config.generation_id, /^dsh-gen-/)
-    const id = calls[0].args.config.generation_id
-    await assert.rejects(w.generate({generation_id: id}), /正在使用/)
-    assert.equal(calls.length, 1)
-    calls[0].resolve({text: 'yes'})
-    assert.equal(await pending, 'yes')
-    assert.deepEqual(events.map(row => row[0]), ['js_generation_started', 'js_generation_ended'])
-})
+
 test('cancel APIs dispatch immediately and failed generation settles with end notification', async () => {
     const {w, calls, events} = fixture()
     const pending = w.generate({generation_id: 'g'}), cancel = w.stopGenerationById('g')

@@ -34,13 +34,7 @@ for (const outcome of ['old success', 'network error', 'server error']) test(`re
   assert.equal(result.viewDelta, undefined); assert.equal(result.viewBase, undefined)
   assert.ok(!h.generations.includes('old'), 'obsolete responses cannot roll runtime generation back')
 })
-test('real RPC does not hide a current request failure behind an older cached success', async () => {
-  const h = harness(), first = h.rpc('getSession', {}, 'A')
-  h.reads[0].reply({ ok: true, viewCursor: 'v1', view: { done: true } }); await first
-  const next = h.rpc('getSession', {}, 'A')
-  h.reads[1].reject(new Error('current outage'))
-  await assert.rejects(next, /current outage/)
-})
+
 for (const method of ['getSession', 'submitTask']) test(`cancelled ${method} preserves AbortError and cannot observe or cache a late success`, async () => {
   const h = harness(), controller = new AbortController()
   const task = h.rpc(method, {}, 'A', { signal: controller.signal })

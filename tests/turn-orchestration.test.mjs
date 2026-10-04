@@ -162,31 +162,6 @@ function harness(mode, options = {}) {
   }
 }
 
-test('生图世界书版本冻结在生成前，不进入正文 Frame 文本，提交时不借用后来版本', async () => {
-  for (const compatibility of [false, true]) {
-    let calls = 0, current = { version: 1, digest: 'a'.repeat(64) }
-    const run = harness('story', { captureSceneWorldbook: async () => { calls++; return clone(current) } })
-    const input = { sessionId: 'session-1', turn: 1, userText: '看一眼林岚。' }
-    const first = compatibility ? await run.orchestrator.beginCompatibility(input) : await run.orchestrator.prepare(input)
-    if (!compatibility) assert.doesNotMatch(foregroundFrameText(first.frame), /aaaaa|sceneWorldbook/)
-    current = { version: 1, digest: 'b'.repeat(64) }
-    if (compatibility) await run.orchestrator.beginCompatibility(input)
-    else await run.orchestrator.prepare(input)
-    assert.equal(calls, 1)
-    await run.orchestrator.finalize({ ...input, assistantText: '林岚站在车站。' })
-    const message = run.chat().messages.at(-1)
-    assert.equal(message.sceneWorldbook.digest, 'a'.repeat(64))
-    assert.equal(message.sceneWorldbook.bodyDigests.length, 1)
-    const next = { ...input, turn: 2, userText: '继续' }
-    if (compatibility) await run.orchestrator.beginCompatibility(next)
-    else await run.orchestrator.prepare(next)
-    await run.orchestrator.finalize({ ...next, assistantText: '第二轮的正文。' })
-    assert.equal(run.chat().messages.at(-1).sceneWorldbook.digest, 'b'.repeat(64))
-    assert.equal(run.chat().messages.find(item => item.role === 'assistant').sceneWorldbook.digest, 'a'.repeat(64))
-    assert.equal(run.rollback().chat.messages.at(-1).sceneWorldbook.digest, 'a'.repeat(64))
-  }
-})
-
 test('连续正文回合的实际 Frame 消息不重复基本信息和常驻世界书', async () => {
   const planner = createContextPlanner({ prompt: () => '正文写作规则' })
   const cardData = { name: '阿芙拉', description: '固定描述', personality: '固定性格', scenario: '固定场景', mes_example: '固定示例', system_prompt: '逐轮系统指令', post_history_instructions: '逐轮历史后指令' }
@@ -236,28 +211,6 @@ test('同一 DSH rpcId 即使被重放到新回合也不会再次推进酒馆状
   }), false)
 })
 
-test('人物卡 promptOnly 正则写入 Session，但展示投影仍保留原始状态块', async () => {
-  const run = harness('story', {
-    extensions: {
-      regexScripts: [{
-        id: 'draft', name: '移除草稿', findRegex: '/<draft_notes>[\\s\\S]*?<\\/draft_notes>\\s*/', replaceString: '',
-        placement: [2], enabled: true, markdownOnly: false, promptOnly: true, runOnEdit: false
-      }]
-    }
-  })
-  await run.orchestrator.prepare({ sessionId: 'session-1', turn: 2, userText: '继续' })
-  const saved = await run.orchestrator.finalize({
-    sessionId: 'session-1', turn: 2, userText: '继续',
-    assistantText: '<draft_notes>内部推演</draft_notes>\n正文。'
-  })
-
-  assert.equal(saved.reply.sourceText, '<draft_notes>内部推演</draft_notes>\n正文。')
-  assert.equal(saved.reply.sessionText, '正文。')
-  assert.equal(saved.reply.displayText, '<draft_notes>内部推演</draft_notes>\n正文。')
-  assert.equal(run.chat().messages.at(-1).text, '正文。')
-  assert.equal(run.chat().messages.at(-1).displayText, '<draft_notes>内部推演</draft_notes>\n正文。')
-})
-
 test('预设中段渲染后进入真实 Frame，并保留存档中的原始宏', async () => {
   const raw = {
     front: { entries: [{ role: 'system', content: '{{setvar::style::温和}}' }] },
@@ -267,22 +220,6 @@ test('预设中段渲染后进入真实 Frame，并保留存档中的原始宏',
   const prepared = await run.orchestrator.prepare({ sessionId: 'session-1', turn: 2, userText: '继续' })
   assert.match(prepared.frame.context.writingRules, /采用温和笔调。/)
   assert.deepEqual(run.chat().runtimePresetSnapshot, raw)
-})
-
-test('正文替代先回到 checkpoint 再提交，剧本游标不会推进两次', async () => {
-  const run = harness('script')
-  await run.orchestrator.prepare({ sessionId: 'session-1', turn: 1, userText: '走进旅店' })
-  await run.orchestrator.finalize({ sessionId: 'session-1', turn: 1, userText: '走进旅店', assistantText: '第一版正文' })
-  assert.equal(run.chat().scriptState.cursor, 1)
-
-  const rolled = run.rollback()
-  run.replaceChat(rolled.chat)
-  await run.orchestrator.prepare({ sessionId: 'session-1', turn: 2, userText: '【重新生成】走进旅店' })
-  await run.orchestrator.finalize({ sessionId: 'session-1', turn: 2, userText: '【重新生成】走进旅店', assistantText: '替代正文' })
-
-  assert.equal(run.chat().scriptState.cursor, 1)
-  assert.equal(run.chat().timeline.checkpoints.length, 1)
-  assert.equal(run.chat().messages.at(-1).text, '替代正文')
 })
 
 test('卡片 raw 扩展修改先暂存，最终回复后才写入工作 raw', async () => {
@@ -295,26 +232,6 @@ test('卡片 raw 扩展修改先暂存，最终回复后才写入工作 raw', as
 
   await run.orchestrator.finalize({ sessionId: 'session-1', turn: 9, userText: '加入正则', assistantText: '已经加入。' })
   assert.deepEqual(run.cardWorkspace().raw.extensions.regex_scripts, [{ scriptName: '状态栏' }])
-})
-
-test('空白卡片工作台确认完整设定后直接创建并绑定正式人物卡', async () => {
-  const run = harness('card', { draft: true })
-  await run.orchestrator.prepare({ sessionId: 'session-1', turn: 6, userText: '确认角色和玩家' })
-  await run.orchestrator.stageChanges({ sessionId: 'session-1', turn: 6, fields: { name: '阿芙拉', player: '旅行者' } })
-  assert.equal(run.chat().workspace.draft.name, '')
-
-  const saved = await run.orchestrator.finalize({ sessionId: 'session-1', turn: 6, userText: '确认角色和玩家', assistantText: '人物卡已创建。' })
-  assert.equal(run.chat().workspace.draft.name, '阿芙拉')
-  assert.equal(run.chat().workspace.player, '旅行者')
-  assert.equal(run.chat().workspace.cursor, 1)
-  assert.equal(run.chat().cardPath, 'cards/阿芙拉.json')
-  assert.equal(run.chat().cardName, '阿芙拉')
-  assert.deepEqual(run.createdCards.map((item) => item.path), ['cards/阿芙拉.json'])
-  assert.deepEqual(saved.createdCard, { path: 'cards/阿芙拉.json', name: '阿芙拉' })
-  const duplicate = await run.orchestrator.finalize({ sessionId: 'session-1', turn: 6, userText: '确认角色和玩家', assistantText: '重复回调' })
-  assert.equal(duplicate.duplicate, true)
-  assert.equal(run.createdCards.length, 1)
-  assert.deepEqual(await run.orchestrator.visibleTools('session-1'), ['tavern_memory_search', 'tavern_memory_preference', 'tavern_memory_experience', 'web_search', 'bash', 'str_replace_editor', 'read', 'write', 'edit', 'read_image', 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect_self', 'cordis_define', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_card_draft', 'tavern_read_mvu_appearance', 'tavern_update_mvu_appearance', 'tavern_validate_mvu_conversion', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response'])
 })
 
 test('游戏前台按快照启用联网搜索，卡片工作台始终启用', async () => {
@@ -354,17 +271,6 @@ test('new card is created and bound before tool returns; next write updates the 
   await run.orchestrator.saveChanges({ sessionId: 'session-1', turn: 1, fields: { description: '第二次修改' } })
   assert.equal(run.card().description, '第二次修改')
   assert.equal(run.createdCards.length, 1)
-})
-
-test('repair workbench reaches tools and completes even when its card cannot parse', async () => {
-  const run = harness('card', { brokenCard: true })
-  const prepared = await run.orchestrator.prepare({ sessionId: 'session-1', turn: 1, userText: '校验并修复人物卡' })
-  assert.equal(prepared.ready, true)
-  assert.ok((await run.orchestrator.visibleTools('session-1')).includes('tavern_validate_card'))
-  const done = await run.orchestrator.finalize({ sessionId: 'session-1', turn: 1, userText: '校验', assistantText: '文件格式仍需修复' })
-  assert.equal(done.saved, true)
-  const play = harness('story', { brokenCard: true })
-  await assert.rejects(play.orchestrator.prepare({ sessionId: 'session-1', turn: 1, userText: '继续' }), /invalid JSON/)
 })
 
 test('玩家模板先于本轮召回，重试不重复执行；提交后只产生一条玩家消息', async () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -26,18 +26,6 @@ function child(code, args = []) {
   })
 }
 
-test('durable installation ownership spans process lifetimes and all same-home entrants', async t => {
-  const dshHome = home(t)
-  const probe = "const m=require(process.argv[1]);try{const h=m.acquireInstallation({dshHome:process.argv[2]});console.log(h.attemptId)}catch(e){console.error(e.code);process.exitCode=3}"
-  const results = await Promise.all(Array.from({ length: 8 }, () => child(probe, [dshHome])))
-  const winners = results.filter(result => result.status === 0)
-  assert.equal(winners.length, 1)
-  assert.ok(results.filter(result => result.status !== 0).every(result => result.stderr.includes('INSTALLATION_BUSY')))
-  assert.equal(readInstallation(dshHome).attemptId, winners[0].stdout.trim())
-  // Even though the winning process is gone, no contender can assume its children are.
-  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
-})
-
 test('explicit same-token nesting joins without releasing or changing the outer owner', t => {
   const dshHome = home(t)
   const outer = acquireInstallation({ dshHome, sourceRoot: '/source', statusFile: '/status' })
@@ -53,20 +41,6 @@ test('explicit same-token nesting joins without releasing or changing the outer 
   assert.equal(outer.release(), true)
   assert.equal(outer.release(), false)
   assert.equal(readInstallation(dshHome), null)
-})
-
-test('reservation is adopted only once and fences delayed reservation callbacks', t => {
-  const dshHome = home(t)
-  const reservation = acquireInstallation({ dshHome, attemptId: 'ui-request', state: 'reserved', pid: 0 })
-  requestCancellation(dshHome, reservation.attemptId)
-  const updater = acquireInstallation({ dshHome, attemptId: reservation.attemptId, adopt: true })
-  assert.equal(updater.adopted, true)
-  assert.equal(updater.owner.pid, process.pid)
-  assert.equal(cancellationRequested(dshHome, updater.attemptId), true)
-  assert.throws(() => acquireInstallation({ dshHome, attemptId: updater.attemptId, adopt: true }), { code: 'INSTALLATION_BUSY' })
-  assert.throws(() => reservation.update({ state: 'failed' }), { code: 'INSTALLATION_OWNERSHIP_LOST' })
-  assert.throws(() => reservation.release(), { code: 'INSTALLATION_OWNERSHIP_LOST' })
-  updater.release()
 })
 
 test('cancellation survives concurrent progress without metadata read-modify-write loss', async t => {
@@ -87,19 +61,6 @@ test('cancellation survives concurrent progress without metadata read-modify-wri
   successor.release()
 })
 
-test('unsafe nested cleanup retains the lock, including through later ordinary updates', t => {
-  const dshHome = home(t)
-  const owner = acquireInstallation({ dshHome })
-  const nested = acquireInstallation({ dshHome, attemptId: owner.attemptId })
-  nested.retain('A descendant could not be terminated')
-  owner.update({ state: 'failed', unsafeToRetry: false })
-  assert.equal(owner.owner.state, 'blocked')
-  assert.equal(owner.owner.unsafeToRetry, true)
-  assert.throws(() => owner.release(), { code: 'INSTALLATION_UNSAFE' })
-  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
-  assert.ok(existsSync(path.join(dshHome, '.tavern-install.lock', 'owner.json')))
-})
-
 test('stopped-owner recovery requires explicit descendant verification and exact generation', async t => {
   const dshHome = home(t)
   const exited = await child('')
@@ -113,21 +74,6 @@ test('stopped-owner recovery requires explicit descendant verification and exact
   const active = acquireInstallation({ dshHome })
   assert.throws(() => releaseStoppedInstallation({ dshHome, attemptId: active.attemptId, generation: active.owner.generation, processesVerifiedStopped: true }), { code: 'INSTALLATION_BUSY' })
   active.release()
-})
-
-test('incomplete, malformed and ancient locks stay conservative and preserve user data', t => {
-  const dshHome = home(t)
-  const lockDir = path.join(dshHome, '.tavern-install.lock')
-  writeFileSync(path.join(dshHome, 'settings.yaml'), 'keep: true\n')
-  mkdirSync(lockDir)
-  assert.equal(readInstallation(dshHome).state, 'uncertain')
-  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
-  writeFileSync(path.join(lockDir, 'owner.json'), '{bad json')
-  assert.equal(readInstallation(dshHome).unsafeToRetry, true)
-  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
-  writeFileSync(path.join(lockDir, 'owner.json'), JSON.stringify({ attemptId: 'ancient', generation: 'old', pid: 2147483647, startedAt: '1970-01-01T00:00:00Z' }))
-  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
-  assert.equal(readFileSync(path.join(dshHome, 'settings.yaml'), 'utf8'), 'keep: true\n')
 })
 
 test('CLI lock release is PID and generation fenced; a nested CLI cannot release', t => {

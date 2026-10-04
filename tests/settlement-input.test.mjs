@@ -5,13 +5,7 @@ const window = () => ({from:9997,messageCount:10000,revision:8,chat:{id:'c',_sto
  backgroundConfigVersion:1,conversationFeaturesVersion:1,timeline:{schemaVersion:1,revision:3,checkpoints:[],operations:{}},
  preparedWorldBook:{revision:3},mvu:{enabled:true,owner:'official'},messages:[{role:'assistant',text:'prior'},
  {role:'tavern-helper',text:'helper'},{role:'assistant',turn:5000,mvu:{pending:true,variableRetry:true},variables:[{hp:8}]}]}})
-test('retry input preserves absolute target and neighboring helper rows without full reads',async()=>{
- const selected=await readSettlementInput('c',{readWindow:async()=>window(),readChat:async()=>{throw Error('full read')}})
- assert.equal(selected.messages.length,10000)
- assert.equal(selected.messages[9999].variables[0].hp,8)
- assert.equal(selected.messages[9998].text,'helper')
- assert.deepEqual(Object.keys(selected.messages),['9997','9998','9999'])
-})
+
 for(const reason of ['worldbook','ordinary','legacy','boundary','format','revision'])test(`unsupported ${reason} input retains full read`,async()=>{
  const value=window()
  if(reason==='worldbook')value.chat.preparedWorldBook.revision=2

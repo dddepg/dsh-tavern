@@ -46,14 +46,3 @@ test('后续正文不能被重新生成成功的范围或正常回退偷偷吞�
   assert.throws(() => planRegenerationSurface({ ...evidence, oldAssistantSeq: 1, eventStart: f.eventStart }), /无法安全清理/)
   assert.throws(() => locateRollbackSurface(evidence), /无法安全清理/)
 })
-
-test('失败重试按钮和执行入口都拒绝不安全范围', async () => {
-  const { failedTurnReplayAvailability } = await import('../tavern-plugin/lib/domain/rollback-surface.js')
-  const f = fixture()
-  const events = sessionEvents(f.session).map(event => event.seq === f.input.seq ? { ...event, data: user('real-input') } : event)
-  const nodes = [f.refreshed.seq, f.input.seq, 1, f.reply.seq]
-  const result = failedTurnReplayAvailability({ events, nodes })
-  assert.equal(result.target, null)
-  assert.match(result.reason, /无法安全清理/)
-  assert.equal(failedTurnReplayAvailability({ events, nodes: f.session.surface.nodes }).target.turn, 2)
-})

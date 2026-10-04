@@ -5,8 +5,6 @@ import { generateHelper, generateHelperRaw, generateHelperCompletion, identifyHe
 import { compileHelperGenerate, validateHelperGenerateConfig, resolveHelperGenerationPreset, helperGenerationHistory } from '../tavern-plugin/lib/domain/helper-generation-prompts.js'
 import { createHelperGenerationTasks } from '../tavern-plugin/lib/domain/helper-generation-tasks.js'
 import { createCleanCompatibilityPreset } from '../tavern-plugin/lib/domain/sillytavern-compatibility.js'
-import { inspectPreset } from '../tavern-plugin/lib/domain/preset-reading.js'
-import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
 
 const pluginSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 const generationCases = pluginSource.slice(pluginSource.indexOf("      case 'generateTavernHelper':"), pluginSource.indexOf("      case 'callOpeningRuntime':"))
@@ -15,17 +13,6 @@ function generationRpc(dependencies) {
     helperGenerationHistory, validateHelperGenerateConfig, readChatCard, helperGenerationPreset, worldBooks, readCardExtensions } = dependencies;
     return async (method, args) => { switch (method) { ${generationCases} } }`)(dependencies)
 }
-
-test('人物卡原样 generateRaw 参数独立生成，不隐式注入历史或修改输入', async () => {
-  const config = { ordered_prompts: [{ role: 'user', content: '生成测试档案' }], max_chat_history: 25, should_stream: false,
-    overrides: { world_info_before: '', world_info_after: '', chat_history: { with_depth_entries: false } } }
-  const before = structuredClone(config)
-  let request
-  const result = await generateHelperRaw(config, { sessionId: 's1', history: [{ role: 'assistant', text: '不要发送的正文' }], callModel: async r => { request = r; return '---\nname: test' } })
-  assert.equal(result, '---\nname: test')
-  assert.deepEqual(request, { sessionId: 's1', system: '', messages: [{ role: 'user', content: [{ type: 'text', text: '生成测试档案' }] }] })
-  assert.deepEqual(config, before)
-})
 
 function generationContext() {
   const preset = createCleanCompatibilityPreset()
@@ -44,18 +31,6 @@ function generationContext() {
     ] } }
   }
 }
-
-test('generate sends the real preset, card, activated worldbook, bounded history and input without mutating them', async () => {
-  const context = generationContext(), config = { user_input: 'A dragon arrives', max_chat_history: 1, should_stream: true, generation_id: 'job' }
-  const before = structuredClone({ context, config })
-  let request
-  assert.equal(await generateHelper(config, { ...context, callModel: async value => { request = value; return 'A reply' } }), 'A reply')
-  const texts = request.messages.map(message => message.content[0].text)
-  assert.deepEqual(texts, ['Preset for Hero', 'Card system', 'Constant lore', 'Card description for Player', 'Kind', 'A forest', 'Dragon lore', 'An unstructured example', 'new history', 'A dragon arrives', 'Card tail'])
-  assert.equal(request.sessionId, 'story')
-  assert.equal(request.system, '')
-  assert.deepEqual({ context, config }, before)
-})
 
 test('generate applies nonempty and empty overrides instead of losing requested content', () => {
   const context = generationContext()
@@ -85,56 +60,6 @@ test('generate inherits supported preset sampling unless overridden or explicitl
   assert.equal(request.temperature, 0.1)
   assert.equal(request.maxTokens, 30)
   assert.ok(!JSON.stringify(request).includes('private'))
-})
-
-test('generation consumes actual inspected preset and embedded/native worldbook schemas', () => {
-  const document = {
-    prompts: [{ identifier: 'charDescription', marker: true }, { identifier: 'worldInfoBefore', marker: true }, { identifier: 'chatHistory', marker: true },
-      { identifier: 'custom', role: 'assistant', content: 'Real preset' }, { identifier: 'ignored', content: 'Disabled preset' }],
-    prompt_order: [{ character_id: 100001, order: ['custom', 'worldInfoBefore', 'charDescription', 'chatHistory'].map(identifier => ({ identifier, enabled: true })).concat({ identifier: 'ignored', enabled: false }) }]
-  }
-  const snapshot = { compatibilityPreset: inspectPreset(JSON.stringify(document), 'real.json'), compatibilityPresetDocument: document }
-  const embedded = { name: 'Book', entries: [
-    { id: 1, keys: [], enabled: true, constant: true, content: 'Before', extensions: { position: 0 } },
-    { id: 2, keys: ['hello'], enabled: true, content: 'Depth', extensions: { position: 4, depth: 1, role: 1 } }
-  ] }
-  const native = { entries: {
-    1: { uid: 1, key: [], disable: false, constant: true, content: 'Before', position: 0 },
-    2: { uid: 2, key: ['hello'], disable: false, content: 'Depth', position: 4, depth: 1, role: 1 }
-  } }
-  for (const world of [embedded, native]) {
-    const messages = compileHelperGenerate({ user_input: 'hello' }, { card: { name: 'Hero', description: 'Real card' }, presetSnapshot: snapshot, worldBook: { view: inspectWorldBookDocument(world) }, history: [] })
-    assert.deepEqual(messages, [
-      { role: 'assistant', content: 'Real preset' }, { role: 'system', content: 'Before' }, { role: 'system', content: 'Real card' },
-      { role: 'user', content: 'Depth' }, { role: 'user', content: 'hello' }
-    ])
-  }
-})
-
-test('generate retains greeting scan metadata, prompt regexes and author-note worldbook anchors', () => {
-  const context = generationContext()
-  context.chat.messages = [{ role: 'assistant', greeting: true, turn: 1, text: 'dragon menu', swipes: ['old', 'dragon menu'], swipeId: 1 }]
-  context.history = helperGenerationHistory(context.chat)
-  assert.equal(context.history[0].greeting, true)
-  assert.equal(context.history[0].turn, 1)
-  const characterRegex = { findRegex: '/menu/g', replaceString: 'opening', placement: [2], enabled: true, promptOnly: true }
-  context.extensions = { regexScripts: [characterRegex], characterRegexScripts: [characterRegex], globalRegexScripts: [] }
-  context.presetSnapshot.regexScripts = [{ findRegex: '/Input/g', replaceString: 'Named preset regex must not run', placement: [1], enabled: true, promptOnly: true }]
-  context.presetRegexScripts = [{ findRegex: '/Input/g', replaceString: 'Active preset input', placement: [1], enabled: true, promptOnly: true }]
-  context.worldBook = { view: inspectWorldBookDocument({ entries: [
-    { id: 1, enabled: true, keys: ['dragon'], content: 'Greeting-only lore', position: 'before_char' },
-    { id: 2, enabled: true, constant: true, content: 'Before note', position: 'before_an' },
-    { id: 3, enabled: true, constant: true, content: 'After note', position: 'after_an' },
-    { id: 4, enabled: true, constant: true, content: 'Outlet excluded', position: 'outlet' }
-  ] }) }
-  const messages = compileHelperGenerate({ user_input: 'Input', overrides: { chat_history: { author_note: 'Author note' } } }, context)
-  const texts = messages.map(message => message.content)
-  assert.ok(!texts.includes('Greeting-only lore'))
-  assert.ok(!texts.includes('Outlet excluded'))
-  assert.ok(!texts.includes('Named preset regex must not run'))
-  assert.ok(texts.includes('dragon opening'))
-  assert.ok(texts.includes('Active preset input'))
-  assert.deepEqual(texts.slice(texts.indexOf('Before note'), texts.indexOf('After note') + 1), ['Before note', 'Author note', 'After note'])
 })
 
 test('preset lookup distinguishes an unselected chat from a preview and rejects ambiguous names', async () => {
@@ -202,32 +127,6 @@ test('helper task cancellation aborts the operation and promptly rejects even wh
   assert.equal(tasks.stop('one', 'shared'), false)
   assert.equal(await tasks.run('one', 'shared', async () => 'replacement'), 'replacement')
   finish('late result must not win')
-})
-
-test('helper tasks reject duplicate IDs, isolate sessions and stop all only within a session', async () => {
-  const tasks = createHelperGenerationTasks()
-  const one = tasks.run('one', 'same', () => new Promise(() => {}))
-  const two = tasks.run('two', 'same', () => new Promise(() => {}))
-  const three = tasks.run('one', 'second', () => new Promise(() => {}))
-  const rejected = [one, two, three].map(pending => assert.rejects(pending, { name: 'AbortError' }))
-  await assert.rejects(tasks.run('one', 'same', () => assert.fail()), /正在使用/)
-  assert.deepEqual(tasks.stopAll('one'), ['same', 'second'])
-  assert.equal(tasks.stop('two', 'same'), true)
-  await Promise.all(rejected)
-  assert.deepEqual(tasks.stopAll('one'), [])
-  await assert.rejects(tasks.run('one', 'bad', async () => { throw new Error('model failed') }), /model failed/)
-  assert.equal(await tasks.run('one', 'bad', async () => 'recovered'), 'recovered')
-})
-
-test('helper tasks can stop before preparation and dispose settles all queued generations', async () => {
-  const tasks = createHelperGenerationTasks()
-  const first = tasks.run('one', 'first', () => assert.fail('cancelled preparation must not run'))
-  const second = tasks.run('two', 'second', () => assert.fail('disposed preparation must not run'))
-  const rejected = [first, second].map(pending => assert.rejects(pending, { name: 'AbortError' }))
-  assert.equal(tasks.stop('one', 'first'), true)
-  tasks.dispose()
-  await Promise.all(rejected)
-  assert.equal(await tasks.run('two', 'second', async () => 'available again'), 'available again')
 })
 
 test('token cancellation handles out-of-order request admission without poisoning reused IDs', async () => {

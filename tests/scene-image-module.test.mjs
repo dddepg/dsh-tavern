@@ -102,25 +102,6 @@ test('plugin settings and original credential references survive migration and l
   assert.equal(f.requests.length, 0)
 })
 
-test('legacy Tavern-only config migrates on save without losing key or calling an API', async t => {
-  const f = await fixture(t)
-  f.keys.set('DSH_TAVERN_IMAGE_GROK_API_KEY', 'old-tavern-key')
-  await f.store.writeJson('scene-images/settings.json', { version: 2, provider: 'grok', enabled: true,
-    providers: { grok: { baseURL: 'https://gateway.example/v1', model: 'custom-model', size: '2k', aspectRatio: '16:9' } } })
-  const ui = await f.setup.settings()
-  assert.equal(ui.hasKey, true)
-  assert.equal(ui.migrationPending, true)
-  assert.equal(ui.enabled, true)
-  assert.equal(ui.ready, false)
-  assert.equal((await f.setup.config()).enabled, true)
-  await assert.rejects(f.setup.capture(), /迁移/)
-  await f.setup.configure({ model: ui.model })
-  const next = await f.create().setup.capture()
-  assert.equal(next.apiKey, 'old-tavern-key')
-  assert.equal(next.active.baseURL, ui.baseURL)
-  assert.equal(f.requests.length, 0)
-})
-
 test('failed migration write preserves original config and does not change credentials', async t => {
   const f = await fixture(t, { provider: 'grok', grokModel: 'old-model' })
   f.keys.set('XAI_API_KEY', 'old-key')

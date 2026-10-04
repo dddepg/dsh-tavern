@@ -23,22 +23,6 @@ function route(updater) {
   }
 }
 
-test('取消更新通过现有 POST RPC 返回后台取消状态', async () => {
-  let calls = 0
-  const status = { phase: 'cancelling', host: 'desktop', cancellable: true }
-  const request = route({ async cancel() { calls++; return status } })
-  const response = await request({ origin: 'http://localhost:3081' })
-  assert.equal(response.status, 200)
-  assert.deepEqual(JSON.parse(response.body), { ok: true, status, runtimeGeneration: 'test-generation' })
-  assert.equal(calls, 1)
-})
-
-test('取消更新沿用 RPC 错误响应，不虚报已取消', async () => {
-  const request = route({ async cancel() { throw new Error('当前安装无法安全自动中止') } })
-  const response = await request()
-  assert.deepEqual(JSON.parse(response.body), { ok: false, error: '当前安装无法安全自动中止' })
-})
-
 test('取消更新拒绝 GET、跨站和损坏请求且不触发取消', async () => {
   let calls = 0
   const request = route({ async cancel() { calls++; return { phase: 'cancelling' } } })

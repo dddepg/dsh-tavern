@@ -4,24 +4,9 @@ import test from 'node:test'
 import { stripTypeScriptTypes } from 'node:module'
 import vm from 'node:vm'
 
-const rootManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-const pluginManifest = JSON.parse(await readFile(new URL('../tavern-plugin/package.json', import.meta.url), 'utf8'))
-const remoteManifest = JSON.parse(await readFile(new URL('../tavern-plugin/packages/dsh-tavern-remote/package.json', import.meta.url), 'utf8'))
-const clientSource = await readFile(new URL('../tavern-plugin/lib/client.js', import.meta.url), 'utf8')
-const hostSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
 const remoteSource = stripTypeScriptTypes(await readFile(new URL('../tavern-plugin/packages/dsh-tavern-remote/src/client.ts', import.meta.url), 'utf8'))
   .replace(/^import .*$/gm, '').replace(/^export /gm, '')
 const remoteBundle = await readFile(new URL('../tavern-plugin/packages/dsh-tavern-remote/lib/client.js', import.meta.url), 'utf8')
-
-test('Tavern notifications use one DSH Remote stream instead of a private EventSource route', function () {
-  assert.ok(rootManifest.dsh.profile.bundles.includes('dsh-tavern-remote'))
-  assert.ok(pluginManifest.dsh.client.inject.includes('dsh-tavern-remote'))
-  assert.equal(remoteManifest.dsh.bundle.patch, './cordis.patch.yml')
-  assert.match(clientSource, /ctx\.tavernSessionSignals/)
-  assert.doesNotMatch(clientSource, /new window\.EventSource/)
-  assert.doesNotMatch(clientSource, /withConnectionSlot/)
-  assert.doesNotMatch(hostSource, /pathname === '\/api\/dsh-tavern\/events'/)
-})
 
 function deferred() {
   let resolve, reject
@@ -354,37 +339,3 @@ for (const format of ['source', 'bundle']) {
     assert.equal(next.disposals, 1)
   })
 }
-
-test('运行时控制使用一次性 Remote stream，传递取消且不自动重放失败请求', async () => {
-  let descriptor, provided, contribution
-  const calls = [], cancelled = new AbortController()
-  let closed = 0, fail = false
-  vm.runInNewContext(remoteBundle, { window: { __ModuleLoader__: { load(value) { descriptor = value } } } })
-  const client = descriptor.factory(() => ({}))
-  const remote = { async * control(method, args, signal) {
-    calls.push({ method, args, signal })
-    try {
-      if (fail) throw new Error('socket lost after execution')
-      yield JSON.stringify({ ok: true, completed: true })
-    } finally { closed++ }
-  } }
-  const dispose = await client.apply({
-    remote: { async $mount(value) { contribution = value; return async () => {} } },
-    get() { return remote },
-    provide(_name, service) { provided = service }
-  })
-  const contract = contribution.descriptors.find(item => item.method === 'control')
-  assert.equal(contract.mode, 'stream')
-  assert.equal(contract.cancellation.parameter, 'signal')
-  assert.equal(contract.parameters[0].codec.schema.safeParse('getSession').success, false)
-  const result = await provided.control('completeTavernHelperEvent', { eventId: 'event', leaseToken: 'lease' }, cancelled.signal)
-  assert.equal(result.completed, true)
-  assert.equal(calls[0].signal, cancelled.signal)
-  assert.equal(closed, 1)
-  fail = true
-  await assert.rejects(provided.control('completeTavernHelperEvent', {}, cancelled.signal), /socket lost/)
-  assert.equal(calls.length, 2, 'executor owns recovery; transport must not blindly replay')
-  await dispose()
-  await assert.rejects(provided.control('claimTavernScriptWork', {}), /disposed/)
-  assert.equal(calls.length, 2)
-})

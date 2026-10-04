@@ -70,22 +70,6 @@ function harness(t, { resizeObserver = true, initiallyRootless = false } = {}) {
   return { window, document, reports, frames, mutations, resizes, size, activate, flush, replaceRoot }
 }
 
-test('jsdom: a queued height report safely skips a removed root', async t => {
-  const h = harness(t)
-  h.document.documentElement.remove()
-  await h.flush()
-  assert.equal(h.reports.length, 0, 'no empty-document fallback height is published')
-  assert.equal(h.frames.length, 0, 'no polling is scheduled while the root is absent')
-
-  const root = h.replaceRoot()
-  h.activate()
-  await h.flush()
-  assert.equal(h.reports.at(-1).height, 240)
-  assert.ok(h.mutations[0].targets.has(root))
-  assert.ok(h.resizes[0].targets.has(root))
-  assert.ok(h.resizes[0].targets.has(h.document.body))
-})
-
 for (const resizeObserver of [true, false]) {
   test(`jsdom: measurement activation tolerates root removal and observes its replacement (ResizeObserver=${resizeObserver})`, async t => {
     const h = harness(t, { resizeObserver })

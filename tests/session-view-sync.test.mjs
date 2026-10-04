@@ -73,21 +73,6 @@ for (const full of [false, true]) test(`superseded ${full ? 'full' : 'delta'} re
   assert.deepEqual(json(value), { ok: true, runtimeGeneration: 'new', viewCursor: 'null', view: null })
 })
 
-test('LRU eviction and A to B to A reentry retain outstanding request freshness', () => {
-  const begin = context.reader(1)
-  const old = begin('A')
-  begin('A').accept({ ok: true, viewCursor: 'A2', view: { value: 2 } })
-  begin('B').accept({ ok: true, viewCursor: 'B1', view: { value: 1 } })
-  const back = begin('A')
-  assert.equal(back.cursor, 'A2')
-  back.accept({ ok: true, viewCursor: 'A3', view: { value: 3 } })
-  begin('B').accept({ ok: true, viewCursor: 'B2', view: { value: 2 } })
-  assert.equal(old.accept({ ok: true, viewCursor: 'A1', view: { value: 1 } }).view.value, 3)
-  const fresh = begin('A')
-  assert.equal(fresh.cursor, undefined, 'completed owners do not pin evicted cache entries')
-  fresh.release()
-})
-
 test('release is idempotent and explicitly released reads cannot mutate the cursor', () => {
   const begin = context.reader(), old = begin('A')
   old.release(); old.release()

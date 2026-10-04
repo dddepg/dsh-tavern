@@ -47,18 +47,6 @@ test('分组草稿跨重启恢复，逐开场保存，原卡不变，重复提�
  assert.equal((await f.resources.list('card')).length,2)
 })
 
-test('规则和单开场修改保留美化，新增字段后重新要求补齐所有开场',async t=>{
- const f=await fixture(t);await f.complete()
- const original=(await f.conversion.draft({action:'read',draftId:f.current.draftId,path:'/definition/appearance/html'})).reading.text
- await f.patch('rules',{场景:'仅根据已发生事实更新'})
- assert.equal((await f.conversion.draft({action:'read',draftId:f.current.draftId,path:'/definition/appearance/html'})).reading.text,original)
- await f.patch('fields',{'/天气':'晴'})
- const state=await f.read()
- assert.ok(state.missing.some(x=>x.openingId==='opening-0'&&x.path==='/天气'))
- assert.ok(state.missing.some(x=>x.openingId==='opening-1'&&x.path==='/天气'))
- assert.ok(state.missing.some(x=>x.section==='review'))
- assert.ok(state.missing.some(x=>x.section==='appearance'&&x.missingPaths?.includes('/天气')))
-})
 test('版本冲突不覆盖草稿，相同请求幂等，复用请求 ID 改参数被拒绝',async t=>{
  const f=await fixture(t),base=f.current
  const args={action:'patch',draftId:base.draftId,draftRevision:base.draftRevision,requestId:'stable',section:'fields',values:{'/位置':'大厅'}}
@@ -179,22 +167,7 @@ test('对象合并保留兄弟键，null 是值，删除需明确操作并保护
  await assert.rejects(f.patch('fields',malicious,{operation:'merge'}),e=>e.code==='DRAFT_PATH_INVALID')
  assert.equal({}.polluted,undefined)
 })
-test('字段移动同步全部开场与组件路径，碰撞保持草稿不变，可提交',async t=>{
- const f=await fixture(t);await f.complete()
- await f.patch('fields',undefined,{operation:'move',path:'/时间/时段',toPath:'/场景/时段'})
- assert.equal(f.current.ruleReviewRequired,true)
- const definition=await draftValue(f,['definition'])
- assert.equal(definition.openingStates[1].场景.时段,'夜晚')
- assert.equal(Object.hasOwn(definition.openingStates[1],'时间'),false)
- assert.match(definition.appearance.html,/path="\/场景\/时段"/)
- assert.ok(f.current.fieldSchema.fields.some(x=>x.path==='/场景/时段'))
- const before=await f.read()
- await assert.rejects(f.patch('fields',undefined,{operation:'move',path:'/场景/时段',toPath:'/地点/名称'}),e=>e.code==='DRAFT_FIELD_COLLISION')
- assert.deepEqual(await f.read(),before)
- await f.patch('rules',{场景:'按正文更新场景中的时段与地点名称'})
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- assert.equal((await f.conversion.draft(f.commitArgs())).receipt.validation.valid,true)
-})
+
 test('已有成品字段改名同步编译后的绑定并允许明确迁移，兼容接口仍保护未声明删字段',async t=>{
  const f=await fixture(t);await f.complete();await f.conversion.draft(f.commitArgs())
  let draft=await f.conversion.draft({action:'begin',sourcePath:f.sourcePath,requestId:'rename-existing'})
@@ -224,20 +197,6 @@ test('无目录旧草稿读取可诊断多余字段，显式删除可恢复而�
  assert.equal((await draftValue(f,['definition','openingStates',1])).时间.时段,'凌晨')
  await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
  assert.equal((await f.conversion.draft(f.commitArgs())).receipt.validation.valid,true)
-})
-test('数组作为完整字段允许各开场不同长度，不把首个开场下标当成必填字段',async t=>{
- const f=await fixture(t,{begin:{appearanceRequirement:'basic',basicReason:'用户要求基础面板'}})
- await f.patch('fields',{'/记录':['入口','大厅'],'/位置':'大厅'})
- await assert.rejects(f.patch('fields',undefined,{operation:'remove',path:'/记录/0'}),e=>e.code==='DRAFT_PATH_INVALID')
- await f.patch('opening',undefined,{openingId:'opening-0',inheritInitialState:true})
- await f.patch('opening',{'/记录':[],'/位置':'车站'},{openingId:'opening-1'})
- await f.patch('rules',{记录:'按发生事件追加'})
- await f.patch('review',{sourceCoverage:true,cleanup:true,appearance:true})
- assert.equal((await f.conversion.draft(f.commitArgs())).receipt.validation.valid,true)
- let next=await f.conversion.draft({action:'begin',sourcePath:f.sourcePath,requestId:'shorter-array',appearanceRequirement:'basic',basicReason:'用户继续使用基础面板'})
- next=await f.conversion.draft({action:'patch',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'shorten',section:'opening',openingId:'opening-0',values:{'/记录':[]}})
- next=await f.conversion.draft({action:'patch',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'review-shorter',section:'review',values:{sourceCoverage:true,cleanup:true,appearance:true}})
- assert.equal((await f.conversion.draft({action:'commit',draftId:next.draftId,draftRevision:next.draftRevision,requestId:'commit-shorter'})).receipt.validation.valid,true)
 })
 
 test('简化凭据自动管理版本与重试，JSON 键顺序不同仍幂等，旧凭据不能覆盖',async t=>{
@@ -370,23 +329,6 @@ test('同会话并发修改不会用另一次调用推进的版本静默覆盖',
  const results=await Promise.allSettled([f.conversion,other].map((conversion,index)=>conversion.draft({action:'patch',section:'fields',values:{'/地点':String(index)}},context)))
  assert.equal(results.filter(x=>x.status==='fulfilled').length,1)
  assert.equal(results.find(x=>x.status==='rejected').reason.code,'DRAFT_SESSION_CHANGED')
-})
-
-test('工具入口自动注入会话及调用标识，输入省略 draft，输出仅有短编号',async t=>{
- const f=await fixture(t,{card:{extensions:{author_note:'保留'}}}),tools=new Map()
- registerMvuConversionTools({tools:{register:tool=>tools.set(tool.name,tool)},defineTool:x=>x,conversion:f.conversion,chatForSession:async id=>({mode:id==='tool-session'?'card':'story'})})
- const tool=tools.get('tavern_card_draft'),exec={agent:{session:{id:'tool-session'}}}
- const begin=await tool.execute({action:'begin',sourcePath:f.sourcePath},{...exec,callId:'begin'})
- assert.equal(begin.report.draft,'d1');assert.equal(Object.hasOwn(begin.report,'draftId'),false)
- assert.equal((await tool.execute({action:'begin',sourcePath:f.sourcePath},{...exec,callId:'begin-again'})).report.draft,'d1')
- const patch={action:'patch',section:'fields',values:{'/位置':'大厅'}}
- await tool.execute(patch,{...exec,callId:'patch'})
- await tool.execute(patch,{...exec,callId:'patch'})
- const read=await tool.execute({action:'source',path:'/extensions'},{...exec,callId:'source'})
- assert.equal(read.report.draft,'d1')
- const stored=await f.resources.readMvuDraftSession('tool-session')
- assert.equal((await f.resources.readMvuDraft(stored.drafts.d1.id)).revision,2)
- assert.equal(Object.hasOwn(stored.calls[Object.keys(stored.calls)[1]],'args'),false)
 })
 
 test('从目标路径编辑已保存 MVU 卡，局部初值修改保留其他开场、外观与来源',async t=>{

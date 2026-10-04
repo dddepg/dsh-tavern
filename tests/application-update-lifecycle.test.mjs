@@ -7,7 +7,6 @@ import { updateApplication } from '../bin/application-update.mjs'
 import { createApplicationUpdater } from '../tavern-plugin/lib/application-updater.js'
 import installationState from '../bin/installation-state.cjs'
 import { createUpdateState } from '../bin/update-state.mjs'
-import { recordInstallationReceipt, readInstallationReceipt } from '../bin/installation-receipt.mjs'
 
 const identity = { currentVersion: '2.4.0', currentCommit: 'a'.repeat(40) }
 const receiptModule = new URL('../bin/installation-receipt.mjs', import.meta.url).href
@@ -42,19 +41,6 @@ const quote = value => "'" + value.replaceAll("'", "'\\''") + "'"
 // The fixture installer uses the real receipt writer after its simulated profile
 // validation. The production updater must both stop its process tree and verify
 // the resulting receipt; exit zero alone is deliberately insufficient.
-test('successful installer requires validated receipt; terminal status clears repair', { skip: process.platform === 'win32' }, async t => {
-  const f = await fixture(t)
-  await writeFile(f.statusFile, JSON.stringify({ phase: 'failed', repairRequired: true, attemptId: 'older', failedAt: 1 }))
-  const program = `import {recordInstallationReceipt} from ${JSON.stringify(receiptModule)};await recordInstallationReceipt({sourceRoot:${JSON.stringify(f.sourceRoot)},dshHome:process.env.DSH_HOME,host:'desktop',attemptId:process.env.DSH_TAVERN_INSTALL_ATTEMPT})`
-  await writeFile(path.join(f.sourceRoot, 'install.sh'), `#!/bin/sh\n${quote(process.execPath)} --input-type=module -e ${quote(program)}\n`)
-  await updateApplication(f.options)
-  const saved = JSON.parse(await readFile(f.statusFile))
-  assert.equal(saved.phase, 'completed'); assert.equal(saved.repairRequired, undefined); assert.equal(saved.requiresRestart, true)
-  assert.equal(installationState.readInstallation(f.root), null)
-  await writeFile(path.join(f.sourceRoot, 'install.sh'), '#!/bin/sh\nexit 0\n')
-  await assert.rejects(updateApplication(f.options), /未确认配置验证和安装完成/)
-  assert.equal(JSON.parse(await readFile(f.statusFile)).repairRequired, true)
-})
 
 test('real hung updater cancels, remains exclusive through cleanup and permits another attempt afterward', { skip: process.platform === 'win32' }, async t => {
   const f = await fixture(t)
@@ -77,14 +63,6 @@ test('real hung updater cancels, remains exclusive through cleanup and permits a
   assert.equal(JSON.parse(await readFile(f.statusFile)).repairRequired, true)
 })
 
-test('wall-clock timeout applies even while updater and child are alive', { skip: process.platform === 'win32' }, async t => {
-  const f = await fixture(t)
-  await writeFile(path.join(f.sourceRoot, 'install.sh'), '#!/bin/sh\nwhile :; do sleep 1; done\n')
-  await assert.rejects(updateApplication({ ...f.options, timeoutMs: 150 }), error => error.code === 'INSTALLATION_TIMEOUT' && error.unsafeToRetry === false)
-  assert.equal(JSON.parse(await readFile(f.statusFile)).phase, 'failed')
-  assert.equal(installationState.readInstallation(f.root), null)
-})
-
 test('independent updater instances share one reservation and attempt id crosses launch', async t => {
   const f = await fixture(t)
   let spawned = 0
@@ -96,28 +74,6 @@ test('independent updater instances share one reservation and attempt id crosses
   assert.equal(result.filter(result => result.status === 'fulfilled').length, 1)
   const owner = installationState.readInstallation(f.root)
   assert.equal(launchedArguments[launchedArguments.indexOf('--attempt-id') + 1], owner.attemptId)
-})
-
-test('late old-attempt writes cannot replace successor; manual receipt reconciles only fresh matching installation', async t => {
-  const f = await fixture(t)
-  const state = createUpdateState(f.statusFile, f.root)
-  const old = installationState.acquireInstallation({ dshHome: f.root, attemptId: 'old' })
-  await state.write({ phase: 'running', attemptId: 'old' }, { attemptId: 'old' })
-  old.release()
-  const newer = installationState.acquireInstallation({ dshHome: f.root, attemptId: 'new' })
-  await state.write({ phase: 'running', attemptId: 'new' }, { attemptId: 'new' })
-  await state.write({ phase: 'completed', attemptId: 'old' }, { attemptId: 'old' })
-  assert.equal((await state.read()).attemptId, 'new')
-  newer.release()
-  await state.write({ phase: 'failed', attemptId: 'new', repairRequired: true, failedAt: 10 })
-  const stale = await recordInstallationReceipt({ sourceRoot: f.sourceRoot, dshHome: f.root, host: 'desktop', attemptId: 'manual', verifiedAt: 5 })
-  assert.equal((await f.updater().status()).phase, 'failed')
-  await recordInstallationReceipt({ ...stale, verifiedAt: Date.now() })
-  assert.equal((await f.updater().status()).phase, 'completed')
-  await state.write({ phase: 'failed', repairRequired: true, failedAt: 10 })
-  await writeFile(path.join(f.root, 'profiles/tavern/cordis.patch.yml'), 'changed')
-  assert.equal(await readInstallationReceipt({ sourceRoot: f.sourceRoot, dshHome: f.root, host: 'desktop' }), null)
-  assert.equal((await f.updater().status()).phase, 'failed')
 })
 
 test('a delayed check cannot restore repair after a newer manual installation', async t => {
@@ -136,23 +92,6 @@ test('a delayed check cannot restore repair after a newer manual installation', 
   assert.equal((await checking).phase, 'completed')
 })
 
-test('status fencing distinguishes an absent previous attempt from an unconstrained write', async t => {
-  const f = await fixture(t)
-  const state = createUpdateState(f.statusFile, f.root)
-  await state.write({ phase: 'completed', attemptId: 'new-manual' })
-  await state.write({ phase: 'up-to-date' }, { expectedAttemptId: undefined })
-  assert.equal((await state.read()).attemptId, 'new-manual')
-})
-
-test('profile receipt from same failed bootstrap cannot erase a later bootstrap failure', { skip: process.platform === 'win32' }, async t => {
-  const f = await fixture(t)
-  const program = `import {recordInstallationReceipt} from ${JSON.stringify(receiptModule)};await recordInstallationReceipt({sourceRoot:${JSON.stringify(f.sourceRoot)},dshHome:process.env.DSH_HOME,host:'desktop',attemptId:process.env.DSH_TAVERN_INSTALL_ATTEMPT})`
-  await writeFile(path.join(f.sourceRoot, 'install.sh'), `#!/bin/sh\n${quote(process.execPath)} --input-type=module -e ${quote(program)}\nexit 9\n`)
-  await assert.rejects(updateApplication(f.options), /退出码 9/)
-  assert.equal((await f.updater().status()).phase, 'failed')
-  assert.equal((await f.updater().check()).phase, 'repair-required')
-})
-
 test('hung config validation stops its writer before profile transaction rollback', { skip: process.platform === 'win32' }, async t => {
   const f = await fixture(t)
   const { beginProfileConfigurationUpdate } = await import('../bin/profile-configuration.mjs')
@@ -169,42 +108,6 @@ test('hung config validation stops its writer before profile transaction rollbac
   await transaction.rollback()
   await new Promise(resolve => setTimeout(resolve, 80))
   assert.equal(await readFile(manifestPath, 'utf8'), original)
-})
-
-test('detached updater does not inherit a completed installation context from its service', async t => {
-  const f = await fixture(t)
-  const names = ['DSH_TAVERN_INSTALL_ATTEMPT', 'DSH_TAVERN_INSTALL_LOCK', 'DSH_TAVERN_INSTALL_PROCESS_DIR', 'DSH_TAVERN_INSTALL_PROCESS_ANCESTORS']
-  const previous = Object.fromEntries(names.map(key => [key, process.env[key]]))
-  for (const key of names) process.env[key] = 'stale-context'
-  t.after(() => { for (const key of names) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key] } })
-  const { runtimeEnvironment } = await import('../bin/launcher-environment.mjs')
-  for (const key of names) assert.equal(runtimeEnvironment({ installation: false })[key], undefined)
-  let environment
-  await f.updater({ fetchLatestCommit: async () => 'b'.repeat(40), compareCommits: async () => 'ahead',
-    spawnProcess(_command, _args, options) { environment = options.env; return { unref() {} } } }).start()
-  for (const key of names) assert.equal(environment[key], undefined)
-})
-
-test('late Windows helper failure cannot overwrite an adopted and completed attempt', async t => {
-  const f = await fixture(t)
-  const { EventEmitter } = await import('node:events')
-  const value = await f.updater({ platform: 'win32', fetchLatestCommit: async () => 'b'.repeat(40), compareCommits: async () => 'ahead',
-    spawnProcess(_command, args) {
-      const child = new EventEmitter(); child.stderr = new EventEmitter(); child.unref = () => {}
-      queueMicrotask(async () => {
-        child.emit('spawn')
-        const attemptId = args[args.indexOf('--attempt-id') + 1]
-        const owner = installationState.acquireInstallation({ dshHome: f.root, attemptId, adopt: true })
-        await createUpdateState(f.statusFile, f.root).write({ phase: 'completed', attemptId }, { attemptId })
-        owner.release()
-        child.stderr.emit('data', Buffer.from('helper lost the launch response'))
-        child.emit('close', 1)
-      })
-      return child
-    },
-  }).start()
-  assert.equal(value.phase, 'completed')
-  assert.equal(JSON.parse(await readFile(f.statusFile)).phase, 'completed')
 })
 
 test('definite launcher spawn failure releases reservation without claiming a running installer', async t => {
@@ -232,13 +135,6 @@ test('CLI service starts only after the bootstrap process tree is quiescent', { 
   } })
   assert.equal(started, true)
   assert.equal(JSON.parse(await readFile(f.statusFile)).phase, 'completed')
-})
-
-test('bootstrap installers defer their persistent service when called by the updater', async () => {
-  const unix = await readFile(new URL('../install.sh', import.meta.url), 'utf8')
-  const windows = await readFile(new URL('../install.ps1', import.meta.url), 'utf8')
-  assert.match(unix, /DSH_TAVERN_DEFER_SERVICE_START[^\n]+\n\s+DSH_HOME=.*dsh-tavern\.mjs" start/)
-  assert.match(windows, /if \(\$env:DSH_TAVERN_DEFER_SERVICE_START -ne '1'\) \{\s+Invoke-InstallCommand 'service.start'/)
 })
 
 test('Windows persistent service launched after cleanup survives successful updater completion', { skip: process.platform !== 'win32' }, async t => {

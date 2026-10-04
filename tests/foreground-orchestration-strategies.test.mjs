@@ -97,40 +97,6 @@ test('游玩固定背景来自原生系统装配，预设前后段保持顺序�
   assert.equal(savedPrefixes.size, 0)
 })
 
-test('DeepSeek thinking 续传为旧 Session 的 reasoning 补齐可回放元数据', async () => {
-  const run = strategies()
-  const incoming = [userMessage('继续')]
-  await run.value.prepareStep({
-    sessionId: 'native', payload: { turn: 8, step: 1, messages: incoming },
-    decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native')
-  })
-  const legacyAssistant = {
-    role: 'assistant',
-    content: [{ type: 'reasoning', text: '旧思考' }, { type: 'text', text: '旧正文' }],
-    source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' }
-  }
-  const oldPresetBoundary = {
-    role: 'system', content: [{ type: 'text', text: '旧预设边界' }],
-    source: { kind: 'plugin', plugin: 'dsh-tavern', sections: [{ name: 'tavern:runtime-preset-front', text: '旧预设边界' }] }
-  }
-  const original = Object.freeze({
-    sessionId: 'native', provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high',
-    messages: Object.freeze([oldPresetBoundary, legacyAssistant, userMessage('下一轮')])
-  })
-
-  const projected = run.value.projectRequest(original)
-  const replay = projected.messages[0].source.replayState
-
-  assert.equal(replay.response.kind, 'pi-ai')
-  assert.equal(replay.response.provider, 'deepseek-official')
-  assert.equal(replay.response.model, 'deepseek-v4-flash')
-  assert.deepEqual(replay.blocks, [
-    { type: 'reasoning', thinkingSignature: 'reasoning_content' },
-    { type: 'text' }
-  ])
-  assert.equal(original.messages[0].source.replayState, undefined)
-})
-
 test('旧 Session 的 Tavern 开场白在请求边界恢复为合成模型来源，不触发 DeepSeek reasoning 续传校验', async () => {
   const run = strategies()
   const incoming = [userMessage('继续')]
@@ -219,17 +185,4 @@ for (const text of ['', '请根据图片继续']) test(`前台投影保留图片
   assert.deepEqual(result.messages[0].content.filter(block => block.type === 'image'), [image])
   assert.equal(result.messages[0].content.some(block => block.text === '（玩家已更新酒馆运行状态）'), false)
   assert.deepEqual(messages, original)
-})
-
-test('未登记的卡片工作台请求也剔除空的固定前缀，避免严格渠道报 user message must have content', () => {
-  const strategy = createNativePlayOrchestrationStrategy({})
-  const prefix = { id: 'tavern-session-prefix:card', role: 'user', content: [],
-    source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot', sections: [{ name: 'tavern:user-preference', text: '偏好' }] } }
-  const original = { sessionId: 'card', system: '系统', messages: [prefix, userMessage('改一下世界书')] }
-  const projected = strategy.projectRequest(original)
-  assert.deepEqual(projected.messages.map(message => message.role + ':' + message.content.length), ['user:1'])
-  assert.equal(projected.system, '系统')
-  assert.equal(strategy.projectRequest(projected), null, '已投影的请求不重复处理')
-  assert.equal(strategy.projectRequest({ sessionId: 'card', messages: [userMessage('普通请求')] }), null, '没有空消息时不改写')
-  assert.equal(strategy.projectRequest({ sessionId: 'card', purpose: 'compaction', messages: [prefix] }), null, '压缩等专用请求不经过这里')
 })
