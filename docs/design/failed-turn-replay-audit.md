@@ -466,3 +466,29 @@ DSH_TAVERN_PORT=3091 ./dsh-tavern start
 后续注意：实例更新（install.sh）重写 profile `package.json` 时只管理 `managedBundles`/`managedDependencies`，这个社区插件作为普通依赖应能保留，但更新后要复查 bundles 里仍在、启动日志仍有 mounted 行。插件可通过 profile 的 `cordis.patch.yml` 覆盖配置（providers/hosts/headers/verbose 等，见插件补丁文件头注释）。
 
 顺带记一条上游隐患：会话中途切换预设会让 `runtimePresetPath` 与固化快照不一致，下一次启动的迁移就会失败——本例即此。上游仍未有对应处理。
+
+## 14. 同步上游 4bbff696 与实例整体更新（2026-10-04）
+
+### 同步结果
+
+`upstream/main` 从 `4034aff1` 前进到 `4bbff696`：54 个提交，其中 38 个实质提交（新增两个分支 `feat/tavern-helper-api-compat`、`fix/upstream-execution-lifecycle`，未合入）。**本次合并零冲突**——上游改动不触及 fork 独有修复的落点。合并提交 `0ffeb3de`，分支 `sync/upstream-20261004`。
+
+要点：`eb0e66a4` 修复不装 dsh-web-mobile 的宿主报 `ERR_PNPM_UNUSED_PATCH`（新增 `patches/dsh-web-mobile@2.3.0.patch` 配套跳过逻辑）；批量删卡列出游玩记录数、删卡询问是否一并删除游玩记录；正文/美化卡跟随字体大小设置；README 大改版。包版本仍为 2.4.0。
+
+`node bin/build-tavern-client.mjs --check` 报「已是最新」。相关测试（`card-batch-deletion` / `pocket-opt-in` + fork 修复护栏 `rollback-surface` / `reply-completeness` / `foreground-handoff` / `turn-orchestration` / `prompt-streamlining`，借用实例运行时）：**56 pass / 0 fail**。`tests/inline-fragment.test.mjs` 本轮上游有改动但本机跑不了（缺 `chromium_headless_shell-1208`，环境限制同 §12），未验证。
+
+### 实例整体更新
+
+沿用既有做法（本地源 + 安装器全流程，`DSH_TAVERN_PORT=3091`），更新前实例已停止。备份 `backups/app-pre-20261004-182921.tar.gz`（24M，`--exclude=node_modules` 同口径）。日志确认走本地仓库（`From /home/ezio/workspace/dsh-tavern`，未回退 jsDelivr）；`apps/dsh-tavern/.dsh-tavern-release.json` 记为 `0ffeb3de…`；pnpm `Packages: +4`（dsh-web-mobile 2.3.0 相关）；安装器收尾自动启动成功。
+
+核对：`tavern-plugin/lib/hooks/turn-lifecycle.js` 第 60 行 `assertCompleteReply` 在位（落点自 §12 起未再迁移）；`lib/domain/reply-completeness.js` 在位；`tavern-plugin/lib` 与仓库内容差异**仅剩旧文件残留**（见下）。社区插件 `opencode-session-id` 更新后仍在 profile bundles，启动日志 `mounted` 行正常（§13 末尾留的复查点）。
+
+### prune 旧文件残留：清单机制清不掉，§13 预测不准确
+
+§13 预测「下一轮更新会正常清理」的 312 个旧文件**仍在**：本轮 prune（install.sh:593）正常跑了，但没有东西可删。原因在脚本语义：`prune-installed-files.mjs` 只删「**上一份清单里记过**、新源码不再发布」的文件，而清单每轮重写为当前源码的文件集；这批残留早于清单机制、从未进过任何清单，所以**永远不会被该机制清理**。清单 `.dsh-tavern-files.txt` 现为 941 条，与源码一致。
+
+残留无害性复查：仓库需要的 113 个 artifact 文件实例侧**一个不缺**（只多不少），`full-template-runtime.js` / `scene-image-settings.js` 两个退役 domain 文件在当前源码已无引用。若要清理需手工删除（或等上游 prune 改成「删除清单外多余文件」语义），本轮未动。
+
+### 启动核对
+
+`service.starting` → `service.spawned`（PID 2878，cwd 为实例 `apps/dsh-tavern`）→ `service.ready` @ 2026-10-04T10:29:54Z，端口 3091。无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`。本次启动日志无迁移失败、无 error/warn。
