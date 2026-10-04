@@ -47,6 +47,59 @@ test('supervised commands preserve output, cwd and exit status', async t => {
   assert.ok(result.pid > 1)
 })
 
+test('POSIX cleanup verifies zombie-only or vanished groups after EPERM', { skip: process.platform === 'win32' }, async t => {
+  const kill = process.kill.bind(process)
+  const simulated = new Set()
+  t.mock.method(process, 'kill', (pid, signal) => {
+    if (pid < -1 && (signal === 0 || signal === 'SIGKILL')) {
+      // Darwin may report EPERM while the terminated wrapper is still a
+      // zombie. Keep actual TERM delivery and require ps to prove it stopped.
+      simulated.add(signal)
+      throw Object.assign(new Error('kill EPERM (zombie group fixture)'), { code: 'EPERM' })
+    }
+    return kill(pid, signal)
+  })
+  const result = await runInstallationProcess(process.execPath, ['-e', 'process.exit(0)'], fastCleanup)
+  assert.equal(result.safe, true)
+  assert.deepEqual(result.remainingProcessGroups, [])
+  assert.deepEqual(result.cleanupErrors, [])
+  assert.ok(simulated.has(0))
+  assert.ok(simulated.has('SIGKILL'))
+})
+
+test('POSIX EPERM with a live writer remains unsafe and reports its cleanup failure', { skip: process.platform === 'win32' }, async t => {
+  const directory = await fixture(t)
+  const ready = path.join(directory, 'ready')
+  const controller = new AbortController()
+  const kill = process.kill.bind(process)
+  let wrapper
+  const mock = t.mock.method(process, 'kill', (pid, signal) => {
+    if (pid < -1) throw Object.assign(new Error('kill EPERM (live writer fixture)'), { code: 'EPERM' })
+    return kill(pid, signal)
+  })
+  try {
+    const promise = runInstallationProcess(process.execPath, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000)`], {
+      signal: controller.signal, timeoutMs: fixtureTimeout, onSpawn(child) { wrapper = child }, ...fastCleanup,
+    })
+    await waitForFile(ready)
+    controller.abort()
+    await assert.rejects(promise, error => {
+      assert.equal(error.code, 'INSTALLATION_CLEANUP_FAILED', error.message)
+      assert.equal(error.unsafeToRetry, true)
+      assert.ok(error.remainingProcessGroups.includes(wrapper.pid))
+      assert.match(error.message, /EPERM.*live writer fixture/)
+      return true
+    })
+  } finally {
+    mock.mock.restore()
+    if (wrapper) {
+      const exited = new Promise(resolve => wrapper.once('exit', resolve))
+      try { kill(-wrapper.pid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+      if (wrapper.exitCode === null && wrapper.signalCode === null) await exited
+    }
+  }
+})
+
 test('supervised invocation preserves Unicode, empty arguments, spaces and quotes', async () => {
   const args = ['space value', 'quote " value', '末尾\\', '', 'slash\\"quote']
   const result = await runInstallationProcess(process.execPath, ['-e', 'console.log(JSON.stringify(process.argv.slice(1)))', ...args], fastCleanup)
@@ -57,13 +110,13 @@ test('supervised invocation preserves Unicode, empty arguments, spaces and quote
 
 test('nonzero exit and missing command are safely rejected', async () => {
   await assert.rejects(runInstallationProcess(process.execPath, ['-e', 'process.exit(23)'], fastCleanup), error => {
-    assert.equal(error.code, 'INSTALLATION_PROCESS_FAILED')
+    assert.equal(error.code, 'INSTALLATION_PROCESS_FAILED', error.message)
     assert.equal(error.status, 23)
     assert.equal(error.unsafeToRetry, false)
     return true
   })
   await assert.rejects(runInstallationProcess('dsh-tavern-fixture-command-does-not-exist', [], fastCleanup), error => {
-    assert.equal(error.code, 'ENOENT')
+    assert.equal(error.code, 'ENOENT', error.message)
     assert.equal(error.unsafeToRetry, false)
     return true
   })
@@ -79,7 +132,7 @@ test('timeout kills a TERM-ignoring grandchild before reporting safe stopped', {
   const promise = runInstallationProcess(process.execPath, ['-e', script], { timeoutMs: 350, label: '--dump-config', ...fastCleanup })
   await waitForFile(ready)
   await assert.rejects(promise, error => {
-    assert.equal(error.code, 'INSTALLATION_TIMEOUT')
+    assert.equal(error.code, 'INSTALLATION_TIMEOUT', error.message)
     assert.equal(error.timeoutMs, 350)
     assert.equal(error.unsafeToRetry, false)
     assert.match(error.message, /--dump-config.*350/)
@@ -100,7 +153,7 @@ test('abort is responsive and stops descendants before rejection', async t => {
   await waitForFile(ready)
   controller.abort('fixture cancellation')
   await assert.rejects(promise, error => {
-    assert.equal(error.code, 'INSTALLATION_ABORTED')
+    assert.equal(error.code, 'INSTALLATION_ABORTED', error.message)
     assert.equal(error.unsafeToRetry, false)
     return true
   })
@@ -141,7 +194,7 @@ test('outer cancellation also kills separately grouped nested stages', async t =
   await waitForFile(ready)
   controller.abort()
   await assert.rejects(promise, error => {
-    assert.equal(error.code, 'INSTALLATION_ABORTED')
+    assert.equal(error.code, 'INSTALLATION_ABORTED', error.message)
     assert.equal(error.unsafeToRetry, false)
     assert.ok(error.processGroups.length >= 2)
     return true
@@ -178,6 +231,7 @@ test('unverifiable process registry fails closed with durable cleanup metadata',
     assert.equal(error.processDirectory, registry)
     assert.ok(error.processGroups.includes(error.pid))
     assert.ok(error.cleanupErrors.length > 0)
+    assert.ok(error.message.includes(error.cleanupErrors[0]))
     return true
   })
   assert.equal(await readFile(path.join(registry, 'stopping'), 'utf8'), '')
@@ -188,10 +242,12 @@ test('recovery only clears closed, verified trees whose supervisor has exited', 
   const registry = path.join(directory, 'processes')
   const runner = path.join(directory, 'runner.mjs')
   await writeFile(runner, `import { runInstallationProcess } from ${JSON.stringify(moduleUrl)}; await runInstallationProcess(process.execPath, ['-e', 'process.exit(0)'], { processDirectory: ${JSON.stringify(registry)} });`)
-  const child = spawn(process.execPath, [runner], { stdio: 'ignore' })
+  const child = spawn(process.execPath, [runner], { stdio: ['ignore', 'ignore', 'pipe'] })
+  let stderr = ''
+  child.stderr.on('data', chunk => { stderr += chunk })
   await new Promise((resolve, reject) => {
     child.once('error', reject)
-    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Fixture exited ${code}`)))
+    child.once('close', code => code === 0 ? resolve() : reject(new Error(`Fixture exited ${code}: ${stderr}`)))
   })
   assert.equal((await verifyInstallationProcessesStopped(registry)).safe, true)
   await writeFile(path.join(registry, 'supervisor.json'), JSON.stringify({ pid: process.pid }))

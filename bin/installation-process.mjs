@@ -44,16 +44,35 @@ function execute(command, args, timeout) {
 async function groupIsAlive(pid, deadline) {
   try { process.kill(-pid, 0) } catch (error) {
     if (error.code === 'ESRCH') return false
-    throw error
+    // Darwin can report EPERM for a group containing only zombies: killpg1
+    // excludes SZOMB members, then finds nobody eligible to receive a signal.
+    // EPERM is not proof of exit, so inspect the complete group below instead.
+    if (error.code !== 'EPERM') throw error
   }
   // kill(0) includes zombies, particularly under container PID 1. Zombies can
   // never write again; inspect the whole group instead of trusting leader exit.
   if (Date.now() >= deadline) throw new Error('Installation process verification exceeded its cleanup deadline')
-  const output = await execute('ps', ['-eo', 'pid=,pgid=,stat='], Math.max(1, deadline - Date.now()))
-  return output.split('\n').some(line => {
-    const [, group, state] = line.trim().split(/\s+/)
-    return Number(group) === pid && state && !state.startsWith('Z') && !state.startsWith('X')
+  const output = await execute('ps', ['-A', '-o', 'pid=', '-o', 'pgid=', '-o', 'stat='], Math.max(1, deadline - Date.now()))
+  const rows = output.split('\n').map(line => line.trim()).filter(Boolean)
+  // A complete all-process listing contains at least ps itself. A malformed or
+  // empty snapshot must never be interpreted as proof that writers have exited.
+  if (rows.length === 0 || rows.some(line => !/^\d+\s+\d+\s+\S+$/.test(line))) {
+    throw new Error(`Cannot verify installation process group ${pid}: invalid ps output`)
+  }
+  return rows.some(line => {
+    const [, group, state] = line.split(/\s+/)
+    return Number(group) === pid && !state.startsWith('Z') && !state.startsWith('X')
   })
+}
+
+async function signalGroup(pid, signal, deadline) {
+  try { process.kill(-pid, signal) } catch (error) {
+    if (error.code === 'ESRCH') return
+    // The same Darwin zombie race affects TERM/KILL, not just signal 0. Only
+    // forgive it after independent evidence that no group member can write.
+    if (error.code === 'EPERM' && !await groupIsAlive(pid, deadline)) return
+    throw error
+  }
 }
 
 async function cleanTree({ directory, pid, root, childExited, killGraceMs, cleanupTimeoutMs }) {
@@ -93,14 +112,14 @@ async function cleanTree({ directory, pid, root, childExited, killGraceMs, clean
       }
     }
   } else {
-    const signal = name => {
+    const signal = async name => {
       for (const processId of known) {
-        try { process.kill(-processId, name) } catch (error) {
-          if (error.code !== 'ESRCH') failures.push(`${name} process group ${processId}: ${error.message}`)
+        try { await signalGroup(processId, name, deadline) } catch (error) {
+          failures.push(`${name} process group ${processId}: ${error.message}`)
         }
       }
     }
-    signal('SIGTERM')
+    await signal('SIGTERM')
     const gracefulDeadline = Math.min(deadline, Date.now() + killGraceMs)
     while (Date.now() < gracefulDeadline) {
       let live = false
@@ -111,7 +130,7 @@ async function cleanTree({ directory, pid, root, childExited, killGraceMs, clean
       if (!live && childExited()) break
       await delay(Math.min(25, Math.max(1, gracefulDeadline - Date.now())))
     }
-    signal('SIGKILL')
+    await signal('SIGKILL')
   }
   let live = [...known]
   while (Date.now() < deadline) {
@@ -127,7 +146,7 @@ async function cleanTree({ directory, pid, root, childExited, killGraceMs, clean
           if (await groupIsAlive(processId, deadline)) {
             live.push(processId)
             // Registrations discovered after the first pass are also terminated.
-            try { process.kill(-processId, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+            await signalGroup(processId, 'SIGKILL', deadline)
           }
         }
       }
@@ -142,6 +161,8 @@ async function cleanTree({ directory, pid, root, childExited, killGraceMs, clean
       }
     }
   }
+  if (live.length > 0) failures.push(`Installation process groups still running or unverifiable: ${live.join(', ')}`)
+  if (!childExited()) failures.push('Installation process wrapper has not exited')
   let safe = failures.length === 0 && live.length === 0 && childExited()
   if (safe) {
     try {
@@ -274,7 +295,8 @@ export async function runInstallationProcess(command, args = [], options = {}) {
   child?.unref()
   const metadata = { status: result.status ?? result.error?.status ?? null, signal: result.signal ?? result.error?.signal ?? null, pid, processGroupId: process.platform === 'win32' ? null : pid, processDirectory: directory, ...cleanup, stdout, stderr }
   if (!cleanup.safe) {
-    throw makeError('INSTALLATION_CLEANUP_FAILED', `${label} 的进程树未能确认停止，请勿重试或恢复配置`, {
+    const diagnostics = [...new Set(cleanup.cleanupErrors)].join('; ')
+    throw makeError('INSTALLATION_CLEANUP_FAILED', `${label} 的进程树未能确认停止，请勿重试或恢复配置${diagnostics ? ` (${diagnostics})` : ''}`, {
       ...metadata, unsafeToRetry: true, cause: result.error, originalCode: result.error?.code,
     })
   }

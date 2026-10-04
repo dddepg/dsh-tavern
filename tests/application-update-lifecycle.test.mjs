@@ -239,6 +239,14 @@ test('bootstrap installers defer their persistent service when called by the upd
 })
 
 test('Windows persistent service launched after cleanup survives successful updater completion', { skip: process.platform !== 'win32' }, async t => {
+  let pid
+  // Hooks run in registration order. Stop the owned long-lived process before
+  // fixture() removes its Windows working directory, and wait for actual exit.
+  t.after(async () => {
+    if (!pid) return
+    try { process.kill(pid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
+    await until(() => { try { process.kill(pid, 0); return false } catch (error) { if (error.code === 'ESRCH') return true; throw error } })
+  })
   const f = await fixture(t)
   const { startUpdatedService } = await import('../bin/application-update.mjs')
   const receiptScript = path.join(f.sourceRoot, 'receipt.mjs')
@@ -247,8 +255,6 @@ test('Windows persistent service launched after cleanup survives successful upda
   await mkdir(path.join(f.sourceRoot, 'bin'))
   const pidFile = path.join(f.root, 'service.pid')
   await writeFile(path.join(f.sourceRoot, 'bin/dsh-tavern.mjs'), `import {spawn} from 'node:child_process';import {writeFileSync} from 'node:fs';const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});writeFileSync(${JSON.stringify(pidFile)},String(p.pid));p.unref()`)
-  let pid
-  t.after(() => { if (pid) { try { process.kill(pid, 'SIGTERM') } catch {} } })
   await updateApplication({ ...f.options, host: 'cli', startService: startUpdatedService })
   pid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(pid > 0)
