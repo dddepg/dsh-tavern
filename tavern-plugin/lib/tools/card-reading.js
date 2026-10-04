@@ -55,7 +55,7 @@ export function registerCardReadingTools({
 
   tools.register(defineTool({
     name: 'tavern_validate_card',
-    description: '只读校验人物卡 JSON、字段类型和 MVU 扩展结构。写入后必须调用，始终读取磁盘文件。不会执行脚本、自动修复或覆盖文件。',
+    description: '检查人物卡文件格式，报告错误位置和修法：JSON 语法、字段类型、世界书条目；MVU 卡还检查各开场 <initvar> 能否解析、开场间字段是否一致、[mvu_update] 规则、<mvu-status/> 入口与面板正则、面板脚本语法与引用的变量路径、正则能否编译。只读，不执行脚本，不改文件。改完卡后调用，按 errors 修正；warnings 视情况处理。',
     parameters: { path: { type: 'string', description: '可选的 cards/... 相对路径；省略时检查当前已保存人物卡' } },
     output: {
       schema: {

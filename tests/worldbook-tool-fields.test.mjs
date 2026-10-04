@@ -15,10 +15,10 @@ function setup() {
   return { run: args => registered.get('tavern_update_worldbook').execute(args, exec), calls }
 }
 
-test('世界书条目字段写错时报错，不静默丢弃关键词', async () => {
+test('世界书条目接受 SillyTavern 常用写法，不认识的字段报错而不是静默丢弃', async () => {
   const { run, calls } = setup()
-  await assert.rejects(run({ operations: [{ op: 'add', entry: { comment: '时局', content: '1936', keys: ['上海'] } }] }), /不支持字段 keys；关键词请用 primaryKeys/)
-  assert.equal(calls.length, 0)
-  await run({ operations: [{ op: 'add', entry: { comment: '时局', content: '1936', primaryKeys: ['上海'] } }] })
-  assert.deepEqual(calls[0].request.operations[0].entry.primaryKeys, ['上海'])
+  await run({ operations: [{ op: 'add', entry: { comment: '时局', content: '1936', keys: ['上海'], disable: true } }] })
+  assert.deepEqual(calls[0].request.operations[0].entry, { comment: '时局', content: '1936', primaryKeys: ['上海'], enabled: false })
+  await assert.rejects(run({ operations: [{ op: 'update', ref: 'entry:0', patch: { tag: 'x' } }] }), /不认识字段 tag/)
+  assert.equal(calls.length, 1)
 })

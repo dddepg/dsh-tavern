@@ -28,7 +28,7 @@ description: "从零新建一张完整可用的原创人物卡：逐题访谈确
 
 用户选择前端美化后，给出 2–3 种风格明显不同的草图供挑选，每种一个 ```html 代码块。工作台会把闭合的 html 代码块直接渲染成静态预览。
 
-- 只写静态 HTML 和内联 `<style>`；不写脚本，不引用外部字体、图片或链接，脚本与外部资源都会被拦截。
+- 用静态 HTML 和内联 `<style>` 画草图：预览里脚本不运行、外部字体和图片不加载。进度条这类动态效果先画成静态示意，成品里再用脚本实现。
 - 使用本卡的示例数据（角色名、地点、状态值），按 360px 窄屏也能阅读设计，长文本能换行。
 - 每个草图前用一句话说明风格取向。用户选定或提出修改后，按需再出一版；草图只是示意，正式成品在创建阶段实现。
 
@@ -47,7 +47,7 @@ description: "从零新建一张完整可用的原创人物卡：逐题访谈确
    - `creator_notes` 与 `tags`：简述玩法和题材。
 2. 需要世界书时，用 `tavern_update_worldbook` 的 `add` 操作写入条目，path 为新卡的 `cards/...` 路径；entry 用 `comment`、`content`、`primaryKeys`（关键词数组）。每个条目一个主题，关键词准确。
 3. 调用 `tavern_validate_card` 读取磁盘校验，修复本次引入的问题后重新校验。
-4. 选择了 MVU：通过原生 `skill` 加载 `card-to-mvu`，`tavern_card_draft.begin` 传刚创建的卡 `sourcePath` 并设 `inPlace=true`，不传 `name`。MVU 直接加到这张卡上，不另建副本，也没有旧协议需要清理，cleanup 留空。美化按选定草图设计 `mvu-field` 面板；没选美化时使用基础面板，`appearanceRequirement=basic`，依据写“用户未选择美化”。完成后库里仍只有这一张卡。
+4. 选择了 MVU：通过原生 `skill` 加载 `card-to-mvu`，直接在这张卡上加变量、更新规则和状态栏。面板按选定草图实现，可以用样式和脚本还原草图效果；没选美化时做一个简洁的字段列表面板。
 5. 选择了美化但不用 MVU：开场主页直接写进开场正文的 ```html 代码块；状态栏在 `system_prompt` 或 `post_history_instructions` 中约定每轮末尾输出固定标签格式，并通过 `rawOperations` 在 `/data/extensions/regex_scripts` 追加正则，把标签替换成选定草图的 HTML（`placement: [2]`、`markdownOnly: true`），另加一条 `promptOnly: true` 的正则从模型历史中移除旧状态块。保存后再次校验。
 
 ## 交付
