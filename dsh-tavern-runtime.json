@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "7968ce586d57dac256a7c5e404347ea7c107fec4",
-  "releaseSequence": 487,
+  "revision": "eb0e66a4bc099cac190a89df72e3db15226b7770",
+  "releaseSequence": 488,
   "version": "2.4.0",
   "files": [
     {
@@ -106,8 +106,8 @@
     },
     {
       "path": "bin/profile-configuration.mjs",
-      "sha256": "e4b3672d432dcdd1d2ddc87bf220e1ae7926c19500fee9e544688e549491a496",
-      "size": 11950
+      "sha256": "f90e549a8e8ed7d0827ea7c9716bda657d95b1f96b6fd1230f957159b7b04c7b",
+      "size": 12230
     },
     {
       "path": "bin/profile-installation.mjs",
