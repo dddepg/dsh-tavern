@@ -54,3 +54,38 @@ test('NovelAI rejects HTML/JSON masquerading as ZIP, corrupt images and oversize
   await assert.rejects(generateSceneImage({ ...input, maxBytes: 8 }, { fetch: async () => new Response(imageZip(png)) }), /ZIP|限制/)
   await assert.rejects(generateSceneImage(input, { fetch: async () => new Response('', { headers: { 'content-length': String(1e9) } }) }), /过大/)
 })
+
+test('NovelAI prompt controls: untouched settings keep the old caption; sections, weights and presets apply when set', () => {
+  const v45 = { model: 'nai-diffusion-4-5-full', size: '832x1216' }
+  assert.equal(novelaiPrompts({ plan }, v45).base, '1girl, 1boy, wide shot, rainy station, watercolor')
+  const ordered = novelaiPrompts({ plan }, { ...v45, qualityTags: 'masterpiece', artistString: 'artist:wlop', promptOrder: 'artist,scene,style,quality' }).base
+  assert.equal(ordered, 'artist:wlop, 1girl, 1boy, wide shot, rainy station, watercolor, masterpiece')
+  // V4+ take numeric weights, so 1.5 and 3 stay distinct; V3 only has brace emphasis.
+  const weighted = weights => novelaiPrompts({ plan }, { ...v45, qualityTags: 'masterpiece', sectionWeights: weights }).base
+  assert.equal(weighted('1.5,1,1,1'), '1.5::masterpiece::, 1girl, 1boy, wide shot, rainy station, watercolor')
+  assert.equal(weighted('3,1,0.75,1'), '3::masterpiece::, 1girl, 1boy, wide shot, rainy station, 0.75::watercolor::')
+  const v3 = novelaiPrompts({ plan }, { model: 'nai-diffusion-3', size: '832x1216', qualityTags: 'masterpiece', sectionWeights: '3,1,0.75' }).base
+  assert.equal(v3, '{{masterpiece}}, 1girl, 1boy, wide shot, rainy station, {watercolor}')
+  // Official presets are opt-in and dedupe against hand-written tags.
+  const preset = novelaiPrompts({ plan }, { ...v45, qualityTags: 'masterpiece', qualityPreset: 'standard' }).base
+  assert.equal(preset, 'masterpiece, very aesthetic, no text, 1girl, 1boy, wide shot, rainy station, watercolor')
+})
+
+test('NovelAI fixed seed, official negative preset and setting validation', () => {
+  const settings = { model: 'nai-diffusion-4-5-full', size: '832x1216', seed: '42', ucPreset: 'light', negativePrompt: 'lowres, extra hands' }
+  const first = imageChannelRequest({ ...input, ...settings, plan }), second = imageChannelRequest({ ...input, ...settings, plan })
+  assert.equal(first.body.parameters.seed, 42)
+  assert.equal(second.body.parameters.seed, 42)
+  assert.match(first.body.parameters.negative_prompt, /^lowres, extra hands, artistic error/)
+  assert.equal(first.body.parameters.negative_prompt.match(/lowres/g).length, 1)
+  assert.equal(first.body.parameters.ucPreset, 1)
+  const untouched = imageChannelRequest({ ...input, model: 'nai-diffusion-4-5-full', size: '832x1216', plan })
+  assert.equal(untouched.body.action, 'generate')
+  for (const key of ['ucPreset', 'qualityToggle', 'image']) assert.ok(!(key in untouched.body.parameters), key)
+  const novelai = extra => channelSettings({ provider: 'novelai', baseURL: 'https://image.novelai.net', model: 'nai-diffusion-4-5-full', size: '832x1216', ...extra })
+  assert.throws(() => novelai({ promptOrder: 'quality,scene' }), /完整排列/)
+  assert.throws(() => novelai({ sectionWeights: '1,-1' }), /正数/)
+  assert.throws(() => novelai({ seed: '4294967296' }), /种子/)
+  assert.throws(() => novelai({ promptPresets: '[]' }), /JSON 对象/)
+  assert.throws(() => novelai({ qualityPreset: 'max' }), /质量词预设/)
+})

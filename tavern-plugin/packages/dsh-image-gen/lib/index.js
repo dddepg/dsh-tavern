@@ -2011,6 +2011,72 @@ const models = {
 	}
 };
 const NOVELAI_MODELS = Object.freeze(Object.keys(models));
+const NOVELAI_BASE_SECTIONS = Object.freeze([
+	"quality",
+	"scene",
+	"style",
+	"artist"
+]);
+const NOVELAI_QUALITY_PRESETS = Object.freeze([
+	"none",
+	"light",
+	"standard"
+]);
+const NOVELAI_UC_PRESETS = Object.freeze([
+	"none",
+	"light",
+	"heavy",
+	"human-focus"
+]);
+const QUALITY_PRESET_TAGS = {
+	"nai-diffusion-5-full": "very aesthetic, masterpiece, no text",
+	"nai-diffusion-5-curated": "very aesthetic, masterpiece, no text",
+	"nai-diffusion-4-5-full": "very aesthetic, masterpiece, no text",
+	"nai-diffusion-4-5-curated": "very aesthetic, masterpiece, no text, -0.8::feet::, rating:general",
+	"nai-diffusion-4-full": "no text, best quality, very aesthetic, absurdres",
+	"nai-diffusion-4-curated": "rating:general, best quality, very aesthetic, absurdres",
+	"nai-diffusion-3": "best quality, amazing quality, very aesthetic, absurdres"
+};
+const QUALITY_LIGHT_V5_TAGS = "very aesthetic, amazing quality, no text";
+const UC_PRESET_TAGS = {
+	"nai-diffusion-4-5-full": {
+		heavy: "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page",
+		light: "lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page",
+		"human-focus": "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy"
+	},
+	"nai-diffusion-4-5-curated": {
+		heavy: "blurry, lowres, upscaled, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, negative space, blank page",
+		light: "blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page",
+		"human-focus": "blurry, lowres, upscaled, artistic error, film grain, scan artifacts, bad anatomy, bad hands, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, halftone, multiple views, logo, too many watermarks, @_@, mismatched pupils, glowing eyes, negative space, blank page"
+	},
+	"nai-diffusion-4-full": {
+		heavy: "blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, multiple views, logo, too many watermarks",
+		light: "blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing"
+	},
+	"nai-diffusion-4-curated": {
+		heavy: "blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, logo, dated, signature, multiple views, gigantic breasts",
+		light: "blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing, logo, dated, signature"
+	},
+	"nai-diffusion-3": {
+		heavy: "lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
+		light: "lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing",
+		"human-focus": "lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], bad anatomy, bad hands, @_@, mismatched pupils, heart-shaped pupils, glowing eyes"
+	}
+};
+const QUALITY_MODEL_ALIASES = { "nai-diffusion-4-curated-preview": "nai-diffusion-4-curated" };
+const UC_MODEL_ALIASES = {
+	"nai-diffusion-5-full": "nai-diffusion-4-5-full",
+	"nai-diffusion-5-curated": "nai-diffusion-4-5-curated",
+	"nai-diffusion-4-curated-preview": "nai-diffusion-4-curated"
+};
+const UC_PRESET_INDEX = {
+	heavy: 0,
+	light: 1,
+	"human-focus": 2,
+	none: 3
+};
+const NOVELAI_TEXT_TAG = /(?:^|[\s,;|])Text\s*:\s*\S/i;
+const BASE64_IMAGE = /^[A-Za-z0-9+/]+={0,2}$/;
 function novelaiSettings(config) {
 	if (!Object.hasOwn(models, config.model)) throw new Error("NovelAI 请选择已接入的 V5、V4.5、V4 或 Anime V3 模型");
 	const dimensions = config.size.match(/^(\d+)x(\d+)$/);
@@ -2023,15 +2089,123 @@ function novelaiSettings(config) {
 		height
 	};
 }
+/** Join two tag lists, dropping duplicates case-insensitively. An empty right
+* side returns the left side verbatim, so untouched settings keep the exact
+* prompt earlier versions sent. */
+function mergeTags(first, second) {
+	const left = String(first || ""), right = String(second || "");
+	if (!right.trim()) return left;
+	if (!left.trim()) return right;
+	const seen = /* @__PURE__ */ new Set(), parts = [];
+	for (const segment of [left, right]) for (const part of segment.split(",").map((value) => value.trim())) if (part && !seen.has(part.toLowerCase())) {
+		seen.add(part.toLowerCase());
+		parts.push(part);
+	}
+	return parts.join(", ");
+}
+/** Official quality tags for the selected model and preset, or '' when unused. */
+function novelaiQualityTags(config, positivePrompt) {
+	const preset = String(config.qualityPreset || "none").trim().toLowerCase();
+	if (preset === "none") return "";
+	const model = String(config.model || "").trim();
+	const tags = preset === "light" && model.startsWith("nai-diffusion-5") ? QUALITY_LIGHT_V5_TAGS : QUALITY_PRESET_TAGS[QUALITY_MODEL_ALIASES[model] || model] || "";
+	if (!tags) return "";
+	if (!NOVELAI_TEXT_TAG.test(String(positivePrompt || ""))) return tags;
+	return tags.split(",").map((tag) => tag.trim()).filter((tag) => tag && tag.toLowerCase() !== "no text").join(", ");
+}
+/** Official undesired-content preset text, or '' when unused. */
+function novelaiNegativeTags(config) {
+	const preset = String(config.ucPreset || "none").trim().toLowerCase();
+	if (preset === "none") return "";
+	const model = String(config.model || "").trim();
+	return UC_PRESET_TAGS[UC_MODEL_ALIASES[model] || model]?.[preset] || "";
+}
+/** Section order comes from the user only when it is a full, duplicate-free
+* permutation; anything else falls back to the documented default. */
+function novelaiPromptOrder(value) {
+	const order = String(value || "").split(",").map((section) => section.trim()).filter(Boolean);
+	return order.length === NOVELAI_BASE_SECTIONS.length && new Set(order).size === order.length && order.every((section) => NOVELAI_BASE_SECTIONS.includes(section)) ? order : [...NOVELAI_BASE_SECTIONS];
+}
+/** Expand one `{A|B|C}` option per call. Braces without a pipe carry NovelAI
+* weight syntax, so they must reach the API untouched. */
+function expandWildcards(text) {
+	if (typeof text !== "string" || !text.includes("{")) return text || "";
+	let output = text;
+	for (let round = 0; round < 64; round++) {
+		const expanded = output.replace(/\{([^{}]*)\}/g, function(whole, inner) {
+			if (!inner.includes("|")) return whole;
+			const options = inner.split("|");
+			return options[randomInt(0, options.length)];
+		});
+		if (expanded === output) break;
+		output = expanded;
+	}
+	return output;
+}
+/** Section weights wrap a whole section. V4 and later take NovelAI's numeric
+* `1.5::tags::` syntax, so every value counts; Anime V3 only has brace
+* emphasis: >1 becomes {{}}, <1 becomes {}. 1 leaves the section unwrapped. */
+function applySectionWeight(tags, weight, numeric) {
+	const text = String(tags || "").trim();
+	if (!text) return "";
+	const value = Number(weight);
+	if (!Number.isFinite(value) || value === 1) return text;
+	if (numeric) return value + "::" + text + "::";
+	return value > 1 ? "{{" + text + "}}" : "{" + text + "}";
+}
+/** Positional section weights; a missing or unusable entry means 1. */
+function novelaiSectionWeights(value) {
+	return String(value || "").split(",").map((weight) => weight.trim()).filter(Boolean).slice(0, NOVELAI_BASE_SECTIONS.length).map((weight) => /^\d+(\.\d+)?$/.test(weight) && Number(weight) > 0 ? Number(weight) : 1);
+}
+/** Assemble base_caption from the configured section order, skipping empty
+* sections so an untouched configuration reproduces the previous prompt. The
+* official quality preset is appended to the user's own quality text. */
+function assembleBase(sections, config) {
+	const order = novelaiPromptOrder(config.promptOrder), weights = novelaiSectionWeights(config.sectionWeights);
+	const draft = order.map((name) => String(sections[name] || "")).filter(Boolean).join(", ");
+	const resolved = {
+		...sections,
+		quality: mergeTags(sections.quality, novelaiQualityTags(config, draft))
+	};
+	const numeric = Boolean(models[config.model]?.characters);
+	return order.map((name, index) => applySectionWeight(expandWildcards(resolved[name]), weights[index], numeric)).filter(Boolean).join(", ");
+}
+/** Empty means NovelAI's own ordering; only an explicit false keeps model order. */
+function novelaiUseOrder(config) {
+	const value = String(config.useOrder || "").trim().toLowerCase();
+	return value ? value !== "false" : true;
+}
+/** NovelAI wants raw base64 in `parameters.image`; a `data:` prefix must be
+* stripped and remote URLs are never fetched on the user's behalf. */
+function referenceImageBytes(value) {
+	const text = String(value || "").trim();
+	if (!text) return "";
+	if (!text.startsWith("data:") && /^[a-z][a-z0-9+.-]*:\/\//i.test(text)) throw new Error("图片参考不支持远程地址，请填写 base64 图片数据，可带 data:image/...;base64, 前缀");
+	const compact = (text.startsWith("data:") ? text.slice(text.indexOf(",") + 1) : text).replace(/\s+/g, "");
+	if (compact.length < 8 || compact.length % 4 || !BASE64_IMAGE.test(compact)) throw new Error("图片参考不是有效的 base64 图片数据");
+	return compact;
+}
+/** Image-to-image strength; NovelAI's own default is 0.7. An empty setting must
+* stay empty rather than coercing to 0, which would ignore the reference image. */
+function imageStrength(config) {
+	const raw = String(config.imageStrength ?? "").trim();
+	if (!raw) return .7;
+	const value = Number(raw);
+	return Number.isFinite(value) && value >= 0 && value <= 1 ? value : .7;
+}
 /** Compile frozen per-person blocks, not current game variables. Image-local
 * adjustments live in blocks; stale person.fields must not override them.
 * Names identify records but aren't repeated as invented visual subjects. */
-function novelaiPrompts(input) {
+function novelaiPrompts(input, config = {}) {
 	const plan = input.plan;
 	if (!plan || !Array.isArray(plan.blocks)) {
 		if (typeof input.prompt !== "string" || !input.prompt.trim() || input.prompt.length > 16e3) throw new Error("NovelAI 画面提示词为空或过长");
 		return {
-			base: input.prompt,
+			base: assembleBase({
+				quality: config.qualityTags,
+				scene: input.prompt,
+				artist: config.artistString
+			}, config),
 			characters: []
 		};
 	}
@@ -2043,7 +2217,13 @@ function novelaiPrompts(input) {
 	}));
 	if (characters.some((person) => !person.caption)) throw new Error("NovelAI 人物方案缺少人物描述");
 	const style = plan.styleOverride?.tags ?? plan.style?.tags ?? "";
-	const base = [...plan.blocks.filter((block) => block.owner === "scene" && block.tags).map((block) => block.tags), style].filter(Boolean).join(", ");
+	const scene = plan.blocks.filter((block) => block.owner === "scene" && block.tags).map((block) => block.tags).join(", ");
+	const base = assembleBase({
+		quality: config.qualityTags,
+		scene,
+		style,
+		artist: config.artistString
+	}, config);
 	if (!base.trim() && !characters.length) throw new Error("NovelAI 画面提示词为空");
 	if (base.length + characters.reduce((sum, person) => sum + person.caption.length, 0) > 16e3) throw new Error("NovelAI 组合提示词过长");
 	return {
@@ -2053,9 +2233,11 @@ function novelaiPrompts(input) {
 }
 function novelaiRequest(input, config) {
 	const { width, height, guidance, characters: limit } = novelaiSettings(config);
-	const prompt = novelaiPrompts(input);
+	const prompt = novelaiPrompts(input, config);
 	if (limit && prompt.characters.length > limit) throw new Error("当前 NovelAI 模型最多支持 " + limit + " 人，请选择 V5 或调整画面");
-	const seed = randomInt(0, 4294967296);
+	const seed = config.seed ? Number(config.seed) : randomInt(0, 4294967296);
+	const negative = mergeTags(config.negativePrompt, novelaiNegativeTags(config));
+	const reference = referenceImageBytes(config.referenceImage);
 	const captions = prompt.characters.map((person) => ({
 		char_caption: person.caption,
 		centers: [{
@@ -2063,10 +2245,24 @@ function novelaiRequest(input, config) {
 			y: .5
 		}]
 	}));
+	const qualityPreset = String(config.qualityPreset || "none").trim().toLowerCase(), ucPreset = String(config.ucPreset || "none").trim().toLowerCase();
+	const presets = {
+		...qualityPreset === "none" ? {} : {
+			qualityPresetId: qualityPreset,
+			qualityToggle: true,
+			quality_toggle: true,
+			tag_hint_qt: qualityPreset === "standard" ? 1 : 3
+		},
+		...ucPreset === "none" ? {} : {
+			uc: negative,
+			ucPreset: UC_PRESET_INDEX[ucPreset],
+			uc_preset: UC_PRESET_INDEX[ucPreset]
+		}
+	};
 	return {
 		input: limit ? prompt.base : [prompt.base, ...prompt.characters.map((person) => person.caption)].filter(Boolean).join("\n"),
 		model: config.model,
-		action: "generate",
+		action: reference ? "img2img" : "generate",
 		parameters: {
 			params_version: 4,
 			width,
@@ -2077,13 +2273,20 @@ function novelaiRequest(input, config) {
 			noise_schedule: "karras",
 			n_samples: 1,
 			seed,
-			negative_prompt: config.negativePrompt || "",
+			negative_prompt: negative,
 			cfg_rescale: 0,
 			dynamic_thresholding: false,
 			legacy: false,
 			legacy_v3_extend: false,
 			deliberate_euler_ancestral_bug: false,
 			prefer_brownian: true,
+			...presets,
+			...reference ? {
+				image: reference,
+				strength: imageStrength(config),
+				noise: 0,
+				extra_noise_seed: Math.max(0, seed - 1)
+			} : {},
 			...limit ? {
 				use_coords: false,
 				legacy_uc: false,
@@ -2093,11 +2296,11 @@ function novelaiRequest(input, config) {
 						char_captions: captions
 					},
 					use_coords: false,
-					use_order: true
+					use_order: novelaiUseOrder(config)
 				},
 				v4_negative_prompt: {
 					caption: {
-						base_caption: config.negativePrompt || "",
+						base_caption: negative,
 						char_captions: captions.map(() => ({
 							char_caption: "",
 							centers: [{
@@ -2487,12 +2690,36 @@ const IMAGE_ADVANCED_FIELDS = [
 	"steps",
 	"guidance"
 ];
+const IMAGE_NOVELAI_PROMPT_FIELDS = [
+	"artistString",
+	"qualityTags",
+	"qualityPreset",
+	"ucPreset",
+	"promptOrder",
+	"sectionWeights",
+	"useOrder",
+	"promptPresets",
+	"seed",
+	"referenceImage",
+	"imageStrength"
+];
+const IMAGE_FIELD_LIMITS = {
+	negativePrompt: 4e3,
+	baseURL: 2e3,
+	artistString: 1e3,
+	qualityTags: 600,
+	qualityPreset: 16,
+	ucPreset: 16,
+	imageStrength: 8,
+	promptOrder: 120,
+	sectionWeights: 120,
+	useOrder: 8,
+	promptPresets: 1e4,
+	seed: 20,
+	referenceImage: 5e4
+};
 for (const channel of channels) {
-	const advanced = [
-		"novelai",
-		"webui",
-		"comfyui"
-	].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === "qwen" ? ["negativePrompt"] : [];
+	const advanced = channel.id === "novelai" ? [...IMAGE_ADVANCED_FIELDS, ...IMAGE_NOVELAI_PROMPT_FIELDS] : ["webui", "comfyui"].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === "qwen" ? ["negativePrompt"] : [];
 	channel.fields = [...channel.fields, ...advanced];
 }
 const SCENE_IMAGE_CHANNELS = channels.filter((channel) => channel.id !== "dsh-image-gen").map(({ id, label, fields, hint, model }) => ({
@@ -2520,7 +2747,7 @@ function channelSettings(value = {}, id = value.provider || "openai") {
 	for (const field of defaults.fields) {
 		if (value[field] !== void 0 && typeof value[field] !== "string") throw new Error("渠道配置须为文本");
 		result[field] = (value[field] ?? defaults[field] ?? "").trim();
-		if (result[field].length > (field === "negativePrompt" ? 4e3 : field === "baseURL" ? 2e3 : 200)) throw new Error("渠道配置过长");
+		if (result[field].length > (IMAGE_FIELD_LIMITS[field] ?? 200)) throw new Error("渠道配置过长");
 	}
 	for (const field of ["steps", "guidance"]) {
 		if (!result[field]) continue;
@@ -2545,7 +2772,37 @@ function channelSettings(value = {}, id = value.provider || "openai") {
 		const dimensions = result.size.match(/^(\d+)x(\d+)$/);
 		if (!dimensions || dimensions.slice(1).some((value) => Number(value) < 64 || Number(value) > 2048 || Number(value) % 8)) throw new Error("WebUI 尺寸须为宽x高，每边 64–2048 且为 8 的倍数");
 	}
-	if (id === "novelai") novelaiSettings(result);
+	if (id === "novelai") {
+		if (result.promptOrder) {
+			const order = result.promptOrder.split(",").map((section) => section.trim()).filter(Boolean);
+			if (order.length !== NOVELAI_BASE_SECTIONS.length || new Set(order).size !== order.length || order.some((section) => !NOVELAI_BASE_SECTIONS.includes(section))) throw new Error("promptOrder 须为 quality,scene,style,artist 的完整排列");
+		}
+		if (result.sectionWeights) {
+			const weights = result.sectionWeights.split(",").map((weight) => weight.trim()).filter(Boolean);
+			if (weights.length > NOVELAI_BASE_SECTIONS.length) throw new Error("sectionWeights 数量不能超过 4");
+			if (weights.some((weight) => !/^\d+(\.\d+)?$/.test(weight) || Number(weight) <= 0)) throw new Error("sectionWeights 须为正数，例如 1.5,1,1,0.75");
+		}
+		if (result.useOrder) {
+			if (!["true", "false"].includes(result.useOrder.toLowerCase())) throw new Error("useOrder 须填 true 或 false");
+			result.useOrder = result.useOrder.toLowerCase();
+		}
+		if (result.promptPresets) try {
+			const presets = JSON.parse(result.promptPresets);
+			if (typeof presets !== "object" || Array.isArray(presets) || presets === null) throw new Error("not object");
+		} catch {
+			throw new Error("promptPresets 须为有效 JSON 对象");
+		}
+		if (result.seed && (!/^\d+$/.test(result.seed) || Number(result.seed) > 4294967295)) throw new Error("种子须为 0–4294967295 的非负整数");
+		result.qualityPreset = (result.qualityPreset || "none").toLowerCase();
+		if (!NOVELAI_QUALITY_PRESETS.includes(result.qualityPreset)) throw new Error("官方质量词预设只能选择 none、light 或 standard");
+		result.ucPreset = (result.ucPreset || "none").toLowerCase();
+		if (!NOVELAI_UC_PRESETS.includes(result.ucPreset)) throw new Error("官方负面预设只能选择 none、light、heavy 或 human-focus");
+		if (result.imageStrength) {
+			if (!/^\d+(?:\.\d+)?$/.test(result.imageStrength) || Number(result.imageStrength) > 1) throw new Error("图片参考强度须为 0–1 的数值");
+			result.imageStrength = String(Number(result.imageStrength));
+		}
+		novelaiSettings(result);
+	}
 	if (id === "comfyui") {
 		result.workflow = comfyWorkflow(value.workflow);
 		for (const field of IMAGE_ADVANCED_FIELDS) if (result[field] && !result.workflow?.bindings[field === "negativePrompt" ? "negative" : field]?.length) throw new Error("工作流缺少 " + field + " 映射，请重新导入支持该参数的工作流或清空该设置");

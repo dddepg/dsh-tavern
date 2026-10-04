@@ -112,3 +112,15 @@ test('failed migration write preserves original config and does not change crede
   assert.equal((await f.imageModule.inspect('grok')).model, 'old-model')
   assert.equal(await f.store.readJson(IMAGE_MODULE_CONFIGURATION), undefined)
 })
+
+test('NovelAI prompt controls persist through settings and restarts', async t => {
+  const f = await fixture(t)
+  const controls = { qualityTags: 'masterpiece', artistString: 'artist:wlop', sectionWeights: '1.5,1,1,1', seed: '42', qualityPreset: 'standard', ucPreset: 'light',
+    promptPresets: JSON.stringify({ 日常: { qualityTags: 'masterpiece' } }) }
+  await f.setup.configure({ provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216', ...controls })
+  const ui = await f.create().setup.settings()
+  for (const [field, value] of Object.entries(controls)) assert.equal(ui[field], value, field)
+  const { active } = await f.create().setup.capture()
+  for (const [field, value] of Object.entries(controls)) assert.equal(active[field], value, field)
+  await assert.rejects(f.setup.configure({ sectionWeights: '0' }), /正数/)
+})

@@ -1,4 +1,4 @@
-import { novelaiSettings, novelaiRequest, NOVELAI_MODELS } from './scene-image-novelai.js'
+import { novelaiSettings, novelaiRequest, NOVELAI_MODELS, NOVELAI_BASE_SECTIONS, NOVELAI_QUALITY_PRESETS, NOVELAI_UC_PRESETS } from './scene-image-novelai.js'
 import { comfyWorkflow } from './scene-image-comfy-workflow.js'
 import { imageReferenceCapability } from './scene-image-reference.js'
 
@@ -17,8 +17,21 @@ const channels = [
 ]
 // Advanced controls are optional strings, like the existing form fields.
 export const IMAGE_ADVANCED_FIELDS = ['negativePrompt', 'steps', 'guidance']
+// NovelAI-only prompt controls: positive prompt, official quality/undesired-content
+// presets, section ordering, image-to-image and reproducibility. Kept separate so
+// other channels never grow these fields.
+export const IMAGE_NOVELAI_PROMPT_FIELDS = ['artistString', 'qualityTags', 'qualityPreset', 'ucPreset', 'promptOrder', 'sectionWeights', 'useOrder', 'promptPresets', 'seed', 'referenceImage', 'imageStrength']
+// Per-field length ceilings; unlisted extended fields keep the historical 200-character cap.
+const IMAGE_FIELD_LIMITS = {
+  negativePrompt: 4000, baseURL: 2000,
+  artistString: 1000, qualityTags: 600,
+  qualityPreset: 16, ucPreset: 16, imageStrength: 8,
+  promptOrder: 120, sectionWeights: 120,
+  useOrder: 8, promptPresets: 10000,
+  seed: 20, referenceImage: 50000
+}
 for (const channel of channels) {
-  const advanced = ['novelai', 'webui', 'comfyui'].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === 'qwen' ? ['negativePrompt'] : []
+  const advanced = channel.id === 'novelai' ? [...IMAGE_ADVANCED_FIELDS, ...IMAGE_NOVELAI_PROMPT_FIELDS] : ['webui', 'comfyui'].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === 'qwen' ? ['negativePrompt'] : []
   channel.fields = [...channel.fields, ...advanced]
 }
 // Keep the old sentinel readable for stored records, never offer it as a provider.
@@ -34,7 +47,7 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
   for (const field of defaults.fields) {
     if (value[field] !== undefined && typeof value[field] !== 'string') throw new Error('渠道配置须为文本')
     result[field] = (value[field] ?? defaults[field] ?? '').trim()
-    if (result[field].length > (field === 'negativePrompt' ? 4000 : field === 'baseURL' ? 2000 : 200)) throw new Error('渠道配置过长')
+    if (result[field].length > (IMAGE_FIELD_LIMITS[field] ?? 200)) throw new Error('渠道配置过长')
   }
   for (const field of ['steps', 'guidance']) {
     if (!result[field]) continue
@@ -55,7 +68,40 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
     const dimensions = result.size.match(/^(\d+)x(\d+)$/)
     if (!dimensions || dimensions.slice(1).some(value => Number(value) < 64 || Number(value) > 2048 || Number(value) % 8)) throw new Error('WebUI 尺寸须为宽x高，每边 64–2048 且为 8 的倍数')
   }
-  if (id === 'novelai') novelaiSettings(result)
+  if (id === 'novelai') {
+    // Prompt controls accept a full permutation only; partial or duplicated
+    // orders would silently drop sections from the assembled caption.
+    if (result.promptOrder) {
+      const order = result.promptOrder.split(',').map(section => section.trim()).filter(Boolean)
+      if (order.length !== NOVELAI_BASE_SECTIONS.length || new Set(order).size !== order.length || order.some(section => !NOVELAI_BASE_SECTIONS.includes(section))) throw new Error('promptOrder 须为 quality,scene,style,artist 的完整排列')
+    }
+    if (result.sectionWeights) {
+      const weights = result.sectionWeights.split(',').map(weight => weight.trim()).filter(Boolean)
+      if (weights.length > NOVELAI_BASE_SECTIONS.length) throw new Error('sectionWeights 数量不能超过 4')
+      if (weights.some(weight => !/^\d+(\.\d+)?$/.test(weight) || Number(weight) <= 0)) throw new Error('sectionWeights 须为正数，例如 1.5,1,1,0.75')
+    }
+    if (result.useOrder) {
+      if (!['true', 'false'].includes(result.useOrder.toLowerCase())) throw new Error('useOrder 须填 true 或 false')
+      result.useOrder = result.useOrder.toLowerCase()
+    }
+    if (result.promptPresets) {
+      try {
+        const presets = JSON.parse(result.promptPresets)
+        if (typeof presets !== 'object' || Array.isArray(presets) || presets === null) throw new Error('not object')
+      } catch { throw new Error('promptPresets 须为有效 JSON 对象') }
+    }
+    if (result.seed && (!/^\d+$/.test(result.seed) || Number(result.seed) > 0xFFFFFFFF)) throw new Error('种子须为 0–4294967295 的非负整数')
+    // Official presets stay opt-in: 'none' keeps the prompt the user typed alone.
+    result.qualityPreset = (result.qualityPreset || 'none').toLowerCase()
+    if (!NOVELAI_QUALITY_PRESETS.includes(result.qualityPreset)) throw new Error('官方质量词预设只能选择 none、light 或 standard')
+    result.ucPreset = (result.ucPreset || 'none').toLowerCase()
+    if (!NOVELAI_UC_PRESETS.includes(result.ucPreset)) throw new Error('官方负面预设只能选择 none、light、heavy 或 human-focus')
+    if (result.imageStrength) {
+      if (!/^\d+(?:\.\d+)?$/.test(result.imageStrength) || Number(result.imageStrength) > 1) throw new Error('图片参考强度须为 0–1 的数值')
+      result.imageStrength = String(Number(result.imageStrength))
+    }
+    novelaiSettings(result)
+  }
   if (id === 'comfyui') {
     result.workflow = comfyWorkflow(value.workflow)
     for (const field of IMAGE_ADVANCED_FIELDS) if (result[field] && !result.workflow?.bindings[field === 'negativePrompt' ? 'negative' : field]?.length) throw new Error('工作流缺少 ' + field + ' 映射，请重新导入支持该参数的工作流或清空该设置')

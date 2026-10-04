@@ -95,6 +95,8 @@
 			const [models, setModels] = React.useState([]);
 			const [modelNotice, setModelNotice] = React.useState("");
 			const [checking, setChecking] = React.useState("");
+			const [presetName, setPresetName] = React.useState("");
+			const [selectedPreset, setSelectedPreset] = React.useState("");
 			React.useEffect(function () {
 				let active = true;
 				rpc("getSceneImageSettings").then(function (result) { if (active) setForm(result.settings); }, function (e) { if (active) setNotice(String(e.message || e)); });
@@ -153,13 +155,83 @@
 				} catch (e) { setNotice(String(e.message || e)); }
 				finally { setBusy(false); event.target.value = ""; }
 			}
+			// Presets store the values the panel edits, keyed by name. Image-to-image stays
+			// hidden until references are uploaded files, not pasted base64 text.
+			const PROMPT_PRESET_FIELDS = ["qualityTags", "qualityPreset", "artistString", "promptOrder", "sectionWeights", "useOrder", "negativePrompt", "ucPreset", "steps", "guidance", "seed"];
+			function readPresets() {
+				if (!form || !form.promptPresets) return {};
+				try {
+					const parsed = JSON.parse(form.promptPresets);
+					return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+				} catch (_) { return {}; }
+			}
+			const presetNames = Object.keys(readPresets());
+			// Derive a short name from the prompt itself when the box is left empty.
+			function defaultPresetName() {
+				const fallback = "正面提示词 " + (presetNames.length + 1);
+				const compact = [form.qualityTags, form.artistString].filter(Boolean).join(", ").replace(/\s+/g, " ").trim().replace(/^[,，、;；]+|[,，、;；]+$/g, "");
+				if (!compact) return fallback;
+				const parts = compact.split(/[,，、;；]+/).map(function (part) { return part.trim(); }).filter(Boolean);
+				let candidate = parts.length ? parts[0] : compact;
+				for (let index = 1; index < parts.length; index++) { const next = candidate + ", " + parts[index]; if (next.length > 28) break; candidate = next; }
+				if (candidate.length > 28) candidate = candidate.slice(0, 28).trim();
+				return candidate || fallback;
+			}
+			function savePreset() {
+				const name = presetName.trim() || defaultPresetName();
+				if (!name) { setNotice("请先填写预设名称。"); return; }
+				let store = {};
+				if (form.promptPresets) {
+					try {
+						const parsed = JSON.parse(form.promptPresets);
+						if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not object");
+						store = parsed;
+					} catch (_) { setNotice("现有预设配置不是有效 JSON 对象，未覆盖；请先修正后再保存。"); return; }
+				}
+				const existed = Object.hasOwn(store, name);
+				const entry = {};
+				PROMPT_PRESET_FIELDS.forEach(function (field) { entry[field] = form[field] || ""; });
+				store[name] = entry;
+				setDirty(true);
+				setForm(function (current) { return Object.assign({}, current, { promptPresets: JSON.stringify(store, null, 2) }); });
+				setSelectedPreset(name);
+				setNotice("已" + (existed ? "更新" : "新增") + "预设「" + name + "」；仍需点击下方保存按钮写入配置。");
+			}
+			function applyPreset() {
+				if (!selectedPreset) { setNotice("请先选择要应用的预设。"); return; }
+				const entry = readPresets()[selectedPreset];
+				if (!entry || typeof entry !== "object" || Array.isArray(entry)) { setNotice("预设「" + selectedPreset + "」不存在或格式不正确。"); return; }
+				const patch = {};
+				PROMPT_PRESET_FIELDS.forEach(function (field) {
+					const value = entry[field];
+					if (typeof value === "string") patch[field] = value;
+					else if (typeof value === "number" && Number.isFinite(value)) patch[field] = String(value);
+				});
+				setDirty(true);
+				setForm(function (current) { return Object.assign({}, current, patch); });
+				setNotice("已应用预设「" + selectedPreset + "」；仍需点击保存按钮写入配置。");
+			}
 			function channelField(field) {
 				if (field === "username" && form.authType !== "basic") return null;
-				const labels = { baseURL: "API 根地址", model: "生图模型名称", size: "图片尺寸／分辨率", aspectRatio: "画面比例", authType: "服务鉴权", username: "鉴权用户名", negativePrompt: "负面提示词（不希望出现的内容）", steps: "生成步数", guidance: "提示词引导强度（CFG）" };
+				const labels = { baseURL: "API 根地址", model: "生图模型名称", size: "图片尺寸／分辨率", aspectRatio: "画面比例", authType: "服务鉴权", username: "鉴权用户名", negativePrompt: "负面提示词（不希望出现的内容）", steps: "生成步数", guidance: "提示词引导强度（CFG）", qualityTags: "正面提示词", qualityPreset: "官方质量词预设", ucPreset: "官方负面预设", artistString: "画师串", promptOrder: "段落排列顺序", sectionWeights: "段落权重", useOrder: "保留用户顺序", seed: "随机种子", referenceImage: "图片参考（Base64，img2img）", imageStrength: "图片参考强度", promptPresets: "预设配置（JSON）" };
+				const placeholders = { negativePrompt: "留空沿用默认；例如：模糊、水印、多余的手指", qualityTags: "留空沿用默认；支持通配符 {选项A|选项B}", artistString: "例如：artist:wlop, artist:ciloranko", promptOrder: "留空沿用默认 quality,scene,style,artist", sectionWeights: "留空不改权重；例如：1.5,1,1,0.75", seed: "留空每次随机；填写后相同种子可复现", referenceImage: "留空为纯文生图；只接受 base64，可带 data:image/...;base64, 前缀，不会代下载网址", imageStrength: "留空按 0.7；越小越贴近参考图", promptPresets: "{\n  \"日常风格\": { \"qualityTags\": \"masterpiece, best quality\" }\n}" };
+				const limits = { baseURL: 2000, qualityTags: 600, artistString: 1000, qualityPreset: 16, ucPreset: 16, imageStrength: 8, promptOrder: 120, sectionWeights: 120, useOrder: 8, negativePrompt: 4000, seed: 20, referenceImage: 50000, promptPresets: 10000 };
+				const rows = { negativePrompt: 3, qualityTags: 2, artistString: 2, promptPresets: 4 };
+				// Enumerated controls; the empty string means "not chosen yet", and the
+				// fallback value below is the same default the backend applies.
+				const choices = {
+					authType: [["none", "无需鉴权"], ["basic", "用户名和密码"], ["bearer", "Bearer Token（反向代理）"]],
+					useOrder: [["true", "保留（按段落顺序提交）"], ["false", "不保留（由模型自行排序）"]],
+					qualityPreset: [["none", "不追加"], ["light", "轻量"], ["standard", "标准"]],
+					ucPreset: [["none", "不追加"], ["light", "轻量"], ["heavy", "重度"], ["human-focus", "人物向"]]
+				};
+				const choiceDefaults = { authType: "none", useOrder: "true", qualityPreset: "none", ucPreset: "none" };
 				function change(event) { const value = event.target.value; setDirty(true); if (["baseURL", "authType", "username"].includes(field)) resetConnection(); if (field === "authType") setKey(""); setForm(function (current) { return Object.assign({}, current, { [field]: value }, field === "authType" ? { hasKey: false } : {}); }); }
-				const control = field === "authType" ? React.createElement("select", { value: form[field], disabled: busy, onChange: change }, [ ["none", "无需鉴权"], ["basic", "用户名和密码"], ["bearer", "Bearer Token（反向代理）"] ].map(function (option) { return React.createElement("option", { key: option[0], value: option[0] }, option[1]); }))
-					: field === "negativePrompt" ? React.createElement("textarea", { value: form[field] || "", rows: 3, maxLength: 4000, placeholder: "留空沿用默认；例如：模糊、水印、多余的手指", disabled: busy, onChange: change })
-                    : React.createElement("input", { value: form[field] || "", type: ["steps", "guidance"].includes(field) ? "number" : "text", step: field === "guidance" ? "0.1" : "1", placeholder: ["steps", "guidance"].includes(field) ? "留空沿用默认" : undefined, disabled: busy, onChange: change });
+				let control;
+				if (choices[field]) control = React.createElement("select", { value: form[field] || choiceDefaults[field], disabled: busy, onChange: change }, choices[field].map(function (option) { return React.createElement("option", { key: option[0], value: option[0] }, option[1]); }));
+				else if (rows[field]) control = React.createElement("textarea", { value: form[field] || "", rows: rows[field], maxLength: limits[field], placeholder: placeholders[field], disabled: busy, onChange: change });
+				else if (["steps", "guidance", "seed", "imageStrength"].includes(field)) control = React.createElement("input", { value: form[field] || "", type: "number", min: field === "steps" ? undefined : 0, max: field === "seed" ? 4294967295 : field === "imageStrength" ? 1 : undefined, step: ["guidance", "imageStrength"].includes(field) ? "0.1" : "1", placeholder: placeholders[field] || "留空沿用默认", disabled: busy, onChange: change });
+				else control = React.createElement("input", { value: form[field] || "", type: "text", maxLength: limits[field], placeholder: placeholders[field], disabled: busy, onChange: change });
 				return React.createElement("label", { key: field }, labels[field] || field, control);
 			}
 			return React.createElement("div", { className: "dsh-tavern-settings-group" },
@@ -187,14 +259,21 @@
 					form && form.provider === "comfyui" ? React.createElement("div", null,
 						React.createElement("p", null, form.workflow ? "工作流：" + (form.workflow.name || "已选择，待保存校验") : "尚未导入工作流"),
 						React.createElement("label", null, "导入工作流", React.createElement("input", { type: "file", accept: ".json,application/json", disabled: busy, onChange: importWorkflow }))) : null,
+					form && selectedChannel && (form.provider === "novelai" || selectedChannel.fields.some(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field); })) ? React.createElement("details", { open: true },
+						React.createElement("summary", null, "提示词与生成参数"),
+						React.createElement("p", null, "选填，留空沿用默认。步数越高通常越慢，也可能增加费用；不保证画质更好。保存后用于下一次生图和重画。"),
+						form.provider === "novelai" ? React.createElement("p", null, "正面提示词与画师串支持 {选项A|选项B} 通配符，每次随机取一个；单独的 {标签} 会作为 NovelAI 权重语法原样提交。段落顺序须为 quality、scene、style、artist 的完整排列；段落权重为不超过四个正数（例如 1.5,1,1,0.75），作用于整段而非单个标签；V4 及以上按数值生效，Anime V3 只分加强、不变、减弱三档。官方预设不选则不追加，选了会把该模型的标准质量词或负面词并入对应段落，并与手写内容自动去重。") : null,
+						form.provider === "novelai" ? ["qualityTags", "qualityPreset", "artistString", "promptOrder", "sectionWeights", "useOrder"].map(channelField) : null,
+						form.provider === "novelai" ? React.createElement("div", { className: "dsh-tavern-image-presets" },
+							React.createElement("label", null, "预设名称", React.createElement("input", { value: presetName, type: "text", maxLength: 80, placeholder: "例如：日常风格", disabled: busy, onChange: function (e) { setPresetName(e.target.value); } })),
+							React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: savePreset }, "保存为预设"),
+							React.createElement("label", null, "已存预设", React.createElement("select", { value: selectedPreset, disabled: busy, onChange: function (e) { setSelectedPreset(e.target.value); } }, [React.createElement("option", { key: "", value: "" }, presetNames.length ? "请选择预设" : "暂无预设")].concat(presetNames.map(function (name) { return React.createElement("option", { key: name, value: name }, name); })))),
+							React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || !selectedPreset, onClick: applyPreset }, "应用预设")) : null,
+						form.provider === "comfyui" ? React.createElement("p", null, "显示已映射的参数；更换工作流后，未映射的旧设置需清空。没有选项时请先保存新工作流，或请维护者补充映射。") : null,
+						form.provider === "novelai" ? ["negativePrompt", "ucPreset", "steps", "guidance", "seed", "promptPresets"].map(channelField) : selectedChannel.fields.filter(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field) && (form.provider !== "comfyui" || form[field] || form.workflow && form.workflow.bindings && form.workflow.bindings[field === "negativePrompt" ? "negative" : field] && form.workflow.bindings[field === "negativePrompt" ? "negative" : field].length); }).map(channelField)) : null,
 					form ? React.createElement("details", null,
 					React.createElement("summary", null, "绘图选项（风格、尺寸）"),
 					selectedChannel && form.provider !== "dsh-image-gen" ? selectedChannel.fields.filter(function (field) { return ["size", "aspectRatio"].includes(field); }).map(channelField) : null,
-                    selectedChannel && selectedChannel.fields.some(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field); }) ? React.createElement("details", { open: true },
-                        React.createElement("summary", null, "高级绘图设置（负面提示词、步数）"),
-                        React.createElement("p", null, "选填，留空沿用默认。步数越高通常越慢，也可能增加费用；不保证画质更好。保存后用于下一次生图和重画。"),
-                        form.provider === "comfyui" ? React.createElement("p", null, "显示已映射的参数；更换工作流后，未映射的旧设置需清空。没有选项时请先保存新工作流，或请维护者补充映射。") : null,
-                        selectedChannel.fields.filter(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field) && (form.provider !== "comfyui" || form[field] || form.workflow && form.workflow.bindings && form.workflow.bindings[field === "negativePrompt" ? "negative" : field] && form.workflow.bindings[field === "negativePrompt" ? "negative" : field].length); }).map(channelField)) : null,
 					form ? React.createElement("label", null, "风格预设", React.createElement("select", { value: form.style.preset, disabled: busy, onChange: function (e) { const value = e.target.value; setDirty(true); setForm(function (current) { return Object.assign({}, current, { style: Object.assign({}, current.style, { preset: value }) }); }); } }, (form.stylePresets || []).map(function (preset) { return React.createElement("option", { key: preset.id, value: preset.id }, preset.label); }))) : null,
 					form ? React.createElement("label", null, "补充描述／标签（选填）", React.createElement("textarea", { value: form.style.custom, rows: 2, maxLength: 2000, placeholder: "例如：低饱和、柔和光线、胶片质感", disabled: busy, onChange: function (e) { const value = e.target.value; setDirty(true); setForm(function (current) { return Object.assign({}, current, { style: Object.assign({}, current.style, { custom: value }) }); }); } })) : null) : null,
 					React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: !form || busy, onClick: function () { return save(); } }, busy && !checking ? "保存中…" : "保存生图 API 配置")
