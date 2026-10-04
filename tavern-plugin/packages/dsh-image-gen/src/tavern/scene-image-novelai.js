@@ -127,7 +127,9 @@ export function novelaiArtists(value) {
     name: libraryText(entry.name, 40, '画师串名称') || '未命名画师串',
     prompt: libraryText(typeof entry.prompt === 'string' ? entry.prompt : undefined, 1000, '画师串'),
     quality: libraryText(typeof entry.quality === 'string' ? entry.quality : undefined, 600, '画师串质量词'),
-    negative: libraryText(typeof entry.negative === 'string' ? entry.negative : undefined, 4000, '画师串负面词') }))
+    negative: libraryText(typeof entry.negative === 'string' ? entry.negative : undefined, 4000, '画师串负面词'),
+    // Revision of the preview image Tavern stores beside the settings; '' means none.
+    preview: typeof entry.preview === 'string' && /^[a-f0-9]{1,16}$/.test(entry.preview) ? entry.preview : '' }))
   return { artists }
 }
 

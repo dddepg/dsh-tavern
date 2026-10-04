@@ -211,13 +211,43 @@
 			function editArtist(field, value) {
 				updateArtists(artists.map(function (entry) { return entry.id === form.activeArtist ? Object.assign({}, entry, { [field]: value }) : entry; }));
 			}
+			// Previews are shrunk in the browser (longest side 512px, JPEG) before upload,
+			// and saved with the settings; until then the form holds the data URL.
+			async function choosePreview(event) {
+				const file = event.target.files && event.target.files[0];
+				event.target.value = "";
+				if (!file) return;
+				try {
+					if (!/^image\//.test(file.type)) throw new Error("请选择图片文件");
+					const bitmap = await createImageBitmap(file);
+					const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+					const canvas = document.createElement("canvas");
+					canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+					canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+					if (bitmap.close) bitmap.close();
+					editArtist("previewData", canvas.toDataURL("image/jpeg", 0.85));
+				} catch (e) { setNotice("预览图读取失败：" + String(e.message || e)); }
+			}
+			function previewSource(entry) {
+				if (entry.previewData) return entry.previewData;
+				return entry.preview ? "/api/dsh-tavern/scene-image-artist-preview?" + new URLSearchParams({ id: entry.id, v: entry.preview }).toString() : "";
+			}
+			function artistCard(entry) {
+				const selected = (form.activeArtist || "") === (entry ? entry.id : "");
+				const source = entry ? previewSource(entry) : "";
+				return React.createElement("button", { key: entry ? entry.id : "", type: "button", className: "dsh-tavern-btn dsh-tavern-artist-card", "aria-pressed": selected, disabled: busy, title: entry ? entry.prompt : "不使用画师串",
+					onClick: function () { updateArtists(artists, entry ? entry.id : ""); } },
+					React.createElement("span", { className: "dsh-tavern-artist-thumb" }, source ? React.createElement("img", { src: source, alt: "" }) : (entry ? "无预览" : "—")),
+					React.createElement("span", { className: "dsh-tavern-artist-name" }, entry ? entry.name : "不使用"));
+			}
 			function artistLibrary() {
 				return React.createElement("div", { className: "dsh-tavern-image-presets" },
-					React.createElement("label", null, "画师串", React.createElement("select", { value: form.activeArtist || "", disabled: busy, onChange: function (e) { updateArtists(artists, e.target.value); } },
-						[React.createElement("option", { key: "", value: "" }, "不使用")].concat(artists.map(function (entry) { return React.createElement("option", { key: entry.id, value: entry.id }, entry.name); })))),
+					React.createElement("div", { role: "group", "aria-label": "画师串", className: "dsh-tavern-artist-grid" }, [artistCard(null)].concat(artists.map(artistCard))),
 					React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy || artists.length >= 50, onClick: addArtist }, "新建画师串"),
 					currentArtist ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: removeArtist }, "删除此画师串") : null,
 					currentArtist ? React.createElement("label", null, "名称", React.createElement("input", { value: currentArtist.name, maxLength: 40, disabled: busy, onChange: function (e) { editArtist("name", e.target.value); } })) : null,
+					currentArtist ? React.createElement("label", null, "预览图（选填，自动缩小到 512 像素）", React.createElement("input", { type: "file", accept: "image/png,image/jpeg,image/webp", disabled: busy, onChange: choosePreview })) : null,
+					currentArtist && previewSource(currentArtist) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", disabled: busy, onClick: function () { updateArtists(artists.map(function (entry) { return entry.id === currentArtist.id ? Object.assign({}, entry, { preview: "", previewData: "" }) : entry; })); } }, "移除预览图") : null,
 					currentArtist ? React.createElement("label", null, "画师与风格标签", React.createElement("textarea", { value: currentArtist.prompt, rows: 2, maxLength: 1000, placeholder: "例如：artist:wlop, artist:ciloranko", disabled: busy, onChange: function (e) { editArtist("prompt", e.target.value); } })) : null,
 					currentArtist ? React.createElement("label", null, "质量词（选填，填写后替代正面提示词）", React.createElement("textarea", { value: currentArtist.quality, rows: 2, maxLength: 600, disabled: busy, onChange: function (e) { editArtist("quality", e.target.value); } })) : null,
 					currentArtist ? React.createElement("label", null, "负面词（选填，填写后替代负面提示词）", React.createElement("textarea", { value: currentArtist.negative, rows: 2, maxLength: 4000, disabled: busy, onChange: function (e) { editArtist("negative", e.target.value); } })) : null);
@@ -282,7 +312,7 @@
 					form && selectedChannel && (form.provider === "novelai" || selectedChannel.fields.some(function (field) { return ["negativePrompt", "steps", "guidance"].includes(field); })) ? React.createElement("details", { open: true },
 						React.createElement("summary", null, "提示词与生成参数"),
 						React.createElement("p", null, "选填，留空沿用默认。步数越高通常越慢，也可能增加费用；不保证画质更好。保存后用于下一次生图和重画。"),
-						form.provider === "novelai" ? React.createElement("p", null, "画师串可存多套、下拉切换，选中的画师串拼入 artist 段。正面提示词与画师串支持 {选项A|选项B} 通配符，每次随机取一个；单独的 {标签} 会作为 NovelAI 权重语法原样提交。段落顺序须为 quality、scene、style、artist 的完整排列；段落权重为不超过四个正数（例如 1.5,1,1,0.75），作用于整段而非单个标签；V4 及以上按数值生效，Anime V3 只分加强、不变、减弱三档。官方预设不选则不追加，选了会把该模型的标准质量词或负面词并入对应段落，并与手写内容自动去重。") : null,
+						form.provider === "novelai" ? React.createElement("p", null, "画师串可存多套、点选切换，可附预览图；选中的画师串拼入 artist 段。正面提示词与画师串支持 {选项A|选项B} 通配符，每次随机取一个；单独的 {标签} 会作为 NovelAI 权重语法原样提交。段落顺序须为 quality、scene、style、artist 的完整排列；段落权重为不超过四个正数（例如 1.5,1,1,0.75），作用于整段而非单个标签；V4 及以上按数值生效，Anime V3 只分加强、不变、减弱三档。官方预设不选则不追加，选了会把该模型的标准质量词或负面词并入对应段落，并与手写内容自动去重。") : null,
 						form.provider === "novelai" ? artistLibrary() : null,
 						form.provider === "novelai" ? ["qualityTags", "qualityPreset", "promptOrder", "sectionWeights", "useOrder"].map(channelField) : null,
 						form.provider === "comfyui" ? React.createElement("p", null, "显示已映射的参数；更换工作流后，未映射的旧设置需清空。没有选项时请先保存新工作流，或请维护者补充映射。") : null,

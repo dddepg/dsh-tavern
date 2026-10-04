@@ -608,7 +608,7 @@ export function createSceneIllustrations(deps) {
     })
     return present(target, next)
   }
-  return { settings, configure, testConnection: connection.test, listModels: connection.models, status, start, cancel, retrySave, readImage, removeImage, setReference,
+  return { settings, configure, readArtistPreview: setup.readArtistPreview, testConnection: connection.test, listModels: connection.models, status, start, cancel, retrySave, readImage, removeImage, setReference,
     async dispose() { for (const job of jobs.values()) job.controller.abort(); await Promise.allSettled([...jobs.values()].map(job => job.promise)); imageHosts.delete(ownerId); imageAborters.delete(ownerId) }
   }
 }

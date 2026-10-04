@@ -117,7 +117,7 @@ test('NovelAI prompt controls persist through settings and restarts', async t =>
   const f = await fixture(t)
   const controls = { qualityTags: 'masterpiece', sectionWeights: '1.5,1,1,1', seed: '42', qualityPreset: 'standard', ucPreset: 'light',
     sampler: 'k_dpmpp_2m', noiseSchedule: 'exponential', cfgRescale: '0.2', varietyBoost: 'true', activeArtist: 'a' }
-  const artists = [{ id: 'a', name: '水彩', prompt: 'artist:wlop', quality: '', negative: '' }]
+  const artists = [{ id: 'a', name: '水彩', prompt: 'artist:wlop', quality: '', negative: '', preview: '' }]
   await f.setup.configure({ provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216', ...controls, artists })
   const ui = await f.create().setup.settings()
   for (const [field, value] of Object.entries(controls)) assert.equal(ui[field], value, field)
@@ -165,4 +165,27 @@ test('older single-endpoint NovelAI settings read as one default endpoint with t
   assert.equal(ui.endpoint, 'default')
   assert.deepEqual(ui.endpoints, [{ id: 'default', name: '默认', baseURL: 'https://image.novelai.net', hasKey: true }])
   assert.ok(f.keys.has('DSH_TAVERN_IMAGE_NOVELAI_API_KEY'))
+})
+
+test('NovelAI artist previews are stored beside the settings, versioned, replaced and removed with their entry', async t => {
+  const f = await fixture(t)
+  const base = { provider: 'novelai', apiKey: 'nai-key', model: 'nai-diffusion-4-5-full', size: '832x1216' }
+  let ui = await f.setup.configure({ ...base, artists: [{ id: 'a', name: '水彩', prompt: 'artist:wlop', previewData: 'data:image/png;base64,' + png.toString('base64') }, { id: 'b', name: '无图', prompt: 'x' }] })
+  const first = ui.artists[0].preview
+  assert.match(first, /^[a-f0-9]{12}$/)
+  assert.equal(ui.artists[1].preview, '')
+  assert.ok(!JSON.stringify(await f.store.readJson(IMAGE_MODULE_CONFIGURATION)).includes(png.toString('base64')), 'image bytes stay out of the settings file')
+  assert.deepEqual((await f.create().setup.readArtistPreview('a')).data, png)
+  // Saving again without new data keeps the image and its revision.
+  ui = await f.setup.configure({ ...base, apiKey: undefined, artists: ui.artists })
+  assert.equal(ui.artists[0].preview, first)
+  const jpeg = Buffer.from([255, 216, 255, 224, 0, 16])
+  ui = await f.setup.configure({ ...base, apiKey: undefined, artists: [{ ...ui.artists[0], previewData: jpeg.toString('base64') }, ui.artists[1]] })
+  assert.notEqual(ui.artists[0].preview, first)
+  assert.equal((await f.setup.readArtistPreview('a')).mediaType, 'image/jpeg')
+  await assert.rejects(f.setup.configure({ ...base, apiKey: undefined, artists: [{ ...ui.artists[0], previewData: Buffer.from('<svg/>').toString('base64') }] }), /预览图/)
+  // Removing the entry removes its image.
+  await f.setup.configure({ ...base, apiKey: undefined, artists: [ui.artists[1]] })
+  await assert.rejects(f.setup.readArtistPreview('a'), /不存在/)
+  await assert.rejects(f.setup.readArtistPreview('../x'), /不存在/)
 })

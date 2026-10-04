@@ -2183,7 +2183,8 @@ function novelaiArtists(value) {
 		name: libraryText(entry.name, 40, "画师串名称") || "未命名画师串",
 		prompt: libraryText(typeof entry.prompt === "string" ? entry.prompt : void 0, 1e3, "画师串"),
 		quality: libraryText(typeof entry.quality === "string" ? entry.quality : void 0, 600, "画师串质量词"),
-		negative: libraryText(typeof entry.negative === "string" ? entry.negative : void 0, 4e3, "画师串负面词")
+		negative: libraryText(typeof entry.negative === "string" ? entry.negative : void 0, 4e3, "画师串负面词"),
+		preview: typeof entry.preview === "string" && /^[a-f0-9]{1,16}$/.test(entry.preview) ? entry.preview : ""
 	})) };
 }
 /** The selected artist entry; its non-empty quality/negative tags take over. */
