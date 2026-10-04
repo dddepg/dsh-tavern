@@ -14,7 +14,7 @@ description: "修改已有的人物卡：设定、开场、文风、世界书、
 - 标准字段（描述、性格、开场、示例对话等）：`tavern_update_card` 的 `fields`，不用处理 JSON 转义。
 - 扩展字段（正则、脚本、MVU 面板等）：`tavern_update_card` 的 `rawOperations`，按 JSON Pointer 设置或删除。
 - 世界书条目：`tavern_update_worldbook`。条目字段用 `comment`、`content`、`primaryKeys`、`enabled`、`constant` 等。
-- 大段或多处改动也可以用文件编辑器直接改卡片 JSON。
+- 大段或多处改动也可以用文件编辑器或脚本直接改卡片 JSON。文件结构是 `{kind, version, raw: {spec, data: {…}}, meta}`，标准字段与 `character_book`、`extensions` 都在 `raw.data` 下。
 - 读取用 `tavern_read_card`、`tavern_read_card_raw`、`tavern_read_worldbook`，只读需要的部分。
 
 改完调用 `tavern_validate_card`，修正 errors；warnings 视情况处理。
