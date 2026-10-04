@@ -70,8 +70,11 @@ async function replay(t,patched) {
   assert.equal(node.visibility,id==='normal-final'?'visible':'hidden')
   assert.equal(node.data.blocks[0].text,'保留模型内容')
  }
- const other={...context,kind:'other',definition:{target:'chat',buildViewNode:()=>null}}
- assert.throws(()=>assembler.buildTargetUpserts('chat',[other]),/withdrew materialized/, 'other definitions keep core guard')
+ // turn-process withdraws when a streamed reply fails into assistant/attempt; any
+ // withdrawal would otherwise kill the event feed subscriber until reload.
+ const other={...context,kind:'turn-process',current:new Map([['chat',{...visible,kind:'turn-process'}]]),definition:{target:'chat',buildViewNode:()=>null}}
+ const kept=assembler.buildTargetUpserts('chat',[other])[0]
+ assert.equal(kept.key,visible.key);assert.equal(kept.visibility,'hidden','other definitions keep identity, hidden')
 }
 test('真实核心可复现已显示块清空后撤回 chat 节点，与 React seed renderer 无关',{skip:!boot},t=>replay(t,false))
 test('已物化 assistant 节点改为 hidden 后仍能继续处理后续事件',{skip:!boot},t=>replay(t,true))

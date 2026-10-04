@@ -34,6 +34,10 @@ export function apply(ctx) {
         const text = '<content>\n你推开酒馆的门，她抬起头，'
         yield { type: 'block-start', index: 0, blockType: 'text' }
         yield { type: 'text-delta', index: 0, text }
+        // Real providers cut the stream after the text has already rendered; the
+        // pause lets the browser materialize the streaming turn before the error.
+        await new Promise(resolve => { const timer = setTimeout(resolve, 1500); input.signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true }) })
+        if (input.signal?.aborted) { yield { type: 'finish', reason: { kind: 'aborted', failure: { message: 'aborted', code: 'ABORTED' } } }; return }
         yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
         return
       }
@@ -42,6 +46,7 @@ export function apply(ctx) {
         && JSON.stringify(input.messages).includes('E2E_POISON') && !latestInput.includes('E2E_POISON')) {
         yield { type: 'block-start', index: 0, blockType: 'text' }
         yield { type: 'text-delta', index: 0, text: '<content>\n她抬起头，' }
+        await new Promise(resolve => { const timer = setTimeout(resolve, 1500); input.signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true }) })
         yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
         return
       }
