@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "0d14ed67a2e23192dab9a95298b780872486aadf",
-  "releaseSequence": 490,
+  "revision": "1a6512a477de8b6655f92d876b1af52626035e5e",
+  "releaseSequence": 491,
   "version": "2.4.0",
   "files": [
     {
@@ -41,8 +41,8 @@
     },
     {
       "path": "bin/cli-runtime.mjs",
-      "sha256": "0118a5f13822f5d71acebe9f5a0295da30d209ac0a677002e0e0b3f78fac7a94",
-      "size": 6681
+      "sha256": "3110459d9586496a5ea166d53d09dc528219a22472377d70076efcd412896d19",
+      "size": 6615
     },
     {
       "path": "bin/desktop-host-paths.mjs",
@@ -81,8 +81,8 @@
     },
     {
       "path": "bin/installation-process.mjs",
-      "sha256": "af17665196370a1f050d11d0ad2ebb3c25bbbc6324b36326e9877611874a89f9",
-      "size": 35193
+      "sha256": "4d95ba28e521f4772270ab56bc4dd12c55c31e6bfc552dbdc8a97453258d95b3",
+      "size": 35201
     },
     {
       "path": "bin/installation-receipt.mjs",
@@ -118,6 +118,11 @@
       "path": "bin/plugin-package-guard.mjs",
       "sha256": "edb73c53069645e24ace862d042de28c6a0ff2c5aff1bf9c9165811855b4d066",
       "size": 634
+    },
+    {
+      "path": "bin/portable-fs.mjs",
+      "sha256": "54e130dc0eaf9f6a524e90374495f07dfdcbdd101ac7a55cf0dfce6b9df004f2",
+      "size": 2301
     },
     {
       "path": "bin/profile-configuration.mjs",
@@ -156,8 +161,8 @@
     },
     {
       "path": "bin/staged-app-install.mjs",
-      "sha256": "b49c629ef7459b06796b7fc56bc0f36b5804741eb885a0f1836e0f57bf5f7059",
-      "size": 8961
+      "sha256": "85f2adcd71aaaa28992838da27360d2109ef34680735d55dfee3369c0486babf",
+      "size": 8930
     },
     {
       "path": "bin/test-tavern.mjs",
