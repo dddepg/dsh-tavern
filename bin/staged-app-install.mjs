@@ -13,7 +13,7 @@
 // User files are everything in the app directory that the previous release did
 // not install (recorded in INVENTORY) and the new release does not ship, e.g.
 // legacy data/. They are moved, never copied, so large data costs nothing.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { INVENTORY, sourceFiles } from './prune-installed-files.mjs'
@@ -163,7 +163,11 @@ function argument(args, name) {
   return index >= 0 ? args[index + 1] : undefined
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Installers run this from a temp directory whose path may be a symlink (macOS
+// /var -> /private/var); compare real paths or the command silently does nothing.
+let isEntryPoint = false
+try { isEntryPoint = Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch {}
+if (isEntryPoint) {
   const [command, ...args] = process.argv.slice(2)
   const app = argument(args, 'app')
   try {
