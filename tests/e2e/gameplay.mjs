@@ -285,6 +285,27 @@ try {
       }
       assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
     })
+  } else if (process.argv.includes('--refusal')) {
+    await step('模型回复拒绝语时，正文下方说明不是酒馆故障', async () => {
+      const composer = page.getByRole('textbox', { name: /发消息|Message/ })
+      await composer.fill('E2E_REFUSE_TEXT 继续'); await composer.press('Enter')
+      const notice = page.locator('.dsh-tavern-refusal-notice').filter({ hasText: '模型拒绝继续这段剧情' })
+      await notice.waitFor()
+      await page.reload(); await notice.waitFor()
+      report.refusal = { textNotice: await notice.textContent() }
+      // Settlement of this round runs in the background; the next send must follow it.
+      await page.locator('.dsh-tavern-mvu-receipt').filter({ visible: true }).last().waitFor()
+      await page.getByText('后台结算已完成').first().waitFor({ timeout: 60000 }).catch(() => {})
+    })
+    await step('服务商内容审核拦截时，报错旁说明不是酒馆故障', async () => {
+      const composer = page.getByRole('textbox', { name: /发消息|Message/ })
+      await composer.fill('E2E_CONTENT_FILTER 继续'); await composer.press('Enter')
+      const label = page.locator('.dsh-tavern-error-controls').filter({ hasText: '内容审核拦截了这一轮回复' })
+      await label.waitFor()
+      await page.reload(); await label.waitFor()
+      report.refusal.providerNotice = await label.textContent()
+      await page.screenshot({ path: join(output, 'refusal-notices.png'), fullPage: true })
+    })
   } else if (helperApiScenario) {
     await helperApiChecks({ page, step, savedChat, output, report })
   } else if (process.argv.includes('--real-character-design')) {
@@ -493,8 +514,26 @@ try {
       assert.equal(await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).count(), 0)
       await inspectRound('after-rollback', 10, '你获得了十枚金币。', 1)
     })
+    if (process.argv.includes('--rollback-resettle')) {
+      // Discussion #131: after a rollback, the restored latest round must be re-settleable.
+      await step('回退后对新的最新一轮重新结算变量', async () => {
+        const prose = chat => chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text }))
+        const before = await savedChat()
+        const receipt = page.locator('.dsh-tavern-mvu-receipt').filter({ visible: true }).last()
+        report.rollbackResettle = { receiptStatus: await receipt.getAttribute('data-status') }
+        await receipt.locator('summary').click()
+        await receipt.getByRole('button', { name: '重新结算变量', exact: true }).click()
+        await page.getByPlaceholder('例如：这轮还没有交付物品，不要扣除库存。').fill('E2E 修正金币为四十')
+        await page.getByRole('button', { name: '重新结算', exact: true }).click()
+        await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：40$/ }).waitFor()
+        assert.deepEqual(prose(await savedChat()), prose(before), '重新结算不能改写正文或新增轮次')
+        await page.reload()
+        await inspectRound('rollback-resettled', 40, '你获得了十枚金币。', 1)
+      })
+    } else {
     await playControls({ page, step, savedChat, inspectRound, output, report })
     await presetSwitch({ page, step, savedChat, inspectRound, output, report })
+    }
   }
   if (process.argv.includes('--card-memory')) await cardMemoryChecks({ page, step, data, output, report, savedChat })
   if (process.argv.includes('--card-variables')) await cardVariableUpdateChecks({page,step,savedChat,data,output,report})

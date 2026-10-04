@@ -27,6 +27,21 @@ export function apply(ctx) {
           return
         }
       }
+      // Refusal scenario: the latest marker decides; settlement and candidate tasks are unaffected.
+      const marked = JSON.stringify(input.messages)
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && (marked.includes('E2E_CONTENT_FILTER') || marked.includes('E2E_REFUSE_TEXT'))) {
+        if (marked.lastIndexOf('E2E_CONTENT_FILTER') > marked.lastIndexOf('E2E_REFUSE_TEXT')) {
+          yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+          return
+        }
+        const block = { type: 'text', text: '我无法协助生成涉及这类露骨内容的描写。\n\n如果您希望继续推进后续剧情，可以换一个方向。' }
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: block.text }
+        yield { type: 'block-end', index: 0, block }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
       const recovery = await recoveryBlocks(input, tools)
       if (recovery) {
         for (const [index, block] of recovery.entries()) {
