@@ -89,6 +89,11 @@ function snapshotMessage(text) {
   }
 }
 
+function hasProviderContent(message) {
+  if (!message || !['user', 'assistant'].includes(message.role) || !Array.isArray(message.content)) return true
+  return message.content.some(block => block && (block.type !== 'text' || str(block.text).trim() !== ''))
+}
+
 function isNativeStablePrefix(message) {
   const source = message && message.source
   return str(message && message.id).startsWith('tavern-session-prefix:') && message.role === 'user'
@@ -273,13 +278,20 @@ export function createNativePlayOrchestrationStrategy(options) {
   function projectRequest(optionsValue) {
     const sessionId = str(optionsValue && optionsValue.sessionId)
     const staged = stagedRequests.get(sessionId)
-    if (optionsValue === null || typeof optionsValue !== 'object' || optionsValue.purpose !== undefined || staged === undefined || redispatches.has(optionsValue)) return null
+    if (optionsValue === null || typeof optionsValue !== 'object' || optionsValue.purpose !== undefined || redispatches.has(optionsValue)) return null
     // Empty surface tombstones preserve append-only history, but are not messages
     // for the provider. Remove them before choosing a regeneration target.
-    const visibleMessages = (optionsValue.messages || []).filter(message => {
-      if (!message || !['user', 'assistant'].includes(message.role) || !Array.isArray(message.content)) return true
-      return message.content.some(block => block && (block.type !== 'text' || str(block.text).trim() !== ''))
-    })
+    const visibleMessages = (optionsValue.messages || []).filter(hasProviderContent)
+    if (staged === undefined) {
+      // Card workbench turns are not staged, but they may still carry the empty
+      // stable-prefix placeholder (the user preference lives in the system prompt).
+      // Strict providers reject an empty user message with HTTP 400.
+      const messages = visibleMessages.filter(message => !isNativeStablePrefix(message))
+      if (messages.length === (optionsValue.messages || []).length) return null
+      const request = Object.assign({}, optionsValue, { messages })
+      redispatches.add(request)
+      return request
+    }
     const regeneratedMessages = projectRegenerationRequestMessages(visibleMessages.length === optionsValue.messages?.length ? optionsValue.messages : visibleMessages)
     const nativeMessages = regeneratedMessages.some(isNativeStablePrefix) ? regeneratedMessages.filter(message => !isNativeStablePrefix(message)) : regeneratedMessages
     const baseRequest = nativeMessages === optionsValue.messages

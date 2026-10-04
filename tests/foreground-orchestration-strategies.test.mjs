@@ -220,3 +220,16 @@ for (const text of ['', '请根据图片继续']) test(`前台投影保留图片
   assert.equal(result.messages[0].content.some(block => block.text === '（玩家已更新酒馆运行状态）'), false)
   assert.deepEqual(messages, original)
 })
+
+test('未登记的卡片工作台请求也剔除空的固定前缀，避免严格渠道报 user message must have content', () => {
+  const strategy = createNativePlayOrchestrationStrategy({})
+  const prefix = { id: 'tavern-session-prefix:card', role: 'user', content: [],
+    source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'snapshot', sections: [{ name: 'tavern:user-preference', text: '偏好' }] } }
+  const original = { sessionId: 'card', system: '系统', messages: [prefix, userMessage('改一下世界书')] }
+  const projected = strategy.projectRequest(original)
+  assert.deepEqual(projected.messages.map(message => message.role + ':' + message.content.length), ['user:1'])
+  assert.equal(projected.system, '系统')
+  assert.equal(strategy.projectRequest(projected), null, '已投影的请求不重复处理')
+  assert.equal(strategy.projectRequest({ sessionId: 'card', messages: [userMessage('普通请求')] }), null, '没有空消息时不改写')
+  assert.equal(strategy.projectRequest({ sessionId: 'card', purpose: 'compaction', messages: [prefix] }), null, '压缩等专用请求不经过这里')
+})
