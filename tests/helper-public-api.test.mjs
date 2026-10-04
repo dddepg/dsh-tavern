@@ -9,7 +9,7 @@ import { stubFrameDependencyImports } from './fixtures/frame-dependency-imports.
 const plain = value => JSON.parse(JSON.stringify(value))
 function messageFrame(state) {
   const listeners = [], sent = [], parent = { postMessage: value => sent.push(value) }
-  const scope = { structuredClone, parent, console, addEventListener(_name, listener) { listeners.push(listener) } }
+  const scope = { structuredClone, parent, console, addEventListener(name, listener) { if (name === "message") listeners.push(listener) } }
   scope.window = scope
   vm.createContext(scope)
   const html = helperClient.buildTavernFrameDocument({content: '<div>card</div>', token: 'message-token', helperContext: state, turn: 1})
@@ -161,4 +161,26 @@ test('script deleteVariable rejects stale or failed writes instead of reporting 
     await assert.rejects(pending, stale ? /未保存/ : /save failed/)
     assert.deepEqual(plain(run.window.getVariables({type: 'chat'})), {keep: 1})
   }
+})
+
+for (const kind of ['script', 'message']) test(kind + ' installed display/regex/event/global APIs operate on the live frame context', async () => {
+  const {marked} = await import('marked')
+  const state = {messages, character: {name: '角色'}, characterName: '角色', playerName: '玩家', turnMessageIds: {1: 0}, chatVariables: {gold: 7},
+    regexScripts: {character: [{enabled: true, placement: [2], markdownOnly: true, findRegex: '/token/g', replaceString: '**{{char}}** {{getvar::gold}}'}]}}
+  const run = kind === 'script' ? helperHostHarness(state) : messageFrame(state), w = run.window
+  w.marked = marked
+  assert.equal(w.TavernHelper.isCharacterTavernRegexesEnabled(), true)
+  assert.equal(w.TavernHelper.formatAsDisplayedMessage('token', {message_id: 0}), '<p><strong>角色</strong> 7</p>\n')
+  if (kind === 'message') {
+    const nextState = {...state, stateRevision: 2, regexScripts: {character: [{enabled: true, placement: [2], markdownOnly: true, findRegex: '/token/g', replaceString: 'changed'}]}}
+    run.receive({type: 'dsh-tavern-helper-context-update', update: helperClient.createTavernHelperContextUpdate(state, nextState, 1, 1)})
+    assert.equal(w.formatAsDisplayedMessage('token', {message_id: 0}), '<p>changed</p>\n')
+  }
+
+  const wait = w.TavernHelper.waitGlobalInitialized('PluginReady')
+  await w.TavernHelper.initializeGlobal('PluginReady', {ready: true})
+  assert.equal((await wait).ready, true)
+  const next = w.eventWaitOnce('local-ready')
+  await w.eventEmitAndWait('local-ready', 1, 'two')
+  assert.deepEqual(plain(await next), [1, 'two'])
 })

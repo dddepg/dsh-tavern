@@ -81,7 +81,9 @@ import { createBackgroundSuppressionReader } from './domain/background-surface.j
 import { ensureCardWorkspaceMessage } from './domain/card-workspace-message.js'
 import { createPromptTemplateGlobalVariables } from './domain/prompt-template-global-variables.js'
 import { createTavernApiDiagnostics } from './domain/tavern-api-diagnostics.js'
-import { generateHelperRaw, generateHelperCompletion } from './domain/helper-generation.js'
+import { generateHelper, generateHelperRaw, generateHelperCompletion, identifyHelperModelMessages } from './domain/helper-generation.js'
+import { validateHelperGenerateConfig, resolveHelperGenerationPreset, helperGenerationHistory } from './domain/helper-generation-prompts.js'
+import { createHelperGenerationTasks } from './domain/helper-generation-tasks.js'
 import { createBodyEditor } from './domain/body-editor.js'
 import { appendHelperUserSessionContext } from './domain/helper-user-session-context.js'
 import { sessionOpeningDescriptor, prepareSessionOpening } from './domain/session-opening.js'
@@ -496,6 +498,8 @@ export async function apply(ctx) {
   const cardPreparation = createCardPreparation({ id: function () { return uid('card') }, now: Date.now })
 
   // ---------- 模型调用 ----------
+  const helperGenerationTasks = createHelperGenerationTasks()
+  ctx.effect(() => () => helperGenerationTasks.dispose())
   function modelSelection(sessionId) {
     // 会话级选择优先：与官方 api-proxy 相同的读取路径
     if (typeof sessionId === 'string' && sessionId !== '') {
@@ -548,6 +552,7 @@ export async function apply(ctx) {
     return groups.filter(function (group) { return group.models.length > 0 })
   }
   async function callModel(opts) {
+    opts.signal?.throwIfAborted()
     const sel = opts.background === true ? backgroundModelSelection(await backgroundConfigForSession(opts.sessionId)) : modelSelection(opts.sessionId)
     if (sel === null) throw new Error('没有可用的模型配置，请先在当前会话的模型选择器中选择模型')
     const cfg = { provider: sel.provider, model: sel.model }
@@ -555,18 +560,22 @@ export async function apply(ctx) {
     // Codex Responses API 不接受 temperature；其他模型仍保留候选温度阶梯。
     if (typeof opts.temperature === 'number' && sel.provider !== 'openai-codex') cfg.temperature = opts.temperature
     if (typeof opts.maxTokens === 'number') cfg.maxTokens = opts.maxTokens
-    const prepared = await llm.prepareCall(cfg)
-    const options = Object.assign({}, prepared.config, { messages: opts.messages, system: opts.system })
+    const prepared = await llm.prepareCall(cfg, opts.signal)
+    opts.signal?.throwIfAborted()
+    const options = Object.assign({}, prepared.config, { messages: identifyHelperModelMessages(opts.messages), system: opts.system }, opts.signal ? { signal: opts.signal } : {})
     let text = ''
     let finish = null
     try {
       for await (const chunk of prepared.stream(options)) {
+        opts.signal?.throwIfAborted()
         if (chunk.type === 'text-delta') text += chunk.text
         else if (chunk.type === 'finish') finish = chunk.reason
       }
     } catch (err) {
+      opts.signal?.throwIfAborted()
       throw new Error('模型流失败: ' + (err && (err.message || err.code) || err))
     }
+    opts.signal?.throwIfAborted()
     if (finish !== null && finish !== undefined && (finish.kind === 'error' || finish.kind === 'aborted')) {
       const f = finish.failure
       throw new Error('模型调用失败: ' + (f !== undefined && f !== null ? (f.message || f.code) : finish.kind))
@@ -996,7 +1005,22 @@ export async function apply(ctx) {
       diagnostics: await resourceDiagnosticProjection(chat)
     })
   }
-  const openingPreparation = createOpeningPreparation({ readCard, worldBooks, extensionSettings: tavernExtensionSettings, readRuntimeExtensions: async cardPath => tavernRemoteAssets.pinExtensions(await readCardExtensions(cardPath)), generateRaw: (config, context) => generateHelperRaw(config, { ...context, callModel: opts => callModel({ ...opts, background: true }) }) })
+  const helperGenerationPreset = (name, snapshot) => resolveHelperGenerationPreset(name, snapshot, {
+    catalog: () => presetLibrary.catalog(), read: readPreset, readDocument: readPresetDocument, selected: () => runtimePresets.state()
+  })
+  const openingPreparation = createOpeningPreparation({ readCard, worldBooks, extensionSettings: tavernExtensionSettings,
+    readRuntimeExtensions: async cardPath => tavernRemoteAssets.pinExtensions(await readCardExtensions(cardPath)),
+    generateRaw: (config, context) => generateHelperRaw(config, { ...context, callModel: opts => callModel({ ...opts, background: true, signal: context.signal }) }),
+    generate: async (config, context) => {
+      validateHelperGenerateConfig(config)
+      const presetSnapshot = await helperGenerationPreset(config.preset_name, context.presetSnapshot)
+      const activeSnapshot = config.preset_name && config.preset_name !== 'in_use'
+        ? await helperGenerationPreset('in_use', context.presetSnapshot) : presetSnapshot
+      context.signal?.throwIfAborted()
+      return generateHelper(config, { ...context, presetSnapshot, presetRegexScripts: activeSnapshot?.regexScripts || [], callModel: opts => callModel({ ...opts, background: true, signal: context.signal }) })
+    }
+  })
+  ctx.effect(() => () => openingPreparation.dispose())
   async function getCardOpenings(cardPath, userName, requestMode, previewTransport) {
     const startedAt = performance.now(), stages = {}
     let success = false
@@ -1604,7 +1628,7 @@ export async function apply(ctx) {
       tavernStatusView: replyDisplay.statusView || null,
       tavernStatusViews: replyDisplay.statusViews || [],
       mvuReceipts: mvuReceiptsOf(chat),
-      tavernHelper: helperContext ? { ...helperContext, openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
+      tavernHelper: helperContext ? { ...helperContext, playerName: str(chat.macroState?.userName).trim() || '你', characterName: str(card?.name || chat.cardName), character: {name:str(card?.name || chat.cardName), path:str(chat.cardPath)}, openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], preset: activePresetSnapshot?.regexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
       tavernMvuRuntime: chat.mvu && chat.mvu.enabled === true ? {
         owner: chat.mvu.owner === 'official' ? 'official' : 'legacy',
         commit: OFFICIAL_MVU_VERSION.commit,
@@ -3170,14 +3194,28 @@ export async function apply(ctx) {
         if (!chat) throw new Error('找不到原对话')
         return await prepareSessionOpening({ chat, card: await readChatCard(chat), swipeId: args.swipeId, message: args.message, preparation: openingPreparation })
       }
+      case 'generateTavernHelper':
       case 'generateTavernHelperRaw': {
-        const chat = await chatForSession(args && args.sessionId)
-        if (!chat) throw new Error('找不到当前游戏')
-        const backgroundCall = opts => callModel({ ...opts, background: true })
-        if (args.completion) return { text: await generateHelperCompletion(args.completion, { callModel: backgroundCall, sessionId: chat.sessionId }) }
-        return { text: await generateHelperRaw(args.config, { callModel: backgroundCall, sessionId: chat.sessionId,
-          history: projectTavernHelperContext(chat).messages.map(message => ({ role: message.role, text: message.message })) }) }
+        return await helperGenerationTasks.run(args?.sessionId, args?.config?.generation_id, async signal => {
+          const chat = await chatForSession(args?.sessionId)
+          if (!chat) throw new Error('找不到当前游戏')
+          signal.throwIfAborted()
+          const backgroundCall = opts => callModel({ ...opts, background: true, signal })
+          if (method === 'generateTavernHelperRaw' && args.completion) return { text: await generateHelperCompletion(args.completion, { callModel: backgroundCall, sessionId: chat.sessionId }) }
+          const context = { callModel: backgroundCall, sessionId: chat.sessionId, history: helperGenerationHistory(chat) }
+          if (method === 'generateTavernHelperRaw') return { text: await generateHelperRaw(args.config, context) }
+          validateHelperGenerateConfig(args.config)
+          const card = await readChatCard(chat)
+          const presetSnapshot = await helperGenerationPreset(args.config.preset_name, chat.runtimePresetSnapshot || null)
+          const worldBook = await worldBooks.bound(chat.cardPath, card, chat)
+          const extensions = await readCardExtensions(chat.cardPath, chat)
+          signal.throwIfAborted()
+          return { text: await generateHelper(args.config, { ...context, chat, card, worldBook, presetSnapshot, extensions,
+            presetRegexScripts: chat.runtimePresetSnapshot?.regexScripts || [], characterVariables: extensions?.variables || {} }) }
+        }, args?.generationToken)
       }
+      case 'stopTavernHelperGeneration': return { stopped: helperGenerationTasks.stop(args?.sessionId, args?.generationId, { generationToken: args?.generationToken, pending: args?.pending }) }
+      case 'stopAllTavernHelperGeneration': return { stopped: true, generationIds: helperGenerationTasks.stopAll(args?.sessionId, args?.pendingGenerations) }
       case 'callOpeningRuntime': return await openingPreparation.callRuntime(args && args.id, args && args.method, args && args.args)
       case 'saveOpeningSelection': return openingPreparation.select(args && args.id, args && args.openingId)
       case 'initializeOpeningTemplate': try { return openingInitializationPayload(await openingPreparation.applyTemplateInitial(args.id, await requestPerformance.stage('templateInitialize', () => fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([]))), args.compact) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }

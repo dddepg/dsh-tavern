@@ -21,6 +21,10 @@ try {
   for (const resourceSync of [1, undefined, 1]) {
     const {view} = await host.rpc('getSession', {sessionId: 's', resourceSync})
     assert.equal(view.tavernHelper.worldbook.name, '回归世界书')
+    assert.equal(view.tavernHelper.character.name, 'Worldbook test')
+    assert.equal(view.tavernHelper.characterName, 'Worldbook test')
+    assert.equal(view.tavernHelper.playerName, '你')
+    assert.deepEqual(view.tavernHelper.regexScripts.preset, [])
     assert.deepEqual(view.tavernHelper.worldbook, view.tavernHelperWorldbook)
     if (resourceSync === 1) {
       assert.equal(view.tavernHelper.worldbook.resourceAccess.kind, 'worldbook')

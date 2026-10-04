@@ -185,3 +185,84 @@ test('live frame context patches refresh worldbook, names and global/character v
   for (const key of ['worldbook', 'characterName', 'playerName', 'globalVariables', 'characterVariables']) assert.deepEqual(copy(updated.context[key]), next[key])
   assert.ok(patch.events.includes('mag_variable_update_ended'))
 })
+
+test('queued Helper generation can be cancelled before earlier writes finish', async t => {
+  let finishWrite
+  const calls = []
+  const h = scriptHost({rpc: async (method, args) => {
+    calls.push([method, args])
+    if (method === 'updateTavernHelperMessages') return await new Promise(resolve => {finishWrite = resolve})
+    if (method === 'stopTavernHelperGeneration') return {stopped: false}
+    if (method.startsWith('generate')) assert.fail('cancelled queued generation must never reach the model')
+    return {}
+  }})
+  t.after(() => h.runtime.dispose())
+  h.call('updateTavernHelperMessages', {messages: []}, {requestId: 'write'}); await tick()
+  h.call('generateTavernHelper', {config: {generation_id: 'g'}}, {requestId: 'gen'})
+  h.call('stopTavernHelperGeneration', {generationId: 'g'}, {requestId: 'stop'}); await tick()
+  const stopped = h.frame.contentWindow.messages.find(row => row.requestId === 'stop')
+  assert.equal(stopped.result.stopped, true)
+  assert.deepEqual(calls.map(row => row[0]), ['updateTavernHelperMessages', 'stopTavernHelperGeneration'])
+  const generated = h.frame.contentWindow.messages.find(row => row.requestId === 'gen')
+  assert.equal(generated.ok, false)
+  assert.match(generated.error, /取消/)
+  // Cancellation settles even if this preceding write would never finish.
+  finishWrite({updated: false}); await tick(); await tick()
+  assert.equal(calls.some(row => row[0].startsWith('generate')), false)
+})
+
+test('active model jobs do not block state writes or immediate cancellation', async t => {
+  let rejectGeneration
+  const calls = []
+  const h = scriptHost({rpc: async (method, args) => {
+    calls.push([method, args])
+    if (method === 'generateTavernHelperRaw') return await new Promise((_resolve, reject) => {rejectGeneration = reject})
+    if (method === 'stopTavernHelperGeneration') {rejectGeneration(new Error('model cancelled')); return {stopped: true}}
+    return {updated: false}
+  }})
+  t.after(() => h.runtime.dispose())
+  h.call('generateTavernHelperRaw', {config: {generation_id: 'g'}}, {requestId: 'gen'}); await tick()
+  h.call('updateTavernHelperMessages', {messages: []}, {requestId: 'write'}); await tick()
+  assert.equal(calls[1][0], 'updateTavernHelperMessages')
+  h.call('stopTavernHelperGeneration', {generationId: 'g'}, {requestId: 'stop'}); await tick(); await tick()
+  assert.equal(h.frame.contentWindow.messages.find(row => row.requestId === 'stop').result.stopped, true)
+  assert.match(h.frame.contentWindow.messages.find(row => row.requestId === 'gen').error, /取消/)
+})
+
+test('retiring a script runtime stops only its tracked active generation IDs', async () => {
+  const stopped = [], pending = new Map()
+  const h = scriptHost({rpc: async (method, args) => {
+    if (method === 'generateTavernHelper') return await new Promise((_resolve, reject) => pending.set(args.config.generation_id, reject))
+    if (method === 'stopTavernHelperGeneration') {stopped.push(args.generationId); pending.get(args.generationId)?.(new Error('cancelled')); return {stopped: true}}
+    return {}
+  }})
+  h.call('generateTavernHelper', {config: {generation_id: 'own'}}, {requestId: 'gen'}); await tick()
+  h.runtime.dispose(); await tick(); await tick()
+  assert.deepEqual(stopped, ['own'])
+})
+
+for (const opening of [false, true]) test('retiring message documents cancels only their owned generation: opening=' + opening, async () => {
+  const h = host(), calls = [], pending = new Map()
+  const initial = {sessionId: opening ? undefined : 'A', openingPreview: opening ? {preparationId: 'preview'} : undefined,
+    helperContext: context(), content: '<p>body</p>', turn: 1, eager: true}
+  const lifecycle = h.client.createTavernMessageFrameLifecycle(initial, {window: h.window, rpc: async (method, args, sessionId) => {
+    calls.push({method, args:copy(args), sessionId})
+    const actual = method === 'callOpeningRuntime' ? args.method : method, payload = method === 'callOpeningRuntime' ? args.args : args
+    if (actual === 'generateTavernHelper') return await new Promise((_resolve, reject) => pending.set(payload.config.generation_id, reject))
+    if (actual === 'stopTavernHelperGeneration') {pending.get(payload.generationId)?.(new Error('cancelled')); return {stopped: true}}
+    return {}
+  }})
+  const stop = lifecycle.start(() => {}), document = lifecycle.snapshot().visibleDocument
+  const frame = {contentWindow: {postMessage() {}}}
+  document.ref(frame)
+  h.deliver(frame.contentWindow, {token: document.token, type: 'dsh-tavern-helper-call', requestId: 'g', method: 'generateTavernHelper', args: {config: {generation_id: 'g'}, generationToken:'request-token'}})
+  await tick()
+  document.ref(null); await tick(); await tick()
+  const cancelled = calls.find(row => (row.method === 'callOpeningRuntime' ? row.args.method : row.method) === 'stopTavernHelperGeneration')
+  assert.ok(cancelled)
+  const payload = opening ? cancelled.args.args : cancelled.args
+  assert.deepEqual(payload, {generationId:'g', generationToken:'request-token', pending:true})
+  if (opening) assert.equal(cancelled.args.id, 'preview')
+  else assert.equal(cancelled.sessionId, 'A')
+  stop()
+})

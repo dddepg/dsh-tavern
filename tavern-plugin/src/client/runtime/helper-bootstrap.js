@@ -528,29 +528,8 @@
 				return await call("updateTavernHelperMessages", { messages: plain });
 			};
 			window.triggerSlash = function (line) {
-				return call("triggerTavernSlash", { line: String(line || "") }).then(function (result) {
+				return call("triggerTavernSlash", { line: window.substitudeMacros(String(line || "")) }).then(function (result) {
 					return result && Object.prototype.hasOwnProperty.call(result, "pipe") ? result.pipe : result;
-				});
-			};
-			window.generateRaw = function (config) {
-				const payload = copy(config || {});
-				const streaming = payload.should_stream === true;
-				const generationId = payload.generation_id != null && String(payload.generation_id) !== ""
-					? String(payload.generation_id)
-					: ("dsh-gen-" + Date.now().toString(16) + "-" + Math.random().toString(16).slice(2, 8));
-				if (streaming) {
-					if (payload.generation_id == null || payload.generation_id === "") payload.generation_id = generationId;
-					// 假流式：宿主一次性返回全文，这里补发酒馆助手流式事件，供评议等 UI 收尾。
-					void window.eventEmit(window.iframe_events.GENERATION_STARTED, generationId);
-				}
-				return call("generateTavernHelperRaw", { config: payload }).then(function (result) {
-					const text = result && result.text;
-					if (!streaming) return text;
-					const events = window.iframe_events;
-					return Promise.resolve(window.eventEmit(events.STREAM_TOKEN_RECEIVED_FULLY, text, generationId))
-						.then(function () { return window.eventEmit(events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, text, generationId); })
-						.then(function () { return window.eventEmit(events.GENERATION_ENDED, text, generationId); })
-						.then(function () { return text; });
 				});
 			};
 			window.createChatMessages = async function (messages, option) {
@@ -776,6 +755,11 @@
 			facade = modules.installFacade({ projectMvuSettings: backgroundModel.projectMvuSettings, normalizeMvuSettings: backgroundModel.normalizeMvuSettings, readGlobalRegexes: function () { return regexGroups().global.map(rawRegex); }, installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, readMessage:readMessage, readCharacter:readCharacter, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
 				Popup: modules.createPopup({ document: window.document, parent: parent, token: token }) });
             modules.installUtilities(window);
+            modules.installEventApi(window);
+            modules.installMacros({window, context: () => state});
+            modules.installRegexApi({window, context: () => state, createEngine: modules.createRegexEngine});
+            modules.installDisplay(window);
+            modules.installGeneration({window, request:call, copy});
 			let regexSaveTimer = null;
 			async function persistGlobalRegexes() {
 				if (regexSaveTimer !== null) { clearTimeout(regexSaveTimer); regexSaveTimer = null; }
