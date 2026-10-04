@@ -27,6 +27,24 @@ export function apply(ctx) {
           return
         }
       }
+      const latestInput = JSON.stringify(input.messages.slice(input.messages.findLastIndex(message => message.role === 'assistant') + 1))
+      // Mid-stream filter: part of the body already streamed, then the provider cuts it off.
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && latestInput.includes('E2E_FILTER_MIDSTREAM')) {
+        const text = '<content>\n你推开酒馆的门，她抬起头，'
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+        return
+      }
+      // Poisoned history: a committed round's content trips the filter on every later request.
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && JSON.stringify(input.messages).includes('E2E_POISON') && !latestInput.includes('E2E_POISON')) {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: '<content>\n她抬起头，' }
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+        return
+      }
       // Refusal scenario: the latest marker decides; settlement and candidate tasks are unaffected.
       const marked = JSON.stringify(input.messages)
       if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')

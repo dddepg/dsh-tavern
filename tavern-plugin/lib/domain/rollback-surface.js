@@ -535,9 +535,11 @@ export function rollbackAvailability(chat, input = {}) {
   }
 }
 
-export function failedTurnReplayAvailability({ events = [], nodes = [] } = {}) {
+export function failedTurnReplayAvailability({ events = [], nodes = [], cleared = [] } = {}) {
   const target = replayableFailedTurn({ events })
   if (!target) return { target: null, reason: '当前没有可重新生成的失败回合' }
+  // The player already cleared this failure (withdrew or dropped it); replaying would resurrect it.
+  if (cleared.map(Number).includes(target.turn)) return { target: null, reason: '这次失败已清除，请重新发送' }
   try {
     planFailedTurnSurface({ events, nodes, turn: target.turn })
     return { target, reason: '' }

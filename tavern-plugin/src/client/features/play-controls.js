@@ -1018,7 +1018,26 @@
 			const turns = state.view && state.view.suppressedDshErrorTurns || [];
 			const hiddenTurns = state.view && state.view.hiddenDshErrorTurns;
 			const replayTurn = state.view && state.view.canReplayFailedTurn ? Number(state.view.replayFailedTurn) || null : null;
-			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local") + ":" + String(replayTurn || "");
+			const staleTurns = state.view && state.view.staleDshErrorTurns || [];
+			const filteredStreak = Number(state.view && state.view.filteredFailureStreak) || 0;
+			const canRewind = !!(state.view && state.view.canRegenerate === true);
+			const draft = props.useInput(snapshot => snapshot.draft);
+			const draftRef = React.useRef(draft);
+			draftRef.current = draft;
+			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local") + ":" + String(replayTurn || "")
+				+ ":" + staleTurns.join(",") + ":" + filteredStreak + ":" + canRewind;
+			// Clearing a failed tail is the first half of both recovery actions.
+			async function clearFailedTail() {
+				const result = await rpc("rollbackTurn", { expectedTurn: null }, props.sessionId);
+				historyProjection.rolledBack(props.sessionId, result && result.view);
+				setCandidatePanel(null); setRegenPanel(null); setCandidateGuidePanel(null);
+				return result || {};
+			}
+			function refreshAfterRecovery() {
+				notifyTavernDataChanged(["sessions"], "play-controls");
+				liveTavernView.invalidate(props.sessionId);
+				tavernCoordination.invalidate(props.sessionId);
+			}
 			React.useEffect(function () {
 				const root = marker.current && marker.current.closest("[data-conversation-scroll]");
 				if (!root) return;
@@ -1033,6 +1052,28 @@
                         try { await submitFailedTurnReplay(props.sessionId); }
                         catch (error) { tavernErrorHub.report("重新生成本轮", error); }
                         finally { liveTavernView.invalidate(props.sessionId); }
+                    },
+                    staleTurns: staleTurns, filteredStreak: filteredStreak, canRewind: canRewind,
+                    onWithdraw: replayTurn === null ? undefined : async function () {
+                        try {
+                            const result = await clearFailedTail();
+                            const text = String(result.view && result.view.clearedInput || "");
+                            if (text.trim() !== "") {
+                                const current = String(draftRef.current || "");
+                                props.inputActions.setDraft(current.trim() === "" ? text : text + "\n" + current);
+                            }
+                        } catch (error) { tavernErrorHub.report("撤回这条输入", error); }
+                        finally { refreshAfterRecovery(); }
+                    },
+                    onRewind: replayTurn === null || !canRewind ? undefined : async function () {
+                        try {
+                            const cleared = await clearFailedTail();
+                            const target = Number(cleared.view && cleared.view.rollbackTargetTurn) || null;
+                            const result = await rpc("rollbackTurn", { expectedTurn: target }, props.sessionId);
+                            historyProjection.rolledBack(props.sessionId, result && result.view);
+                            if (result && result.view && result.view.rollbackWarning) tavernErrorHub.report("回退提示", new Error(result.view.rollbackWarning));
+                        } catch (error) { tavernErrorHub.report("回退上一轮", error); }
+                        finally { refreshAfterRecovery(); }
                     },
                     onError: function (error) { tavernErrorHub.report("保存错误提示状态失败", error); }
                 });

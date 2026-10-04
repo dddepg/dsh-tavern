@@ -301,6 +301,54 @@ try {
       await page.screenshot({ path: join(output, 'send-during-settlement.png'), fullPage: true })
       assert.equal(outcome, 'replied', '结算期间发送的消息不能直接失败：' + outcome)
     })
+  } else if (process.argv.includes('--filter-midstream')) {
+    // Moderation stops repeat for the same request: the failed tail must offer a way out besides replaying.
+    const composer = () => page.getByRole('textbox', { name: /发消息|Message/ })
+    const tail = () => page.locator('.dsh-tavern-error-controls').filter({ visible: true }).last()
+    const settled = () => page.getByText('后台结算已完成').last().waitFor({ timeout: 60000 }).catch(() => {})
+    const replies = async () => (await savedChat()).messages.filter(m => m.role === 'assistant').length
+    const nextReply = async before => { for (let i = 0; i < 120 && await replies() <= before; i++) await pause(500); assert.ok(await replies() > before, '应收到新回复') }
+    await step('正常玩一轮', async () => {
+      await composer().fill('领取任务奖励'); await composer().press('Enter')
+      await page.getByText('你获得了十枚金币。').first().waitFor()
+      await settled()
+    })
+    await step('正文输出到一半被内容审核掐断：撤回输入放回输入框，错误收起', async () => {
+      await composer().fill('E2E_FILTER_MIDSTREAM 继续'); await composer().press('Enter')
+      await tail().locator('.dsh-tavern-error-withdraw.is-primary').waitFor({ timeout: 60000 })
+      assert.match(await tail().innerText(), /原样重新生成通常还会被拦截/)
+      await page.screenshot({ path: join(output, 'filter-tail.png'), fullPage: true })
+      await tail().locator('.dsh-tavern-error-withdraw').click()
+      await page.waitForFunction(() => /E2E_FILTER_MIDSTREAM 继续/.test(document.querySelector('[data-composer-card] :is(textarea, [contenteditable="true"])')?.value ?? document.querySelector('[data-composer-card] [contenteditable="true"]')?.innerText ?? ''), null, { timeout: 15000 })
+      await page.getByText('这一轮的失败已清除，错误已收起').first().waitFor({ timeout: 15000 })
+      await page.getByRole('button', { name: '重新生成本轮', exact: true }).filter({ visible: true }).waitFor({ state: 'detached', timeout: 15000 }).catch(() => {})
+      report.withdrawDockReplay = await page.locator('.dsh-tavern-choice-trigger').filter({ hasText: '重新生成本轮' }).count()
+      assert.equal(report.withdrawDockReplay, 0, '撤回后不应再提供重放被撤回的输入')
+    })
+    await step('撤回后改写输入再发送，正常回复', async () => {
+      await composer().fill('再次领取奖励'); await composer().press('Enter')
+      await page.getByText('你再次领取了奖励', { exact: false }).first().waitFor({ timeout: 60000 })
+      await settled()
+    })
+    await step('前面的剧情触发审核、之后连续被拦：主推回退上一轮，回退后恢复', async () => {
+      const before = await replies()
+      await composer().fill('E2E_POISON 继续'); await composer().press('Enter')
+      await nextReply(before)
+      await settled(); await pause(1000)
+      await composer().fill('第三次领取'); await composer().press('Enter')
+      await tail().locator('.dsh-tavern-error-replay').waitFor({ timeout: 60000 })
+      await tail().locator('.dsh-tavern-error-replay').click()
+      await tail().locator('.dsh-tavern-error-rewind.is-primary').waitFor({ timeout: 60000 })
+      assert.match(await tail().innerText(), /已连续 2 次.*建议回退上一轮/s)
+      await page.screenshot({ path: join(output, 'filter-repeated.png'), fullPage: true })
+      await tail().locator('.dsh-tavern-error-rewind').click()
+      await page.waitForFunction(() => !document.body.innerText.includes('E2E_POISON 继续'), null, { timeout: 30000 })
+      assert.ok(!JSON.stringify((await savedChat()).messages).includes('E2E_POISON'), '回退上一轮应移除触发审核的那一轮')
+      const kept = await replies()
+      await composer().fill('回退后再领取'); await composer().press('Enter')
+      await nextReply(kept)
+      await page.screenshot({ path: join(output, 'filter-recovered.png'), fullPage: true })
+    })
   } else if (process.argv.includes('--refusal')) {
     await step('模型回复拒绝语时，正文下方说明不是酒馆故障', async () => {
       const composer = page.getByRole('textbox', { name: /发消息|Message/ })

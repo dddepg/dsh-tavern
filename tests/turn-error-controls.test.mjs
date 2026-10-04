@@ -103,3 +103,36 @@ test('只把开头就是拒绝语的回复标为模型拒绝，剧情里的类�
     assert.equal(notice(story), '', story)
   assert.equal(client.tavernProviderRefusalNotice('request failed with status 400'), '')
 })
+
+test('内容审核拦截的失败尾部：主推撤回输入，重放降级；连续拦截改为主推回退上一轮', async () => {
+  const calls = []
+  const options = { replayTurn: 8, onReplay: () => calls.push('replay'), onWithdraw: turn => calls.push('withdraw:' + turn), onRewind: turn => calls.push('rewind:' + turn), canRewind: true }
+  const once = setup('Provider finish_reason: content_filter', new Map(), 'a', { ...options, filteredStreak: 1 })
+  once.controls.apply()
+  const [label, , , replay, withdraw, rewind] = once.row.panel.children
+  assert.match(label.textContent, /原样重新生成通常还会被拦截/)
+  assert.match(replay.className, /is-secondary/)
+  assert.equal(withdraw.hidden, false); assert.match(withdraw.className, /is-primary/)
+  assert.equal(rewind.hidden, false); assert.doesNotMatch(rewind.className, /is-primary/)
+  await withdraw.onclick(); await rewind.onclick()
+  assert.deepEqual(calls, ['withdraw:8', 'rewind:8'])
+  const repeated = setup('Provider finish_reason: content_filter', new Map(), 'b', { ...options, filteredStreak: 2 })
+  repeated.controls.apply()
+  assert.match(repeated.row.panel.children[0].textContent, /已连续 2 次.*建议回退上一轮/)
+  assert.match(repeated.row.panel.children[5].className, /is-primary/)
+  assert.doesNotMatch(repeated.row.panel.children[4].className, /is-primary/)
+  const plain = setup('request failed with status 500', new Map(), 'c', options)
+  plain.controls.apply()
+  assert.equal(plain.row.panel.children[4].hidden, true, '普通故障仍只提供重放')
+  assert.equal(plain.row.panel.children[5].hidden, true)
+})
+
+test('已清除或已被后续轮次取代的失败默认收起，可临时查看', () => {
+  const { row, controls } = setup('Provider finish_reason: content_filter', new Map(), 'a', { staleTurns: [8] })
+  controls.apply()
+  assert.equal(row.style.display, 'none')
+  assert.match(row.panel.children[0].textContent, /失败已清除/)
+  row.panel.children[2].onclick()
+  assert.equal(row.style.display, '')
+  assert.equal(row.panel.children[2].textContent, '隐藏此错误')
+})

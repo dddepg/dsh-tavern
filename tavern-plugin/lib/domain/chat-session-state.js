@@ -5,6 +5,7 @@ import { copyLazyHistoryHeader } from './lazy-history-read.js'
 import { rollbackAvailability, hasRollbackMessages, failedTurnReplayAvailability, foregroundSuppressedTurns, supersededRegenerationErrorTurns } from './rollback-surface.js'
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
+import { failedErrorTurnStates } from './failed-error-visibility.js'
 const str = value => String(value ?? '')
 
 export function pendingMvuSettlementState(chat) {
@@ -123,13 +124,16 @@ export function createSessionStateView({ activity: activityOf, evidence: evidenc
       canRollback: false, canClearIncompleteReply: false,
       reason: '当前会话的消息流尚未加载，请重新打开对话后重试；历史正文仍保留。'
     }
-    const replayTarget = Array.isArray(nodes) ? failedTurnReplayAvailability({ events: evidence.events || [], nodes }).target : null
+    const replayTarget = Array.isArray(nodes) ? failedTurnReplayAvailability({ events: evidence.events || [], nodes, cleared: chat.suppressedDshTurns || [] }).target : null
     const hasRound = hasRollbackMessages(chat.messages)
+    const failures = failedErrorTurnStates(evidence.events || [], chat.suppressedDshTurns)
     const result = {
       hiddenDshErrorTurns: chat.hiddenDshErrorTurns || [],
       suppressedDshTurns: foregroundSuppressedTurns(chat, evidence.events || []),
       regeneratedDshTurns: mappings,
       suppressedDshErrorTurns: supersededRegenerationErrorTurns({ events: evidence.events || [], suppressedDshTurns: chat.suppressedDshTurns }),
+      staleDshErrorTurns: failures.staleTurns,
+      filteredFailureStreak: failures.filteredStreak,
       canRegenerate: hasRound && !isRescuedHistoryMessage(chat, chat.messages?.findLast(message => message.role === 'assistant')),
       canEditBody: hasRound,
       rollbackTargetTurn: settlementTurn(chat),
