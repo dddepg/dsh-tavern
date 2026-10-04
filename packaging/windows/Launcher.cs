@@ -18,7 +18,7 @@ class Launcher : Form {
  // build.ps1 rewrites both payload values for the payload it embeds; the defaults here are the last published payload.
  const string PayloadSha256="a272f20b3f1f5b15d2b8b05d22259e7e97597f47dfc01ee79291e34479d5cea4";
  // Bump the suffix for any embedded runtime/bootstrap change; never patch a running installation.
- const string Version="a272f20b3f1f5b15-setup5";
+ const string Version="a272f20b3f1f5b15-setup6";
  Label label=new Label(), activity=new Label(); ProgressBar bar=new ProgressBar();
  Button logs=new Button(); System.Windows.Forms.Timer progressTimer=new System.Windows.Forms.Timer();
  Stopwatch elapsed=Stopwatch.StartNew(); TimeSpan lastProgress=TimeSpan.Zero; string lastStatus="";
