@@ -879,11 +879,12 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-library > .dsh-tavern-card-batch { flex-shrink: 0; margin: 0 12px; padding: 10px 0 6px; gap: 10px; }
 .dsh-tavern-library > .dsh-tavern-card-batch + .dsh-tavern-library-search { margin-top: 12px; }
 
-/* Size every opening by content; scroll the dialog instead of squeezing long forms. */
-.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
+/* The dialog never exceeds the viewport: forms and the start button stay whole,
+   only a tall opening preview shrinks and scrolls inside itself. */
+.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); overflow: hidden; }
 /* In block pickers this is inert; avoid a descendant :has() before universal children. */
 .dsh-tavern-card-picker > * { flex-shrink: 0; }
-.dsh-tavern-card-picker .dsh-tavern-greeting-preview { height: auto; min-height: 0; max-height: 100dvh; flex: 0 0 auto; }
+.dsh-tavern-card-picker .dsh-tavern-greeting-preview { height: auto; min-height: 120px; max-height: none; flex: 0 1 auto; overflow: auto; overscroll-behavior: contain; }
 .dsh-tavern-card-picker .dsh-tavern-greeting-preview .dsh-tavern-message-frame-slot,
 .dsh-tavern-card-picker .dsh-tavern-greeting-preview .dsh-tavern-message-frame { min-height: 0; }
 @media (max-width: 640px) {
@@ -1819,7 +1820,7 @@ body.dsh-tavern-shell-active > :is([role="tree"], [role="menu"], [role="listbox"
 
 /* Opening preparation can use the entire available height. */
 .dsh-tavern-picker-overlay:has(.dsh-tavern-greeting-preview) { padding-block: 0; }
-.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { max-height: 100dvh; padding-block: 8px; }
+.dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) { max-height: min(100%, 100dvh); padding-block: 8px; }
 .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) .dsh-tavern-card-picker-head { flex-wrap: wrap; }
 .dsh-tavern-card-picker:has(.dsh-tavern-greeting-preview) .dsh-tavern-picker-foot { position: static; margin: 0; padding: 8px 0 0; }
 
