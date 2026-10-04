@@ -1,5 +1,6 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { normalizeResourcePath, resourceKind } from '../domain/file-resources.js'
+import { WORLD_BOOK_PATCH_FIELDS } from '../domain/worldbook-resource.js'
 
 export function registerWorldbookTools({
   chatForSession,
@@ -89,8 +90,8 @@ export function registerWorldbookTools({
           properties: {
             op: { type: 'string', required: true, enum: ['update', 'add', 'delete'] },
             ref: { type: 'string' },
-            patch: { type: 'object', additionalProperties: true },
-            entry: { type: 'object', additionalProperties: true }
+            patch: { type: 'object', additionalProperties: true, description: 'update 的字段，与 entry 使用相同字段名' },
+            entry: { type: 'object', additionalProperties: true, description: 'add 的新条目字段：comment 标题、content 正文、primaryKeys 关键词数组、secondaryKeys、enabled、constant、order 等；不使用 keys/key' }
           }
         }
       }
@@ -117,6 +118,11 @@ export function registerWorldbookTools({
       const kind = resourceKind(normalized)
       if (kind !== 'worldbook' && kind !== 'card') throw new Error('世界书引用路径类型不正确')
       const source = kind === 'card' ? { kind: 'card', cardPath: normalized } : { kind: 'standalone', path: normalized }
+      for (const operation of Array.isArray(args.operations) ? args.operations : []) {
+        const fields = Object.keys(operation?.entry || {}).concat(Object.keys(operation?.patch || {}))
+        const unknown = fields.filter(field => !WORLD_BOOK_PATCH_FIELDS.includes(field))
+        if (unknown.length) throw new Error('世界书条目不支持字段 ' + unknown.join('、') + (unknown.some(field => /^(keys?|secondary_keys|keysecondary)$/.test(field)) ? '；关键词请用 primaryKeys / secondaryKeys' : '') + '。可用字段：' + WORLD_BOOK_PATCH_FIELDS.join('、'))
+      }
       const request = { operations: args.operations }
       if (Object.prototype.hasOwnProperty.call(args, 'name')) request.name = args.name
       if (Object.prototype.hasOwnProperty.call(args, 'description')) request.description = args.description
