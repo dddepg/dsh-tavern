@@ -1,5 +1,16 @@
 import { synchronizeBodyEdits } from '../domain/body-editor.js'
+import { randomUUID } from 'node:crypto'
+import { lastRoundVariableChanges } from '../domain/foreground-variable-changes.js'
 import { synchronizeTemplateHistory } from '../domain/template-history.js'
+
+// Appended once at the start of a reply, so it joins the history after the cached prefix.
+export function appendVariableChanges({ chat, payload, decision }) {
+  if (!chat || decision.kind !== 'enter' || Number(payload.step) !== 1) return decision
+  if (decision.messages.some(message => message.source?.form === 'variable-changes')) return decision
+  const text = lastRoundVariableChanges(chat)
+  if (!text) return decision
+  return { ...decision, messages: [...decision.messages, { id: randomUUID(), role: 'user', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'variable-changes' } }] }
+}
 
 export function registerRequestHooks({
   backgroundAgentRunner,
@@ -36,7 +47,8 @@ export function registerRequestHooks({
       chat,
       requestId: requestIdForMessages(payload.messages)
     })
-    try { return await cardMemory.appendRecall({ chat, payload, decision: prepared }) }
-    catch (error) { console.warn('[Tavern card memory] recall unavailable:', error.message); return prepared }
+    const withChanges = appendVariableChanges({ chat, payload, decision: prepared })
+    try { return await cardMemory.appendRecall({ chat, payload, decision: withChanges }) }
+    catch (error) { console.warn('[Tavern card memory] recall unavailable:', error.message); return withChanges }
   })
 }
