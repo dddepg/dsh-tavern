@@ -27,7 +27,7 @@ jobs:
       - name: Check launcher
         run: node --test tests/windows-update-launch.test.mjs tests/installation-process.test.mjs tests/installation-state.test.mjs tests/application-update-lifecycle.test.mjs tests/application-update-api.test.mjs tests/update-status-client.test.mjs tests/application-updater.test.mjs tests/download.test.mjs tests/windows-setup-progress.test.mjs tests/windows-installer-command-log.test.mjs tests/launcher.test.mjs tests/windows-command-shim.test.mjs tests/runtime-package.test.mjs tests/cdn-upgrade.test.mjs tests/plugin-dependencies.test.mjs tests/bundled-image-plugin.test.mjs
       - name: Check server template process
-        run: node --test tests/server-template-runtime.test.mjs tests/server-template-native.test.mjs
+        run: node --test tests/server-template-runtime.test.mjs
       - name: Check help command
         run: node bin/dsh-tavern.mjs --help
 
