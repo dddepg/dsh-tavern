@@ -80,6 +80,8 @@ export function apply(ctx) {
       for (const [index, block] of blocks.entries()) {
         if (heldAttempt !== undefined && block.type === 'tool-call') await appendFile(process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-late.jsonl', JSON.stringify({attempt:heldAttempt, tool:block.name})+'\n')
         yield { type: 'block-start', index, blockType: block.type }
+        // Real providers stream text before closing the block; helper generation reads deltas.
+        if (block.type === 'text') yield { type: 'text-delta', index, text: block.text }
         yield { type: 'block-end', index, block }
       }
       yield { type: 'finish', reason: { kind: blocks.some(block => block.type === 'tool-call') ? 'tool-calls' : 'stop' } }
