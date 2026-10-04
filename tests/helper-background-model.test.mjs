@@ -93,3 +93,18 @@ test('MVU 宿主管理连接的随机头部读值与实际请求一致，并保�
     assert.equal(restored.额外模型解析配置.温度, 0.7)
   } finally { dom.window.close() }
 })
+
+test('宿主后台已结算 MVU 时，卡内 MVU 看到“随AI输出”，不再自行额外模型解析；保存时保留用户原设置', () => {
+  const dom = new JSDOM('<body></body>', { url: 'https://host.invalid' })
+  let state = { mvuSettlement: 'host' }
+  const bridge = install({ window: dom.window, request: async () => ({ text: 'ok' }), context: () => state })
+  try {
+    const saved = { 更新方式: '额外模型解析', 额外模型解析配置: { 温度: 0.5 } }
+    const visible = bridge.projectMvuSettings(saved)
+    assert.equal(visible.更新方式, '随AI输出')
+    assert.deepEqual(JSON.parse(JSON.stringify(visible)), saved, '序列化仍是用户原设置')
+    assert.equal(bridge.normalizeMvuSettings({ ...saved, 更新方式: '随AI输出' }, saved).更新方式, '额外模型解析')
+    state = { mvuSettlement: 'script' }
+    assert.equal(visible.更新方式, '额外模型解析', '后台变量结算关闭时仍由卡内 MVU 自行解析')
+  } finally { dom.window.close() }
+})

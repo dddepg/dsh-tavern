@@ -751,7 +751,7 @@
 					.replace(/{{\s*char\s*}}/gi, String(state.characterName || "角色"));
 			};
 			window.submitTavernInput = function (text) { return call("submitTavernHelperInput", { text: String(text || "") }); };
-            const backgroundModel = modules.installBackgroundModel({ window: window, request: call });
+            const backgroundModel = modules.installBackgroundModel({ window: window, request: call, context: function () { return state; } });
 			facade = modules.installFacade({ projectMvuSettings: backgroundModel.projectMvuSettings, normalizeMvuSettings: backgroundModel.normalizeMvuSettings, readGlobalRegexes: function () { return regexGroups().global.map(rawRegex); }, installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, readMessage:readMessage, readCharacter:readCharacter, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
 				Popup: modules.createPopup({ document: window.document, parent: parent, token: token }) });
             modules.installUtilities(window);
