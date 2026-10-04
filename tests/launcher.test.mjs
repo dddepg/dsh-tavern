@@ -23,7 +23,7 @@ const profileWorkspace = await readFile(new URL('../pnpm-workspace.yaml', import
 
 test('Windows UI 更新隐藏 PowerShell 窗口并保持 UTF-8 输出', () => {
   assert.match(updateSource, /System\.Text\.UTF8Encoding/)
-  assert.match(updateSource, /spawnSync\(command, args, \{[\s\S]*?windowsHide: true,/)
+  assert.match(updateSource, /runInstallationProcess\(command, args, \{[\s\S]*?windowsHide: true,/)
 })
 
 test('Tavern profile installs Better Sidebar as its right-panel foundation', () => {

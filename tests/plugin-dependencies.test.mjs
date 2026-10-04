@@ -34,7 +34,7 @@ function fixture(t) {
   return { root, pluginDirectory, original, bootstrap, packages }
 }
 
-test('真实 pnpm 离线安装本地链接，并由插件解析到宿主原包及其传递依赖', t => {
+test('真实 pnpm 离线安装本地链接，并由插件解析到宿主原包及其传递依赖', async t => {
   const f = fixture(t)
   const staleTools = path.join(f.pluginDirectory, 'node_modules/@deepseek-ai/dsh-tools')
   mkdirSync(staleTools, { recursive: true })
@@ -46,7 +46,7 @@ test('真实 pnpm 离线安装本地链接，并由插件解析到宿主原包�
   writeFileSync(path.join(helper, 'index.js'), 'export default "host-transitive"')
   writeFileSync(path.join(f.packages['@deepseek-ai/dsh-tools'], 'index.js'), 'import value from "host-helper"; export function defineTool() { return value }')
   const originalPackages = Object.values(f.packages).map(directory => readFileSync(path.join(directory, 'package.json'), 'utf8'))
-  installPluginDependencies({ ...f, host: 'desktop', env: { ...process.env, DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
+  await installPluginDependencies({ ...f, host: 'desktop', env: { ...process.env, DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
     run(command, args, options) {
       // Neither registry access nor a cached alpha.1 package can make this pass.
       const result = spawnSync(command, [...args, '--offline', '--store-dir', './empty-store'], {
@@ -64,7 +64,7 @@ test('真实 pnpm 离线安装本地链接，并由插件解析到宿主原包�
 })
 
 for (const failure of ['missing', 'export', 'transitive']) {
-  test(`宿主依赖 ${failure} 异常时明确报错，不删除旧依赖、不调用 pnpm`, t => {
+  test(`宿主依赖 ${failure} 异常时明确报错，不删除旧依赖、不调用 pnpm`, async t => {
     const f = fixture(t)
     const directory = f.packages['@deepseek-ai/dsh-subagent']
     if (failure === 'missing') rmSync(directory, { recursive: true })
@@ -72,7 +72,7 @@ for (const failure of ['missing', 'export', 'transitive']) {
     mkdirSync(path.join(f.pluginDirectory, 'node_modules'))
     const sentinel = path.join(f.pluginDirectory, 'node_modules', 'keep.txt')
     writeFileSync(sentinel, 'keep')
-    assert.throws(() => installPluginDependencies({ ...f, host: 'desktop', env: { DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
+    await assert.rejects(() => installPluginDependencies({ ...f, host: 'desktop', env: { DSH_DESKTOP_DSH_BOOTSTRAP: f.bootstrap },
       run() { assert.fail('不得调用 pnpm') },
     }), failure === 'missing' ? /缺少必需依赖 @deepseek-ai\/dsh-subagent/ : /dsh-subagent.*无法加载所需接口 snapshotSubagentDescriptor/)
     assert.equal(readFileSync(sentinel, 'utf8'), 'keep')

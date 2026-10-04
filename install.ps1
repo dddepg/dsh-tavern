@@ -52,8 +52,6 @@ if ($InstallHost -eq 'cli') {
     }
   }
   Write-Host "CLI 安装目录：$DshRoot"
-  New-Item -ItemType Directory -Force -Path $DshRoot | Out-Null
-  Set-Content -LiteralPath (Join-Path $DshRoot '.dsh-tavern-install-root') -Value 'cli-v1'
 }
 
 $AppDir = if ($env:DSH_TAVERN_APP_DIR) { $env:DSH_TAVERN_APP_DIR } else { Join-Path $DshRoot 'apps\dsh-tavern' }
@@ -468,6 +466,280 @@ function Get-DownloadModule {
   return $ModulePath
 }
 
+# Shared module: bin/installation-state.cjs, embedded by bin/build-installer-scripts.mjs.
+$InstallationStateModuleSource = @'
+'use strict'
+// Dependency-free installation ownership, also embedded in standalone bootstraps.
+// An abandoned lock is deliberately NOT reclaimed by age or by a dead owner PID:
+// package-manager descendants may still be writing to this installation.
+const fs = require('node:fs')
+const path = require('node:path')
+const { randomUUID } = require('node:crypto')
+
+const LOCK_NAME = '.tavern-install.lock'
+const sleep = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
+const failure = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra })
+const lockPath = dshHome => path.join(path.resolve(dshHome), LOCK_NAME)
+const uncertain = lockDir => ({ lockDir, state: 'uncertain', unsafeToRetry: true })
+
+function readInstallation(dshHome) {
+  const lockDir = lockPath(dshHome)
+  try {
+    if (!fs.lstatSync(lockDir).isDirectory()) return uncertain(lockDir)
+    const owner = JSON.parse(fs.readFileSync(path.join(lockDir, 'owner.json'), 'utf8'))
+    if (!owner || typeof owner.attemptId !== 'string' || !owner.attemptId || typeof owner.generation !== 'string') return uncertain(lockDir)
+    return { ...owner, lockDir }
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      try { fs.lstatSync(lockDir) } catch (missing) { if (missing.code === 'ENOENT') return null }
+    }
+    return uncertain(lockDir)
+  }
+}
+
+function assertOwner(dshHome, attemptId, generation) {
+  const owner = readInstallation(dshHome)
+  if (!owner || owner.attemptId !== attemptId || (generation && owner.generation !== generation)) {
+    throw failure('INSTALLATION_OWNERSHIP_LOST', '安装任务已失去所有权，已停止写入。', { owner })
+  }
+  return owner
+}
+
+// Serialize all metadata changes, cancellation, final file promotions and release.
+// A crashed mutation also fails closed; there is no lease timeout/automatic eviction.
+function withMutation(dshHome, attemptId, generation, callback) {
+  const lockDir = lockPath(dshHome)
+  const gate = path.join(lockDir, '.mutation')
+  const deadline = Date.now() + 5000
+  const gateToken = randomUUID()
+  for (;;) {
+    assertOwner(dshHome, attemptId, generation)
+    try {
+      fs.mkdirSync(gate)
+      fs.writeFileSync(path.join(gate, 'token'), gateToken, { flag: 'wx', mode: 0o600 })
+      break
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      if (Date.now() >= deadline) throw failure('INSTALLATION_STATE_BUSY', '安装状态正在写入或尚未安全结束，请勿并行重试。')
+      sleep(10)
+    }
+  }
+  try {
+    const result = callback(assertOwner(dshHome, attemptId, generation))
+    if (result && typeof result.then === 'function') throw new TypeError('withOwnership callback must be synchronous')
+    return result
+  } finally {
+    // release() renames the entire directory while holding this gate. Never touch
+    // a gate belonging to an installation that appeared at the old path afterward.
+    try {
+      if (fs.readFileSync(path.join(gate, 'token'), 'utf8') === gateToken) {
+        fs.unlinkSync(path.join(gate, 'token'))
+        fs.rmdirSync(gate)
+      }
+    } catch (error) { if (error.code !== 'ENOENT') throw error }
+  }
+}
+
+function writeRecord(lockDir, basename, value) {
+  const filename = path.join(lockDir, basename)
+  const temporary = path.join(lockDir, `.owner-${randomUUID()}.tmp`)
+  let fd
+  try {
+    fd = fs.openSync(temporary, 'wx', 0o600)
+    fs.writeFileSync(fd, `${JSON.stringify(value)}\n`)
+    fs.fsyncSync(fd)
+    fs.closeSync(fd); fd = undefined
+    // Do not unlink the destination as an overwrite fallback: preserve the last
+    // complete owner if antivirus/sharing violations prevent atomic replacement.
+    for (let retry = 0; ; retry++) {
+      try { fs.renameSync(temporary, filename); break } catch (error) {
+        if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || retry >= 5) throw error
+        sleep(10 * (retry + 1))
+      }
+    }
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd)
+    try { fs.unlinkSync(temporary) } catch (error) { if (error.code !== 'ENOENT') throw error }
+  }
+}
+
+const writeOwner = (lockDir, owner) => writeRecord(lockDir, 'owner.json', owner)
+
+function releaseOwner(dshHome, attemptId, generation, pid) {
+  return withMutation(dshHome, attemptId, generation, owner => {
+    if (pid !== undefined && owner.pid !== pid) throw failure('INSTALLATION_OWNERSHIP_LOST', '仅安装任务的所有者可以释放安装锁。')
+    if (owner.unsafeToRetry || owner.state === 'blocked') throw failure('INSTALLATION_UNSAFE', '安装子进程尚未确认停止，已保留安装锁，禁止再次写入。', { owner, unsafeToRetry: true })
+    const lockDir = lockPath(dshHome)
+    const removed = `${lockDir}.released-${randomUUID()}`
+    fs.renameSync(lockDir, removed)
+    // This unique, just-renamed directory is ours. No user installation files or
+    // a successor's lock can be removed by delayed cleanup.
+    fs.rmSync(removed, { recursive: true, force: true })
+    return true
+  })
+}
+
+function makeHandle(dshHome, initialOwner, { created = false, adopted = false } = {}) {
+  const { attemptId, generation } = initialOwner
+  const mayRelease = created || adopted
+  let released = false
+  return {
+    attemptId, lockDir: lockPath(dshHome), created, adopted, joined: !mayRelease,
+    get owner() { return assertOwner(dshHome, attemptId, generation) },
+    assertOwnership() { return assertOwner(dshHome, attemptId, generation) },
+    withOwnership(callback) { return withMutation(dshHome, attemptId, generation, callback) },
+    update(patch) {
+      return withMutation(dshHome, attemptId, generation, owner => {
+        // Only adoption can change PID/generation. A nested installer may mark the
+        // shared task unsafe, but no later progress update can silently clear it.
+        const next = { ...owner, ...patch, attemptId, generation, pid: owner.pid,
+          dshHome: owner.dshHome, startedAt: owner.startedAt,
+          unsafeToRetry: Boolean(owner.unsafeToRetry || patch.unsafeToRetry), updatedAt: Date.now() }
+        if (owner.unsafeToRetry || next.unsafeToRetry) next.state = 'blocked'
+        delete next.lockDir
+        writeOwner(lockPath(dshHome), next)
+        return { ...next, lockDir: lockPath(dshHome) }
+      })
+    },
+    retain(reason) { return this.update({ state: 'blocked', unsafeToRetry: true, blockedReason: String(reason || 'Unverified process cleanup') }) },
+    release() {
+      if (!mayRelease || released) return false
+      const result = releaseOwner(dshHome, attemptId, generation, initialOwner.pid)
+      released = true
+      return result
+    },
+  }
+}
+
+function acquireInstallation(options = {}) {
+  const { dshHome, sourceRoot = '', statusFile = '', adopt = false, state = 'running' } = options
+  if (typeof dshHome !== 'string' || !dshHome) throw new TypeError('dshHome is required')
+  const explicitAttempt = typeof options.attemptId === 'string' && options.attemptId.length > 0
+  const attemptId = explicitAttempt ? options.attemptId : randomUUID()
+  const pid = options.pid === undefined ? (state === 'reserved' ? 0 : process.pid) : options.pid
+  if (!Number.isSafeInteger(pid) || pid < 0) throw new TypeError('pid must be a non-negative integer')
+  const lockDir = lockPath(dshHome)
+  fs.mkdirSync(path.resolve(dshHome), { recursive: true })
+  try { fs.mkdirSync(lockDir) } catch (error) {
+    if (error.code !== 'EEXIST') throw error
+    const owner = readInstallation(dshHome)
+    if (!explicitAttempt || owner?.attemptId !== attemptId) {
+      throw failure('INSTALLATION_BUSY', '已有安装或更新任务占用此目录；尚未确认其子进程结束，请勿并行重试。', { owner, lockDir })
+    }
+    if (owner.unsafeToRetry || owner.state === 'blocked') throw failure('INSTALLATION_UNSAFE', '上次安装尚未安全结束，安装目录仍被锁定。', { owner, unsafeToRetry: true })
+    if (!adopt) return makeHandle(dshHome, owner)
+    const adoptedOwner = withMutation(dshHome, attemptId, owner.generation, current => {
+      if (current.state !== 'reserved' || current.pid) throw failure('INSTALLATION_BUSY', '此安装任务已经开始，不能再次启动。', { owner: current })
+      // Rotate fencing generation so the old reservation handle cannot release or
+      // overwrite a running child, even if its delayed spawn callback fires.
+      const next = { ...current, generation: randomUUID(), pid, state: 'running',
+        sourceRoot: sourceRoot || current.sourceRoot, statusFile: statusFile || current.statusFile, updatedAt: Date.now() }
+      delete next.lockDir
+      writeOwner(lockDir, next)
+      return next
+    })
+    return makeHandle(dshHome, adoptedOwner, { adopted: true })
+  }
+  const owner = { attemptId, generation: randomUUID(), pid, startedAt: Date.now(),
+    sourceRoot, statusFile, state, dshHome: path.resolve(dshHome) }
+  // An initialization error retains the mkdir reservation conservatively. A
+  // racing reader never treats an absent/partial owner file as an unlocked home.
+  writeOwner(lockDir, owner)
+  return makeHandle(dshHome, owner, { created: true })
+}
+
+function requestCancellation(dshHome, attemptId) {
+  for (;;) {
+    const owner = assertOwner(dshHome, attemptId)
+    try {
+      return withMutation(dshHome, attemptId, owner.generation, current => {
+        const filename = path.join(lockPath(dshHome), 'cancel-request.json')
+        const request = { attemptId, requestedAt: Date.now() }
+        if (!fs.existsSync(filename)) writeRecord(lockPath(dshHome), 'cancel-request.json', request)
+        return { ...request, owner: current }
+      })
+    } catch (error) {
+      // Adoption rotates generation without changing this logical attempt. A
+      // cancellation arriving at that exact boundary still belongs to the child.
+      const current = readInstallation(dshHome)
+      if (error.code === 'INSTALLATION_OWNERSHIP_LOST' && current?.attemptId === attemptId && current.generation !== owner.generation) continue
+      throw error
+    }
+  }
+}
+
+function cancellationRequested(dshHome, attemptId) {
+  const owner = readInstallation(dshHome)
+  if (!owner || owner.attemptId !== attemptId) return false
+  try {
+    const request = JSON.parse(fs.readFileSync(path.join(lockPath(dshHome), 'cancel-request.json'), 'utf8'))
+    return request.attemptId === attemptId && readInstallation(dshHome)?.generation === owner.generation
+  } catch { return false }
+}
+
+// Explicit recovery only. The caller must first close and verify the complete
+// durable process registry, including descendants; owner PID death is NOT proof.
+function releaseStoppedInstallation({ dshHome, attemptId, generation, processesVerifiedStopped } = {}) {
+  if (processesVerifiedStopped !== true || !generation) throw failure('INSTALLATION_UNSAFE', '释放安装锁前必须确认所有安装子进程均已停止。', { unsafeToRetry: true })
+  return withMutation(dshHome, attemptId, generation, owner => {
+    if (owner.pid) {
+      try { process.kill(owner.pid, 0) } catch (error) {
+        if (error.code === 'ESRCH') {
+          const removed = `${lockPath(dshHome)}.released-${randomUUID()}`
+          fs.renameSync(lockPath(dshHome), removed)
+          fs.rmSync(removed, { recursive: true, force: true })
+          return true
+        }
+        throw failure('INSTALLATION_UNSAFE', '无法确认安装所有者已经停止。', { unsafeToRetry: true })
+      }
+      throw failure('INSTALLATION_BUSY', '安装所有者仍在运行，不能释放安装锁。', { owner })
+    }
+    const removed = `${lockPath(dshHome)}.released-${randomUUID()}`
+    fs.renameSync(lockPath(dshHome), removed)
+    fs.rmSync(removed, { recursive: true, force: true })
+    return true
+  })
+}
+
+function main(argv) {
+  const [command, ...args] = argv
+  const flags = {}
+  for (let index = 0; index < args.length; index += 2) flags[args[index].replace(/^--/, '')] = args[index + 1]
+  const dshHome = flags.home
+  if (command === 'acquire') {
+    const handle = acquireInstallation({ dshHome, attemptId: flags.attempt, pid: Number(flags.pid), sourceRoot: flags.source || '', statusFile: flags.status || '' })
+    const result = { attemptId: handle.attemptId, lockDir: handle.lockDir, created: handle.created, generation: handle.owner.generation }
+    // Shells consume plain lines, not eval or executable text from user paths.
+    if (flags.format === 'lines') console.log(`${result.attemptId}\n${result.lockDir}\n${result.created ? '1' : '0'}\n${result.generation}`)
+    else console.log(JSON.stringify(result))
+    return
+  }
+  if (command === 'release') {
+    if (!flags.attempt || !flags.generation || !flags.pid) throw new TypeError('release requires attempt, generation and pid')
+    return releaseOwner(dshHome, flags.attempt, flags.generation, Number(flags.pid))
+  }
+  if (command === 'check') {
+    const owner = assertOwner(dshHome, flags.attempt)
+    if (owner.unsafeToRetry || owner.state === 'blocked') throw failure('INSTALLATION_UNSAFE', '安装子进程尚未确认停止。', { unsafeToRetry: true })
+    if (cancellationRequested(dshHome, flags.attempt)) throw failure('INSTALLATION_CANCELLED', '安装任务已请求中止。')
+    return
+  }
+  if (command === 'retain') return acquireInstallation({ dshHome, attemptId: flags.attempt }).retain(flags.reason)
+  throw new Error(`Unknown installation-state command: ${command}`)
+}
+
+module.exports = { acquireInstallation, readInstallation, requestCancellation, cancellationRequested, releaseStoppedInstallation, LOCK_NAME }
+if (require.main === module) {
+  try { main(process.argv.slice(2)) } catch (error) { console.error(`${error.code || 'INSTALLATION_ERROR'}: ${error.message}`); process.exitCode = 1 }
+}
+'@
+$InstallationOwner = $null
+$InstallFailure = $null
+$InstallationCompleted = $false
+$InstallationStateModule = Join-Path $TempDir 'installation-state.cjs'
+$PreviousInstallationAttempt = $env:DSH_TAVERN_INSTALL_ATTEMPT
+$PreviousInstallationLock = $env:DSH_TAVERN_INSTALL_LOCK
+
 $PreviousDshHome = $env:DSH_HOME
 $PreviousCliHome = $env:DSH_TAVERN_CLI_HOME
 $PreviousLegacyHome = $env:DSH_TAVERN_LEGACY_DSH_HOME
@@ -501,6 +773,19 @@ try {
   if ($NodeVersion -lt [version]'22.19.0') {
     throw "Node.js 版本过低，需要 22.19 或更高版本（当前：$NodeVersionText）。"
   }
+  # Reserve before installation markers, persistent PATH, logs or source writes.
+  New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
+  [IO.File]::WriteAllText($InstallationStateModule, $InstallationStateModuleSource, (New-Object Text.UTF8Encoding($false)))
+  $OwnerArguments = @($InstallationStateModule, 'acquire', '--home', $DshRoot, '--pid', [string]$PID, '--source', $AppDir)
+  if ($env:DSH_TAVERN_INSTALL_ATTEMPT) { $OwnerArguments += @('--attempt', $env:DSH_TAVERN_INSTALL_ATTEMPT) }
+  $OwnerJson = & node @OwnerArguments
+  Assert-LastCommand '已有安装任务占用此目录，尚未安全结束。'
+  $InstallationOwner = ($OwnerJson -join "`n") | ConvertFrom-Json
+  $env:DSH_TAVERN_INSTALL_ATTEMPT = $InstallationOwner.attemptId
+  $env:DSH_TAVERN_INSTALL_LOCK = $InstallationOwner.lockDir
+  if ($InstallHost -eq 'cli') {
+    Set-Content -LiteralPath (Join-Path $DshRoot '.dsh-tavern-install-root') -Value 'cli-v1'
+  }
   $GitCommand = Resolve-Command 'git'
   $NpmCommand = Resolve-Command 'npm'
   if ($InstallHost -eq 'cli' -and $null -eq $NpmCommand) { throw '未找到 npm，请重新安装 Node.js。' }
@@ -530,7 +815,7 @@ try {
   } catch { Write-Warning "无法读取系统代理设置：$($_.Exception.Message)" }
   finally { $ErrorActionPreference = $PreviousPreference }
   $UpdateLogRoot = if ($env:DSH_TAVERN_UPDATE_LOG_ROOT) { $env:DSH_TAVERN_UPDATE_LOG_ROOT } else { Join-Path $DshRoot 'profile-data/tavern/data' }
-  $UpdateAttempt = if ($env:DSH_TAVERN_UPDATE_ATTEMPT) { $env:DSH_TAVERN_UPDATE_ATTEMPT } else { "install-$PID-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())" }
+  $UpdateAttempt = if ($env:DSH_TAVERN_UPDATE_ATTEMPT) { $env:DSH_TAVERN_UPDATE_ATTEMPT } else { $env:DSH_TAVERN_INSTALL_ATTEMPT }
   $env:DSH_TAVERN_UPDATE_ATTEMPT = $UpdateAttempt
   $UpdateLogger = Join-Path $TempDir 'update-log.cjs'
   [IO.File]::WriteAllText($UpdateLogger, @'
@@ -603,13 +888,28 @@ try {
     if ($Code -ne 0) { throw "Git 步骤失败：$Step（退出码 $Code）：$($Output -join "`n")" }
     return ($Output -join "`n")
   }
-  function Invoke-InstallCommand([string]$Step, [string]$Command, [string[]]$CommandArgs, [switch]$CaptureOutput) {
+  function Invoke-InstallCommand([string]$Step, [string]$Command, [string[]]$CommandArgs, [switch]$CaptureOutput, [int]$TimeoutMs = 600000) {
     $Started = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     Write-UpdateLog 'installer.stage.started' $Step
     $OutputFile = Join-Path $TempDir 'command.output'
     $ErrorFile = Join-Path $TempDir 'command.error'
     [IO.File]::WriteAllText($OutputFile, '')
     [IO.File]::WriteAllText($ErrorFile, '')
+    # The launcher start intentionally creates a long-lived service. All other
+    # downloaded-release stages must close their complete process tree first.
+    $Supervisor = $null
+    if ($Step -ne 'service.start') {
+      $SupervisorCandidates = @()
+      if ($null -ne $SourceDir) { $SupervisorCandidates += (Join-Path $SourceDir.FullName 'bin\installation-process.mjs') }
+      if ($AppDir) { $SupervisorCandidates += (Join-Path $AppDir 'bin\installation-process.mjs') }
+      foreach ($Candidate in $SupervisorCandidates) {
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { $Supervisor = $Candidate; break }
+      }
+    }
+    if ($Supervisor) {
+      $CommandArgs = @($Supervisor, '--run', $Step, [string]$TimeoutMs, $Command) + $CommandArgs
+      $Command = 'node'
+    }
     $PreviousPreference = $ErrorActionPreference
     $Code = 1
     $InvocationError = ''
@@ -750,16 +1050,17 @@ try {
       $PnpmNeedsInstall = $true
     }
     else {
-      try { $PnpmNeedsInstall = ((& $PnpmCommand --version).Trim() -ne $PnpmVersion) }
+      try { $PnpmNeedsInstall = ((Invoke-InstallCommand 'dependencies.version' $PnpmCommand @('--version') -CaptureOutput -TimeoutMs 30000).Trim() -ne $PnpmVersion) }
       catch { $PnpmNeedsInstall = $true }
     }
   }
+  & node $InstallationStateModule check --home $DshRoot --attempt $InstallationOwner.attemptId
+  Assert-LastCommand '安装任务已中止或子进程尚未安全结束。'
   if ($PnpmNeedsInstall) { $MissingPackages += "pnpm@$PnpmVersion" }
   if ($MissingPackages.Count -gt 0) {
     Write-Host ("正在安装缺失依赖：" + ($MissingPackages -join '、') + '……')
     New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
-    & $NpmCommand install --global --prefix $RuntimeRoot @MissingPackages
-    Assert-LastCommand 'pnpm 或 DeepSeek Harness 安装失败。'
+    Invoke-InstallCommand 'tooling.install' $NpmCommand (@('install', '--global', '--prefix', $RuntimeRoot) + $MissingPackages)
   }
   $PnpmCommand = Resolve-Command 'pnpm'
   if ($null -eq $PnpmCommand) { throw '未找到 pnpm。Desktop 版请从 DSH Desktop 托盘打开 DSH Terminal 后运行本命令。' }
@@ -768,8 +1069,7 @@ try {
 
   # Validate before replacing any installed application files.
   if ($InstallHost -ne 'cli') {
-    $CurrentDshVersion = (& $DshCommand --version)
-    Assert-LastCommand '无法读取宿主 DSH 版本。'
+    $CurrentDshVersion = Invoke-InstallCommand 'host.version' $DshCommand @('--version') -CaptureOutput -TimeoutMs 30000
     & node $CompatibilityScript --check $InstallHost ($CurrentDshVersion -join "`n")
     Assert-LastCommand '宿主 DSH 版本不兼容，尚未覆盖程序文件。'
   }
@@ -805,17 +1105,20 @@ try {
   Invoke-InstallCommand 'dependencies.install' $PnpmCommand @('--dir', $AppDir, 'install', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000')
 
   Write-InstallStatus '本地配置：正在注册 Tavern 并检查兼容性…'
-  Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost)
+  Invoke-InstallCommand 'profile.install' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'install', '--host', $InstallHost) -TimeoutMs 1200000
   if ($InstallHost -eq 'desktop') {
     Write-Host 'DSH Tavern Desktop 版安装完成。'
     Write-Host '请重启 DSH Desktop，再从托盘的 Profile 菜单切换到 tavern。'
   }
   else {
-    Invoke-InstallCommand 'service.start' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'start')
+    if ($env:DSH_TAVERN_DEFER_SERVICE_START -ne '1') {
+      Invoke-InstallCommand 'service.start' 'node' @((Join-Path $AppDir 'bin\dsh-tavern.mjs'), 'start')
+    }
     Write-Host 'DSH Tavern 安装完成。请使用上方完整访问地址，或运行 dsh-tavern open 打开网页。'
     Write-Host '以后可以使用：dsh-tavern start、open、stop、restart、status、update（新 PowerShell 生效）'
   }
   Write-UpdateLog 'installer.finished' 'bootstrap' '0'
+  $InstallationCompleted = $true
 }
 catch {
   $InstallFailure = $_
@@ -830,6 +1133,18 @@ catch {
   throw ("安装失败：" + $InstallFailure.Exception.Message)
 }
 finally {
+  if ($null -ne $InstallationOwner -and $InstallationOwner.created) {
+    # A nested Profile retains this lock if descendant termination is uncertain.
+    # Release verifies token, generation and the owning PowerShell PID.
+    if (-not $InstallationCompleted -and ($null -eq $InstallFailure -or $InstallFailure.Exception -is [System.Management.Automation.PipelineStoppedException])) {
+      & node $InstallationStateModule retain --home $DshRoot --attempt $InstallationOwner.attemptId --reason 'Bootstrap interrupted; descendant cleanup is unverified'
+    } else {
+      & node $InstallationStateModule release --home $DshRoot --attempt $InstallationOwner.attemptId --generation $InstallationOwner.generation --pid $PID
+    }
+    if ($LASTEXITCODE -ne 0) { Write-Warning '安装任务尚未安全结束，已保留安装锁。' }
+  }
+  $env:DSH_TAVERN_INSTALL_ATTEMPT = $PreviousInstallationAttempt
+  $env:DSH_TAVERN_INSTALL_LOCK = $PreviousInstallationLock
   [Console]::OutputEncoding = $PreviousConsoleOutputEncoding
   $OutputEncoding = $PreviousOutputEncoding
   $env:npm_config_registry = $PreviousNpmRegistry

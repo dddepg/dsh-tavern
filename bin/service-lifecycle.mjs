@@ -329,7 +329,7 @@ export async function startService() {
       cwd: SOURCE_ROOT,
       // Track the actual Node service, not a cmd shim that can exit separately.
       detached: true,
-      env: runtimeEnvironment(),
+      env: runtimeEnvironment({ installation: false }),
       shell: false,
       windowsHide: true,
       stdio: ['ignore', logDescriptor, logDescriptor],

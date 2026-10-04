@@ -21,7 +21,7 @@ export function healthyCliRuntime(root, platform = process.platform) {
   } catch { return false }
 }
 
-export function installCliRuntime({ root, run, platform = process.platform, force = process.env.DSH_TAVERN_REINSTALL_RUNTIME === '1' }) {
+export async function installCliRuntime({ root, run, platform = process.platform, force = process.env.DSH_TAVERN_REINSTALL_RUNTIME === '1' }) {
   if (!force && healthyCliRuntime(root, platform)) {
     return { command: cliRuntimeCommand(root, platform), reused: true, commit() {}, rollback() {} }
   }
@@ -39,7 +39,7 @@ export function installCliRuntime({ root, run, platform = process.platform, forc
     const manifest = JSON.parse(readFileSync(new URL('../config/cli-runtime/package.json', import.meta.url), 'utf8'))
     if (manifest.dependencies['@deepseek-ai/dsh'] !== adaptedDshVersion) throw new Error('独立 DSH 依赖锁与适配版本不一致。')
     for (const name of ['package.json', 'package-lock.json']) copyFileSync(new URL('../config/cli-runtime/' + name, import.meta.url), path.join(installRoot, name))
-    run('npm', ['ci', '--prefix', installRoot, '--no-audit', '--no-fund', '--registry', process.env.DSH_TAVERN_NPM_REGISTRY || 'https://registry.npmmirror.com'])
+    await run('npm', ['ci', '--prefix', installRoot, '--no-audit', '--no-fund', '--registry', process.env.DSH_TAVERN_NPM_REGISTRY || 'https://registry.npmmirror.com'])
     const installedPackage = path.join(installRoot, 'node_modules/@deepseek-ai/dsh/package.json')
     const pkg = JSON.parse(readFileSync(installedPackage, 'utf8'))
     const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.dsh
@@ -71,6 +71,7 @@ export function installCliRuntime({ root, run, platform = process.platform, forc
       },
     }
   } catch (error) {
+    if (error.unsafeToRetry) throw error
     if (!promoted && backedUp) renameSync(backup, root)
     rmSync(staging, { recursive: true, force: true })
     throw error
