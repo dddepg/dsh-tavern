@@ -36,3 +36,13 @@ test('单个变量最多 100 字，超出截断并标注', () => {
   const line = text.split('\n').find(row => row.startsWith('/日记'))
   assert.equal(line, '/日记 = "' + '今'.repeat(99) + '…（已截断）')
 })
+
+test('变量回灌是本局设置，默认开启，关闭后不注入', async () => {
+  const { normalizeBackgroundTasks, applyTavernSettingsPatch } = await import('../tavern-plugin/lib/domain/tavern-settings.js')
+  assert.equal(normalizeBackgroundTasks({}).variableFeedback, true)
+  assert.equal(normalizeBackgroundTasks({ variableFeedback: false }).variableFeedback, false)
+  assert.equal(applyTavernSettingsPatch({}, { defaultPlaySettings: { backgroundTasks: { variableFeedback: false } } }).defaultPlaySettings.backgroundTasks.variableFeedback, false)
+  const current = { ...chat([message({ hp: 10 }), message({ hp: 9 })]), backgroundTasks: { variableFeedback: false } }
+  const decision = { kind: 'enter', messages: [] }
+  assert.equal(appendVariableChanges({ chat: current, payload: { step: 1 }, decision }).messages.length, 0)
+})
