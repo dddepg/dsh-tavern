@@ -159,22 +159,45 @@
 		}
 
 		function releaseTavernHostJQueryHandlers(host, frameWindow) {
-			const jq = host.jQuery;
-			if (!jq || !jq._data || !jq.event || !frameWindow || !frameWindow.Function) return;
-			// Callback realm identifies the retiring script even on shared document
-			// targets. Never remove a whole namespace owned by another component.
-			const targets = [host, host.document].concat(Array.from(host.document.querySelectorAll('*')));
-			for (const target of targets) {
-				if (!jq.hasData(target)) continue;
-				const events = jq._data(target, 'events') || {};
-				for (const handlers of Object.values(events)) {
-					for (const entry of Array.from(handlers)) {
-						if (entry.handler instanceof frameWindow.Function) {
-							jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
-						}
-					}
-				}
-			}
+            if (!host || !frameWindow || !frameWindow.Function) return;
+            // A trusted script can use either jQuery instance to bind live message
+            // nodes. Each instance owns a separate event cache, so inspect both.
+            const registries = Array.from(new Set([host.jQuery, frameWindow.jQuery])).filter(function (jq) {
+                return jq && typeof jq.hasData === "function" && typeof jq._data === "function" && typeof jq.event?.remove === "function";
+            });
+            if (!registries.length) return;
+            const targets = new Set();
+            function addDocument(owner, document) {
+                if (owner) targets.add(owner);
+                if (!document) return;
+                targets.add(document);
+                for (const node of document.querySelectorAll?.('*') || []) targets.add(node);
+            }
+            addDocument(host, host.document);
+            addDocument(frameWindow, frameWindow.document);
+            const sessionId = frameWindow.frameElement?.__dshTavernSessionId;
+            if (sessionId) for (const frame of host.document?.querySelectorAll?.('iframe.dsh-tavern-message-frame') || []) {
+                if (frame.__dshTavernSessionId !== sessionId) continue;
+                try {
+                    // Hidden replacement frames may already have handlers too.
+                    // Never enter another session or an opaque/cross-origin frame.
+                    const document = frame.contentDocument;
+                    if (document) addDocument(frame.contentWindow, document);
+                } catch (_) { /* Cross-origin documents cannot be inspected. */ }
+            }
+            // Callback realm identifies the retiring script even on shared DOM.
+            // Preserve other scripts' callbacks, including identical namespaces.
+            for (const jq of registries) for (const target of targets) {
+                if (!jq.hasData(target)) continue;
+                const events = jq._data(target, 'events') || {};
+                for (const handlers of Object.values(events)) {
+                    for (const entry of Array.from(handlers)) {
+                        if (entry.handler instanceof frameWindow.Function) {
+                            jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
+                        }
+                    }
+                }
+            }
 		}
 
         // The parent sends the latest complete context after iframe load. Keep
@@ -209,6 +232,7 @@
 						name: String(script && script.name || ""),
 						info: String(script && script.info || ""),
 						buttons: Array.isArray(script && script.buttons) ? script.buttons : [],
+                        buttonsEnabled: !script || script.buttonsEnabled !== false,
 						system: String(script && script.system || "")
 					};
 				})
@@ -223,6 +247,8 @@
                 + 'createOrderedNumericIndex:' + createOrderedNumericIndex.toString() + ','
                 + 'createTurnFieldIndex:' + createTurnFieldIndex.toString() + ','
                 + 'applyVariableReceipt:' + applyTavernVariableReceipt.toString() + ','
+				+ 'createMessageReader:' + createTavernHelperMessageReader.toString() + ','
+                + 'installUtilities:' + installTavernHelperUtilities.toString() + ','
 				+ 'createEvents:' + createTavernHelperEventBus.toString() + ','
 				+ 'createPopup:' + createTavernHelperPopup.toString() + ','
 				+ 'installCompatibility:' + installTavernCompatibilityDiagnostics.toString() + ','

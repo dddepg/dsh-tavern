@@ -44,10 +44,10 @@
 			}
 			if (afterMessages.length > shared) operations.push({ op: "messages.append", values: clone(afterMessages.slice(shared)) });
 			if (afterMessages.length < beforeMessages.length) operations.push({ op: "messages.truncate", length: afterMessages.length });
-			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "lifecycleRevision"]) {
+			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "globalVariables", "characterVariables", "worldbook", "characterName", "playerName", "lifecycleRevision"]) {
 				if (same(previous[key], target[key])) continue;
 				operations.push({ op: "value.replace", key: key, value: clone(target[key]) });
-				if (key === "chatVariables" || key === "scriptVariables") variablesChanged = true;
+				if (["chatVariables", "scriptVariables", "globalVariables", "characterVariables"].includes(key)) variablesChanged = true;
 			}
 			const stateRevision = Math.max(0, Number(target.stateRevision) || 0);
 			if (operations.length === 0 && Number(previousTurn) === turn && Number(previous.stateRevision) === stateRevision) return null;
@@ -422,16 +422,20 @@
 							return invoke("getSession", {}, props.sessionId).then(function (snapshot) {
 								const context = snapshot && snapshot.view && snapshot.view.tavernHelper;
 								if (context) helperContext = context;
-								return Object.assign({}, result || {}, context ? { context: context } : {});
+								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: context } : {});
 							});
 						}).then(function (result) {
 							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 						}, function (error) {
-							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error) }, "*");
+							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error), errorCode: String(error && error.code || "") }, "*");
 						});
 						return;
 					}
-					if (!allowedMethods.has(data.method)) return;
+                    if (!allowedMethods.has(data.method)) {
+                        event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false,
+                            error: "当前消息不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" }, "*");
+                        return;
+                    }
 					const args = Object.assign({}, data.args || {}, { sessionId: props.sessionId, expectedLifecycleRevision: Math.max(0, Number(helperContext && helperContext.lifecycleRevision) || 0) });
 					invoke(data.method, args, props.sessionId).then(function (result) {
 						if (current() && data.method === "prepareSessionOpening") sourceDocument.openingRequest = result;

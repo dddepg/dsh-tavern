@@ -581,6 +581,7 @@ window.__ModuleLoader__.load({
 
 // @include runtime/host-artifacts.js
 
+// @include runtime/helper-public-api.js
 // @include runtime/frame-document.js
 
 // @include modules/host-theme.js

@@ -681,6 +681,26 @@
 					}
 					return;
 				}
+                if (data.type === "dsh-tavern-helper-call" && data.method === "triggerTavernSlash") {
+                    // Wait for earlier persistence, but do not put generation on the
+                    // RPC tail: its MVU events must be able to issue their own writes.
+                    Promise.resolve(record.rpcTail).catch(function () {}).then(function () {
+                        if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，人物卡命令未执行；请返回原对话重试");
+                        if (data.lifecycleRevision !== undefined && Number(data.lifecycleRevision) !== Number(record.context?.lifecycleRevision || 0)) throw new Error("存档版本已变化，人物卡命令未执行");
+                        if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
+                            throw Object.assign(new Error("事件已经结束，人物卡命令未执行"), { code: "TAVERN_SCRIPT_EVENT_CLOSED" });
+                        }
+                        if (typeof options.executeSlash !== "function") throw new Error("当前对话命令入口尚未就绪");
+                        return options.executeSlash(String(data.args?.line || ""), record.sessionId, data.eventId ? { waitForCompletion: false } : undefined);
+                    }).then(function (result) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: true,
+                            result: typeof result === "string" ? { pipe: result } : result });
+                    }, function (error) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                            error: String(error.message || error), errorCode: String(error.code || "") });
+                    });
+                    return;
+                }
                 if (data.type === "dsh-tavern-helper-call" && data.method === "submitTavernHelperInput") {
                     Promise.resolve().then(function () {
                         if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，开局消息未发送；请返回原对话重试");
@@ -695,7 +715,12 @@
                     });
                     return;
                 }
-				if (data.type !== "dsh-tavern-helper-call" || !allowedMethods.has(data.method)) return;
+                if (data.type !== "dsh-tavern-helper-call") return;
+                if (!allowedMethods.has(data.method)) {
+                    post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                        error: "当前人物卡不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" });
+                    return;
+                }
 				if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false, error: "事件已经结束，已拒绝迟到写入", errorCode: "TAVERN_SCRIPT_EVENT_CLOSED" });
 					return;

@@ -1445,7 +1445,7 @@ test('host cleanup removes only callbacks from the retiring iframe realm', () =>
     event: { remove: (...args) => removed.push(args) }
   } };
   client.releaseTavernHostJQueryHandlers(host, realm);
-  assert.equal(removed.length, 3);
+  assert.equal(removed.length, 4); // host, host document, element and retiring window
   assert.ok(removed.every(row => row[1] === 'click.shared' && row[2] === realm.callback && row[3] === '.ball'));
 });
 

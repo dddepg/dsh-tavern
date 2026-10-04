@@ -57,7 +57,7 @@ test('官方 MVU 恢复时可使用全局变量并登记关闭状态下的 Funct
   assert.equal(call.args.option.type, 'global')
   assert.deepEqual(call.args.variables, {})
   run.reply(call, { updated: true, target: { type: 'global' }, globalVariables: {} })
-  assert.deepEqual(await deleting, {})
+  assert.deepEqual(JSON.parse(JSON.stringify(await deleting)), { variables: {}, delete_occurred: true })
 })
 
 function parentHarness(rpc, reportError = () => {}) {

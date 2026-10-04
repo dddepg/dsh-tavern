@@ -3417,6 +3417,89 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+// Shared synchronous public API semantics for script and message iframes.
+// Keep factories self-contained: the document builders serialize their source.
+function createTavernHelperMessageReader(options) {
+    return function (target, settings) {
+        const state = options.context(), count = (state.messages || []).length;
+        if (!count) return [];
+        const current = options.currentId();
+        const raw = target === undefined || target === null ? String(current) : String(target)
+            .replace(/{{\s*lastMessageId\s*}}/gi, String(count - 1));
+        const match = /^(-?\d+)(?:-(-?\d+))?$/.exec(raw.trim());
+        if (!match) return [];
+        const normalize = value => Math.max(0, Math.min(count - 1, value < 0 ? count + value : value));
+        const start = normalize(Number(match[1])), end = normalize(Number(match[2] ?? match[1]));
+        const selected = [], filter = settings || {};
+        for (let id = Math.min(start, end); id <= Math.max(start, end); id++) {
+            const source = options.readMessage(id);
+            if (!source) continue;
+            if (filter.role && filter.role !== 'all' && source.role !== filter.role) continue;
+            const hidden = source.is_hidden === true;
+            if (filter.hide_state === 'hidden' && !hidden || filter.hide_state === 'unhidden' && hidden) continue;
+            const row = options.copy(source);
+            const swipe = Number(row.swipe_id) || 0;
+            row.name = row.name || (row.role === 'user' ? state.playerName || '你' : state.characterName || '角色');
+            row.is_hidden = hidden;
+            row.swipe_id = swipe;
+            row.swipes = Array.isArray(row.swipes) && row.swipes.length ? row.swipes : [String(row.message || '')];
+            row.swipes_data = row.swipes.map((_, index) => options.copy(row.swipes_data?.[index] ?? (index === swipe ? row.variables : undefined) ?? {}));
+            row.swipes_info = row.swipes.map((_, index) => options.copy(row.swipes_info?.[index] ?? row.pluginData?.swipe_info?.[index] ?? (index === swipe ? row.extra ?? row.pluginData?.extra : undefined) ?? {}));
+            row.message = String(row.message ?? row.swipes[swipe] ?? '');
+            row.data = options.copy(row.swipes_data[swipe] || row.variables || {});
+            row.extra = options.copy(row.swipes_info[swipe] || {});
+            // Retain the existing DSH fields as aliases. Both upstream overloads
+            // can read their required fields, without breaking older card scripts.
+            selected.push(row);
+        }
+        return selected;
+    };
+}
+
+function installTavernHelperUtilities(target) {
+    target.getIframeName = function () {
+        if (target.name) return String(target.name);
+        return typeof target.getScriptId === 'function' ? 'TH-script--' + target.getScriptName() + '--' + target.getScriptId() : '';
+    };
+    target.getMessageId = function (iframeName) {
+        // Official IDs end in a timestamp; DSH uses a per-document token.
+        const match = /^TH-message--(\d+)--[^\s]+$/.exec(String(iframeName));
+        if (!match) throw new Error('不是有效的消息 iframe 名称: ' + String(iframeName));
+        return Number(match[1]);
+    };
+    target.errorCatched = function (factory) {
+        return function () {
+            function fail(error) {
+                try {
+                    if (target.toastr && typeof target.toastr.error === 'function') target.toastr.error(String(error?.message || error));
+                    else target.console?.error(error);
+                } catch (_) { /* Reporting must never replace the caller's error. */ }
+                throw error;
+            }
+            try {
+                const result = factory.apply(this, arguments);
+                return result && typeof result.then === 'function' ? Promise.resolve(result).catch(fail) : result;
+            } catch (error) { return fail(error); }
+        };
+    };
+    target.retrieveDisplayedMessage = function (messageId) {
+        const found = [], id = Number(messageId);
+        if (!Number.isSafeInteger(id) || id < 0) return target.jQuery ? target.jQuery() : [];
+        try {
+            if (target.getIframeName().startsWith('TH-message--') && target.getMessageId(target.name) === id) found.push(target.document.body);
+            else {
+                const session = target.frameElement && target.frameElement.__dshTavernSessionId;
+                if (session) for (const frame of target.parent.document.querySelectorAll('iframe.dsh-tavern-message-frame')) {
+                    if (frame.__dshTavernSessionId !== session || frame.isConnected === false || frame.getAttribute('aria-hidden') === 'true' || frame.closest('[hidden]')) continue;
+                    try {
+                        if (target.getMessageId(frame.contentWindow.name) === id && frame.contentDocument?.body) found.push(frame.contentDocument.body);
+                    } catch (_) { /* Isolated and cross-origin frames remain inaccessible. */ }
+                }
+            }
+        } catch (_) { /* Parent DOM access is available only in trusted mode. */ }
+        return target.jQuery ? target.jQuery(found) : found;
+    };
+}
 		function tavernHelperMessageDependencies() {
 			return tavernIconDependencies()
 				+ '<script data-dsh-tavern-helper-dependency="tailwind" src="/api/dsh-tavern/vendor/runtime-assets/tailwind/index.global.js"><\/script>'
@@ -3496,7 +3579,9 @@ window.__ModuleLoader__.load({
 				// Read through the live Helper API so context updates and MVU view
 				// observation use the same path. Each read already returns a copy.
 				// Historical frames must not merge variables from later messages.
-				return Object.assign({}, window.getVariables({ type: "chat" }), window.getVariables({ type: "message", message_id: window.getCurrentMessageId() }));
+				const merged = Object.assign({}, window.getVariables({ type: "global" }), window.getVariables({ type: "character" }), window.getVariables({ type: "chat" }));
+                Object.assign(merged, window.getVariables({ type: "message", message_id: window.getCurrentMessageId() }));
+                return merged;
 			};
 		}
 
@@ -4745,8 +4830,8 @@ window.__ModuleLoader__.load({
 				? buildTavernHelperScriptParts({ token: input.token, context: input.openingPreview.runtime.context, scripts: input.openingPreview.runtime.scripts, previewScope: true }) : null;
 			const helperDependencies = input && (input.helperContext || input.openingPreview) ? tavernHelperMessageDependencies() : sillyTavernCssCompatibilityDependencies(sizing) + (/<script\b/i.test(html) ? tavernHelperMessageDependencies() : "");
 			const storageShim = '<script data-dsh-tavern-storage>(function(){try{void window.localStorage;return;}catch(e){}var values=Object.create(null),keys=[];var storage={getItem:function(key){key=String(key);return Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;},setItem:function(key,value){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))keys.push(key);values[key]=String(value);},removeItem:function(key){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))return;delete values[key];keys.splice(keys.indexOf(key),1);},clear:function(){values=Object.create(null);keys=[];},key:function(index){index=Number(index);return index>=0&&index<keys.length?keys[index]:null;}};Object.defineProperty(storage,"length",{enumerable:true,get:function(){return keys.length;}});try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,value:storage});}catch(e){}})();<\/script>';
-			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var readMessage=(' + createTavernHistoryReader.toString() + ')({context:function(){return state;},install:function(row){state.messages[row.message_id]=row;}});var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[readMessage(currentId())];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(readMessage(i));}else items=[readMessage(normalizeId(target))];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=readMessage(normalizeId(option.message_id));if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=readMessage(normalizeId(patch.message_id));if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables(readMessage(normalizeId(option.message_id)));};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
-			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")});};var worldbook=' + JSON.stringify(input && input.helperContext && input.helperContext.worldbook || null).replace(/</g, '\\u003c') + ';window.getCharWorldbookNames=function(){return {primary:worldbook&&worldbook.name||null,additional:[]};};window.getWorldbookNames=function(){return worldbook&&worldbook.name?[worldbook.name]:[];};window.TavernHelper=window.TavernHelper||{};["getCurrentCharacterName","getVariables","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
+			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var readMessage=(' + createTavernHistoryReader.toString() + ')({context:function(){return state;},install:function(row){state.messages[row.message_id]=row;}});var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}var messagesFor=(' + createTavernHelperMessageReader.toString() + ')({context:function(){return state;},currentId:currentId,copy:copy,readMessage:readMessage});function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(["message","chat","character","global","script"].indexOf(value.type)<0)throw Object.assign(new Error("尚未支持的变量作用域: "+value.type),{code:"TAVERN_CAPABILITY_UNSUPPORTED"});if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=readMessage(normalizeId(option.message_id));if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=readMessage(normalizeId(patch.message_id));if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;if(data.ok&&data.result){if(data.result.context)state=Object.assign({},state,data.result.context);if(Object.prototype.hasOwnProperty.call(data.result,"worldbook"))state.worldbook=copy(data.result.worldbook);}var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.getWorldbookNames=function(){return state.worldbook&&state.worldbook.name?[state.worldbook.name]:[];};window.getCharWorldbookNames=function(){return {primary:state.worldbook&&state.worldbook.name||null,additional:[]};};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables(readMessage(normalizeId(option.message_id)));};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.deleteVariable=async function(path,option){option=optionOf(option);var next=window.getVariables(option),deleted=window._.unset(next,String(path||""));await window.replaceVariables(next,option);return{variables:copy(next),delete_occurred:deleted};};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};(' + installTavernHelperUtilities.toString() + ')(window);var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
+			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")}).then(function(result){return result&&Object.prototype.hasOwnProperty.call(result,"pipe")?result.pipe:result;});};window.TavernHelper=window.TavernHelper||{};["triggerSlash","getMessageId","getIframeName","errorCatched","retrieveDisplayedMessage","waitGlobalInitialized","getCurrentMessageId","getLastMessageId","getChatMessages","setChatMessages","getAllVariables","getCurrentCharacterName","getVariables","deleteVariable","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
 			const mvuViewObservationShim = input && input.helperContext && input.observeMvuView !== false ? '<script data-dsh-tavern-mvu-view-observer>(function(){var token=' + token + ',reported=false;function report(){if(reported)return;reported=true;window.__dshTavernMvuViewUsed=true;parent.postMessage({type:"dsh-tavern-mvu-view-used",token:token,mvuViewUsed:true},"*");}var getMvuData=window.Mvu&&window.Mvu.getMvuData;if(typeof getMvuData==="function")window.Mvu.getMvuData=function(){report();return getMvuData.apply(window.Mvu,arguments);};var getVariables=window.getVariables;if(typeof getVariables==="function")window.getVariables=function(){report();return getVariables.apply(window,arguments);};})();<\/script>' : '';
 			// parent.Mvu may throw an Error from another iframe: instanceof alone loses its stack.
 			const runtimeReporter = input && input.runtimeReporting === false ? '' : '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var captureDom=' + JSON.stringify(!(input && input.persistent === true)) + ';var logs=[],network=[],errors=[],timer=0;function trim(list){if(list.length>100)list.splice(0,list.length-100);}function value(input,depth){if(depth>3)return "[深度已截断]";if(input===null||input===undefined||typeof input==="boolean"||typeof input==="number"||typeof input==="string")return typeof input==="string"&&input.length>4000?input.slice(0,4000)+"…[已截断]":input;try{if(input instanceof Error||Object.prototype.toString.call(input)==="[object Error]")return {name:String(input.name),message:String(input.message).slice(0,4000),stack:String(input.stack||"").slice(0,4000)};if(Array.isArray(input))return input.slice(0,30).map(function(item){return value(item,depth+1);});if(typeof input==="object"){var out={};Object.keys(input).slice(0,30).forEach(function(key){out[key]=value(input[key],depth+1);});return out;}}catch(e){}return String(input);}function cleanUrl(input){try{var parsed=new URL(String(input),location.href);return parsed.protocol+"//"+parsed.host+parsed.pathname;}catch(e){return String(input||"").split(/[?#]/)[0].slice(0,1000);}}function send(){timer=0;var dom="";try{if(captureDom&&document.body){var copy=document.body.cloneNode(true);Array.prototype.forEach.call(copy.querySelectorAll("script[data-dsh-tavern-frame],script[data-dsh-tavern-storage],script[data-dsh-tavern-layout]"),function(node){node.remove();});dom=copy.innerHTML;}}catch(e){}if(dom.length>100000)dom=dom.slice(0,100000)+"<!-- 已截断 -->";parent.postMessage({type:"dsh-tavern-frame-runtime",token:token,runtime:{capturedAt:Date.now(),dom:dom,console:logs.slice(),network:network.slice(),errors:errors.slice()}} ,"*");}function schedule(){if(timer)return;timer=setTimeout(send,350);}["log","info","warn","error"].forEach(function(level){var original=console[level];console[level]=function(){logs.push({at:Date.now(),level:level,args:Array.prototype.map.call(arguments,function(item){return value(item,0);})});trim(logs);schedule();return original&&original.apply(console,arguments);};});addEventListener("error",function(event){var target=event.target;if(target&&target!==window){errors.push({at:Date.now(),kind:"resource",tag:String(target.tagName||""),url:cleanUrl(target.src||target.href||"")});}else errors.push({at:Date.now(),kind:"error",message:String(event.message||""),source:cleanUrl(event.filename||""),line:Number(event.lineno)||0,column:Number(event.colno)||0});trim(errors);schedule();},true);addEventListener("unhandledrejection",function(event){errors.push({at:Date.now(),kind:"unhandledrejection",message:String(event.reason&&event.reason.message||event.reason||"")});trim(errors);schedule();});if(typeof window.fetch==="function"){var nativeFetch=window.fetch;window.fetch=function(input,init){var started=Date.now(),method=String(init&&init.method||"GET").toUpperCase(),url=cleanUrl(input&&input.url||input);return nativeFetch.apply(this,arguments).then(function(response){network.push({at:started,kind:"fetch",method:method,url:url,status:Number(response.status)||0,durationMs:Date.now()-started});trim(network);if(!response.ok)schedule();return response;},function(error){network.push({at:started,kind:"fetch",method:method,url:url,failed:true,durationMs:Date.now()-started,error:String(error&&error.message||error)});trim(network);schedule();throw error;});};}if(typeof XMLHttpRequest==="function"){var nativeOpen=XMLHttpRequest.prototype.open,nativeSend=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(method,url){this.__dshRequest={started:0,method:String(method||"GET").toUpperCase(),url:cleanUrl(url)};return nativeOpen.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){var request=this.__dshRequest||{method:"GET",url:""};request.started=Date.now();this.addEventListener("loadend",function(){network.push({at:request.started,kind:"xhr",method:request.method,url:request.url,status:Number(this.status)||0,durationMs:Date.now()-request.started});trim(network);if(Number(this.status)>=400)schedule();});return nativeSend.apply(this,arguments);};}addEventListener("load",schedule);schedule();})();<\/script>';
@@ -5461,7 +5546,7 @@ function bindTavernFontZoom(node, win) {
 			}
 			// Both entry points reference the same functions; plugin wrappers stay visible to each other.
 			const helper = {};
-			const helperNames = ["generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros", "iframe_events", "tavern_events"];
+			const helperNames = ["getMessageId", "getIframeName", "errorCatched", "retrieveDisplayedMessage", "initializeGlobal", "waitGlobalInitialized", "triggerSlash", "generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "getAllEnabledScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros", "iframe_events", "tavern_events"];
 			for (const name of helperNames) Object.defineProperty(helper, name, { enumerable: true, configurable: true, get: function () { return window[name]; }, set: function (value) { window[name] = value; } });
 			window.TavernHelper = helper;
 			const eventSource = { on: window.eventOn, once: window.eventOnce, off: window.eventOff, removeListener: window.eventOff, makeFirst: window.eventMakeFirst, makeLast: window.eventMakeLast, emit: window.eventEmit };
@@ -5650,6 +5735,7 @@ function bindTavernFontZoom(node, win) {
 					name: String(script && script.name || script && script.id || ""),
 					info: String(script && script.info || ""),
 					buttons: Array.isArray(script && script.buttons) ? script.buttons : [],
+                    buttonsEnabled: !script || script.buttonsEnabled !== false,
 					ready: false,
 					failed: false
 				};
@@ -5884,26 +5970,14 @@ function bindTavernFontZoom(node, win) {
 			function optionOf(option) {
 				const value = option && typeof option === "object" ? copy(option) : { type: "message" };
 				if (!value.type) value.type = "message";
+                if (!["message", "chat", "character", "global", "script"].includes(value.type)) throw Object.assign(new Error("尚未支持的变量作用域: " + value.type), { code: "TAVERN_CAPABILITY_UNSUPPORTED" });
 				if (value.type === "message") {
 					if (value.message_id === undefined || value.message_id === null || value.message_id === "latest") value.message_id = currentId();
 				} else if (value.type === "script" && !value.script_id) value.script_id = currentScript().id;
 				return value;
 			}
-			function messagesFor(target, options) {
-				const all = state.messages || [];
-				let items = [];
-				if (target === undefined || target === null) items = [readMessage(currentId())];
-				else if (typeof target === "string" && target.includes("-")) {
-					const value = target.replace(/{{\s*lastMessageId\s*}}/gi, String(lastId()));
-					const parts = value.split("-");
-					const from = normalizeId(parts[0]);
-					const to = normalizeId(parts[1]);
-					for (let index = Math.min(from, to); index <= Math.max(from, to); index += 1) items.push(readMessage(index));
-				} else items = [readMessage(normalizeId(target))];
-				items = items.filter(Boolean);
-				if (options && options.role && options.role !== "all") items = items.filter(function (item) { return item.role === options.role; });
-				return copy(items);
-			}
+            const messagesFor = modules.createMessageReader({ context: () => state, currentId, copy, readMessage });
+
 			function getVariables(option) {
 				const resolved = optionOf(option);
 				if (resolved.type === "global") return copy(state.globalVariables || {});
@@ -6004,6 +6078,16 @@ function bindTavernFontZoom(node, win) {
 				window.replaceScriptButtons(next);
 				return copy(next);
 			};
+            window.getAllEnabledScriptButtons = function () {
+                const result = {};
+                for (const script of scriptList) {
+                    if (script.buttonsEnabled === false || script.failed) continue;
+                    const buttons = script.buttons.filter(button => button && button.visible === true)
+                        .map(button => ({ button_id: buttonEvent(button.name, script.id), button_name: button.name }));
+                    if (buttons.length) Object.defineProperty(result, script.id, { value: buttons, enumerable: true, configurable: true, writable: true });
+                }
+                return copy(result);
+            };
 			window.getButtonEvent = buttonEvent;
 			window.getCharData = function () { return copy(readCharacter() || null); };
 			window.getCurrentCharacterName = function () { return String(state.characterName || state.character && state.character.name || ""); };
@@ -6028,13 +6112,23 @@ function bindTavernFontZoom(node, win) {
 			};
 			window.getVariables = getVariables;
 			window.getAllVariables = function () {
-				const merged = Object.assign({}, copy(state.globalVariables || {}), copy(state.characterVariables || {}), copy(state.chatVariables || {}), getVariables({ type: "script" }));
-				for (const message of state.messages || []) Object.assign(merged, copy(message.variables || {}));
-				return merged;
+				return Object.assign({}, copy(state.globalVariables || {}), copy(state.characterVariables || {}), getVariables({ type: "script" }), copy(state.chatVariables || {}));
 			};
 			window.replaceVariables = function (variables, option) {
-				const resolved = localReplace(copy(variables || {}), option);
-				return call("updateTavernHelperVariables", { option: resolved, variables: copy(variables || {}) }).catch(function (error) { console.error(error); throw error; });
+                const resolved = optionOf(option), plain = copy(variables || {}), before = getVariables(resolved);
+                const revision = [state.chatId, state.lifecycleRevision, state.stateRevision];
+                localReplace(plain, resolved);
+                return call("updateTavernHelperVariables", { option: resolved, variables: plain }).then(function (result) {
+                    if (result && result.stale) throw new Error("聊天已变化，变量未保存");
+                    return result;
+                }).catch(function (error) {
+                    // Preserve a newer context or overlapping edit; roll back only
+                    // our own unacknowledged optimistic value on the same revision.
+                    if (JSON.stringify(revision) === JSON.stringify([state.chatId, state.lifecycleRevision, state.stateRevision])
+                        && JSON.stringify(getVariables(resolved)) === JSON.stringify(plain)) localReplace(before, resolved);
+                    console.error(error);
+                    throw error;
+                });
 			};
 			window.insertOrAssignVariables = function (variables, option) {
 				const resolved = optionOf(option);
@@ -6073,14 +6167,19 @@ function bindTavernFontZoom(node, win) {
 			window.deleteVariable = async function (path, option) {
 				const resolved = optionOf(option);
 				const next = getVariables(resolved);
-				window._.unset(next, String(path || ""));
+				const deleted = window._.unset(next, String(path || ""));
 				await window.replaceVariables(next, resolved);
-				return copy(next);
+				return { variables: copy(next), delete_occurred: deleted };
 			};
 			window.setChatMessages = async function (patches) {
 				const plain = copy(patches || []);
 				localSetMessages(plain);
 				return await call("updateTavernHelperMessages", { messages: plain });
+			};
+			window.triggerSlash = function (line) {
+				return call("triggerTavernSlash", { line: String(line || "") }).then(function (result) {
+					return result && Object.prototype.hasOwnProperty.call(result, "pipe") ? result.pipe : result;
+				});
 			};
 			window.generateRaw = function (config) {
 				const payload = copy(config || {});
@@ -6325,6 +6424,7 @@ function bindTavernFontZoom(node, win) {
             const backgroundModel = modules.installBackgroundModel({ window: window, request: call });
 			facade = modules.installFacade({ projectMvuSettings: backgroundModel.projectMvuSettings, normalizeMvuSettings: backgroundModel.normalizeMvuSettings, readGlobalRegexes: function () { return regexGroups().global.map(rawRegex); }, installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, readMessage:readMessage, readCharacter:readCharacter, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
 				Popup: modules.createPopup({ document: window.document, parent: parent, token: token }) });
+            modules.installUtilities(window);
 			let regexSaveTimer = null;
 			async function persistGlobalRegexes() {
 				if (regexSaveTimer !== null) { clearTimeout(regexSaveTimer); regexSaveTimer = null; }
@@ -6807,22 +6907,45 @@ function bindTavernFontZoom(node, win) {
 		}
 
 		function releaseTavernHostJQueryHandlers(host, frameWindow) {
-			const jq = host.jQuery;
-			if (!jq || !jq._data || !jq.event || !frameWindow || !frameWindow.Function) return;
-			// Callback realm identifies the retiring script even on shared document
-			// targets. Never remove a whole namespace owned by another component.
-			const targets = [host, host.document].concat(Array.from(host.document.querySelectorAll('*')));
-			for (const target of targets) {
-				if (!jq.hasData(target)) continue;
-				const events = jq._data(target, 'events') || {};
-				for (const handlers of Object.values(events)) {
-					for (const entry of Array.from(handlers)) {
-						if (entry.handler instanceof frameWindow.Function) {
-							jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
-						}
-					}
-				}
-			}
+            if (!host || !frameWindow || !frameWindow.Function) return;
+            // A trusted script can use either jQuery instance to bind live message
+            // nodes. Each instance owns a separate event cache, so inspect both.
+            const registries = Array.from(new Set([host.jQuery, frameWindow.jQuery])).filter(function (jq) {
+                return jq && typeof jq.hasData === "function" && typeof jq._data === "function" && typeof jq.event?.remove === "function";
+            });
+            if (!registries.length) return;
+            const targets = new Set();
+            function addDocument(owner, document) {
+                if (owner) targets.add(owner);
+                if (!document) return;
+                targets.add(document);
+                for (const node of document.querySelectorAll?.('*') || []) targets.add(node);
+            }
+            addDocument(host, host.document);
+            addDocument(frameWindow, frameWindow.document);
+            const sessionId = frameWindow.frameElement?.__dshTavernSessionId;
+            if (sessionId) for (const frame of host.document?.querySelectorAll?.('iframe.dsh-tavern-message-frame') || []) {
+                if (frame.__dshTavernSessionId !== sessionId) continue;
+                try {
+                    // Hidden replacement frames may already have handlers too.
+                    // Never enter another session or an opaque/cross-origin frame.
+                    const document = frame.contentDocument;
+                    if (document) addDocument(frame.contentWindow, document);
+                } catch (_) { /* Cross-origin documents cannot be inspected. */ }
+            }
+            // Callback realm identifies the retiring script even on shared DOM.
+            // Preserve other scripts' callbacks, including identical namespaces.
+            for (const jq of registries) for (const target of targets) {
+                if (!jq.hasData(target)) continue;
+                const events = jq._data(target, 'events') || {};
+                for (const handlers of Object.values(events)) {
+                    for (const entry of Array.from(handlers)) {
+                        if (entry.handler instanceof frameWindow.Function) {
+                            jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
+                        }
+                    }
+                }
+            }
 		}
 
         // The parent sends the latest complete context after iframe load. Keep
@@ -6857,6 +6980,7 @@ function bindTavernFontZoom(node, win) {
 						name: String(script && script.name || ""),
 						info: String(script && script.info || ""),
 						buttons: Array.isArray(script && script.buttons) ? script.buttons : [],
+                        buttonsEnabled: !script || script.buttonsEnabled !== false,
 						system: String(script && script.system || "")
 					};
 				})
@@ -6871,6 +6995,8 @@ function bindTavernFontZoom(node, win) {
                 + 'createOrderedNumericIndex:' + createOrderedNumericIndex.toString() + ','
                 + 'createTurnFieldIndex:' + createTurnFieldIndex.toString() + ','
                 + 'applyVariableReceipt:' + applyTavernVariableReceipt.toString() + ','
+				+ 'createMessageReader:' + createTavernHelperMessageReader.toString() + ','
+                + 'installUtilities:' + installTavernHelperUtilities.toString() + ','
 				+ 'createEvents:' + createTavernHelperEventBus.toString() + ','
 				+ 'createPopup:' + createTavernHelperPopup.toString() + ','
 				+ 'installCompatibility:' + installTavernCompatibilityDiagnostics.toString() + ','
@@ -7604,6 +7730,26 @@ function bindTavernFontZoom(node, win) {
 					}
 					return;
 				}
+                if (data.type === "dsh-tavern-helper-call" && data.method === "triggerTavernSlash") {
+                    // Wait for earlier persistence, but do not put generation on the
+                    // RPC tail: its MVU events must be able to issue their own writes.
+                    Promise.resolve(record.rpcTail).catch(function () {}).then(function () {
+                        if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，人物卡命令未执行；请返回原对话重试");
+                        if (data.lifecycleRevision !== undefined && Number(data.lifecycleRevision) !== Number(record.context?.lifecycleRevision || 0)) throw new Error("存档版本已变化，人物卡命令未执行");
+                        if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
+                            throw Object.assign(new Error("事件已经结束，人物卡命令未执行"), { code: "TAVERN_SCRIPT_EVENT_CLOSED" });
+                        }
+                        if (typeof options.executeSlash !== "function") throw new Error("当前对话命令入口尚未就绪");
+                        return options.executeSlash(String(data.args?.line || ""), record.sessionId, data.eventId ? { waitForCompletion: false } : undefined);
+                    }).then(function (result) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: true,
+                            result: typeof result === "string" ? { pipe: result } : result });
+                    }, function (error) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                            error: String(error.message || error), errorCode: String(error.code || "") });
+                    });
+                    return;
+                }
                 if (data.type === "dsh-tavern-helper-call" && data.method === "submitTavernHelperInput") {
                     Promise.resolve().then(function () {
                         if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，开局消息未发送；请返回原对话重试");
@@ -7618,7 +7764,12 @@ function bindTavernFontZoom(node, win) {
                     });
                     return;
                 }
-				if (data.type !== "dsh-tavern-helper-call" || !allowedMethods.has(data.method)) return;
+                if (data.type !== "dsh-tavern-helper-call") return;
+                if (!allowedMethods.has(data.method)) {
+                    post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                        error: "当前人物卡不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" });
+                    return;
+                }
 				if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false, error: "事件已经结束，已拒绝迟到写入", errorCode: "TAVERN_SCRIPT_EVENT_CLOSED" });
 					return;
@@ -8394,10 +8545,10 @@ function bindTavernFontZoom(node, win) {
 			}
 			if (afterMessages.length > shared) operations.push({ op: "messages.append", values: clone(afterMessages.slice(shared)) });
 			if (afterMessages.length < beforeMessages.length) operations.push({ op: "messages.truncate", length: afterMessages.length });
-			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "lifecycleRevision"]) {
+			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "globalVariables", "characterVariables", "worldbook", "characterName", "playerName", "lifecycleRevision"]) {
 				if (same(previous[key], target[key])) continue;
 				operations.push({ op: "value.replace", key: key, value: clone(target[key]) });
-				if (key === "chatVariables" || key === "scriptVariables") variablesChanged = true;
+				if (["chatVariables", "scriptVariables", "globalVariables", "characterVariables"].includes(key)) variablesChanged = true;
 			}
 			const stateRevision = Math.max(0, Number(target.stateRevision) || 0);
 			if (operations.length === 0 && Number(previousTurn) === turn && Number(previous.stateRevision) === stateRevision) return null;
@@ -8772,16 +8923,20 @@ function bindTavernFontZoom(node, win) {
 							return invoke("getSession", {}, props.sessionId).then(function (snapshot) {
 								const context = snapshot && snapshot.view && snapshot.view.tavernHelper;
 								if (context) helperContext = context;
-								return Object.assign({}, result || {}, context ? { context: context } : {});
+								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: context } : {});
 							});
 						}).then(function (result) {
 							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 						}, function (error) {
-							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error) }, "*");
+							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error), errorCode: String(error && error.code || "") }, "*");
 						});
 						return;
 					}
-					if (!allowedMethods.has(data.method)) return;
+                    if (!allowedMethods.has(data.method)) {
+                        event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false,
+                            error: "当前消息不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" }, "*");
+                        return;
+                    }
 					const args = Object.assign({}, data.args || {}, { sessionId: props.sessionId, expectedLifecycleRevision: Math.max(0, Number(helperContext && helperContext.lifecycleRevision) || 0) });
 					invoke(data.method, args, props.sessionId).then(function (result) {
 						if (current() && data.method === "prepareSessionOpening") sourceDocument.openingRequest = result;
@@ -9755,6 +9910,89 @@ function bindTavernFontZoom(node, win) {
 
 		function createTavernFrameSlashExecutor(ctx, hostWindow) {
 			hostWindow = hostWindow || window;
+            // A deliberately bounded, read-only subset of ST slash commands. Parse
+            // every stage before reading anything; never forward a mixed pipeline.
+            function slashError(message) {
+                return Object.assign(new Error(message), { code: "UNSUPPORTED_SLASH_PIPELINE" });
+            }
+            function decodeSlashText(value) {
+                value = value.trim();
+                if ((value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0]) value = value.slice(1, -1);
+                return value.replace(/\\([\\|"'])/g, '$1');
+            }
+            function readPipeline(line) {
+                const stages = [];
+                let start = 0, quote = '', escaped = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (escaped) { escaped = false; continue; }
+                    if (ch === '\\') { escaped = true; continue; }
+                    if (quote) { if (ch === quote) quote = ''; continue; }
+                    if ((ch === '"' || ch === "'") && (i === start || /[\s=]/.test(line[i - 1]))) { quote = ch; continue; }
+                    if (ch === '|') { stages.push(line.slice(start, i).trim()); start = i + 1; }
+                }
+                if (quote) throw slashError('人物卡命令引号未闭合');
+                stages.push(line.slice(start).trim());
+                return stages.map(function (stage) {
+                    const match = /^\/(pass|return|findentry|findlore|findwi)(?:\s+([\s\S]*))?$/i.exec(stage);
+                    if (!match) throw slashError('暂不支持这条人物卡命令管道；/pass 和 /findentry 只能与只读命令组合，未发送消息');
+                    const command = match[1].toLowerCase();
+                    let text = match[2] || '';
+                    if (command === 'pass' || command === 'return') return { command: 'pass', text: decodeSlashText(text) };
+                    const args = {};
+                    while (true) {
+                        const named = /^([a-zA-Z_]\w*)=/.exec(text);
+                        if (!named) break;
+                        const key = named[1];
+                        if (!['file', 'field'].includes(key) || Object.hasOwn(args, key)) throw slashError('不支持或重复的 /findentry 参数: ' + key);
+                        text = text.slice(named[0].length);
+                        let end = 0;
+                        if (text[0] === '"' || text[0] === "'") {
+                            const quote = text[0]; end = 1;
+                            for (; end < text.length; end++) {
+                                if (text[end] === '\\') { end++; continue; }
+                                if (text[end] === quote) { end++; break; }
+                            }
+                            if (end < text.length && !/\s/.test(text[end])) throw slashError('/findentry 引号后需要空格');
+                        } else {
+                            while (end < text.length && !/\s/.test(text[end])) end++;
+                        }
+                        args[key] = decodeSlashText(text.slice(0, end));
+                        text = text.slice(end).trimStart();
+                    }
+                    const field = args.field || 'key';
+                    if (!args.file) throw slashError('/findentry 需要 file=当前世界书名称（或 current）');
+                    if (!['key', 'keysecondary', 'comment', 'name', 'content', 'uid'].includes(field)) throw slashError('暂不支持 /findentry 字段: ' + field);
+                    return { command: 'findentry', file: args.file, field: field, text: decodeSlashText(text) };
+                });
+            }
+            async function executeReadPipeline(line, sessionId) {
+                const stages = readPipeline(line);
+                let pipe = '';
+                for (const stage of stages) {
+                    const text = stage.text.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    if (stage.command === 'pass') { pipe = text; continue; }
+                    const file = stage.file.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    const result = await rpc('getTavernHelperWorldbook', { name: file }, sessionId);
+                    const query = text.toLowerCase();
+                    let found = null, best = Infinity;
+                    for (const entry of result?.worldbook?.entries || []) {
+                        const field = stage.field;
+                        const value = field === 'key' ? entry.strategy?.keys : field === 'keysecondary' ? entry.strategy?.keys_secondary?.keys
+                            : field === 'comment' ? entry.name : entry[field];
+                        for (const item of Array.isArray(value) ? value : [value]) {
+                            if (item === undefined || item === null || !query) continue;
+                            const candidate = String(item).toLowerCase();
+                            const position = candidate.indexOf(query);
+                            // Exact matches outrank substrings. Stable ties retain book order.
+                            const score = candidate === query ? 0 : position < 0 ? Infinity : 1 + position + (candidate.length - query.length) / (candidate.length + 1);
+                            if (score < best) { best = score; found = entry; }
+                        }
+                    }
+                    pipe = found?.uid === undefined ? '' : String(found.uid);
+                }
+                return pipe;
+            }
 			return function (line, sessionId, options) {
                 if (options && typeof options.inputText === "string") {
                     const text = options.inputText.trim();
@@ -9765,6 +10003,7 @@ function bindTavernFontZoom(node, win) {
                         return { submitted:true };
                     });
                 }
+                if (/^\s*\/(?:pass|return|findentry|findlore|findwi)(?:\s|$)/i.test(String(line))) return executeReadPipeline(String(line), sessionId);
                 if (/^\/ejs(?:-refresh)?(?:\s|$)/.test(String(line))) return rpc("executeFullTemplateCommand", {text:line}, sessionId).then(function(result){return result.pipe;});
 				const draftMatch = /^\/setinput(?: ([\s\S]*))?$/.exec(String(line || ""));
                 // Preflight before touching the composer: otherwise the greedy
