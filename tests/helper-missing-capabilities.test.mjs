@@ -24,20 +24,20 @@ test('辅助空实现继续运行、核心占位明确失败；原有缺失函�
     assert.throws(() => ctx[name]('PRIVATE_CHAT'), error => error.code === 'TAVERN_CAPABILITY_UNSUPPORTED')
   }
   let fallback = false
-  if (typeof w.TavernHelper.generate === 'function') w.TavernHelper.generate()
+  if (typeof w.TavernHelper.getPreset === 'function') w.TavernHelper.getPreset()
   else fallback = true
   assert.equal(fallback, true)
-  assert.equal(w.generate, undefined)
+  assert.equal(w.getPreset, undefined)
   assert.equal(ctx.deleteMessage, undefined)
-  assert.equal(observations(run).find(item => item.capabilityId === 'TavernHelper.generate').count, 1)
+  assert.equal(observations(run).find(item => item.capabilityId === 'TavernHelper.getPreset').count, 1)
   assert.equal(run.calls().length, 0, '空实现或探测不得触发保存或模型 RPC')
   assert.doesNotMatch(JSON.stringify(observations(run)), /PRIVATE_CHAT|password|toJSON/)
   const before = observations(run).length
   assert.equal(ctx.then, undefined)
   assert.equal(ctx.randomUnknownMethod, undefined)
   assert.equal(observations(run).length, before, '不伪造任意未知函数')
-  w.TavernHelper.generate = () => 'plugin fallback'
-  assert.equal(w.generate(), 'plugin fallback', '插件仍能自行安装原有缺失函数的回退实现')
+  w.TavernHelper.getPreset = () => 'plugin fallback'
+  assert.equal(w.getPreset(), 'plugin fallback', '插件仍能自行安装原有缺失函数的回退实现')
 })
 
 test('官方 MVU 恢复时可使用全局变量并登记关闭状态下的 Function Tool', async () => {
@@ -57,7 +57,7 @@ test('官方 MVU 恢复时可使用全局变量并登记关闭状态下的 Funct
   assert.equal(call.args.option.type, 'global')
   assert.deepEqual(call.args.variables, {})
   run.reply(call, { updated: true, target: { type: 'global' }, globalVariables: {} })
-  assert.deepEqual(await deleting, {})
+  assert.deepEqual(JSON.parse(JSON.stringify(await deleting)), { variables: {}, delete_occurred: true })
 })
 
 function parentHarness(rpc, reportError = () => {}) {
@@ -125,7 +125,7 @@ test('记录落盘回读、去重、容量限制、Session 隔离与日志包导
     assert.equal(saved.records[0].result, 'noop')
     assert.doesNotMatch(JSON.stringify(saved), /PRIVATE_CHAT/)
     assert.equal((await store.read('s2')).records.length, 0)
-    await store.record('s1', 'r1', [{ ...call, capabilityId: 'TavernHelper.generate', result: 'noop' }, { ...call, capabilityId: 'SillyTavern.registerMacro', result: 'noop' }])
+    await store.record('s1', 'r1', [{ ...call, capabilityId: 'TavernHelper.getPreset', result: 'noop' }, { ...call, capabilityId: 'SillyTavern.registerMacro', result: 'noop' }])
     saved = await store.read('s1')
     assert.equal(saved.records[1].operation, 'lookup')
     assert.equal(saved.records[1].result, 'unavailable')

@@ -581,6 +581,13 @@ window.__ModuleLoader__.load({
 
 // @include runtime/host-artifacts.js
 
+// @include runtime/helper-public-api.js
+// @include runtime/helper-macro-api.js
+// @include runtime/helper-display-api.js
+// @include runtime/helper-generation-api.js
+// @include runtime/helper-event-api.js
+// @include-domain tavern-regex-engine.js
+// @include-domain tavern-helper-regex-api.js
 // @include runtime/frame-document.js
 
 // @include modules/host-theme.js

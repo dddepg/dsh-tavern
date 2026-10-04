@@ -3417,6 +3417,664 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+// Shared synchronous public API semantics for script and message iframes.
+// Keep factories self-contained: the document builders serialize their source.
+function createTavernHelperMessageReader(options) {
+    return function (target, settings) {
+        const state = options.context(), count = (state.messages || []).length;
+        if (!count) return [];
+        const current = options.currentId();
+        const raw = target === undefined || target === null ? String(current) : String(target)
+            .replace(/{{\s*lastMessageId\s*}}/gi, String(count - 1));
+        const match = /^(-?\d+)(?:-(-?\d+))?$/.exec(raw.trim());
+        if (!match) return [];
+        const normalize = value => Math.max(0, Math.min(count - 1, value < 0 ? count + value : value));
+        const start = normalize(Number(match[1])), end = normalize(Number(match[2] ?? match[1]));
+        const selected = [], filter = settings || {};
+        for (let id = Math.min(start, end); id <= Math.max(start, end); id++) {
+            const source = options.readMessage(id);
+            if (!source) continue;
+            if (filter.role && filter.role !== 'all' && source.role !== filter.role) continue;
+            const hidden = source.is_hidden === true;
+            if (filter.hide_state === 'hidden' && !hidden || filter.hide_state === 'unhidden' && hidden) continue;
+            const row = options.copy(source);
+            const swipe = Number(row.swipe_id) || 0;
+            row.name = row.name || (row.role === 'user' ? state.playerName || '你' : state.characterName || '角色');
+            row.is_hidden = hidden;
+            row.swipe_id = swipe;
+            row.swipes = Array.isArray(row.swipes) && row.swipes.length ? row.swipes : [String(row.message || '')];
+            row.swipes_data = row.swipes.map((_, index) => options.copy(row.swipes_data?.[index] ?? (index === swipe ? row.variables : undefined) ?? {}));
+            row.swipes_info = row.swipes.map((_, index) => options.copy(row.swipes_info?.[index] ?? row.pluginData?.swipe_info?.[index] ?? (index === swipe ? row.extra ?? row.pluginData?.extra : undefined) ?? {}));
+            row.message = String(row.message ?? row.swipes[swipe] ?? '');
+            row.data = options.copy(row.swipes_data[swipe] || row.variables || {});
+            row.extra = options.copy(row.swipes_info[swipe] || {});
+            // Retain the existing DSH fields as aliases. Both upstream overloads
+            // can read their required fields, without breaking older card scripts.
+            selected.push(row);
+        }
+        return selected;
+    };
+}
+
+function installTavernHelperUtilities(target) {
+    target.getIframeName = function () {
+        if (target.name) return String(target.name);
+        return typeof target.getScriptId === 'function' ? 'TH-script--' + target.getScriptName() + '--' + target.getScriptId() : '';
+    };
+    target.getMessageId = function (iframeName) {
+        // Official IDs end in a timestamp; DSH uses a per-document token.
+        const match = /^TH-message--(\d+)--[^\s]+$/.exec(String(iframeName));
+        if (!match) throw new Error('不是有效的消息 iframe 名称: ' + String(iframeName));
+        return Number(match[1]);
+    };
+    target.errorCatched = function (factory) {
+        return function () {
+            function fail(error) {
+                try {
+                    if (target.toastr && typeof target.toastr.error === 'function') target.toastr.error(String(error?.message || error));
+                    else target.console?.error(error);
+                } catch (_) { /* Reporting must never replace the caller's error. */ }
+                throw error;
+            }
+            try {
+                const result = factory.apply(this, arguments);
+                return result && typeof result.then === 'function' ? Promise.resolve(result).catch(fail) : result;
+            } catch (error) { return fail(error); }
+        };
+    };
+    target.retrieveDisplayedMessage = function (messageId) {
+        const found = [], id = Number(messageId);
+        if (!Number.isSafeInteger(id) || id < 0) return target.jQuery ? target.jQuery() : [];
+        try {
+            if (target.getIframeName().startsWith('TH-message--') && target.getMessageId(target.name) === id) found.push(target.document.body);
+            else {
+                const session = target.frameElement && target.frameElement.__dshTavernSessionId;
+                if (session) for (const frame of target.parent.document.querySelectorAll('iframe.dsh-tavern-message-frame')) {
+                    if (frame.__dshTavernSessionId !== session || frame.isConnected === false || frame.getAttribute('aria-hidden') === 'true' || frame.closest('[hidden]')) continue;
+                    try {
+                        if (target.getMessageId(frame.contentWindow.name) === id && frame.contentDocument?.body) found.push(frame.contentDocument.body);
+                    } catch (_) { /* Isolated and cross-origin frames remain inaccessible. */ }
+                }
+            }
+        } catch (_) { /* Parent DOM access is available only in trusted mode. */ }
+        return target.jQuery ? target.jQuery(found) : found;
+    };
+}
+// Read-only macro emulation. Do not execute write/eval/random macros merely
+// because a card asks to format text or inspect a slash-command result.
+function installTavernHelperMacroApi({window, context}) {
+    function readPath(value, path) {
+        const parts = [];
+        String(path).replace(/[^.[\]]+|\[(?:(["'])((?:(?!\1)[^\\]|\\.)*)\1|([^\]]+))\]/g,
+            function (token, quote, quoted, unquoted) { parts.push(quote ? quoted.replace(/\\([\\"'])/g, '$1') : unquoted === undefined ? token : unquoted); });
+        for (const part of parts) {
+            if (['__proto__', 'constructor', 'prototype'].includes(part) || value == null || !Object.prototype.hasOwnProperty.call(Object(value), part)) return undefined;
+            value = value[part];
+        }
+        return value;
+    }
+    function publicValue(value, seen = new WeakSet()) {
+        if (!value || typeof value !== 'object') return value;
+        if (seen.has(value)) return null;
+        seen.add(value);
+        const result = Array.isArray(value) ? value.map(item => publicValue(item, seen))
+            : Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('$')).map(([key, item]) => [key, publicValue(item, seen)]));
+        seen.delete(value);
+        return result;
+    }
+    function asText(value) {
+        if (value === undefined || value === null) return '';
+        if (typeof value === 'object') { try { return JSON.stringify(value); } catch (_) { return ''; } }
+        return String(value);
+    }
+    window.substitudeMacros = function (input, options = {}) {
+        const state = context() || {};
+        const id = options.message_id === undefined ? window.getCurrentMessageId?.() : options.message_id;
+        return String(input ?? '').replace(/{{\s*(user|char|lastMessageId|messageId)\s*}}/gi, function (_match, name) {
+            switch (name.toLowerCase()) {
+                case 'user': return String(state.playerName || '你');
+                case 'char': return String(options.character_name ?? state.characterName ?? state.character?.name ?? '角色');
+                case 'lastmessageid': return String(window.getLastMessageId?.() ?? -1);
+                default: return String(id ?? -1);
+            }
+        }).replace(/{{\s*(getvar|getglobalvar|get_(message|chat|character|global)_variable)\s*::\s*([^{}]*?)\s*}}/gi,
+            function (_match, command, scope, path) {
+                const type = scope?.toLowerCase() || (command.toLowerCase() === 'getglobalvar' ? 'global' : 'chat');
+                const option = type === 'message' ? {type, message_id: id} : {type};
+                const table = window.getVariables(option);
+                const value = readPath(table, path);
+                return asText(scope ? publicValue(value) : value);
+            });
+    };
+    // Correctly spelled convenience alias; the historical public name is kept.
+    window.substituteMacros = window.substitudeMacros;
+    const helper = window.TavernHelper || (window.TavernHelper = {});
+    for (const name of ['substitudeMacros', 'substituteMacros']) Object.defineProperty(helper, name, {
+        enumerable: true, configurable: true, get: () => window[name], set: value => {window[name] = value;}
+    });
+}
+// A synchronous DSH display adapter: current message identity + local regexes
+// + the same pinned Markdown parser used by the host. Refresh affects DOM only.
+function installTavernHelperDisplayApi(window) {
+    function messageId(value = 'last') {
+        const last = window.getLastMessageId();
+        if (last < 0) throw new Error('未找到任何消息楼层');
+        if (value === 'last') return last;
+        if (value === 'last_user' || value === 'last_char') {
+            const role = value === 'last_user' ? 'user' : 'assistant';
+            for (let id = last; id >= 0; id--) if (window.getChatMessages(id)[0]?.role === role) return id;
+            throw new Error('未找到对应角色的消息楼层: ' + value);
+        }
+        if (!Number.isSafeInteger(value)) throw new Error('无效的消息楼层: ' + value);
+        const id = value < 0 ? last + 1 + value : value;
+        if (id < 0 || id > last) throw new Error('消息楼层不存在: ' + value);
+        return id;
+    }
+    window.formatAsDisplayedMessage = function (text, options = {}) {
+        const id = messageId(options.message_id), row = window.getChatMessages(id)[0];
+        const source = row?.role === 'user' ? 'user_input' : 'ai_output';
+        const input = String(text ?? '').replace(/{{\s*lastMessageId\s*}}/gi, String(window.getLastMessageId()))
+            .replace(/{{\s*messageId\s*}}/gi, String(id));
+        const formatted = typeof window.formatAsTavernRegexedString === 'function'
+            ? window.formatAsTavernRegexedString(input, source, 'display', { depth: window.getLastMessageId() - id })
+            : typeof window.substitudeMacros === 'function' ? window.substitudeMacros(input) : input;
+        if (!window.marked || typeof window.marked.parse !== 'function') throw new Error('Markdown 显示组件尚未加载');
+        return window.marked.parse(formatted, { gfm: true, breaks: true, async: false });
+    };
+    window.refreshOneMessage = async function (value, elements) {
+        const selected = elements === undefined ? window.retrieveDisplayedMessage(value) : elements;
+        const targets = Array.from(selected || []).filter(node => node && node.nodeType === 1);
+        if (!targets.length) return;
+        const id = messageId(value), row = window.getChatMessages(id)[0];
+        const html = window.formatAsDisplayedMessage(row.message, {message_id: id});
+        for (const element of targets) {
+            const content = element.matches?.('.mes') ? element.querySelector('.mes_text') : element;
+            if (!content) continue;
+            // Native innerHTML intentionally does not replay embedded scripts or
+            // duplicate shared card event handlers. Saved message state is untouched.
+            content.innerHTML = html;
+        }
+        const name = row.role === 'user' ? 'USER_MESSAGE_RENDERED' : 'CHARACTER_MESSAGE_RENDERED';
+        const emit = window.eventEmitAndWait || window.eventEmit;
+        if (typeof emit === 'function') await emit(window.tavern_events?.[name] || name, id);
+    };
+    const helper = window.TavernHelper || (window.TavernHelper = {});
+    for (const name of ['formatAsDisplayedMessage', 'refreshOneMessage']) Object.defineProperty(helper, name, {
+        enumerable: true, configurable: true, get: () => window[name], set: value => { window[name] = value; }
+    });
+}
+// Both generation APIs use host-owned read-only model jobs. Streaming is an
+// intentional emulation: lifecycle/token events carry the completed response.
+function installTavernHelperGenerationApi({window, request, copy}) {
+    const active = new Map();
+    function token() { return 'dsh-job-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2); }
+    async function emit(name, ...args) {
+        if (!name || typeof window.eventEmit !== 'function') return;
+        try { await window.eventEmit(name, ...args); }
+        catch (error) { window.console?.error(error); }
+    }
+    function generate(method, config = {}) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return Promise.reject(new TypeError('生成参数必须是对象'));
+        const payload = copy(config);
+        const id = payload.generation_id == null || payload.generation_id === ''
+            ? 'dsh-gen-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2) : String(payload.generation_id);
+        if (active.has(id)) return Promise.reject(new Error('生成编号正在使用: ' + id));
+        payload.generation_id = id;
+        let rejectCancelled;
+        const cancelled = new Promise(function (_resolve, reject) { rejectCancelled = reject; });
+        const job = {generationId:id, generationToken:token(), cancel:function () {
+            const error = new Error('生成已取消'); error.name = 'AbortError'; rejectCancelled(error);
+        }};
+        active.set(id, job);
+        return (async function () {
+            let text = '';
+            const events = window.iframe_events || {};
+            try {
+                // Dispatch before notifying listeners so a STARTED listener can
+                // immediately cancel this exact request (including queued jobs).
+                const pending = request(method, {config: payload, generationToken:job.generationToken});
+                void emit(events.GENERATION_STARTED || 'js_generation_started', id);
+                const result = await Promise.race([pending, cancelled]);
+                text = String(result?.text ?? '');
+                if (payload.should_stream === true) {
+                    await emit(events.STREAM_TOKEN_RECEIVED_FULLY || 'js_stream_token_received_fully', text, id);
+                    await emit(events.STREAM_TOKEN_RECEIVED_INCREMENTALLY || 'js_stream_token_received_incrementally', text, id);
+                }
+                return text;
+            } finally {
+                if (active.get(id) === job) active.delete(id);
+                await emit(events.GENERATION_ENDED || 'js_generation_ended', text, id);
+            }
+        })();
+    }
+    window.generate = config => generate('generateTavernHelper', config);
+    window.generateRaw = config => generate('generateTavernHelperRaw', config);
+    window.stopGenerationById = async id => {
+        if (typeof id !== 'string' || !id) return false;
+        const job = active.get(id);
+        if (job) job.cancel();
+        const result = await request('stopTavernHelperGeneration', {generationId: id,
+            ...(job ? {generationToken:job.generationToken, pending:true} : {})});
+        return !!job || result?.stopped === true;
+    };
+    window.stopAllGeneration = async () => {
+        const jobs = Array.from(active.values());
+        for (const job of jobs) job.cancel();
+        const result = await request('stopAllTavernHelperGeneration', {
+            pendingGenerations:jobs.map(job => ({generationId:job.generationId, generationToken:job.generationToken}))
+        });
+        return jobs.length > 0 || result?.stopped === true;
+    };
+    const helper = window.TavernHelper || (window.TavernHelper = {});
+    for (const name of ['generate', 'generateRaw', 'stopGenerationById', 'stopAllGeneration']) Object.defineProperty(helper, name, {
+        enumerable: true, configurable: true, get: () => window[name], set: value => {window[name] = value;}
+    });
+}
+        // Self-contained: embedded into both script and message iframe documents.
+        function installTavernHelperEventApi(target, options = {}) {
+            const pendingWaits = new Set();
+            let disposed = false;
+            let clearLocalEvents = null;
+            function closedError() {
+                const error = new Error("事件运行时已关闭，等待已取消");
+                error.name = "AbortError";
+                return error;
+            }
+            function assertOpen() { if (disposed) throw closedError(); }
+
+            // Shared script sandboxes already have an identity-aware bus. Do not
+            // wrap or replace its registration/removal methods: ownership belongs
+            // to the registering script, including when its stop handle runs later.
+            if (options.localEvents === true) {
+                const listeners = new Map();
+                const aliases = { message_sent: "MESSAGE_SENT", message_received: "MESSAGE_RECEIVED", message_updated: "MESSAGE_UPDATED", message_swiped: "MESSAGE_SWIPED", message_deleted: "MESSAGE_DELETED", message_edited: "MESSAGE_EDITED", chat_id_changed: "CHAT_CHANGED", chat_created: "CHAT_CREATED", character_page_loaded: "CHARACTER_PAGE_LOADED" };
+                function eventName(name) {
+                    name = String(name);
+                    return Object.prototype.hasOwnProperty.call(aliases, name) ? aliases[name] : name;
+                }
+                function remove(name, entry) {
+                    const entries = listeners.get(name);
+                    if (!entries) return;
+                    entries.delete(entry);
+                    if (!entries.size) listeners.delete(name);
+                }
+                function listen(name, handler, position, once) {
+                    assertOpen();
+                    if (typeof handler !== "function") throw new TypeError("事件监听器必须是函数");
+                    name = eventName(name);
+                    let entries = listeners.get(name) || new Set();
+                    let entry = Array.from(entries).find(item => item.handler === handler);
+                    if (!entry) entry = { handler: handler, once: once === true };
+                    if (position) entries.delete(entry);
+                    if (position === "first") entries = new Set([entry].concat(Array.from(entries)));
+                    else entries.add(entry);
+                    listeners.set(name, entries);
+                    return { stop: function () { remove(name, entry); } };
+                }
+                target.eventOn = function (name, handler) { return listen(name, handler); };
+                target.eventOnce = function (name, handler) { return listen(name, handler, null, true); };
+                target.eventMakeFirst = function (name, handler) { return listen(name, handler, "first"); };
+                target.eventMakeLast = function (name, handler) { return listen(name, handler, "last"); };
+                target.eventOff = function (name, handler) {
+                    name = eventName(name);
+                    for (const entry of Array.from(listeners.get(name) || [])) if (entry.handler === handler) remove(name, entry);
+                };
+                target.eventRemoveListener = target.eventOff;
+                target.eventClearEvent = function (name) { listeners.delete(eventName(name)); };
+                target.eventClearListener = function (handler) {
+                    for (const [name, entries] of listeners) for (const entry of Array.from(entries)) if (entry.handler === handler) remove(name, entry);
+                };
+                clearLocalEvents = function () { listeners.clear(); };
+                target.eventClearAll = clearLocalEvents;
+                target.eventEmit = async function (name) {
+                    assertOpen();
+                    name = eventName(name);
+                    const args = Array.prototype.slice.call(arguments, 1);
+                    for (const entry of Array.from(listeners.get(name) || [])) {
+                        // A listener removed by an earlier callback must not run.
+                        if (!listeners.get(name)?.has(entry)) continue;
+                        // Remove before invoking, even when a callback emits recursively.
+                        if (entry.once) remove(name, entry);
+                        await entry.handler.apply(null, args);
+                    }
+                };
+            }
+            if (typeof target.eventOn !== "function" || typeof target.eventOff !== "function" || typeof target.eventEmit !== "function") {
+                throw new TypeError("事件工具需要已有事件总线或 localEvents 选项");
+            }
+            target.eventEmitAndWait = async function () {
+                assertOpen();
+                await target.eventEmit.apply(target, arguments);
+            };
+
+            function waitFor(name, read, checkCurrent) {
+                return new Promise(function (resolve, reject) {
+                    assertOpen();
+                    let subscription, finished = false;
+                    function stop() {
+                        if (subscription && typeof subscription.stop === "function") subscription.stop();
+                        else target.eventOff(name, listener);
+                    }
+                    function finish(success, value) {
+                        if (finished) return;
+                        finished = true;
+                        pendingWaits.delete(cancel);
+                        try { stop(); }
+                        catch (error) { if (success) { success = false; value = error; } }
+                        if (success) resolve(value);
+                        else reject(value);
+                    }
+                    function cancel() { finish(false, closedError()); }
+                    function listener() {
+                        try {
+                            const result = read(Array.prototype.slice.call(arguments));
+                            if (result.ready) finish(true, result.value);
+                        } catch (error) { finish(false, error); }
+                    }
+                    pendingWaits.add(cancel);
+                    try {
+                        subscription = target.eventOn(name, listener);
+                        // Support a synchronous registration callback without leaking it.
+                        if (finished) stop();
+                        else if (checkCurrent) listener();
+                    } catch (error) { finish(false, error); }
+                });
+            }
+            // Convenience extension: resolves to the next emission's argument array.
+            // Registration happens synchronously, so an immediate emit is not lost.
+            target.eventWaitOnce = function (name) {
+                return waitFor(name, function (args) { return { ready: true, value: args }; });
+            };
+            function globalName(name) {
+                if (typeof name !== "string" || !name || name === "__proto__") throw new TypeError("全局接口名称无效");
+                return name;
+            }
+            function settled(value) { return value !== undefined && !(value && value.__dshBootstrap === true); }
+            target.initializeGlobal = function (name, value) {
+                assertOpen();
+                name = globalName(name);
+                if (!Reflect.set(target, name, value)) throw new TypeError("全局接口不可写: " + name);
+                return target.eventEmitAndWait("global_" + name + "_initialized");
+            };
+            target.waitGlobalInitialized = async function (name) {
+                assertOpen();
+                name = globalName(name);
+                const value = target[name];
+                if (settled(value)) return value;
+                return await waitFor("global_" + name + "_initialized", function () {
+                    const current = target[name];
+                    return { ready: settled(current), value: current };
+                }, true);
+            };
+            // Match the established event strings without replacing existing custom
+            // constants. These are local notifications, not a cross-frame bridge.
+            target.iframe_events = Object.freeze(Object.assign({
+                MESSAGE_IFRAME_RENDER_STARTED: "message_iframe_render_started",
+                MESSAGE_IFRAME_RENDER_ENDED: "message_iframe_render_ended",
+                GENERATION_REQUESTED: "js_generation_requested",
+                GENERATION_STARTED: "js_generation_started",
+                STREAM_TOKEN_RECEIVED_FULLY: "js_stream_token_received_fully",
+                STREAM_TOKEN_RECEIVED_INCREMENTALLY: "js_stream_token_received_incrementally",
+                GENERATION_ENDED: "js_generation_ended"
+            }, target.iframe_events || {}));
+            target.tavern_events = Object.assign({
+                USER_MESSAGE_RENDERED: "user_message_rendered",
+                CHARACTER_MESSAGE_RENDERED: "character_message_rendered"
+            }, target.tavern_events || {});
+            const namespace = target.TavernHelper || (target.TavernHelper = {});
+            for (const name of ["eventOn", "eventOnce", "eventMakeFirst", "eventMakeLast", "eventOff", "eventRemoveListener", "eventClearEvent", "eventClearListener", "eventClearAll", "eventEmit", "eventEmitAndWait", "eventWaitOnce", "initializeGlobal", "waitGlobalInitialized", "iframe_events", "tavern_events"]) {
+                if (target[name] === undefined) continue;
+                Object.defineProperty(namespace, name, { enumerable: true, configurable: true,
+                    get: function () { return target[name]; }, set: function (value) { target[name] = value; } });
+            }
+            function dispose() {
+                if (disposed) return;
+                disposed = true;
+                for (const cancel of Array.from(pendingWaits)) cancel();
+                if (clearLocalEvents) clearLocalEvents();
+                if (typeof target.removeEventListener === "function") target.removeEventListener("pagehide", dispose);
+            }
+            if (typeof target.addEventListener === "function") target.addEventListener("pagehide", dispose, { once: true });
+            return { dispose: dispose };
+        }
+// Shared by host projections and synchronous Helper iframe APIs.
+// Keep the factory self-contained: frame document builders serialize its source.
+function createTavernRegexEngine() {
+  function str(value) {
+    return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
+  }
+
+  function depth(value) {
+    const number = Number(value)
+    return value === null || value === undefined || value === '' || !Number.isFinite(number) ? null : number
+  }
+
+  // Mirrors SillyTavern's slash-delimited regex parsing while still accepting a
+  // plain pattern such as "校园".
+  function regexFromString(value) {
+    const source = str(value)
+    const match = source.match(/(\/?)(.+)\1([a-z]*)/i)
+    if (match === null) return new RegExp(source)
+    try { return new RegExp(match[2], match[3]) } catch (error) {
+      return new RegExp(source)
+    }
+  }
+
+  function enabledFor(script, options) {
+    if (!script || script.enabled === false || script.disabled === true) return false
+    const placement = Number(options.placement === undefined ? 2 : options.placement)
+    if (!Array.isArray(script.placement) || !script.placement.map(Number).includes(placement)) return false
+    // SillyTavern treats these as ephemerality targets, not mutually exclusive
+    // modes. Enabling both applies to display and outgoing prompt without
+    // changing the stored chat text.
+    if (options.isMarkdown === true && script.promptOnly === true && script.markdownOnly !== true) return false
+    if (options.isMarkdown !== true && script.markdownOnly === true && script.promptOnly !== true) return false
+    if (options.isEdit === true && script.runOnEdit !== true) return false
+    // Helper's optional depth is different from the display pipeline's default
+    // depth 0. Keep existing projections unchanged and opt out explicitly.
+    if (options.ignoreDepth === true) return true
+    const currentDepth = Number(options.depth) || 0
+    const minimum = depth(script.minDepth)
+    const maximum = depth(script.maxDepth)
+    if (minimum !== null && currentDepth < minimum) return false
+    if (maximum !== null && currentDepth > maximum) return false
+    return true
+  }
+
+  function replacementFor(script) {
+    const trims = Array.isArray(script.trimStrings) ? script.trimStrings.map(str).filter(Boolean) : []
+    return function () {
+      const args = Array.from(arguments)
+      const groups = args.length > 0 && args.at(-1) !== null && typeof args.at(-1) === 'object' ? args.at(-1) : null
+      const filtered = function (value) {
+        let result = str(value)
+        for (const trim of trims) result = result.split(trim).join('')
+        return result
+      }
+      return str(script.replaceString)
+        .replace(/\{\{match\}\}/gi, '$0')
+        .replace(/\$(\d+)|\$<([^>]+)>/g, function (_token, digits, groupName) {
+          const match = digits !== undefined ? args[Number(digits)] : groups && groups[groupName]
+          return match ? filtered(match) : ''
+        })
+    }
+  }
+
+  function replaceAndCount(source, regex, replacement) {
+    let count = 0
+    const text = source.replace(regex, function () {
+      count++
+      return replacement.apply(null, arguments)
+    })
+    return { text, count }
+  }
+
+  /** Apply enabled Tavern regex replacements to one ephemeral text projection. */
+  function applyTavernRegexText(value, scripts, options = {}) {
+    const sourceText = str(value)
+    let text = sourceText
+    const warnings = []
+    const applied = []
+    for (const [index, script] of (Array.isArray(scripts) ? scripts : []).entries()) {
+      if (!enabledFor(script, options)) continue
+      const label = str(script.name || script.id) || '正则 ' + (index + 1)
+      try {
+        const replaced = replaceAndCount(text, regexFromString(script.findRegex), replacementFor(script))
+        if (replaced.count === 0) continue
+        text = replaced.text
+        applied.push({ index, id: str(script.id), name: label, matches: replaced.count })
+      } catch (error) {
+        warnings.push(label + '：' + str(error && error.message || error))
+      }
+    }
+    return { sourceText, text, changed: applied.length > 0, applied, warnings }
+  }
+
+  /**
+   * Apply character-card display regexes in their original array order.
+   * `text` is the SillyTavern-compatible display projection. `bodyText` removes
+   * every matched source segment so display markup never remains in story text.
+   */
+  function renderTavernRegexDisplay(value, scripts, options = {}) {
+    const sourceText = str(value)
+    let text = sourceText
+    let bodyText = sourceText
+    const warnings = []
+    const applied = []
+    const presentationParts = []
+
+    function presentationToken(index) {
+      return '\uE000DSH_TAVERN_REGEX_' + index + '\uE001'
+    }
+
+    function restorePresentationTokens(value) {
+      return str(value).replace(/\uE000DSH_TAVERN_REGEX_(\d+)\uE001/g, function (token, index) {
+        return presentationParts[Number(index)] || ''
+      })
+    }
+
+    for (const [index, script] of (Array.isArray(scripts) ? scripts : []).entries()) {
+      if (!enabledFor(script, options)) continue
+      const label = str(script.name || script.id) || '正则 ' + (index + 1)
+      try {
+        const displayRegex = regexFromString(script.findRegex)
+        const bodyRegex = regexFromString(script.findRegex)
+        const buildReplacement = replacementFor(script)
+        const displayed = replaceAndCount(text, displayRegex, function () {
+          const replacement = buildReplacement.apply(null, arguments)
+          const token = presentationToken(presentationParts.length)
+          presentationParts.push(replacement)
+          return token
+        })
+        if (displayed.count === 0) continue
+        text = displayed.text
+        bodyText = replaceAndCount(bodyText, bodyRegex, function () { return '' }).text
+        applied.push({ index, id: str(script.id), name: label, matches: displayed.count })
+      } catch (error) {
+        warnings.push(label + '：' + str(error && error.message || error))
+      }
+    }
+
+    if (applied.length > 0 && sourceText.trim() !== '' && bodyText.trim() === '') {
+      warnings.push('显示正则覆盖了整轮正文，已忽略本轮展示结果')
+      return {
+        sourceText,
+        text: sourceText,
+        bodyText: sourceText,
+        presentationText: '',
+        changed: false,
+        applied: [],
+        warnings
+      }
+    }
+
+    const presentationTokens = text.match(/\uE000DSH_TAVERN_REGEX_\d+\uE001/g) || []
+
+    return {
+      sourceText,
+      text: restorePresentationTokens(text),
+      bodyText,
+      presentationText: presentationTokens.map(restorePresentationTokens).filter(Boolean).join('\n'),
+      changed: applied.length > 0,
+      applied,
+      warnings
+    }
+  }
+
+  return { applyTavernRegexText, renderTavernRegexDisplay }
+}
+// Synchronous Helper APIs share the host's regex engine, with live context reads.
+// Keep this installer self-contained for script and message iframe serialization.
+function installTavernHelperRegexApi(options) {
+  const target = options.window
+  const engine = options.createEngine()
+  const placements = { user_input: 1, ai_output: 2, slash_command: 3, world_info: 5, reasoning: 6 }
+
+  function boundCharacter(state) {
+    // DSH applies enabled rules on a bound card without SillyTavern's separate
+    // avatar opt-in. This reports the same permission as the Helper facade's
+    // character_allowed_regex projection, even when all individual rules are off.
+    return state.character !== null && typeof state.character === 'object' && !Array.isArray(state.character)
+  }
+
+  function substituteIdentity(value, state, characterName, escape = false) {
+    function replacement(value) {
+      const text = String(value)
+      return escape ? text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : text
+    }
+    return String(value ?? '').replace(/{{\s*(user|char)\s*}}/gi, function (_match, name) {
+      return replacement(name.toLowerCase() === 'user'
+        ? state.playerName || '你'
+        : characterName ?? (state.characterName || state.character?.name || state.character?.data?.name || '角色'))
+    })
+  }
+
+  target.isCharacterTavernRegexesEnabled = function () {
+    return boundCharacter(options.context() || {})
+  }
+
+  target.formatAsTavernRegexedString = function (value, source, destination, settings = {}) {
+    if (!Object.prototype.hasOwnProperty.call(placements, source)) throw new TypeError('无效的正则来源: ' + String(source))
+    if (destination !== 'display' && destination !== 'prompt') throw new TypeError('无效的正则目标: ' + String(destination))
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new TypeError('正则选项必须是对象')
+    if (settings.depth !== undefined && (typeof settings.depth !== 'number' || !Number.isFinite(settings.depth))) {
+      throw new TypeError('正则深度必须是有限数字')
+    }
+    const state = options.context() || {}
+    const groups = state.regexScripts || {}
+    const list = value => Array.isArray(value) ? value : []
+    // Preserve DSH's global, preset, character priority; preset rules participate
+    // when the host supplies that group. No state or stored message is modified.
+    const scripts = list(groups.global).concat(list(groups.preset), boundCharacter(state) ? list(groups.character) : [])
+      .filter(script => script && typeof script === 'object')
+      .map(function (script) {
+        const mode = Number(script.substituteRegex)
+        return {
+          ...script,
+          findRegex: mode === 1 || mode === 2
+            ? substituteIdentity(script.findRegex, state, settings.character_name, mode === 2) : script.findRegex,
+          trimStrings: list(script.trimStrings).map(value => substituteIdentity(value, state, settings.character_name))
+        }
+      })
+    const result = engine.applyTavernRegexText(value, scripts, {
+      placement: placements[source], isMarkdown: destination === 'display', isEdit: false,
+      depth: settings.depth, ignoreDepth: settings.depth === undefined
+    })
+    for (const warning of result.warnings) target.console?.warn?.('[TavernHelper regex] ' + warning)
+    // Apply identity macros first, then the shared read-only macro adapter.
+    // Unknown or side-effecting macros remain literal during formatting.
+    const formatted = substituteIdentity(result.text, state, settings.character_name)
+    return typeof target.substitudeMacros === 'function' ? target.substitudeMacros(formatted, {
+      character_name: settings.character_name,
+      message_id: settings.depth === undefined ? undefined : (state.messages || []).length - settings.depth - 1
+    }) : formatted
+  }
+
+  return {
+    formatAsTavernRegexedString: target.formatAsTavernRegexedString,
+    isCharacterTavernRegexesEnabled: target.isCharacterTavernRegexesEnabled
+  }
+}
 		function tavernHelperMessageDependencies() {
 			return tavernIconDependencies()
 				+ '<script data-dsh-tavern-helper-dependency="tailwind" src="/api/dsh-tavern/vendor/runtime-assets/tailwind/index.global.js"><\/script>'
@@ -3426,14 +4084,16 @@ window.__ModuleLoader__.load({
 				+ '<script data-dsh-tavern-helper-dependency="jquery-ui-touch-punch" src="/api/dsh-tavern/vendor/runtime-assets/jquery-ui-touch-punch/jquery.ui.touch-punch.min.js"><\/script>'
 				+ '<script data-dsh-tavern-helper-dependency="vue" src="/api/dsh-tavern/vendor/runtime-assets/vue/vue.runtime.global.prod.js"><\/script>'
 				+ '<script data-dsh-tavern-helper-dependency="vue-router" src="/api/dsh-tavern/vendor/runtime-assets/vue-router/vue-router.global.prod.js"><\/script>'
-				+ '<script data-dsh-tavern-helper-dependency="lodash" src="/api/dsh-tavern/vendor/runtime-assets/lodash/lodash.min.js"><\/script>';
+				+ '<script data-dsh-tavern-helper-dependency="lodash" src="/api/dsh-tavern/vendor/runtime-assets/lodash/lodash.min.js"><\/script>'
+                + '<script data-dsh-tavern-helper-dependency="marked" src="/api/dsh-tavern/vendor/runtime-assets/marked/marked.umd.js"><\/script>';
 		}
 
 		function tavernHelperScriptDependencies() {
 			return '<script data-dsh-tavern-helper-dependency="vue" src="/api/dsh-tavern/vendor/runtime-assets/vue/vue.runtime.global.prod.js"><\/script>'
 				+ '<script data-dsh-tavern-helper-dependency="vue-router" src="/api/dsh-tavern/vendor/runtime-assets/vue-router/vue-router.global.prod.js"><\/script>'
 				+ '<script data-dsh-tavern-helper-dependency="jquery" src="/api/dsh-tavern/vendor/runtime-assets/jquery/jquery.min.js"><\/script>'
-				+ '<script data-dsh-tavern-helper-dependency="lodash" src="/api/dsh-tavern/vendor/runtime-assets/lodash/lodash.min.js"><\/script>';
+				+ '<script data-dsh-tavern-helper-dependency="lodash" src="/api/dsh-tavern/vendor/runtime-assets/lodash/lodash.min.js"><\/script>'
+                + '<script data-dsh-tavern-helper-dependency="marked" src="/api/dsh-tavern/vendor/runtime-assets/marked/marked.umd.js"><\/script>';
 		}
 
 		const SILLYTAVERN_CSS_COMPAT = Object.freeze({
@@ -3496,7 +4156,9 @@ window.__ModuleLoader__.load({
 				// Read through the live Helper API so context updates and MVU view
 				// observation use the same path. Each read already returns a copy.
 				// Historical frames must not merge variables from later messages.
-				return Object.assign({}, window.getVariables({ type: "chat" }), window.getVariables({ type: "message", message_id: window.getCurrentMessageId() }));
+				const merged = Object.assign({}, window.getVariables({ type: "global" }), window.getVariables({ type: "character" }), window.getVariables({ type: "chat" }));
+                Object.assign(merged, window.getVariables({ type: "message", message_id: window.getCurrentMessageId() }));
+                return merged;
 			};
 		}
 
@@ -4776,8 +5438,8 @@ window.__ModuleLoader__.load({
 				? buildTavernHelperScriptParts({ token: input.token, context: input.openingPreview.runtime.context, scripts: input.openingPreview.runtime.scripts, previewScope: true }) : null;
 			const helperDependencies = input && (input.helperContext || input.openingPreview) ? tavernHelperMessageDependencies() : sillyTavernCssCompatibilityDependencies(sizing) + (/<script\b/i.test(html) ? tavernHelperMessageDependencies() : "");
 			const storageShim = '<script data-dsh-tavern-storage>(function(){try{void window.localStorage;return;}catch(e){}var values=Object.create(null),keys=[];var storage={getItem:function(key){key=String(key);return Object.prototype.hasOwnProperty.call(values,key)?values[key]:null;},setItem:function(key,value){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))keys.push(key);values[key]=String(value);},removeItem:function(key){key=String(key);if(!Object.prototype.hasOwnProperty.call(values,key))return;delete values[key];keys.splice(keys.indexOf(key),1);},clear:function(){values=Object.create(null);keys=[];},key:function(index){index=Number(index);return index>=0&&index<keys.length?keys[index]:null;}};Object.defineProperty(storage,"length",{enumerable:true,get:function(){return keys.length;}});try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,value:storage});}catch(e){}})();<\/script>';
-			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var readMessage=(' + createTavernHistoryReader.toString() + ')({context:function(){return state;},install:function(row){state.messages[row.message_id]=row;}});var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}function messagesFor(target,options){var all=state.messages||[],items=[];if(target===undefined||target===null)items=[readMessage(currentId())];else if(typeof target==="string"&&target.indexOf("-")>=0){var value=target.replace(/{{\\s*lastMessageId\\s*}}/gi,String(lastId())),parts=value.split("-"),from=normalizeId(parts[0]),to=normalizeId(parts[1]);for(var i=Math.min(from,to);i<=Math.max(from,to);i+=1)items.push(readMessage(i));}else items=[readMessage(normalizeId(target))];items=items.filter(Boolean);if(options&&options.role&&options.role!=="all")items=items.filter(function(item){return item.role===options.role;});return copy(items);}function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=readMessage(normalizeId(option.message_id));if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=readMessage(normalizeId(patch.message_id));if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){if(data.result&&data.result.context)state=data.result.context;syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return (' + substituteTavernIdentityMacros.toString() + ')(value,state);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables(readMessage(normalizeId(option.message_id)));};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
-			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.generateRaw=function(config){return call("generateTavernHelperRaw",{config:copy(config)}).then(function(result){return result.text;});};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:String(line||"")});};var worldbook=' + JSON.stringify(input && input.helperContext && input.helperContext.worldbook || null).replace(/</g, '\\u003c') + ';window.getCharWorldbookNames=function(){return {primary:worldbook&&worldbook.name||null,additional:[]};};window.getWorldbookNames=function(){return worldbook&&worldbook.name?[worldbook.name]:[];};window.TavernHelper=window.TavernHelper||{};["getCurrentCharacterName","getVariables","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
+			const helperShim = input && input.helperContext ? '<script data-dsh-tavern-helper>(function(){var token=' + token + ',state=' + helperContext + ',turn=' + helperTurn + ',nextId=1,pending=Object.create(null),listeners=Object.create(null);var readMessage=(' + createTavernHistoryReader.toString() + ')({context:function(){return state;},install:function(row){state.messages[row.message_id]=row;}});var applyContextUpdate=' + applyTavernHelperContextUpdate.toString() + ';if(window.Vue)Object.assign(window,window.Vue);window.errorCatched=function(factory){return function(){try{return factory.apply(this,arguments);}catch(error){console.error(error);return {};}};};function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function lastId(){return Math.max(-1,(state.messages||[]).length-1);}function normalizeId(value){var id=Number(value);if(!Number.isFinite(id))id=lastId();if(id<0)id=(state.messages||[]).length+id;return Math.max(0,Math.min(lastId(),id));}function currentId(){var mapped=state.turnMessageIds&&state.turnMessageIds[String(turn)];return mapped===undefined?lastId():normalizeId(mapped);}function syncFrameName(){var id=currentId();window.name=id>=0?"TH-message--"+id+"--"+token:"";}function selectedVariables(message){return copy(message&&message.variables&&typeof message.variables==="object"?message.variables:{});}var messagesFor=(' + createTavernHelperMessageReader.toString() + ')({context:function(){return state;},currentId:currentId,copy:copy,readMessage:readMessage});function call(method,args){return new Promise(function(resolve,reject){var requestId=String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}function optionOf(option){var value=option&&typeof option==="object"?copy(option):{type:"message"};if(!value.type)value.type="message";if(["message","chat","character","global","script"].indexOf(value.type)<0)throw Object.assign(new Error("尚未支持的变量作用域: "+value.type),{code:"TAVERN_CAPABILITY_UNSUPPORTED"});if(value.type==="message"){if(value.message_id===undefined||value.message_id===null)value.message_id=currentId();else if(value.message_id==="latest")value.message_id=lastId();}return value;}function localReplace(variables,option){option=optionOf(option);if(option.type==="chat")state.chatVariables=copy(variables);else if(option.type==="character")state.characterVariables=copy(variables);else if(option.type==="global")state.globalVariables=copy(variables);else if(option.type==="script"){if(!state.scriptVariables)state.scriptVariables={};state.scriptVariables[option.script_id]=copy(variables);}else{var message=readMessage(normalizeId(option.message_id));if(message){message.variables=copy(variables);if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(variables);}}}function localSetMessages(patches){(patches||[]).forEach(function(patch){var message=readMessage(normalizeId(patch.message_id));if(!message)return;if(patch.swipe_id!==undefined){message.swipe_id=Math.max(0,Math.min((message.swipes||[]).length-1,Number(patch.swipe_id)||0));message.message=(message.swipes||[])[message.swipe_id]||message.message;}if(patch.message!==undefined){message.message=String(patch.message);if(Array.isArray(message.swipes))message.swipes[message.swipe_id||0]=message.message;}if(patch.data!==undefined){message.variables=copy(patch.data||{});if(Array.isArray(message.swipes_data))message.swipes_data[message.swipe_id||0]=copy(patch.data||{});}});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token)return;if(data.type==="dsh-tavern-helper-context-update"){var previous=copy(state),applied;try{applied=applyContextUpdate(state,data.update);}catch(error){parent.postMessage({type:"dsh-tavern-helper-context-request",token:token},"*");return;}state=applied.context;if(Number.isFinite(Number(applied.turn)))turn=Math.max(0,Number(applied.turn));syncFrameName();Promise.resolve().then(async function(){var names=Array.isArray(applied.events)?applied.events:[];for(var index=0;index<names.length;index+=1){var name=names[index];if(window.Mvu&&name===window.Mvu.events.VARIABLE_UPDATE_ENDED)await window.eventEmit(name,selectedVariables((state.messages||[])[currentId()]),previous);else await window.eventEmit(name,currentId());}}).catch(function(error){console.error(error);});return;}if(data.type!=="dsh-tavern-helper-response")return;if(data.ok&&data.result){if(data.result.context)state=Object.assign({},state,data.result.context);if(Object.prototype.hasOwnProperty.call(data.result,"worldbook"))state.worldbook=copy(data.result.worldbook);}var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok){syncFrameName();task.resolve(data.result);}else task.reject(new Error(String(data.error||"Helper 调用失败")));});syncFrameName();window.getCurrentMessageId=currentId;window.getLastMessageId=lastId;window.getChatMessages=messagesFor;window.getCurrentCharacterName=function(){return String(state.characterName||state.character&&state.character.name||"");};window.getWorldbookNames=function(){return state.worldbook&&state.worldbook.name?[state.worldbook.name]:[];};window.getCharWorldbookNames=function(){return {primary:state.worldbook&&state.worldbook.name||null,additional:[]};};window.SillyTavern=Object.assign(window.SillyTavern||{},{substituteParams:function(value){return window.substitudeMacros(value);}});window.getVariables=function(option){option=optionOf(option);if(option.type==="chat")return copy(state.chatVariables||{});if(option.type==="character")return copy(state.characterVariables||{});if(option.type==="global")return copy(state.globalVariables||{});if(option.type==="script")return copy(state.scriptVariables&&state.scriptVariables[option.script_id]||{});return selectedVariables(readMessage(normalizeId(option.message_id)));};window.replaceVariables=function(variables,option){option=optionOf(option);var plain=copy(variables||{}),before=window.getVariables(option);localReplace(plain,option);var task=call("updateTavernHelperVariables",{option:option,variables:plain}).then(function(result){if(result&&result.stale)throw new Error("聊天已变化，变量未保存");return copy(plain);}).catch(function(error){if(JSON.stringify(window.getVariables(option))===JSON.stringify(plain))localReplace(before,option);throw error;});task.catch(function(error){console.error(error);});return task;};window.insertOrAssignVariables=function(variables,option){return window.replaceVariables(window._.mergeWith(window.getVariables(option),copy(variables||{}),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.insertVariables=function(variables,option){return window.replaceVariables(window._.mergeWith({},copy(variables||{}),window.getVariables(option),function(left,right){return Array.isArray(right)?right:undefined;}),option);};window.updateVariablesWith=async function(updater,option){option=optionOf(option);var current=window.getVariables(option),next=typeof updater==="function"?await updater(copy(current)):current;if(next===undefined)next=current;next=copy(next);return await window.replaceVariables(next,option);};window.deleteVariable=async function(path,option){option=optionOf(option);var next=window.getVariables(option),deleted=window._.unset(next,String(path||""));await window.replaceVariables(next,option);return{variables:copy(next),delete_occurred:deleted};};window.setChatMessages=async function(patches){var plain=copy(patches||[]);localSetMessages(plain);var result=await call("updateTavernHelperMessages",{messages:plain});return result;};window.retrieveDisplayedMessage=function(messageId){return normalizeId(messageId)===currentId()?window.jQuery(document.body):window.jQuery();};window.toastr={success:function(message){console.info(String(message));},info:function(message){console.info(String(message));},warning:function(message){console.warn(String(message));},error:function(message){console.error(String(message));}};window.eventOn=function(name,handler){(listeners[name]||(listeners[name]=new Set())).add(handler);return handler;};window.eventOff=function(name,handler){if(listeners[name])listeners[name].delete(handler);};window.eventEmit=async function(name){var args=Array.prototype.slice.call(arguments,1),items=listeners[name]?Array.from(listeners[name]):[];for(var i=0;i<items.length;i+=1)await items[i].apply(null,args);};window.tavern_events={MESSAGE_SENT:"MESSAGE_SENT",MESSAGE_RECEIVED:"MESSAGE_RECEIVED",MESSAGE_UPDATED:"MESSAGE_UPDATED",MESSAGE_SWIPED:"MESSAGE_SWIPED",MESSAGE_DELETED:"MESSAGE_DELETED",MESSAGE_EDITED:"MESSAGE_EDITED"};if(state.mvuEnabled!==false)window.Mvu={events:{VARIABLE_INITIALIZED:"mag_variable_initialized",VARIABLE_UPDATE_STARTED:"mag_variable_update_started",COMMAND_PARSED:"mag_command_parsed",VARIABLE_UPDATE_ENDED:"mag_variable_update_ended",BEFORE_MESSAGE_UPDATE:"mag_before_message_update"},getMvuData:function(option){return window.getVariables(option);},replaceMvuData:async function(value,option){await window.updateVariablesWith(function(){return value;},option);return copy(value);},parseMessage:async function(){throw new Error("当前兼容层尚未开放 iframe 内手动 MVU 重算");}};window.waitGlobalInitialized=async function(name){if(name==="Mvu")return window.Mvu;return window[name];};(' + installTavernHelperUtilities.toString() + ')(window);(' + installTavernHelperEventApi.toString() + ')(window,{localEvents:true});(' + installTavernHelperMacroApi.toString() + ')({window:window,context:function(){return state;}});(' + installTavernHelperRegexApi.toString() + ')({window:window,context:function(){return state;},createEngine:' + createTavernRegexEngine.toString() + '});(' + installTavernHelperDisplayApi.toString() + ')(window);(' + installTavernHelperGenerationApi.toString() + ')({window:window,request:call,copy:copy});var ready=import(new URL("/api/dsh-tavern/vendor/runtime-assets/zod/index.mjs",document.baseURI).href).then(function(module){window.z=module;return true;});window.__dshTavernHelperReady=ready;if(window.jQuery&&window.jQuery.fn&&window.jQuery.fn.load&&!window.jQuery.fn.__dshDeferred){var original=window.jQuery.fn.load;var deferred=function(){var self=this,args=arguments;ready.then(function(){original.apply(self,args);});return self;};deferred.__dshDeferred=true;window.jQuery.fn.load=deferred;}})();<\/script>' : '';
+			const interactiveHelperShim = input && input.helperContext ? '<script data-dsh-tavern-interactive-helper>(function(){var token=' + token + ',nextId=1,pending=Object.create(null);function copy(value){try{return structuredClone(value);}catch(e){return JSON.parse(JSON.stringify(value));}}function call(method,args){return new Promise(function(resolve,reject){var requestId="interactive:"+String(nextId++);pending[requestId]={resolve:resolve,reject:reject};parent.postMessage({type:"dsh-tavern-helper-call",token:token,requestId:requestId,method:method,args:copy(args||{})},"*");});}addEventListener("message",function(event){var data=event&&event.data;if(event.source!==parent||!data||data.token!==token||data.type!=="dsh-tavern-helper-response")return;var task=pending[data.requestId];if(!task)return;delete pending[data.requestId];if(data.ok)task.resolve(data.result);else task.reject(new Error(String(data.error||"Helper 调用失败")));});function payload(entries){if(!Array.isArray(entries))throw new TypeError("世界书条目必须是数组");return copy(entries).map(function(entry){delete entry.uid;return entry;});}async function fresh(name){var result=await call("getTavernHelperWorldbook",{name:String(name||"")});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}async function replace(name,entries,expectedEntries){var result=await call("replaceTavernHelperWorldbook",{name:String(name||""),entries:copy(entries),expectedEntries:copy(expectedEntries)});return copy(result&&result.worldbook&&result.worldbook.entries||[]);}window.getWorldbook=async function(name){return await fresh(name);};window.updateWorldbookWith=async function(name,updater){if(typeof updater!=="function")throw new TypeError("世界书更新器必须是函数");var current=await fresh(name),draft=copy(current),next=await updater(draft);return await replace(name,next===undefined?draft:next,current);};window.createWorldbookEntries=async function(name,entries){var additions=payload(entries),previous;var worldbook=await window.updateWorldbookWith(name,function(current){previous=new Set(current.map(function(entry){return entry.uid;}));return current.concat(additions);});return{worldbook:worldbook,new_entries:worldbook.filter(function(entry){return!previous.has(entry.uid);})};};window.deleteWorldbookEntries=async function(name,predicate){if(typeof predicate!=="function")throw new TypeError("世界书删除条件必须是函数");var deleted=[];var worldbook=await window.updateWorldbookWith(name,function(current){return current.filter(function(entry){if(!predicate(copy(entry)))return true;deleted.push(copy(entry));return false;});});return{worldbook:worldbook,deleted_entries:deleted};};window.createChatMessages=async function(messages,option){var result=await call("createTavernHelperMessages",{messages:copy(Array.isArray(messages)?messages:[]),option:copy(option&&typeof option==="object"?option:{})});if(result&&result.stale)throw new Error("聊天已变化，消息未创建");};window.triggerSlash=function(line){return call("triggerTavernSlash",{line:window.substitudeMacros(String(line||""))}).then(function(result){return result&&Object.prototype.hasOwnProperty.call(result,"pipe")?result.pipe:result;});};window.TavernHelper=window.TavernHelper||{};["formatAsTavernRegexedString","isCharacterTavernRegexesEnabled","triggerSlash","getMessageId","getIframeName","errorCatched","retrieveDisplayedMessage","waitGlobalInitialized","getCurrentMessageId","getLastMessageId","getChatMessages","setChatMessages","getAllVariables","getCurrentCharacterName","getVariables","deleteVariable","replaceVariables","insertOrAssignVariables","insertVariables","updateVariablesWith","generateRaw","createChatMessages","getWorldbook","getCharWorldbookNames","getWorldbookNames","updateWorldbookWith","createWorldbookEntries","deleteWorldbookEntries"].forEach(function(name){Object.defineProperty(window.TavernHelper,name,{enumerable:true,configurable:true,get:function(){return window[name];},set:function(value){window[name]=value;}});});})();<\/script>' : '';
 			const mvuViewObservationShim = input && input.helperContext && input.observeMvuView !== false ? '<script data-dsh-tavern-mvu-view-observer>(function(){var token=' + token + ',reported=false;function report(){if(reported)return;reported=true;window.__dshTavernMvuViewUsed=true;parent.postMessage({type:"dsh-tavern-mvu-view-used",token:token,mvuViewUsed:true},"*");}var getMvuData=window.Mvu&&window.Mvu.getMvuData;if(typeof getMvuData==="function")window.Mvu.getMvuData=function(){report();return getMvuData.apply(window.Mvu,arguments);};var getVariables=window.getVariables;if(typeof getVariables==="function")window.getVariables=function(){report();return getVariables.apply(window,arguments);};})();<\/script>' : '';
 			// parent.Mvu may throw an Error from another iframe: instanceof alone loses its stack.
 			const runtimeReporter = input && input.runtimeReporting === false ? '' : '<script data-dsh-tavern-frame>(function(){var token=' + token + ';var captureDom=' + JSON.stringify(!(input && input.persistent === true)) + ';var logs=[],network=[],errors=[],timer=0;function trim(list){if(list.length>100)list.splice(0,list.length-100);}function value(input,depth){if(depth>3)return "[深度已截断]";if(input===null||input===undefined||typeof input==="boolean"||typeof input==="number"||typeof input==="string")return typeof input==="string"&&input.length>4000?input.slice(0,4000)+"…[已截断]":input;try{if(input instanceof Error||Object.prototype.toString.call(input)==="[object Error]")return {name:String(input.name),message:String(input.message).slice(0,4000),stack:String(input.stack||"").slice(0,4000)};if(Array.isArray(input))return input.slice(0,30).map(function(item){return value(item,depth+1);});if(typeof input==="object"){var out={};Object.keys(input).slice(0,30).forEach(function(key){out[key]=value(input[key],depth+1);});return out;}}catch(e){}return String(input);}function cleanUrl(input){try{var parsed=new URL(String(input),location.href);return parsed.protocol+"//"+parsed.host+parsed.pathname;}catch(e){return String(input||"").split(/[?#]/)[0].slice(0,1000);}}function send(){timer=0;var dom="";try{if(captureDom&&document.body){var copy=document.body.cloneNode(true);Array.prototype.forEach.call(copy.querySelectorAll("script[data-dsh-tavern-frame],script[data-dsh-tavern-storage],script[data-dsh-tavern-layout]"),function(node){node.remove();});dom=copy.innerHTML;}}catch(e){}if(dom.length>100000)dom=dom.slice(0,100000)+"<!-- 已截断 -->";parent.postMessage({type:"dsh-tavern-frame-runtime",token:token,runtime:{capturedAt:Date.now(),dom:dom,console:logs.slice(),network:network.slice(),errors:errors.slice()}} ,"*");}function schedule(){if(timer)return;timer=setTimeout(send,350);}["log","info","warn","error"].forEach(function(level){var original=console[level];console[level]=function(){logs.push({at:Date.now(),level:level,args:Array.prototype.map.call(arguments,function(item){return value(item,0);})});trim(logs);schedule();return original&&original.apply(console,arguments);};});addEventListener("error",function(event){var target=event.target;if(target&&target!==window){errors.push({at:Date.now(),kind:"resource",tag:String(target.tagName||""),url:cleanUrl(target.src||target.href||"")});}else errors.push({at:Date.now(),kind:"error",message:String(event.message||""),source:cleanUrl(event.filename||""),line:Number(event.lineno)||0,column:Number(event.colno)||0});trim(errors);schedule();},true);addEventListener("unhandledrejection",function(event){errors.push({at:Date.now(),kind:"unhandledrejection",message:String(event.reason&&event.reason.message||event.reason||"")});trim(errors);schedule();});if(typeof window.fetch==="function"){var nativeFetch=window.fetch;window.fetch=function(input,init){var started=Date.now(),method=String(init&&init.method||"GET").toUpperCase(),url=cleanUrl(input&&input.url||input);return nativeFetch.apply(this,arguments).then(function(response){network.push({at:started,kind:"fetch",method:method,url:url,status:Number(response.status)||0,durationMs:Date.now()-started});trim(network);if(!response.ok)schedule();return response;},function(error){network.push({at:started,kind:"fetch",method:method,url:url,failed:true,durationMs:Date.now()-started,error:String(error&&error.message||error)});trim(network);schedule();throw error;});};}if(typeof XMLHttpRequest==="function"){var nativeOpen=XMLHttpRequest.prototype.open,nativeSend=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(method,url){this.__dshRequest={started:0,method:String(method||"GET").toUpperCase(),url:cleanUrl(url)};return nativeOpen.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){var request=this.__dshRequest||{method:"GET",url:""};request.started=Date.now();this.addEventListener("loadend",function(){network.push({at:request.started,kind:"xhr",method:request.method,url:request.url,status:Number(this.status)||0,durationMs:Date.now()-request.started});trim(network);if(Number(this.status)>=400)schedule();});return nativeSend.apply(this,arguments);};}addEventListener("load",schedule);schedule();})();<\/script>';
@@ -5492,7 +6154,7 @@ function bindTavernFontZoom(node, win) {
 			}
 			// Both entry points reference the same functions; plugin wrappers stay visible to each other.
 			const helper = {};
-			const helperNames = ["generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros", "iframe_events", "tavern_events"];
+			const helperNames = ["formatAsTavernRegexedString", "isCharacterTavernRegexesEnabled", "getMessageId", "getIframeName", "errorCatched", "retrieveDisplayedMessage", "initializeGlobal", "waitGlobalInitialized", "triggerSlash", "generateRaw", "injectPrompts", "uninjectPrompts", "getScriptId", "getScriptName", "getScriptInfo", "replaceScriptInfo", "getScriptButtons", "getAllEnabledScriptButtons", "replaceScriptButtons", "updateScriptButtonsWith", "appendInexistentScriptButtons", "getButtonEvent", "getCharData", "getCurrentCharacterName", "getCurrentMessageId", "getLastMessageId", "getChatMessages", "setChatMessages", "createChatMessages", "getVariables", "getAllVariables", "replaceVariables", "insertOrAssignVariables", "insertVariables", "updateVariablesWith", "deleteVariable", "getTavernRegexes", "replaceTavernRegexes", "updateTavernRegexesWith", "importRawTavernRegex", "replaceWorldbook", "createWorldbookEntries", "deleteWorldbookEntries", "setLorebookEntries", "createLorebookEntries", "deleteLorebookEntries", "getLorebooks", "getWorldbookNames", "getCharWorldbookNames", "getWorldbook", "getLorebookEntries", "getCharLorebooks", "getCurrentCharPrimaryLorebook", "getLorebookSettings", "setLorebookSettings", "updateWorldbookWith", "getTavernHelperVersion", "substitudeMacros", "iframe_events", "tavern_events"];
 			for (const name of helperNames) Object.defineProperty(helper, name, { enumerable: true, configurable: true, get: function () { return window[name]; }, set: function (value) { window[name] = value; } });
 			window.TavernHelper = helper;
 			const eventSource = { on: window.eventOn, once: window.eventOnce, off: window.eventOff, removeListener: window.eventOff, makeFirst: window.eventMakeFirst, makeLast: window.eventMakeLast, emit: window.eventEmit };
@@ -5681,6 +6343,7 @@ function bindTavernFontZoom(node, win) {
 					name: String(script && script.name || script && script.id || ""),
 					info: String(script && script.info || ""),
 					buttons: Array.isArray(script && script.buttons) ? script.buttons : [],
+                    buttonsEnabled: !script || script.buttonsEnabled !== false,
 					ready: false,
 					failed: false
 				};
@@ -5915,26 +6578,14 @@ function bindTavernFontZoom(node, win) {
 			function optionOf(option) {
 				const value = option && typeof option === "object" ? copy(option) : { type: "message" };
 				if (!value.type) value.type = "message";
+                if (!["message", "chat", "character", "global", "script"].includes(value.type)) throw Object.assign(new Error("尚未支持的变量作用域: " + value.type), { code: "TAVERN_CAPABILITY_UNSUPPORTED" });
 				if (value.type === "message") {
 					if (value.message_id === undefined || value.message_id === null || value.message_id === "latest") value.message_id = currentId();
 				} else if (value.type === "script" && !value.script_id) value.script_id = currentScript().id;
 				return value;
 			}
-			function messagesFor(target, options) {
-				const all = state.messages || [];
-				let items = [];
-				if (target === undefined || target === null) items = [readMessage(currentId())];
-				else if (typeof target === "string" && target.includes("-")) {
-					const value = target.replace(/{{\s*lastMessageId\s*}}/gi, String(lastId()));
-					const parts = value.split("-");
-					const from = normalizeId(parts[0]);
-					const to = normalizeId(parts[1]);
-					for (let index = Math.min(from, to); index <= Math.max(from, to); index += 1) items.push(readMessage(index));
-				} else items = [readMessage(normalizeId(target))];
-				items = items.filter(Boolean);
-				if (options && options.role && options.role !== "all") items = items.filter(function (item) { return item.role === options.role; });
-				return copy(items);
-			}
+            const messagesFor = modules.createMessageReader({ context: () => state, currentId, copy, readMessage });
+
 			function getVariables(option) {
 				const resolved = optionOf(option);
 				if (resolved.type === "global") return copy(state.globalVariables || {});
@@ -6035,6 +6686,16 @@ function bindTavernFontZoom(node, win) {
 				window.replaceScriptButtons(next);
 				return copy(next);
 			};
+            window.getAllEnabledScriptButtons = function () {
+                const result = {};
+                for (const script of scriptList) {
+                    if (script.buttonsEnabled === false || script.failed) continue;
+                    const buttons = script.buttons.filter(button => button && button.visible === true)
+                        .map(button => ({ button_id: buttonEvent(button.name, script.id), button_name: button.name }));
+                    if (buttons.length) Object.defineProperty(result, script.id, { value: buttons, enumerable: true, configurable: true, writable: true });
+                }
+                return copy(result);
+            };
 			window.getButtonEvent = buttonEvent;
 			window.getCharData = function () { return copy(readCharacter() || null); };
 			window.getCurrentCharacterName = function () { return String(state.characterName || state.character && state.character.name || ""); };
@@ -6059,13 +6720,23 @@ function bindTavernFontZoom(node, win) {
 			};
 			window.getVariables = getVariables;
 			window.getAllVariables = function () {
-				const merged = Object.assign({}, copy(state.globalVariables || {}), copy(state.characterVariables || {}), copy(state.chatVariables || {}), getVariables({ type: "script" }));
-				for (const message of state.messages || []) Object.assign(merged, copy(message.variables || {}));
-				return merged;
+				return Object.assign({}, copy(state.globalVariables || {}), copy(state.characterVariables || {}), getVariables({ type: "script" }), copy(state.chatVariables || {}));
 			};
 			window.replaceVariables = function (variables, option) {
-				const resolved = localReplace(copy(variables || {}), option);
-				return call("updateTavernHelperVariables", { option: resolved, variables: copy(variables || {}) }).catch(function (error) { console.error(error); throw error; });
+                const resolved = optionOf(option), plain = copy(variables || {}), before = getVariables(resolved);
+                const revision = [state.chatId, state.lifecycleRevision, state.stateRevision];
+                localReplace(plain, resolved);
+                return call("updateTavernHelperVariables", { option: resolved, variables: plain }).then(function (result) {
+                    if (result && result.stale) throw new Error("聊天已变化，变量未保存");
+                    return result;
+                }).catch(function (error) {
+                    // Preserve a newer context or overlapping edit; roll back only
+                    // our own unacknowledged optimistic value on the same revision.
+                    if (JSON.stringify(revision) === JSON.stringify([state.chatId, state.lifecycleRevision, state.stateRevision])
+                        && JSON.stringify(getVariables(resolved)) === JSON.stringify(plain)) localReplace(before, resolved);
+                    console.error(error);
+                    throw error;
+                });
 			};
 			window.insertOrAssignVariables = function (variables, option) {
 				const resolved = optionOf(option);
@@ -6104,34 +6775,18 @@ function bindTavernFontZoom(node, win) {
 			window.deleteVariable = async function (path, option) {
 				const resolved = optionOf(option);
 				const next = getVariables(resolved);
-				window._.unset(next, String(path || ""));
+				const deleted = window._.unset(next, String(path || ""));
 				await window.replaceVariables(next, resolved);
-				return copy(next);
+				return { variables: copy(next), delete_occurred: deleted };
 			};
 			window.setChatMessages = async function (patches) {
 				const plain = copy(patches || []);
 				localSetMessages(plain);
 				return await call("updateTavernHelperMessages", { messages: plain });
 			};
-			window.generateRaw = function (config) {
-				const payload = copy(config || {});
-				const streaming = payload.should_stream === true;
-				const generationId = payload.generation_id != null && String(payload.generation_id) !== ""
-					? String(payload.generation_id)
-					: ("dsh-gen-" + Date.now().toString(16) + "-" + Math.random().toString(16).slice(2, 8));
-				if (streaming) {
-					if (payload.generation_id == null || payload.generation_id === "") payload.generation_id = generationId;
-					// 假流式：宿主一次性返回全文，这里补发酒馆助手流式事件，供评议等 UI 收尾。
-					void window.eventEmit(window.iframe_events.GENERATION_STARTED, generationId);
-				}
-				return call("generateTavernHelperRaw", { config: payload }).then(function (result) {
-					const text = result && result.text;
-					if (!streaming) return text;
-					const events = window.iframe_events;
-					return Promise.resolve(window.eventEmit(events.STREAM_TOKEN_RECEIVED_FULLY, text, generationId))
-						.then(function () { return window.eventEmit(events.STREAM_TOKEN_RECEIVED_INCREMENTALLY, text, generationId); })
-						.then(function () { return window.eventEmit(events.GENERATION_ENDED, text, generationId); })
-						.then(function () { return text; });
+			window.triggerSlash = function (line) {
+				return call("triggerTavernSlash", { line: window.substitudeMacros(String(line || "")) }).then(function (result) {
+					return result && Object.prototype.hasOwnProperty.call(result, "pipe") ? result.pipe : result;
 				});
 			};
 			window.createChatMessages = async function (messages, option) {
@@ -6356,6 +7011,12 @@ function bindTavernFontZoom(node, win) {
             const backgroundModel = modules.installBackgroundModel({ window: window, request: call });
 			facade = modules.installFacade({ projectMvuSettings: backgroundModel.projectMvuSettings, normalizeMvuSettings: backgroundModel.normalizeMvuSettings, readGlobalRegexes: function () { return regexGroups().global.map(rawRegex); }, installCompatibility: modules.installCompatibility, currentScript: currentScript, post: transport.post, createChatData: modules.createChatData, readMessage:readMessage, readCharacter:readCharacter, createLocalVariables: modules.createLocalVariables, window: window, copy: copy, request: call, context: function () { return state; },
 				Popup: modules.createPopup({ document: window.document, parent: parent, token: token }) });
+            modules.installUtilities(window);
+            modules.installEventApi(window);
+            modules.installMacros({window, context: () => state});
+            modules.installRegexApi({window, context: () => state, createEngine: modules.createRegexEngine});
+            modules.installDisplay(window);
+            modules.installGeneration({window, request:call, copy});
 			let regexSaveTimer = null;
 			async function persistGlobalRegexes() {
 				if (regexSaveTimer !== null) { clearTimeout(regexSaveTimer); regexSaveTimer = null; }
@@ -6838,22 +7499,45 @@ function bindTavernFontZoom(node, win) {
 		}
 
 		function releaseTavernHostJQueryHandlers(host, frameWindow) {
-			const jq = host.jQuery;
-			if (!jq || !jq._data || !jq.event || !frameWindow || !frameWindow.Function) return;
-			// Callback realm identifies the retiring script even on shared document
-			// targets. Never remove a whole namespace owned by another component.
-			const targets = [host, host.document].concat(Array.from(host.document.querySelectorAll('*')));
-			for (const target of targets) {
-				if (!jq.hasData(target)) continue;
-				const events = jq._data(target, 'events') || {};
-				for (const handlers of Object.values(events)) {
-					for (const entry of Array.from(handlers)) {
-						if (entry.handler instanceof frameWindow.Function) {
-							jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
-						}
-					}
-				}
-			}
+            if (!host || !frameWindow || !frameWindow.Function) return;
+            // A trusted script can use either jQuery instance to bind live message
+            // nodes. Each instance owns a separate event cache, so inspect both.
+            const registries = Array.from(new Set([host.jQuery, frameWindow.jQuery])).filter(function (jq) {
+                return jq && typeof jq.hasData === "function" && typeof jq._data === "function" && typeof jq.event?.remove === "function";
+            });
+            if (!registries.length) return;
+            const targets = new Set();
+            function addDocument(owner, document) {
+                if (owner) targets.add(owner);
+                if (!document) return;
+                targets.add(document);
+                for (const node of document.querySelectorAll?.('*') || []) targets.add(node);
+            }
+            addDocument(host, host.document);
+            addDocument(frameWindow, frameWindow.document);
+            const sessionId = frameWindow.frameElement?.__dshTavernSessionId;
+            if (sessionId) for (const frame of host.document?.querySelectorAll?.('iframe.dsh-tavern-message-frame') || []) {
+                if (frame.__dshTavernSessionId !== sessionId) continue;
+                try {
+                    // Hidden replacement frames may already have handlers too.
+                    // Never enter another session or an opaque/cross-origin frame.
+                    const document = frame.contentDocument;
+                    if (document) addDocument(frame.contentWindow, document);
+                } catch (_) { /* Cross-origin documents cannot be inspected. */ }
+            }
+            // Callback realm identifies the retiring script even on shared DOM.
+            // Preserve other scripts' callbacks, including identical namespaces.
+            for (const jq of registries) for (const target of targets) {
+                if (!jq.hasData(target)) continue;
+                const events = jq._data(target, 'events') || {};
+                for (const handlers of Object.values(events)) {
+                    for (const entry of Array.from(handlers)) {
+                        if (entry.handler instanceof frameWindow.Function) {
+                            jq.event.remove(target, entry.origType + (entry.namespace ? '.' + entry.namespace : ''), entry.handler, entry.selector);
+                        }
+                    }
+                }
+            }
 		}
 
         // The parent sends the latest complete context after iframe load. Keep
@@ -6888,6 +7572,7 @@ function bindTavernFontZoom(node, win) {
 						name: String(script && script.name || ""),
 						info: String(script && script.info || ""),
 						buttons: Array.isArray(script && script.buttons) ? script.buttons : [],
+                        buttonsEnabled: !script || script.buttonsEnabled !== false,
 						system: String(script && script.system || "")
 					};
 				})
@@ -6902,6 +7587,14 @@ function bindTavernFontZoom(node, win) {
                 + 'createOrderedNumericIndex:' + createOrderedNumericIndex.toString() + ','
                 + 'createTurnFieldIndex:' + createTurnFieldIndex.toString() + ','
                 + 'applyVariableReceipt:' + applyTavernVariableReceipt.toString() + ','
+				+ 'createMessageReader:' + createTavernHelperMessageReader.toString() + ','
+                + 'installUtilities:' + installTavernHelperUtilities.toString() + ','
+                + 'installMacros:' + installTavernHelperMacroApi.toString() + ','
+                + 'installDisplay:' + installTavernHelperDisplayApi.toString() + ','
+                + 'installGeneration:' + installTavernHelperGenerationApi.toString() + ','
+                + 'installEventApi:' + installTavernHelperEventApi.toString() + ','
+                + 'createRegexEngine:' + createTavernRegexEngine.toString() + ','
+                + 'installRegexApi:' + installTavernHelperRegexApi.toString() + ','
 				+ 'createEvents:' + createTavernHelperEventBus.toString() + ','
 				+ 'createPopup:' + createTavernHelperPopup.toString() + ','
 				+ 'installCompatibility:' + installTavernCompatibilityDiagnostics.toString() + ','
@@ -6978,7 +7671,7 @@ function bindTavernFontZoom(node, win) {
 			const closedEventIds = new Set();
 			const closedEventOrder = [];
 			const structuralMutationMethods = new Set(["updateTavernHelperPrompts", "updateTavernHelperMessages", "createTavernHelperMessages", "replaceTavernHelperWorldbook", "saveTavernExtensionSettings", "saveTavernWorldInfo", "saveTavernChatData"]);
-			const allowedMethods = new Set(["getTavernHelperContext", "generateTavernHelperRaw", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "createTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook", "saveTavernExtensionSettings", "loadTavernWorldInfo", "saveTavernWorldInfo", "saveTavernChatData"]);
+			const allowedMethods = new Set(["getTavernHelperContext", "generateTavernHelper", "generateTavernHelperRaw", "stopTavernHelperGeneration", "stopAllTavernHelperGeneration", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "createTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook", "saveTavernExtensionSettings", "loadTavernWorldInfo", "saveTavernWorldInfo", "saveTavernChatData"]);
 			let activeSessionId = "";
 			let root = null;
 			let previous = null;
@@ -7163,6 +7856,10 @@ function bindTavernFontZoom(node, win) {
 				const record = records.get(id);
 				if (!record) return;
 				void flushCompatibility(record);
+                for (const [generationId, job] of record.helperGenerations || []) {
+                    job.cancel();
+                    if (job.started) void Promise.resolve(invoke("stopTavernHelperGeneration", {generationId, generationToken:job.generationToken, pending:true}, record.sessionId)).catch(function () {});
+                }
 				for (const [eventId, pending] of pendingEvents) {
 					if (pending.record !== record) continue;
 					hostWindow.clearTimeout(pending.timer);
@@ -7635,6 +8332,26 @@ function bindTavernFontZoom(node, win) {
 					}
 					return;
 				}
+                if (data.type === "dsh-tavern-helper-call" && data.method === "triggerTavernSlash") {
+                    // Wait for earlier persistence, but do not put generation on the
+                    // RPC tail: its MVU events must be able to issue their own writes.
+                    Promise.resolve(record.rpcTail).catch(function () {}).then(function () {
+                        if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，人物卡命令未执行；请返回原对话重试");
+                        if (data.lifecycleRevision !== undefined && Number(data.lifecycleRevision) !== Number(record.context?.lifecycleRevision || 0)) throw new Error("存档版本已变化，人物卡命令未执行");
+                        if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
+                            throw Object.assign(new Error("事件已经结束，人物卡命令未执行"), { code: "TAVERN_SCRIPT_EVENT_CLOSED" });
+                        }
+                        if (typeof options.executeSlash !== "function") throw new Error("当前对话命令入口尚未就绪");
+                        return options.executeSlash(String(data.args?.line || ""), record.sessionId, data.eventId ? { waitForCompletion: false } : undefined);
+                    }).then(function (result) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: true,
+                            result: typeof result === "string" ? { pipe: result } : result });
+                    }, function (error) {
+                        post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                            error: String(error.message || error), errorCode: String(error.code || "") });
+                    });
+                    return;
+                }
                 if (data.type === "dsh-tavern-helper-call" && data.method === "submitTavernHelperInput") {
                     Promise.resolve().then(function () {
                         if (!foreground || records.get(record.id) !== record) throw new Error("对话已切换，开局消息未发送；请返回原对话重试");
@@ -7649,7 +8366,32 @@ function bindTavernFontZoom(node, win) {
                     });
                     return;
                 }
-				if (data.type !== "dsh-tavern-helper-call" || !allowedMethods.has(data.method)) return;
+                if (data.type !== "dsh-tavern-helper-call") return;
+                if (!allowedMethods.has(data.method)) {
+                    post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false,
+                        error: "当前人物卡不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" });
+                    return;
+                }
+                if (data.method === "stopTavernHelperGeneration" || data.method === "stopAllTavernHelperGeneration") {
+                    const all = data.method === "stopAllTavernHelperGeneration", id = String(data.args?.generationId || "");
+                    let cancelledLocal = false;
+                    const stopArgs = Object.assign({}, data.args || {}), pendingGenerations = [];
+                    for (const [generationId, job] of record.helperGenerations || []) {
+                        if (!all && generationId !== id) continue;
+                        if (!all && stopArgs.generationToken && stopArgs.generationToken !== job.generationToken) continue;
+                        pendingGenerations.push({generationId, generationToken:job.generationToken});
+                        if (!all) Object.assign(stopArgs, {generationToken:job.generationToken, pending:true});
+                        job.cancel(); cancelledLocal = true;
+                    }
+                    if (all) stopArgs.pendingGenerations = (stopArgs.pendingGenerations || []).concat(pendingGenerations);
+                    Promise.resolve().then(() => invoke(data.method, stopArgs, record.sessionId)).then(function (result) {
+                        post(record, {type:"dsh-tavern-helper-response", requestId:data.requestId, ok:true,
+                            result:Object.assign({}, result, {stopped:cancelledLocal || result?.stopped === true})});
+                    }, function (error) {
+                        post(record, {type:"dsh-tavern-helper-response", requestId:data.requestId, ok:false, error:String(error.message || error)});
+                    });
+                    return;
+                }
 				if (data.eventId && (closedEventIds.has(String(data.eventId)) || pendingEvents.get(String(data.eventId))?.finishing)) {
 					post(record, { type: "dsh-tavern-helper-response", requestId: data.requestId, ok: false, error: "事件已经结束，已拒绝迟到写入", errorCode: "TAVERN_SCRIPT_EVENT_CLOSED" });
 					return;
@@ -7665,7 +8407,31 @@ function bindTavernFontZoom(node, win) {
 				const batchKey = JSON.stringify([data.scriptId, data.eventId, mutationArgs.expectedLifecycleRevision]);
 				const queued = record.queuedPromptBatch;
 				let rpcTask;
-				if (promptOperation && queued && queued.key === batchKey && queued.operations.length < 64) {
+                if (data.method === "generateTavernHelper" || data.method === "generateTavernHelperRaw") {
+                    const config = mutationArgs.config || {}, generationId = String(config.generation_id || "dsh-rpc-" + token());
+                    mutationArgs = Object.assign({}, mutationArgs, {generationToken:mutationArgs.generationToken || token(), config:Object.assign({}, config, {generation_id:generationId})});
+                    const jobs = record.helperGenerations || (record.helperGenerations = new Map());
+                    if (jobs.has(generationId)) rpcTask = Promise.reject(new Error("生成编号正在使用: " + generationId));
+                    else {
+                        let rejectCancelled;
+                        const cancelled = new Promise(function (_resolve, reject) { rejectCancelled = reject; });
+                        const job = {started:false, cancelled:false, generationToken:mutationArgs.generationToken, cancel:function () {
+                            if (job.cancelled) return;
+                            job.cancelled = true;
+                            rejectCancelled(new Error("生成已取消"));
+                        }};
+                        jobs.set(generationId, job);
+                        // Respect earlier mutations, but don't put a long model job
+                        // in the mutation queue: cancellation must reach it immediately.
+                        const generation = (record.rpcTail || Promise.resolve()).catch(function () {}).then(function () {
+                            if (job.cancelled || records.get(record.id) !== record) throw new Error("生成已取消");
+                            if (data.lifecycleRevision !== undefined && Number(data.lifecycleRevision) !== Number(record.context?.lifecycleRevision || 0)) throw new Error("存档版本已变化，生成已取消");
+                            job.started = true;
+                            return invoke(data.method, mutationArgs, record.sessionId);
+                        });
+                        rpcTask = Promise.race([generation, cancelled]).finally(function () { if (jobs.get(generationId) === job) jobs.delete(generationId); });
+                    }
+                } else if (promptOperation && queued && queued.key === batchKey && queued.operations.length < 64) {
 					queued.operations.push(promptOperation);
 					// Every caller receives persistence confirmation, but refresh the host once.
 					rpcTask = queued.task.then(function (result) { return Object.assign({}, result, { updated: false }); });
@@ -8425,10 +9191,10 @@ function bindTavernFontZoom(node, win) {
 			}
 			if (afterMessages.length > shared) operations.push({ op: "messages.append", values: clone(afterMessages.slice(shared)) });
 			if (afterMessages.length < beforeMessages.length) operations.push({ op: "messages.truncate", length: afterMessages.length });
-			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "lifecycleRevision"]) {
+			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "globalVariables", "characterVariables", "worldbook", "character", "characterName", "playerName", "regexScripts", "lifecycleRevision"]) {
 				if (same(previous[key], target[key])) continue;
 				operations.push({ op: "value.replace", key: key, value: clone(target[key]) });
-				if (key === "chatVariables" || key === "scriptVariables") variablesChanged = true;
+				if (["chatVariables", "scriptVariables", "globalVariables", "characterVariables"].includes(key)) variablesChanged = true;
 			}
 			const stateRevision = Math.max(0, Number(target.stateRevision) || 0);
 			if (operations.length === 0 && Number(previousTurn) === turn && Number(previous.stateRevision) === stateRevision) return null;
@@ -8490,6 +9256,32 @@ function bindTavernFontZoom(node, win) {
 			const configuredSlashExecutor = options && options.executeSlash;
 			const invalidate = options && options.invalidate || function (sessionId) { liveTavernView.invalidate(sessionId); };
 			const channels = new Map();
+            const generationOwners = new Set();
+            function retireGenerations(document) {
+                if (!document?.generationJobs) return;
+                for (const job of document.generationJobs.values()) void Promise.resolve().then(job.stop).catch(function () {});
+                document.generationJobs.clear();
+                generationOwners.delete(document);
+            }
+            async function frameCall(document, method, args, sessionId, preparationId) {
+                const send = (name, payload) => preparationId
+                    ? invoke("callOpeningRuntime", {id:preparationId, method:name, args:payload})
+                    : invoke(name, payload, sessionId);
+                if (method !== "generateTavernHelper" && method !== "generateTavernHelperRaw") return send(method, args);
+                const generationId = String(args?.config?.generation_id || "dsh-frame-" + nextTavernFrameToken());
+                const generationToken = String(args?.generationToken || nextTavernFrameToken());
+                const jobs = document.generationJobs || (document.generationJobs = new Map());
+                if (jobs.has(generationId)) throw new Error("生成编号正在使用: " + generationId);
+                const job = {stop:() => send("stopTavernHelperGeneration", {generationId, generationToken, pending:true})};
+                jobs.set(generationId, job); generationOwners.add(document);
+                try {
+                    return await send(method, Object.assign({}, args, {generationToken,
+                        config:Object.assign({}, args?.config || {}, {generation_id:generationId})}));
+                } finally {
+                    if (jobs.get(generationId) === job) jobs.delete(generationId);
+                    if (!jobs.size) generationOwners.delete(document);
+                }
+            }
             const touchRelay = createTavernTouchRelay(hostWindow);
 			const frameSizeObservers = new Map();
             const sizingObservers = new Map();
@@ -8581,7 +9373,7 @@ function bindTavernFontZoom(node, win) {
                         document.layout = layout;
                         if (document.sizing.mode !== "content") applySizing(document, channel, layout.height);
                     }));
-                    if (!node) channels.delete(document.token);
+                    if (!node) { retireGenerations(document); channels.delete(document.token); }
 				};
 				return document;
 			}
@@ -8620,9 +9412,10 @@ function bindTavernFontZoom(node, win) {
 			}
 			function reconcile() {
 				if (desired.key === visible.key) {
-					if (pending) { pending = null; publish(); }
+					if (pending) { retireGenerations(pending); pending = null; publish(); }
 				} else if (!pending || pending.key !== desired.key) {
-					pending = desired;
+					if (pending && pending !== desired) retireGenerations(pending);
+                    pending = desired;
 					publish();
 				}
 			}
@@ -8638,6 +9431,7 @@ function bindTavernFontZoom(node, win) {
 				if (desired.key !== documentKey()) desired = createDocument();
 				if (sessionChanged) {
 					// Never keep an old conversation's page eligible for writes in a new one.
+                    for (const owner of Array.from(generationOwners)) retireGenerations(owner);
 					channels.clear();
 					visible = desired; pending = null;
 					height = (props.openingPreview ? 160 : restoredTavernFrameHeight(visible.heightKey, visible.content));
@@ -8689,7 +9483,8 @@ function bindTavernFontZoom(node, win) {
 					if (sourceDocument === pending && pending.key === desired.key) {
 						rememberHeight(pending, pending.height || (props.openingPreview ? 160 : restoredTavernFrameHeight(pending.heightKey, pending.content)));
 						touchRelay.stop();
-						visible = pending; pending = null;
+						retireGenerations(visible);
+                        visible = pending; pending = null;
 						publish();
 					}
 				} else if (data.type === "dsh-tavern-frame-touch-start" || data.type === "dsh-tavern-frame-scroll") {
@@ -8767,13 +9562,13 @@ function bindTavernFontZoom(node, win) {
                     }
 					(data.method === "submitTavernHelperInput"
                         ? submitOpening(sourceDocument, data.args && data.args.text)
-                        : invoke("callOpeningRuntime", { id: props.openingPreview.preparationId, method: data.method, args: data.args })).then(function (result) {
+                        : frameCall(sourceDocument, data.method, data.args, undefined, requestProps.openingPreview.preparationId)).then(function (result) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result }, "*");
 					}, function (error) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error.message || error) }, "*");
 					});
 				} else if (data.type === "dsh-tavern-helper-call" && props.sessionId) {
-					const allowedMethods = new Set(["generateTavernHelperRaw", "prepareSessionOpening", "createTavernHelperMessages", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook"]);
+					const allowedMethods = new Set(["generateTavernHelper", "generateTavernHelperRaw", "stopTavernHelperGeneration", "stopAllTavernHelperGeneration", "prepareSessionOpening", "createTavernHelperMessages", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook"]);
 					if (data.method === "startSessionOpening") {
 						const request = sourceDocument.openingRequest;
 						const start = async function () {
@@ -8803,18 +9598,22 @@ function bindTavernFontZoom(node, win) {
 							return invoke("getSession", {}, props.sessionId).then(function (snapshot) {
 								const context = snapshot && snapshot.view && snapshot.view.tavernHelper;
 								if (context) helperContext = context;
-								return Object.assign({}, result || {}, context ? { context: context } : {});
+								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: context } : {});
 							});
 						}).then(function (result) {
 							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 						}, function (error) {
-							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error) }, "*");
+							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error), errorCode: String(error && error.code || "") }, "*");
 						});
 						return;
 					}
-					if (!allowedMethods.has(data.method)) return;
+                    if (!allowedMethods.has(data.method)) {
+                        event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false,
+                            error: "当前消息不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" }, "*");
+                        return;
+                    }
 					const args = Object.assign({}, data.args || {}, { sessionId: props.sessionId, expectedLifecycleRevision: Math.max(0, Number(helperContext && helperContext.lifecycleRevision) || 0) });
-					invoke(data.method, args, props.sessionId).then(function (result) {
+					frameCall(sourceDocument, data.method, args, requestProps.sessionId).then(function (result) {
 						if (current() && data.method === "prepareSessionOpening") sourceDocument.openingRequest = result;
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 					}, function (error) {
@@ -8865,6 +9664,7 @@ function bindTavernFontZoom(node, win) {
                         sizingObservers.clear();
                         frameVisibility.forEach(stop => stop());
                         frameVisibility.clear();
+                        for (const owner of Array.from(generationOwners)) retireGenerations(owner);
 						listener = null; lifetime++;
 						hostWindow.removeEventListener("message", receive);
 						cancelRuntimeReport();
@@ -9786,6 +10586,89 @@ function bindTavernFontZoom(node, win) {
 
 		function createTavernFrameSlashExecutor(ctx, hostWindow) {
 			hostWindow = hostWindow || window;
+            // A deliberately bounded, read-only subset of ST slash commands. Parse
+            // every stage before reading anything; never forward a mixed pipeline.
+            function slashError(message) {
+                return Object.assign(new Error(message), { code: "UNSUPPORTED_SLASH_PIPELINE" });
+            }
+            function decodeSlashText(value) {
+                value = value.trim();
+                if ((value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0]) value = value.slice(1, -1);
+                return value.replace(/\\([\\|"'])/g, '$1');
+            }
+            function readPipeline(line) {
+                const stages = [];
+                let start = 0, quote = '', escaped = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (escaped) { escaped = false; continue; }
+                    if (ch === '\\') { escaped = true; continue; }
+                    if (quote) { if (ch === quote) quote = ''; continue; }
+                    if ((ch === '"' || ch === "'") && (i === start || /[\s=]/.test(line[i - 1]))) { quote = ch; continue; }
+                    if (ch === '|') { stages.push(line.slice(start, i).trim()); start = i + 1; }
+                }
+                if (quote) throw slashError('人物卡命令引号未闭合');
+                stages.push(line.slice(start).trim());
+                return stages.map(function (stage) {
+                    const match = /^\/(pass|return|findentry|findlore|findwi)(?:\s+([\s\S]*))?$/i.exec(stage);
+                    if (!match) throw slashError('暂不支持这条人物卡命令管道；/pass 和 /findentry 只能与只读命令组合，未发送消息');
+                    const command = match[1].toLowerCase();
+                    let text = match[2] || '';
+                    if (command === 'pass' || command === 'return') return { command: 'pass', text: decodeSlashText(text) };
+                    const args = {};
+                    while (true) {
+                        const named = /^([a-zA-Z_]\w*)=/.exec(text);
+                        if (!named) break;
+                        const key = named[1];
+                        if (!['file', 'field'].includes(key) || Object.hasOwn(args, key)) throw slashError('不支持或重复的 /findentry 参数: ' + key);
+                        text = text.slice(named[0].length);
+                        let end = 0;
+                        if (text[0] === '"' || text[0] === "'") {
+                            const quote = text[0]; end = 1;
+                            for (; end < text.length; end++) {
+                                if (text[end] === '\\') { end++; continue; }
+                                if (text[end] === quote) { end++; break; }
+                            }
+                            if (end < text.length && !/\s/.test(text[end])) throw slashError('/findentry 引号后需要空格');
+                        } else {
+                            while (end < text.length && !/\s/.test(text[end])) end++;
+                        }
+                        args[key] = decodeSlashText(text.slice(0, end));
+                        text = text.slice(end).trimStart();
+                    }
+                    const field = args.field || 'key';
+                    if (!args.file) throw slashError('/findentry 需要 file=当前世界书名称（或 current）');
+                    if (!['key', 'keysecondary', 'comment', 'name', 'content', 'uid'].includes(field)) throw slashError('暂不支持 /findentry 字段: ' + field);
+                    return { command: 'findentry', file: args.file, field: field, text: decodeSlashText(text) };
+                });
+            }
+            async function executeReadPipeline(line, sessionId) {
+                const stages = readPipeline(line);
+                let pipe = '';
+                for (const stage of stages) {
+                    const text = stage.text.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    if (stage.command === 'pass') { pipe = text; continue; }
+                    const file = stage.file.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    const result = await rpc('getTavernHelperWorldbook', { name: file }, sessionId);
+                    const query = text.toLowerCase();
+                    let found = null, best = Infinity;
+                    for (const entry of result?.worldbook?.entries || []) {
+                        const field = stage.field;
+                        const value = field === 'key' ? entry.strategy?.keys : field === 'keysecondary' ? entry.strategy?.keys_secondary?.keys
+                            : field === 'comment' ? entry.name : entry[field];
+                        for (const item of Array.isArray(value) ? value : [value]) {
+                            if (item === undefined || item === null || !query) continue;
+                            const candidate = String(item).toLowerCase();
+                            const position = candidate.indexOf(query);
+                            // Exact matches outrank substrings. Stable ties retain book order.
+                            const score = candidate === query ? 0 : position < 0 ? Infinity : 1 + position + (candidate.length - query.length) / (candidate.length + 1);
+                            if (score < best) { best = score; found = entry; }
+                        }
+                    }
+                    pipe = found?.uid === undefined ? '' : String(found.uid);
+                }
+                return pipe;
+            }
 			return function (line, sessionId, options) {
                 if (options && typeof options.inputText === "string") {
                     const text = options.inputText.trim();
@@ -9796,6 +10679,7 @@ function bindTavernFontZoom(node, win) {
                         return { submitted:true };
                     });
                 }
+                if (/^\s*\/(?:pass|return|findentry|findlore|findwi)(?:\s|$)/i.test(String(line))) return executeReadPipeline(String(line), sessionId);
                 if (/^\/ejs(?:-refresh)?(?:\s|$)/.test(String(line))) return rpc("executeFullTemplateCommand", {text:line}, sessionId).then(function(result){return result.pipe;});
 				const draftMatch = /^\/setinput(?: ([\s\S]*))?$/.exec(String(line || ""));
                 // Preflight before touching the composer: otherwise the greedy

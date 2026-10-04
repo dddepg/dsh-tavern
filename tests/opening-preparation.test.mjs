@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createOpeningPreparation } from '../tavern-plugin/lib/domain/opening-preparation.js'
 import { inspectWorldBookDocument } from '../tavern-plugin/lib/domain/worldbook-resource.js'
+import { generateHelper, generateHelperRaw } from '../tavern-plugin/lib/domain/helper-generation.js'
+import { createCleanCompatibilityPreset } from '../tavern-plugin/lib/domain/sillytavern-compatibility.js'
 
 const card = { name: '测试', first_mes: '首页', alternate_greetings: ['第二幕'] }
 function fixture() {
@@ -150,4 +152,74 @@ test('MVU 开局保留完整模板设置，卡脚本可按读取的基线保存�
   next.EjsTemplate.depth_limit = -1
   await service.callRuntime(draft.id, 'saveTavernExtensionSettings', { settings: next, expectedSettings: draft.runtime.context.extensionSettings })
   assert.equal((await service.create('card', { runtime: true })).runtime.context.extensionSettings.EjsTemplate.depth_limit, -1)
+})
+
+test('opening generate reads the edited draft worldbook, selected greeting, actual card and source preset without writes', async t => {
+  const original = { name: 'Preview book', entries: [{ id: 1, keys: [], enabled: false, constant: true, content: 'Draft-only lore', position: 'before_char' }] }
+  const preset = createCleanCompatibilityPreset()
+  preset.entries.unshift({ entryKey: 'source', identifier: 'source', role: 'system', content: 'Source preset', enabled: true, ordered: true })
+  const sourceChat = { sessionId: 'source-game', macroState: { userName: 'Player' }, runtimePresetSnapshot: { compatibilityPreset: preset, compatibilityPresetDocument: {} } }
+  let request
+  const service = createOpeningPreparation({ readCard: async () => ({ ...card, description: 'A card for {{user}}' }),
+    worldBooks: { bound: async () => ({ source: { kind: 'card' }, view: inspectWorldBookDocument(original) }) },
+    generate: (config, context) => generateHelper(config, { ...context, callModel: async options => { request = options; return 'Preview result' } }) })
+  t.after(() => service.dispose())
+  const draft = await service.create('card', { sourceChat, runtime: true })
+  const old = structuredClone(draft.worldbook.entries), enabled = old.map(entry => ({ ...entry, enabled: true }))
+  await service.replaceWorldbook(draft.id, enabled, old)
+  service.select(draft.id, 'alternate:0')
+  const before = service.resolve(draft.id, 'card', 'alternate:0')
+  assert.deepEqual(await service.callRuntime(draft.id, 'generateTavernHelper', { config: { user_input: 'Continue', generation_id: 'preview' } }), { text: 'Preview result' })
+  assert.equal(request.sessionId, 'source-game')
+  const texts = request.messages.map(message => message.content[0].text)
+  for (const expected of ['Source preset', 'A card for Player', 'Draft-only lore', '第二幕', 'Continue']) assert.ok(texts.includes(expected), expected)
+  assert.ok(!texts.includes('首页'))
+  assert.deepEqual(service.resolve(draft.id, 'card', 'alternate:0'), before)
+  assert.equal(original.entries[0].enabled, false)
+})
+
+test('opening stop/release/expiry cancels only its own pending generations and aborts provider signals', async t => {
+  let now = 0
+  const started = new Map(), signals = new Map()
+  const service = createOpeningPreparation({ readCard: async () => card, worldBooks: { bound: async () => null }, now: () => now,
+    generateRaw: async (config, context) => {
+      signals.set(context.chat.id, context.signal)
+      started.get(context.chat.id)?.()
+      return generateHelperRaw(config, { ...context, callModel: async () => new Promise(() => {}) })
+    } })
+  t.after(() => service.dispose())
+  const first = await service.create('card', { sourceChat: { sessionId: 'shared-source' } })
+  const second = await service.create('card', { sourceChat: { sessionId: 'shared-source' } })
+  const run = draft => {
+    const ready = new Promise(resolve => started.set(draft.id, resolve))
+    const pending = service.callRuntime(draft.id, 'generateTavernHelperRaw', { config: { generation_id: 'same-id', ordered_prompts: [{ role: 'user', content: 'wait' }] } })
+    return { ready, rejected: assert.rejects(pending, { name: 'AbortError' }) }
+  }
+  const a = run(first), b = run(second)
+  await Promise.all([a.ready, b.ready])
+  assert.deepEqual(await service.callRuntime(first.id, 'stopTavernHelperGeneration', { generationId: 'same-id' }), { stopped: true })
+  await a.rejected
+  assert.equal(signals.get(first.id).aborted, true)
+  assert.equal(signals.get(second.id).aborted, false)
+  service.release(second.id)
+  await b.rejected
+  assert.equal(signals.get(second.id).aborted, true)
+  const c = run(first)
+  await c.ready
+  now = 3 * 60 * 60 * 1000
+  assert.throws(() => service.get(first.id), /过期/)
+  await c.rejected
+  assert.equal(signals.get(first.id).aborted, true)
+})
+
+test('opening stopAll remembers token-scoped pending admission without blocking a new incarnation', async t => {
+  let calls = 0
+  const service = createOpeningPreparation({ readCard: async () => card, worldBooks: { bound: async () => null }, generateRaw: async () => { calls++; return 'ok' } })
+  t.after(() => service.dispose())
+  const draft = await service.create('card')
+  assert.deepEqual(await service.callRuntime(draft.id, 'stopAllTavernHelperGeneration', { pendingGenerations: [{ generationId: 'delayed', generationToken: 'old' }] }), { stopped: true, generationIds: ['delayed'] })
+  await assert.rejects(service.callRuntime(draft.id, 'generateTavernHelperRaw', { generationToken: 'old', config: { generation_id: 'delayed' } }), { name: 'AbortError' })
+  assert.equal(calls, 0)
+  assert.deepEqual(await service.callRuntime(draft.id, 'generateTavernHelperRaw', { generationToken: 'new', config: { generation_id: 'delayed' } }), { text: 'ok' })
+  assert.equal(calls, 1)
 })
