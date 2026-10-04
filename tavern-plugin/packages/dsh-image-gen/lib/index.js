@@ -2360,7 +2360,7 @@ function novelaiRequest(input, config) {
 	const prompt = novelaiPrompts(input, config);
 	if (limit && prompt.characters.length > limit) throw new Error("当前 NovelAI 模型最多支持 " + limit + " 人，请选择 V5 或调整画面");
 	const seed = config.seed ? Number(config.seed) : randomInt(0, 4294967296);
-	const negative = mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config));
+	const negative = mergeTags(mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config)), typeof input.plan?.negative === "string" ? input.plan.negative : "");
 	const sampler = config.sampler || "k_euler_ancestral";
 	const reference = referenceImageBytes(config.referenceImage);
 	const captions = prompt.characters.map((person) => ({
@@ -2963,8 +2963,27 @@ function channelReady(config, hasKey) {
 	if (config.provider === "dsh-image-gen") return config.pluginReady === true;
 	return Boolean(config.baseURL && (config.provider === "comfyui" ? config.workflow : config.provider === "webui" || config.model) && (!channelNeedsKey(config) || hasKey) && (config.authType !== "basic" || config.username));
 }
+/** The picture's own orientation turns a configured WxH size or W:H ratio
+* around, keeping its resolution. Square settings and named sizes (1K, 2K)
+* stay as configured; so does everything when the user fixed the orientation. */
+function orientedChannelSettings(config, input = {}) {
+	const orientation = input.style?.orientation === "fixed" ? "" : input.plan?.orientation;
+	if (!["portrait", "landscape"].includes(orientation)) return config;
+	const turn = (width, height) => orientation === "portrait" ? width > height : width < height;
+	const result = { ...config };
+	const size = typeof config.size === "string" && config.size.match(/^(\d+)([x*])(\d+)$/);
+	if (size && turn(Number(size[1]), Number(size[3]))) result.size = size[3] + size[2] + size[1];
+	const ratio = typeof config.aspectRatio === "string" && config.aspectRatio.match(/^(\d+):(\d+)$/);
+	if (ratio && turn(Number(ratio[1]), Number(ratio[2]))) result.aspectRatio = ratio[2] + ":" + ratio[1];
+	return result;
+}
+/** Negative tags the picture itself asks for, added after the configured ones. */
+function imageNegativePrompt(configured, input = {}) {
+	const extra = typeof input.plan?.negative === "string" ? input.plan.negative.trim() : "";
+	return [configured || "", extra].filter(Boolean).join(", ");
+}
 function imageChannelRequest(input) {
-	const config = channelSettings(input);
+	const config = orientedChannelSettings(channelSettings(input), input);
 	const references = input.referenceImages || [];
 	const capability = imageReferenceCapability(config);
 	if (!Array.isArray(references) || references.length && (!capability.supported || references.length > capability.maxImages)) throw new Error("当前渠道不支持所选参考图，未发送请求");
@@ -2993,7 +3012,7 @@ function imageChannelRequest(input) {
 			seed: -1,
 			send_images: true,
 			save_images: false,
-			...config.negativePrompt ? { negative_prompt: config.negativePrompt } : {},
+			...imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {},
 			...config.steps ? { steps: Number(config.steps) } : {},
 			...config.guidance ? { cfg_scale: Number(config.guidance) } : {}
 		};
@@ -3056,7 +3075,7 @@ function imageChannelRequest(input) {
 				size: config.size,
 				n: 1,
 				prompt_extend: false,
-				...config.negativePrompt ? { negative_prompt: config.negativePrompt } : {}
+				...imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {}
 			}
 		};
 	} else if (config.provider === "grok") {
@@ -3621,7 +3640,11 @@ async function generateComfyImage(input, deps) {
 	if (task) {
 		if (task.provider !== "comfyui" || !opaqueId(task.promptId) || task.baseURL !== config.baseURL || task.workflowDigest !== config.workflow.digest || task.outputNode !== config.workflow.outputNode) throw new Error("原 ComfyUI 任务与当前配置不匹配，请恢复原配置后查询");
 	} else {
-		const compiled = compileComfyWorkflow(config.workflow, input.prompt, config);
+		const negativePrompt = config.workflow?.bindings?.negative?.length ? imageNegativePrompt(config.negativePrompt, input) : config.negativePrompt;
+		const compiled = compileComfyWorkflow(config.workflow, input.prompt, {
+			...config,
+			negativePrompt
+		});
 		task = {
 			provider: "comfyui",
 			promptId: randomUUID(),

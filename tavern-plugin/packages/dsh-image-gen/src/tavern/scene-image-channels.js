@@ -136,8 +136,28 @@ export function imageExpressionGuidance(config) {
   return 'NovelAI：tags 优先用简洁英文绘图标签，必要关系用短英文句子。人物外貌、服装、动作、表情、位置只放各自的人物块，不在 scene 中重写。scene 只放人数、环境、镜头和关系；人数与性别须有依据，不猜测。V4/V4.5/V5 会分开提交角色描述，人数标签如 2girls 放 scene，单个人物只写 girl/boy/other，不写 1girl，不使用 | 人物分隔语法。保留稳定身份与事实，只转换表达。'
 }
 
+/** The picture's own orientation turns a configured WxH size or W:H ratio
+ * around, keeping its resolution. Square settings and named sizes (1K, 2K)
+ * stay as configured; so does everything when the user fixed the orientation. */
+export function orientedChannelSettings(config, input = {}) {
+  const orientation = input.style?.orientation === 'fixed' ? '' : input.plan?.orientation
+  if (!['portrait', 'landscape'].includes(orientation)) return config
+  const turn = (width, height) => orientation === 'portrait' ? width > height : width < height
+  const result = { ...config }
+  const size = typeof config.size === 'string' && config.size.match(/^(\d+)([x*])(\d+)$/)
+  if (size && turn(Number(size[1]), Number(size[3]))) result.size = size[3] + size[2] + size[1]
+  const ratio = typeof config.aspectRatio === 'string' && config.aspectRatio.match(/^(\d+):(\d+)$/)
+  if (ratio && turn(Number(ratio[1]), Number(ratio[2]))) result.aspectRatio = ratio[2] + ':' + ratio[1]
+  return result
+}
+/** Negative tags the picture itself asks for, added after the configured ones. */
+export function imageNegativePrompt(configured, input = {}) {
+  const extra = typeof input.plan?.negative === 'string' ? input.plan.negative.trim() : ''
+  return [configured || '', extra].filter(Boolean).join(', ')
+}
+
 export function imageChannelRequest(input) {
-  const config = channelSettings(input)
+  const config = orientedChannelSettings(channelSettings(input), input)
   const references = input.referenceImages || []
   const capability = imageReferenceCapability(config)
   if (!Array.isArray(references) || references.length && (!capability.supported || references.length > capability.maxImages)) throw new Error('当前渠道不支持所选参考图，未发送请求')
@@ -154,7 +174,7 @@ export function imageChannelRequest(input) {
     if (config.authType === 'none') delete headers.authorization
     else if (config.authType === 'basic') headers.authorization = 'Basic ' + Buffer.from(config.username + ':' + input.apiKey, 'utf8').toString('base64')
     const [width, height] = config.size.split('x').map(Number)
-    body = { prompt, width, height, batch_size: 1, n_iter: 1, seed: -1, send_images: true, save_images: false, ...(config.negativePrompt ? { negative_prompt: config.negativePrompt } : {}), ...(config.steps ? { steps: Number(config.steps) } : {}), ...(config.guidance ? { cfg_scale: Number(config.guidance) } : {}) }
+    body = { prompt, width, height, batch_size: 1, n_iter: 1, seed: -1, send_images: true, save_images: false, ...(imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {}), ...(config.steps ? { steps: Number(config.steps) } : {}), ...(config.guidance ? { cfg_scale: Number(config.guidance) } : {}) }
   } else if (config.provider === 'gemini') {
     path = 'interactions'; delete headers.authorization; headers['x-goog-api-key'] = input.apiKey
     body = { model: config.model, input: [{ type: 'text', text: prompt }], response_format: { type: 'image', mime_type: 'image/png', aspect_ratio: config.aspectRatio, image_size: config.size } }
@@ -169,7 +189,7 @@ export function imageChannelRequest(input) {
   } else if (config.provider === 'qwen') {
     if (!config.model.startsWith('qwen-image')) throw new Error('百炼渠道当前只接入 Qwen-Image，不支持其他万相模型')
     path = 'services/aigc/multimodal-generation/generation'
-    body = { model: config.model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size: config.size, n: 1, prompt_extend: false, ...(config.negativePrompt ? { negative_prompt: config.negativePrompt } : {}) } }
+    body = { model: config.model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size: config.size, n: 1, prompt_extend: false, ...(imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {}) } }
   } else if (config.provider === 'grok') {
     if (!['1k', '2k'].includes(config.size)) throw new Error('Grok 分辨率须为 1k 或 2k')
     body = { model: config.model, prompt, n: 1, aspect_ratio: config.aspectRatio, resolution: config.size }

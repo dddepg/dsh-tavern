@@ -299,7 +299,7 @@ export function novelaiRequest(input, config) {
   const prompt = novelaiPrompts(input, config)
   if (limit && prompt.characters.length > limit) throw new Error('当前 NovelAI 模型最多支持 ' + limit + ' 人，请选择 V5 或调整画面')
   const seed = config.seed ? Number(config.seed) : randomInt(0, 0x100000000)
-  const negative = mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config))
+  const negative = mergeTags(mergeTags(novelaiArtist(config).negative, novelaiNegativeTags(config)), typeof input.plan?.negative === 'string' ? input.plan.negative : '')
   const sampler = config.sampler || 'k_euler_ancestral'
   const reference = referenceImageBytes(config.referenceImage)
   const captions = prompt.characters.map(person => ({ char_caption: person.caption, centers: [{ x: 0.5, y: 0.5 }] }))

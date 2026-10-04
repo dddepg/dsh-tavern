@@ -13,11 +13,14 @@ const presets = [
 export const SCENE_STYLE_PRESETS = presets.map(({ id, label }) => ({ id, label }))
 
 export function imageStyleSettings(input = {}) {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['preset', 'custom'].includes(key))) throw new Error('风格设置只能包含 preset 与 custom')
-  const preset = input.preset ?? 'default', custom = input.custom ?? ''
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['preset', 'custom', 'orientation'].includes(key))) throw new Error('风格设置只能包含 preset、custom 与 orientation')
+  const preset = input.preset ?? 'default', custom = input.custom ?? '', orientation = input.orientation ?? 'auto'
   if (!presets.some(item => item.id === preset)) throw new Error('未知的生图风格')
   if (typeof custom !== 'string' || custom.length > 2000) throw new Error('风格补充须为不超过 2000 字符的文本')
-  return { preset, custom } // Keep the user's original wording, independently of its expression.
+  // 'auto' (the default, omitted so older records compare equal) lets each picture
+  // turn the configured size to portrait or landscape; 'fixed' never does.
+  if (!['auto', 'fixed'].includes(orientation)) throw new Error('画幅方向只能是 auto 或 fixed')
+  return { preset, custom, ...(orientation === 'fixed' ? { orientation } : {}) } // Keep the user's original wording, independently of its expression.
 }
 
 /** Current Images channel accepts short sentences as well as tags: its custom

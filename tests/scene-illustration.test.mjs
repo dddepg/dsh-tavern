@@ -654,3 +654,15 @@ test('native point status finds existing legacy images, including disabled gener
   await db.update(original.id,chat=>{chat.messages[0].text=original.messages[0].text;return chat})
   assert.deepEqual((await fx.service.status('parent',2)).versions,done.versions)
 })
+
+test('after a picture of an earlier moment, the next planning input re-reads the rest of that turn', async t => {
+  const inputs = []
+  let moment = 'earlier'
+  const fx = await fixture(t, { runAgent: async input => { inputs.push(JSON.parse(input.messages[0].content[0].text)); await submitPlanCall(input, { arguments: { plan: { ...planFixture(), moment } } }); moment = 'end'; return {} } })
+  await fx.service.start('parent', 2, sceneTarget(fx.chat(), 2).key)
+  await until(async () => (await fx.service.status('parent', 2)).status === 'succeeded')
+  fx.chat().messages.push({ role: 'assistant', turn: 3, text: '她坐下。' })
+  await fx.service.start('parent', 3, sceneTarget(fx.chat(), 3).key)
+  await until(async () => (await fx.service.status('parent', 3)).status === 'succeeded')
+  assert.ok(inputs[1].sources.some(source => source.turn === 2 && source.id !== 'target'), 'the earlier-moment turn is resent as history')
+})

@@ -62,3 +62,19 @@ test('branches and games do not share future identities; stale parallel commits 
   await fx.module.commit(fresh, { description: '', continuity: 'continued', subjects: one.subjects, characters: [], scene: { composition } })
   await assert.rejects(fx.module.commit(stale, { description: '', continuity: 'continued', subjects: one.subjects, characters: [], scene: { composition } }), /版本已变化/)
 })
+
+test('a picture records its moment, orientation and own negative tags; an earlier moment is reported to the next picture', async t => {
+  const fx = await fixture(t)
+  const one = await fx.module.commit(await fx.prepare(), { ...first(), moment: 'earlier', orientation: 'portrait', negative: 'extra person, hat' })
+  assert.equal(one.moment, 'earlier')
+  assert.equal(one.orientation, 'portrait')
+  assert.equal(one.negative, 'extra person, hat')
+  assert.equal((await fx.prepare(2, '林岚离开。')).previousMoment, 'earlier')
+  // Defaults keep the stored frame identical to earlier versions.
+  const fx2 = await fixture(t)
+  const plain = await fx2.module.commit(await fx2.prepare(), first())
+  assert.ok(!('moment' in plain) && !('orientation' in plain) && !('negative' in plain))
+  assert.equal((await fx2.prepare(2, '林岚离开。')).previousMoment, 'end')
+  await assert.rejects(fx2.module.commit(await fx2.prepare(2, 'x'), { ...first(), moment: 'middle' }), /moment/)
+  await assert.rejects(fx2.module.commit(await fx2.prepare(2, 'x'), { ...first(), orientation: 'wide' }), /orientation/)
+})

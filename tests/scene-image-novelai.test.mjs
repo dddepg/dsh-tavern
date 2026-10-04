@@ -151,3 +151,22 @@ test('NovelAI busy (429) waits and resends; other failures and aborts do not ret
   await assert.rejects(pending, /cancelled/)
   assert.equal(count, 1)
 })
+
+test('a picture turns the configured size to its own orientation and adds its own negative tags', async () => {
+  const novelai = { ...input, model: 'nai-diffusion-4-5-full', size: '832x1216', negativePrompt: 'lowres' }
+  const request = extra => imageChannelRequest({ ...novelai, ...extra }).body.parameters
+  const landscape = request({ plan: { ...plan, orientation: 'landscape', negative: 'hat, lowres' } })
+  assert.deepEqual([landscape.width, landscape.height], [1216, 832])
+  assert.equal(landscape.negative_prompt, 'lowres, hat')
+  const portrait = request({ plan: { ...plan, orientation: 'portrait' } })
+  assert.deepEqual([portrait.width, portrait.height], [832, 1216])
+  const fixed = request({ plan: { ...plan, orientation: 'landscape' }, style: { preset: 'default', custom: '', orientation: 'fixed' } })
+  assert.deepEqual([fixed.width, fixed.height], [832, 1216])
+  const gemini = imageChannelRequest({ provider: 'gemini', apiKey: 'k', prompt: 'p', model: 'gemini-3.1-flash-image', size: '1K', aspectRatio: '3:4', plan: { orientation: 'landscape' } }).body
+  assert.equal(gemini.response_format.aspect_ratio, '4:3')
+  assert.equal(imageChannelRequest({ provider: 'gemini', apiKey: 'k', prompt: 'p', model: 'gemini-3.1-flash-image', size: '1K', aspectRatio: '1:1', plan: { orientation: 'landscape' } }).body.response_format.aspect_ratio, '1:1')
+  const webui = imageChannelRequest({ provider: 'webui', baseURL: 'http://127.0.0.1:7860', authType: 'none', prompt: 'p', size: '512x768', negativePrompt: 'blurry', plan: { orientation: 'landscape', negative: 'text' } }).body
+  assert.deepEqual([webui.width, webui.height, webui.negative_prompt], [768, 512, 'blurry, text'])
+  const qwen = imageChannelRequest({ provider: 'qwen', apiKey: 'k', prompt: 'p', model: 'qwen-image-3.0', size: '1328*1024', plan: { orientation: 'portrait', negative: 'text' } }).body.parameters
+  assert.deepEqual([qwen.size, qwen.negative_prompt], ['1024*1328', 'text'])
+})
