@@ -33,8 +33,14 @@ async function absent(file) {
   await assert.rejects(readFile(file), { code: 'ENOENT' })
 }
 
+// A surviving descendant writes `late` this long after `ready`. Keep it well above
+// slow-runner cleanup latency (macOS CI probes process groups via ps), or a
+// correct but slow kill looks like a leaked process.
+const LATE_WRITE_MS = 2000
+const afterLateWrite = () => delay(LATE_WRITE_MS + 300)
+
 function writerScript(ready, late) {
-  return `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setTimeout(() => fs.writeFileSync(${JSON.stringify(late)}, 'late write'), 700); setInterval(() => {}, 1000)`
+  return `const fs = require('node:fs'); process.on('SIGTERM', () => {}); fs.writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setTimeout(() => fs.writeFileSync(${JSON.stringify(late)}, 'late write'), ${LATE_WRITE_MS}); setInterval(() => {}, 1000)`
 }
 
 test('supervised commands preserve output, cwd and exit status', async t => {
@@ -143,7 +149,7 @@ test('timeout kills a TERM-ignoring grandchild before reporting safe stopped', {
     return true
   })
   assert.ok(Date.now() - start < 3000)
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
@@ -160,7 +166,7 @@ test('abort is responsive and stops descendants before rejection', async t => {
     assert.equal(error.unsafeToRetry, false)
     return true
   })
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
@@ -182,7 +188,7 @@ test('a successful direct command cannot leave background descendants writing', 
   const promise = runInstallationProcess(process.execPath, ['-e', script], fastCleanup)
   await waitForFile(ready)
   assert.equal((await promise).status, 0)
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
@@ -202,7 +208,7 @@ test('outer cancellation also kills separately grouped nested stages', async t =
     assert.ok(error.processGroups.length >= 2)
     return true
   })
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
@@ -215,7 +221,7 @@ test('nested stage timeout does not kill its enclosing installation supervisor',
   await writeFile(nested, `import { writeFileSync } from 'node:fs'; import { runInstallationProcess } from ${JSON.stringify(moduleUrl)}; try { await runInstallationProcess(process.execPath, ['-e', ${JSON.stringify(writerScript(ready, late))}], { timeoutMs: 350, killGraceMs: 50 }); } catch (error) { writeFileSync(${JSON.stringify(caught)}, JSON.stringify({ code: error.code, unsafeToRetry: error.unsafeToRetry })); }`)
   assert.equal((await runInstallationProcess(process.execPath, [nested], { timeoutMs: fixtureTimeout, ...fastCleanup })).status, 0)
   assert.deepEqual(JSON.parse(await readFile(caught, 'utf8')), { code: 'INSTALLATION_TIMEOUT', unsafeToRetry: false })
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
@@ -277,7 +283,7 @@ test('lost POSIX supervisor closes its launch gate and stops owned writers', { s
     await delay(25)
   } while (Date.now() < deadline)
   assert.equal(result.safe, true, JSON.stringify(result))
-  await delay(750)
+  await afterLateWrite()
   await absent(late)
 })
 
