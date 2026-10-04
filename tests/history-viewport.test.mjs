@@ -21,6 +21,8 @@ test('real React loads older pages on upward input without remounting retained f
   }
   const retained = await readFile(new URL('../tavern-plugin/src/client/modules/retained-message-frames.js', import.meta.url), 'utf8')
   const retention = await readFile(new URL('../tavern-plugin/src/client/modules/session-resource-retention.js', import.meta.url), 'utf8')
+  // Story frames follow the reading font size (bindTavernFontZoom); text colors are irrelevant here.
+  const hostTheme = (await readFile(new URL('../tavern-plugin/src/client/modules/host-theme.js', import.meta.url), 'utf8')) + '\nfunction tavernTextColorOverrides(){return {}}'
   const browser = await chromium.launch({headless:true})
   try {
     const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
@@ -28,7 +30,7 @@ test('real React loads older pages on upward input without remounting retained f
     await page.setContent('<div id="app" data-conversation-scroll style="height:600px;overflow:auto;overflow-anchor:none"></div>')
     await page.addScriptTag({content: bundle + `
       const React=modules.react;
-      ${ordered}\n${retention}\n${retained}\n${source}
+      ${ordered}\n${retention}\n${hostTheme}\n${retained}\n${source}
       const retention=createTavernSessionRetention({window});retention.select('a');
       const tavernRetainedFrames=createRetainedTavernFrames({window,retention,createLifecycle(props){
         const d={token:Math.random().toString(),trustedCardMode:true,html:'<input value="fresh"><script>window.identity=Math.random()</'+'script>',ref(){}};

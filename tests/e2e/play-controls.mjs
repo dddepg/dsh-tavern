@@ -30,7 +30,8 @@ export async function playControls({ page, step, savedChat, inspectRound, output
   await step('Guide：添加、刷新、删除，正文与变量保持不变', async () => {
     const before = await savedChat()
     const guide = 'E2E 指导：多写酒馆窗外的雨声。'
-    await page.getByPlaceholder('例如：多用短句，多写心理活动，对话不要超过三句').fill(guide)
+    // Locate by accessible name: the placeholder is example copy and changes with the UI.
+    await page.getByRole('textbox', { name: '新 Guide 内容', exact: true }).fill(guide)
     await page.getByRole('button', { name: '添加 Guide', exact: true }).click()
     const item = page.locator('.dsh-tavern-guide-item').filter({ hasText: guide })
     await item.waitFor()
@@ -42,7 +43,7 @@ export async function playControls({ page, step, savedChat, inspectRound, output
     await item.waitFor({ state: 'hidden' })
     assert.deepEqual((await savedChat()).guides, [])
     await page.reload()
-    await page.getByText('暂无 Guide。添加后会自动注入正文和候选项生成。', { exact: true }).waitFor()
+    await page.getByText(/^暂无 Guide。/).waitFor()
     const after = await savedChat()
     assert.deepEqual(prose(after), prose(before))
     assert.deepEqual(after.messages.at(-1).variables, before.messages.at(-1).variables)
@@ -63,7 +64,7 @@ export async function playControls({ page, step, savedChat, inspectRound, output
   })
   await step('导出纯对话：下载内容与当前可见剧情一致', async () => {
     const before = await savedChat()
-    await page.getByRole('button', { name: '导出 ▾', exact: true }).click()
+    await page.getByRole('button', { name: '导出', exact: true }).click()
     const downloading = page.waitForEvent('download')
     await page.getByRole('menuitem', { name: '纯对话 TXT', exact: true }).click()
     const download = await downloading
