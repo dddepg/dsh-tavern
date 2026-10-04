@@ -202,6 +202,31 @@ test('并发改写同一路径时明确拒绝旧快照覆盖', async function ()
   assert.equal(app.stored().posture, '窗边')
 })
 
+test('结算收尾与下一轮开始各改时间线不同条目时合并，时间戳取较新值', async function () {
+  const timeline = { schemaVersion: 1, updatedAt: 100, operations: { a: { kind: 'body', status: 'foreground-completed' } } }
+  const app = harness({ id: 'chat-1', timeline, _storageRevision: 4 })
+  const settlement = await app.persistence.read('chat-1')
+  const nextRound = await app.persistence.read('chat-1')
+  settlement.timeline.operations.a.status = 'settled'; settlement.timeline.updatedAt = 300
+  nextRound.timeline.operations.b = { kind: 'body', status: 'running' }; nextRound.timeline.updatedAt = 200
+  await app.persistence.write(settlement)
+  await app.persistence.write(nextRound)
+  const stored = app.stored().timeline
+  assert.equal(stored.updatedAt, 300)
+  assert.equal(stored.operations.a.status, 'settled')
+  assert.equal(stored.operations.b.status, 'running')
+})
+
+test('时间线同一条目被并发改成不同状态时仍然拒绝', async function () {
+  const app = harness({ id: 'chat-1', timeline: { updatedAt: 1, operations: { a: { status: 'running' } } }, _storageRevision: 4 })
+  const first = await app.persistence.read('chat-1')
+  const second = await app.persistence.read('chat-1')
+  first.timeline.operations.a.status = 'settled'; first.timeline.updatedAt = 2
+  second.timeline.operations.a.status = 'failed'; second.timeline.updatedAt = 3
+  await app.persistence.write(first)
+  await assert.rejects(app.persistence.write(second), error => error.code === 'DSH_TAVERN_CHAT_CONFLICT' && error.path === 'timeline.operations.a.status')
+})
+
 test('对象字段顺序变化不应让等价的预设条目数组产生假冲突', async function () {
   const app = harness({
     id: 'chat-1',

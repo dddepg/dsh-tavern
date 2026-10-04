@@ -285,6 +285,22 @@ try {
       }
       assert.deepEqual((await savedChat()).messages,original,'换强调色只改变展示，不改写存档')
     })
+  } else if (process.argv.includes('--send-during-settlement')) {
+    // A reload followed by an immediate send must not fail while the previous round still settles.
+    await step('结算未完成时刷新并立即发送下一条消息', async () => {
+      const composer = () => page.getByRole('textbox', { name: /发消息|Message/ })
+      await composer().fill('领取任务奖励'); await composer().press('Enter')
+      await page.getByText('你获得了十枚金币。').first().waitFor()
+      await page.reload()
+      await composer().fill('再次领取奖励'); await composer().press('Enter')
+      const outcome = await Promise.race([
+        page.getByText('你再次领取了奖励，金币累计二十枚。').first().waitFor({ timeout: 90000 }).then(() => 'replied'),
+        page.locator('[data-chat-flow-kind="turn-error"]').first().waitFor({ timeout: 90000 }).then(async () => 'error: ' + await page.locator('[data-chat-flow-kind="turn-error"]').first().innerText()),
+      ])
+      report.sendDuringSettlement = outcome
+      await page.screenshot({ path: join(output, 'send-during-settlement.png'), fullPage: true })
+      assert.equal(outcome, 'replied', '结算期间发送的消息不能直接失败：' + outcome)
+    })
   } else if (process.argv.includes('--refusal')) {
     await step('模型回复拒绝语时，正文下方说明不是酒馆故障', async () => {
       const composer = page.getByRole('textbox', { name: /发消息|Message/ })
