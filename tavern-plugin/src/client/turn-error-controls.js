@@ -81,8 +81,9 @@ function createTurnErrorControls(root, options) {
             // Superseded-turn projection owns `hidden`; keep its errors hidden.
             if (!row.hidden && row.style.display !== display) row.style.display = display;
             if (entry.panel.hidden !== row.hidden) entry.panel.hidden = row.hidden;
-            const summary = dismissed ? '错误提示已隐藏' : long
-                ? (/message content cannot be empty/i.test(text) ? '模型接口错误：消息内容不能为空。' : '模型接口调用失败，已收起过长的错误信息。') : '';
+            const refusal = tavernProviderRefusalNotice(text);
+            const summary = dismissed ? '错误提示已隐藏' : refusal || (long
+                ? (/message content cannot be empty/i.test(text) ? '模型接口错误：消息内容不能为空。' : '模型接口调用失败，已收起过长的错误信息。') : '');
             if (entry.label.textContent !== summary) entry.label.textContent = summary;
             if (entry.details.hidden !== (dismissed || !long)) entry.details.hidden = dismissed || !long;
             const detailText = entry.expanded ? '收起详情' : '显示原始错误';

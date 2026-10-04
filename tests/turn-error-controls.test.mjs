@@ -85,3 +85,21 @@ test('失败尾部错误行提供一键重放，按轮次匹配而不是所有�
   missing.controls.apply()
   assert.equal(missing.row.panel.children[3].hidden, true, '没有重放回调时不显示按钮')
 })
+
+test('服务商内容审核拦截时说明不是酒馆故障，原始错误保留', () => {
+  const text = 'Provider finish_reason: content_filter'
+  const { row, controls } = setup(text)
+  controls.apply()
+  assert.match(row.panel.children[0].textContent, /内容审核拦截了这一轮回复，这不是酒馆故障/)
+  assert.equal(row.style.display, '', '短错误不收起，原文仍可见')
+  assert.equal(row.textContent, text)
+})
+
+test('只把开头就是拒绝语的回复标为模型拒绝，剧情里的类似台词不受影响', () => {
+  const notice = client.tavernModelRefusalNotice
+  assert.match(notice('我无法协助生成涉及未成年角色的露骨性描写内容。\n\n如果您希望继续推进后续的剧情发展……'), /模型拒绝继续这段剧情/)
+  assert.match(notice("I'm sorry, but I can't help with generating explicit content."), /模型拒绝/)
+  for (const story of ['我不能就这样离开她。\n她转过身去。', '“抱歉，我无法帮助你。”她低声说。', '房间里很安静。\n我无法协助生成这类内容。', ''])
+    assert.equal(notice(story), '', story)
+  assert.equal(client.tavernProviderRefusalNotice('request failed with status 400'), '')
+})

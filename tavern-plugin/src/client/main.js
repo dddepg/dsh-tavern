@@ -525,6 +525,8 @@ window.__ModuleLoader__.load({
 // @include runtime/helper-event-api.js
 // @include-domain tavern-regex-engine.js
 // @include-domain tavern-helper-regex-api.js
+// @include-domain response-refusal.js
+// @include refusal-notice.js
 // @include runtime/frame-document.js
 
 // @include modules/host-theme.js
@@ -845,6 +847,8 @@ window.__ModuleLoader__.load({
         exports.parseTavernInlineFragment = parseTavernInlineFragment;
         exports.TavernInlineFragment = TavernInlineFragment;
         exports.bindTavernFontZoom = bindTavernFontZoom;
+        exports.tavernProviderRefusalNotice = tavernProviderRefusalNotice;
+        exports.tavernModelRefusalNotice = tavernModelRefusalNotice;
         exports.renderTavernProjection = renderTavernProjection;
 		exports.createConversationLifecycleModule = createConversationLifecycleModule;
 		exports.createConversationHostAdapter = createConversationHostAdapter;

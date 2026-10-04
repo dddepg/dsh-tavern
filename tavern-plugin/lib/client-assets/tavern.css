@@ -95,6 +95,7 @@ body.dsh-tavern-shell-active,
 .dsh-tavern-swipe-controls { align-self: center; display: flex; align-items: center; gap: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 24px; }
 .dsh-tavern-swipe-controls button { min-width: 28px; height: 26px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 7px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .dsh-tavern-swipe-controls button:disabled { opacity: .35; cursor: default; }
+.dsh-tavern-refusal-notice { align-self: flex-start; max-width: min(100%, 760px); box-sizing: border-box; padding: 6px 10px; border-left: 3px solid var(--dsw-alias-state-warning, #d9822b); border-radius: 6px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }
 .dsh-tavern-mvu-receipt { align-self: flex-start; width: min(100%, 760px); border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-specific-input-major); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }
 .dsh-tavern-mvu-receipt[data-status="pending"] { border-color: rgba(68,126,230,.42); }
 .dsh-tavern-mvu-receipt[data-status="updated"] { border-color: rgba(70,160,105,.42); }
