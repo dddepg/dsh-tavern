@@ -27,6 +27,23 @@ export function apply(ctx) {
           return
         }
       }
+      // Truncation scenario: only the latest user input decides, so later turns answer normally.
+      const latestUser = JSON.stringify(input.messages.slice(input.messages.findLastIndex(message => message.role === 'assistant') + 1))
+      if (process.env.E2E_TRUNCATE_LOG) await appendFile(process.env.E2E_TRUNCATE_LOG, JSON.stringify({ at: Date.now(), tools: [...tools], tail: input.messages.slice(-4).map(m => ({ role: m.role, content: JSON.stringify(m.content).slice(0, 160) })) }) + '\n')
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && /E2E_TRUNCATE_(TEXT|THINK|LOOP)/.test(latestUser)) {
+        yield { type: 'block-start', index: 0, blockType: 'reasoning' }
+        yield { type: 'text-delta', index: 0, text: '构思正文。' }
+        yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: '构思正文。' } }
+        if (!latestUser.includes('E2E_TRUNCATE_THINK')) {
+          // LOOP models a degenerate repetition that only stops at the provider output limit.
+          const text = latestUser.includes('E2E_TRUNCATE_LOOP') ? '<content>\n' + '雨水顺着屋檐落下，她又说了一遍。'.repeat(Number(process.env.E2E_TRUNCATE_LOOP_REPEAT) || 40000) : '<content>\n你推开酒馆的门，雨水顺着'
+          yield { type: 'block-start', index: 1, blockType: 'text' }
+          for (let offset = 0; offset < text.length; offset += 64) yield { type: 'text-delta', index: 1, text: text.slice(offset, offset + 64) }
+        }
+        yield { type: 'finish', reason: { kind: 'max-tokens' } }
+        return
+      }
       const latestInput = JSON.stringify(input.messages.slice(input.messages.findLastIndex(message => message.role === 'assistant') + 1))
       // Mid-stream filter: part of the body already streamed, then the provider cuts it off.
       if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
