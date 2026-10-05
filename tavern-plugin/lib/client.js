@@ -10060,7 +10060,8 @@ function bindTavernFontZoom(node, win) {
 		function createRetainedTavernFrames(options) {
 		    const host = options.window, document = host.document, retention = options.retention;
 		    const records = new Map();
-		    let parking = null;
+		    let parking = null, retiring = null;
+		    const retirements = new Map();
 		    function parked() {
 		        if (!parking) {
 		            parking = document.createElement("div");
@@ -10076,7 +10077,38 @@ function bindTavernFontZoom(node, win) {
 		    function move(node, target) {
 		        if (node.parentNode !== target) target.moveBefore(node, null);
 		    }
-		    function release(record) {
+		    // A reloaded status panel keeps its old document alive, hidden and earlier in
+		    // document order, until the replacement has loaded. SillyTavern card shells elect
+		    // the newest floor and hand shared UI over to it; tearing the old one down first
+		    // lets it hide that UI with no successor to restore it.
+		    function retire(record) {
+		        const node = record.node;
+		        if (!node.isConnected || typeof document.body.moveBefore !== "function") return false;
+		        if (!retiring) {
+		            retiring = document.createElement("div");
+		            retiring.hidden = true;
+		            retiring.setAttribute("data-tavern-retiring-frames", "");
+		        }
+		        if (retiring.parentNode !== document.body) document.body.insertBefore(retiring, document.body.firstChild);
+		        retiring.moveBefore(node, null);
+		        let timer = null;
+		        const finish = function () {
+		            if (retirements.get(record.key) === finish) retirements.delete(record.key);
+		            host.clearTimeout(timer);
+		            node.remove();
+		            if (retiring && !retiring.firstChild) { retiring.remove(); retiring = null; }
+		        };
+		        timer = host.setTimeout(finish, 5000);
+		        const previous = retirements.get(record.key);
+		        retirements.set(record.key, finish);
+		        if (previous) previous();
+		        return true;
+		    }
+		    function successorLoaded(record) {
+		        const finish = retirements.get(record.key);
+		        if (finish) host.setTimeout(finish, 300);
+		    }
+		    function release(record, replaced) {
 		        if (records.get(record.key) !== record) return;
 		        records.delete(record.key);
 		        if (record.unmount) record.unmount();
@@ -10086,7 +10118,7 @@ function bindTavernFontZoom(node, win) {
 		        if (record.unzoom) record.unzoom();
 		        for (const item of record.frames.values()) item.descriptor.ref(null);
 		        record.frames.clear();
-		        record.node.remove();
+		        if (!(replaced && retire(record))) record.node.remove();
 		        if (!records.size && parking) { parking.remove(); parking = null; }
 		    }
 		    function paint(record, state) {
@@ -10105,6 +10137,7 @@ function bindTavernFontZoom(node, win) {
 		                frame.referrerPolicy = "no-referrer";
 		                if (!descriptor.trustedCardMode) frame.setAttribute("sandbox", "allow-scripts");
 		                frame.srcdoc = descriptor.html;
+		                if (retirements.has(record.key)) frame.addEventListener("load", function () { successorLoaded(record); }, { once: true });
 		                item = { node: frame, descriptor: descriptor };
 		                record.frames.set(descriptor.token, item);
 		                record.node.appendChild(frame);
@@ -10174,7 +10207,7 @@ function bindTavernFontZoom(node, win) {
 		            for (const record of Array.from(records.values())) if (record.owner === owner) release(record);
 		        },
 		        invalidatePanel: function (sessionId, panelId) {
-		            for (const record of Array.from(records.values())) if (record.sessionId === sessionId && record.persistent && record.panelId === panelId) release(record);
+		            for (const record of Array.from(records.values())) if (record.sessionId === sessionId && record.persistent && record.panelId === panelId) release(record, true);
 		        },
 		        clear: function () { for (const record of Array.from(records.values())) release(record); }
 		    };
