@@ -505,3 +505,36 @@ DSH_TAVERN_PORT=3091 ./dsh-tavern start
 删除前定向备份 `backups/stale-files-20261004.tar.gz`（12M，347 个文件）。删后复验：实例 = 清单 + 2 个运行时文件，缺失 0。`./dsh-tavern stop` → 删除 → `start`：`service.ready`（PID 4358，端口 3091），无 token 401、带 token 303、`runtime-generation` 返回 ok，本次启动日志 0 条 error/warn。
 
 结论：残留已清零；今后 prune 只需按清单机制正常工作，不会再积累这类残留（清单每轮重写，清单外新残留只可能来自旧版安装器行为变化）。
+
+## 16. 同步上游 v2.5 与实例整体更新（2026-10-05）
+
+### 同步结果
+
+`upstream/main` 从 `4bbff696` 前进到 `0f1fea52`：128 个提交，其中 32 个 manifest，实质提交约 91 个，核心是 **v2.5 发布**（原地 MVU 卡、变量回灌、NovelAI 生图增强、卡片工作台问答任务、大量 installer/Windows 修复）。两个分支 `feat/tavern-helper-api-compat`、`fix/updater-execution-lifecycle` 仍未合入。
+
+冲突 4 个文件：manifest 取上游侧；`tests/prompt-streamlining.test.mjs` 与 `tests/turn-orchestration.test.mjs` 是上游 `177c03f3`「test 瘦身 30%」删掉了 fork 护栏所在的旧测试群——上游自己的用例（卡片 Agent 极简模式、promptOnly 正则）随上游删，fork 的 3 个截断护栏用例保留（锚点核对过：`registerTurnLifecycleHooks` 仍在 `lib/index.js:4099`，`assertCompleteReply` 在 `hooks/turn-lifecycle.js:60` 且先于 `finalize`；报错文案「正文中途中断」「token 上限」已迁到 `domain/reply-completeness.js`，断言仍匹配）；`tests/rollback-surface.test.mjs` 只冲突 import 行，取 fork 超集（11 个导出全在）。合并提交 `c5b0acb9` → main `f66e3d08`。
+
+`node bin/build-tavern-client.mjs --check`「已是最新」。护栏测试（`rollback-surface` / `reply-completeness` / `foreground-handoff` / `turn-orchestration` / `prompt-streamlining` / `pocket-opt-in` / `failed-turn-session-restore`，借用实例运行时）全绿。
+
+### 实例更新：第一次跑错源，教训是 DSH_TAVERN_GIT_URL 必须显式传
+
+按 §13 记下的命令直接跑（`DSH_TAVERN_CLI_HOME` + `DSH_TAVERN_HOST` + `DSH_TAVERN_PORT`，**没带 `DSH_TAVERN_GIT_URL`**），install.sh:19 的 `REPOSITORY_URL` 回落到 `https://github.com/flizzywine/dsh-tavern.git`，把**上游 v2.5 原样装了进去**：release 记 `0f1fea52`、`assertCompleteReply` 计数 0、`reply-completeness.js` 缺失。日志里 `From https://github.com/flizzywine/dsh-tavern` 一眼可见，但当时没先看。**§13 的命令样例因此是坑——它省掉了关键环境变量。**正确完整命令：
+
+```sh
+cd /home/ezio/workspace/dsh-tavern-cli && \
+DSH_TAVERN_CLI_HOME=$PWD DSH_TAVERN_HOST=cli DSH_TAVERN_PORT=3091 \
+DSH_TAVERN_GIT_URL=/home/ezio/workspace/dsh-tavern \
+sh /home/ezio/workspace/dsh-tavern/install.sh
+```
+
+误装无害（同 v2.5 代码基，只是缺 fork 修复），停服后带 `DSH_TAVERN_GIT_URL` 重跑安装器即整体覆盖。更新前备份 `backups/app-pre-20261005.tar.gz`（13M / 1066 条目，`--exclude=node_modules` 口径，比上轮 24M 小是清了 347 个残留）。重跑日志 `From /home/ezio/workspace/dsh-tavern`；release 记 `f66e3d08`；pnpm `Packages: +122`（v2.5 新依赖）；安装器收尾自动启动。
+
+核对：`turn-lifecycle.js` 含 `assertCompleteReply`、`reply-completeness.js` 在位、`rollback-surface.js` 含 3 处 `isFailedTurnReason`。实例 `tavern-plugin/lib` 与仓库差异仅剩 5 个**仓库有而实例没有**的 `st-prompt-template/upstream/{docs,tests}` 文件——它们不在发布清单里，属清单机制的正确行为，方向反了不用管。
+
+### 清单外残留：保持清零
+
+实例（排除 node_modules）= 清单 955 条 + 3 个运行时文件（`.dsh-tavern-files.txt` 自身、`.dsh-tavern-local.json`、`.dsh-tavern-release.json`），清单缺失 0。§15 的预测成立：prune 正常工作，无新残留。
+
+### 启动核对
+
+`service.ready` @ 2026-10-05T10:55:33Z（PID 3572，端口 3091，cwd 为实例 `apps/dsh-tavern`；本轮起启动等待上限已是上游放宽后的 120 秒）。无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`；本次启动日志 0 条 error/warn；社区插件 `opencode-session-id` mounted 正常。
