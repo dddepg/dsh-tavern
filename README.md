@@ -106,7 +106,7 @@
 
 **方式一：一键安装包（推荐）**
 
-**[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.5/DSH-Tavern-Desktop-2.0.13-x64-Setup6.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。[图文教程 →](https://flizzywine.github.io/dsh-tavern/#a02--section-2)
+**[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.5/DSH-Tavern-Desktop-2.0.13-x64-Setup7.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。[图文教程 →](https://flizzywine.github.io/dsh-tavern/#a02--section-2)
 
 **方式二：借助 DSH Desktop**
 

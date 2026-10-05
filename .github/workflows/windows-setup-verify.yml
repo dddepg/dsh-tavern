@@ -8,10 +8,10 @@ on:
     inputs:
       setup_url:
         description: Published Setup EXE URL
-        default: https://github.com/flizzywine/dsh-tavern/releases/download/v2.5/DSH-Tavern-Desktop-2.0.13-x64-Setup6.exe
+        default: https://github.com/flizzywine/dsh-tavern/releases/download/v2.5/DSH-Tavern-Desktop-2.0.13-x64-Setup7.exe
       setup_sha256:
         description: Expected SHA-256
-        default: 5957b9ee181dac273082761850d7a8feab7bd3fa43cd6cc0bccf6ec4242cfbef
+        default: ad40b98a3b0a306c5a41df7108c80f56ab6b938cf3a47e01712c0e693a825d1b
 
 jobs:
   verify:
