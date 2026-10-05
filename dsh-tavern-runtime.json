@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "3af46e218820b9cb4548aa59d71be3985f3aee5b",
-  "releaseSequence": 505,
+  "revision": "18f135a644c087346289b9e21cb190703577c1a6",
+  "releaseSequence": 506,
   "version": "2.5.0",
   "files": [
     {
@@ -91,8 +91,8 @@
     },
     {
       "path": "bin/installation-state.cjs",
-      "sha256": "d2232d931e1c6b9eb41a1624b8e485b4eafa6a3e31cadfdf8fbd1e8380b06c88",
-      "size": 17556
+      "sha256": "49e1fa82f274d56af563ee68e92b3e76d7e93cd044747d6c5b3cbf9825f4b43f",
+      "size": 18131
     },
     {
       "path": "bin/launcher-environment.mjs",
@@ -246,13 +246,13 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "6ae78d7eff72234e00c950e1a117a944abac99c08d6e7d55cca87d85e8e326ad",
-      "size": 70777
+      "sha256": "d97f6783c479c4ae3bee82e875a337c4089f5e166cf0412b2708de3211398fca",
+      "size": 71352
     },
     {
       "path": "install.sh",
-      "sha256": "b9525e2b46504daa520c2e79b315346361a4cbf3f4d590c12c14e6d3880f21ae",
-      "size": 53800
+      "sha256": "816aae695c10df2ea9cbcf4efbd39b854913056e878a542971386f4c8e74c423",
+      "size": 54375
     },
     {
       "path": "package.json",
