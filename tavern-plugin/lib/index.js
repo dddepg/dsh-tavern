@@ -3944,7 +3944,6 @@ export async function apply(ctx) {
 
   // ---------- DSH 回合生命周期 ----------
   const requestCoordinates = new Map()
-  const storyCompactionRequests = new WeakSet()
   const tavernRetryLimiter = createTavernRetryLimiter({
     owns: async function (agent) {
       const sessionId = agent && agent.session ? agent.session.id : ''
@@ -4071,7 +4070,6 @@ export async function apply(ctx) {
     runtimePrompt,
     sessionStateForSession,
     sessionStore,
-    storyCompactionRequests,
     str,
     updateChat,
     worldbookRecallLog,

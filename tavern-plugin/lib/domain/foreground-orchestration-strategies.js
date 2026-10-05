@@ -2,6 +2,7 @@ import { inputAttachments, projectPlayerContent } from './player-input-content.j
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
 import { projectRuntimePresetRequest } from './runtime-preset-lifecycle.js'
+import { markRequestHandled, requestHandledBy } from './request-lineage.js'
 
 const CARD_REFERENCE_SECTIONS = new Set(['tavern:character-card', 'tavern:card-system-prompt', 'tavern:constant-worldbook'])
 
@@ -91,7 +92,7 @@ function snapshotMessage(text) {
 
 function hasProviderContent(message) {
   if (!message || !['user', 'assistant'].includes(message.role) || !Array.isArray(message.content)) return true
-  return message.content.some(block => block && (block.type !== 'text' || str(block.text).trim() !== ''))
+  return message.content.some(block => block && (block.type !== 'text' || /\S/.test(str(block.text))))
 }
 
 function isNativeStablePrefix(message) {
@@ -176,9 +177,11 @@ function projectDeepSeekThinkingPassback(messages, request) {
   return changed ? projected : messages
 }
 
+// Copies made by later hooks (workspace presentation) must still count as projected.
+const PROJECTED = 'foreground-projection'
+
 export function createCompatibilityOrchestrationStrategy(options) {
   const stagedRequests = new Map()
-  const redispatches = new WeakSet()
 
   async function prepareStep(input) {
     const sessionId = input.sessionId
@@ -204,14 +207,12 @@ export function createCompatibilityOrchestrationStrategy(options) {
   function projectRequest(optionsValue, coordinates) {
     const sessionId = str(optionsValue && optionsValue.sessionId)
     const staged = stagedRequests.get(sessionId)
-    if (redispatches.has(optionsValue) || !isCompatibilityConversationRequest(optionsValue, staged, coordinates)) return null
-    const request = createEphemeralCompatibilityRequest(optionsValue, staged.messages)
-    redispatches.add(request)
-    return request
+    if (requestHandledBy(optionsValue, PROJECTED) || !isCompatibilityConversationRequest(optionsValue, staged, coordinates)) return null
+    return markRequestHandled(createEphemeralCompatibilityRequest(optionsValue, staged.messages), PROJECTED)
   }
 
   function completeRequest(optionsValue, completed) {
-    if (!completed || !redispatches.has(optionsValue)) return false
+    if (!completed || !requestHandledBy(optionsValue, PROJECTED)) return false
     stagedRequests.delete(str(optionsValue && optionsValue.sessionId))
     return true
   }
@@ -234,7 +235,6 @@ export function createCompatibilityOrchestrationStrategy(options) {
 
 export function createNativePlayOrchestrationStrategy(options) {
   const stagedRequests = options.stagedRequests instanceof Map ? options.stagedRequests : new Map()
-  const redispatches = new WeakSet()
 
   async function prepareStep(input) {
     const sessionId = input.sessionId
@@ -278,7 +278,7 @@ export function createNativePlayOrchestrationStrategy(options) {
   function projectRequest(optionsValue) {
     const sessionId = str(optionsValue && optionsValue.sessionId)
     const staged = stagedRequests.get(sessionId)
-    if (optionsValue === null || typeof optionsValue !== 'object' || optionsValue.purpose !== undefined || redispatches.has(optionsValue)) return null
+    if (optionsValue === null || typeof optionsValue !== 'object' || optionsValue.purpose !== undefined || requestHandledBy(optionsValue, PROJECTED)) return null
     // Empty surface tombstones preserve append-only history, but are not messages
     // for the provider. Remove them before choosing a regeneration target.
     const visibleMessages = (optionsValue.messages || []).filter(hasProviderContent)
@@ -288,9 +288,7 @@ export function createNativePlayOrchestrationStrategy(options) {
       // Strict providers reject an empty user message with HTTP 400.
       const messages = visibleMessages.filter(message => !isNativeStablePrefix(message))
       if (messages.length === (optionsValue.messages || []).length) return null
-      const request = Object.assign({}, optionsValue, { messages })
-      redispatches.add(request)
-      return request
+      return markRequestHandled(Object.assign({}, optionsValue, { messages }), PROJECTED)
     }
     const regeneratedMessages = projectRegenerationRequestMessages(visibleMessages.length === optionsValue.messages?.length ? optionsValue.messages : visibleMessages)
     const nativeMessages = regeneratedMessages.some(isNativeStablePrefix) ? regeneratedMessages.filter(message => !isNativeStablePrefix(message)) : regeneratedMessages
@@ -315,12 +313,11 @@ export function createNativePlayOrchestrationStrategy(options) {
       delete request.system
     }
     if (request === optionsValue) return null
-    redispatches.add(request)
-    return request
+    return markRequestHandled(request, PROJECTED)
   }
 
   function completeRequest(optionsValue, completed) {
-    if (!completed || !redispatches.has(optionsValue)) return false
+    if (!completed || !requestHandledBy(optionsValue, PROJECTED)) return false
     stagedRequests.delete(str(optionsValue && optionsValue.sessionId))
     return true
   }
