@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "8f7fc524cd1154232d3df44b5f65c02c2abec668",
-  "releaseSequence": 535,
+  "revision": "95949fc032fd802d023e5163a47027057a8e6bd6",
+  "releaseSequence": 536,
   "version": "2.5.0",
   "files": [
     {
@@ -1041,8 +1041,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-background-settlement.js",
-      "sha256": "2ad33a78b045d2f84d4ef05e1c04ba3b20c5673d87d5625e257bc93f9a096112",
-      "size": 37104
+      "sha256": "18b41239fb603bdf7bad379d36d22c9d06815e9510fc8cc1aba25c504c956595",
+      "size": 37771
     },
     {
       "path": "tavern-plugin/lib/domain/mvu-card-check.js",
