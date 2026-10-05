@@ -136,7 +136,11 @@ function makeHandle(dshHome, initialOwner, { created = false, adopted = false } 
         return { ...next, lockDir: lockPath(dshHome) }
       })
     },
-    retain(reason) { return this.update({ state: 'blocked', unsafeToRetry: true, blockedReason: String(reason || 'Unverified process cleanup') }) },
+    // ownerDone: the owner itself retains on its way out, so its PID (often the
+    // user's interactive shell) no longer proves a writer is alive.
+    retain(reason, { ownerDone = false } = {}) {
+      return this.update({ state: 'blocked', unsafeToRetry: true, blockedReason: String(reason || 'Unverified process cleanup'), ...(ownerDone ? { ownerDone: true } : {}) })
+    },
     release() {
       if (!mayRelease || released) return false
       const result = releaseOwner(dshHome, attemptId, generation, initialOwner.pid)
@@ -152,7 +156,7 @@ function alive(pid) {
 
 // Owner plus every PID recorded under processes/<stage>/ (registrations and supervisors).
 function recordedPids(lockDir, owner) {
-  const pids = new Set(Number.isSafeInteger(owner?.pid) && owner.pid > 1 ? [owner.pid] : [])
+  const pids = new Set(!owner?.ownerDone && Number.isSafeInteger(owner?.pid) && owner.pid > 1 ? [owner.pid] : [])
   const base = path.join(lockDir, 'processes')
   let stages = []
   try { stages = fs.readdirSync(base) } catch (error) { if (error.code !== 'ENOENT') return null }
@@ -180,9 +184,11 @@ function lastActivity(lockDir, owner) {
 function staleReason(lockDir, owner, now = Date.now()) {
   const idle = now - lastActivity(lockDir, owner)
   if (idle > STALE_IDLE_MS) return 'idle'
-  if (owner?.state === 'reserved' || owner?.state === 'uncertain' || idle < DEAD_OWNER_GRACE_MS) return ''
+  if (owner?.state === 'reserved' || owner?.state === 'uncertain') return ''
+  // A finished owner spawns nothing more; its stage processes register before running.
+  if (!owner?.ownerDone && idle < DEAD_OWNER_GRACE_MS) return ''
   const pids = recordedPids(lockDir, owner)
-  return pids && pids.size > 0 && [...pids].every(pid => !alive(pid)) ? 'writers-exited' : ''
+  return pids && (pids.size > 0 || owner?.ownerDone) && [...pids].every(pid => !alive(pid)) ? 'writers-exited' : ''
 }
 
 // Move a stale lock aside atomically, then confirm it was the one judged stale.
@@ -328,7 +334,7 @@ function main(argv) {
     if (cancellationRequested(dshHome, flags.attempt)) throw failure('INSTALLATION_CANCELLED', '安装任务已请求中止。')
     return
   }
-  if (command === 'retain') return acquireInstallation({ dshHome, attemptId: flags.attempt }).retain(flags.reason)
+  if (command === 'retain') return acquireInstallation({ dshHome, attemptId: flags.attempt }).retain(flags.reason, { ownerDone: flags['owner-done'] === '1' })
   throw new Error(`Unknown installation-state command: ${command}`)
 }
 

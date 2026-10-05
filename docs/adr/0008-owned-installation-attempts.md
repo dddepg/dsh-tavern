@@ -12,7 +12,7 @@
 
 保留现有安装流程和 Profile 事务，局部提取三个边界：
 
-1. installation-state：每个 DSH_HOME 一个排他安装任务。UI 先保留 attemptId，独立更新器一次性接管，子安装步骤只加入同一任务。接管变更 generation，延迟启动回调不能覆盖新所有者。残留锁仅在两种情况下由下一次安装回收：所有者及 processes/ 下登记的全部进程均已退出（且锁已静默 1 分钟以上），或锁超过 1 小时无任何进展（长于整个受监督更新的 30 分钟上限）。否则关窗口、崩溃或 blocked 后，用户将被永久锁死且没有出口。
+1. installation-state：每个 DSH_HOME 一个排他安装任务。UI 先保留 attemptId，独立更新器一次性接管，子安装步骤只加入同一任务。接管变更 generation，延迟启动回调不能覆盖新所有者。残留锁仅在两种情况下由下一次安装回收：所有者及 processes/ 下登记的全部进程均已退出（且锁已静默 1 分钟以上；所有者自己在退出前保留的锁标记 ownerDone，不再看所有者 PID、也不等静默期，因为 install.ps1 的所有者是用户仍开着的 PowerShell），或锁超过 1 小时无任何进展（长于整个受监督更新的 30 分钟上限）。否则关窗口、崩溃或 blocked 后，用户将被永久锁死且没有出口。
 2. installation-process：有界、可取消的子进程执行。配置校验 60 秒、版本探测 30 秒、依赖命令 10 分钟、bootstrap Profile 步骤 20 分钟、整个 UI 更新 30 分钟。取消先关闭新子步骤入口，再等待所有所属执行链停止，最后才能恢复配置及释放安装锁。POSIX 使用进程组；Windows 使用挂起创建、加入 Job Object、恢复执行，以及 Job 活动进程计数归零确认。taskkill 仅是清理后备，不能单独证明孤儿进程已停止。CLI 的长期服务在 bootstrap 执行链清理和收据验证后，由独立更新器在安装 Job 外启动；否则 Windows Job 清理会误杀新服务。
 3. installation-receipt：完整 Profile 验证、事务提交、运行时最终提交之后记录安装收据。收据绑定安装根、源码路径、宿主、attemptId 和配置/发布元数据指纹。更新器还必须确认 bootstrap 成功，才写 completed。新手动安装收据可以清除较早失败；同一次 bootstrap 在收据之后发生的失败不会被收据覆盖。
 

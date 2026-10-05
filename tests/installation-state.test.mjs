@@ -195,3 +195,27 @@ test('a fresh lock with a dead owner is not reclaimed during the startup grace p
   assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
   assert.equal(readInstallation(dshHome).attemptId, owner.attemptId)
 })
+
+test('an interrupted bootstrap whose shell is still open is reclaimed once its stages exited', async t => {
+  // install.ps1 runs inside the user's PowerShell; after Ctrl+C that owner PID stays alive.
+  const dshHome = home(t)
+  const exited = await child('')
+  const interrupted = acquireInstallation({ dshHome, pid: process.pid })
+  const stage = path.join(interrupted.lockDir, 'processes', 'stage-1')
+  createRequire(import.meta.url)('node:fs').mkdirSync(stage, { recursive: true })
+  writeFileSync(path.join(stage, `${process.pid}.json`), JSON.stringify({ pid: process.pid, ancestors: [] }))
+  interrupted.retain('Bootstrap interrupted', { ownerDone: true })
+  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
+  writeFileSync(path.join(stage, `${process.pid}.json`), JSON.stringify({ pid: exited.pid, ancestors: [] }))
+  const successor = acquireInstallation({ dshHome })
+  assert.equal(successor.created, true)
+  successor.release()
+})
+
+test('a retained lock without ownerDone still treats a live owner as a writer', async t => {
+  const dshHome = home(t)
+  const owner = acquireInstallation({ dshHome, pid: process.pid })
+  owner.retain('nested profile cleanup unverified')
+  age(owner.lockDir, 5 * 60 * 1000)
+  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
+})
