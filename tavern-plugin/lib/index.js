@@ -175,7 +175,6 @@ import { createTavernSkillProvider } from './domain/tavern-skill-provider.js'
 import { canonicalTavernSkillName, createTavernSkillModule } from './domain/tavern-skills.js'
 import { createTavernConversationRegistry } from './domain/tavern-conversation-registry.js'
 import { installTavernTokenMeter } from './domain/tavern-token-meter.js'
-import { createTavernCompactionCoordinator } from './domain/tavern-compaction.js'
 import { cordisToolNames, createTurnOrchestrator, dshFileToolNames } from './domain/turn-orchestration.js'
 import { resourceWorkspaceContext } from './domain/workspace-resources.js'
 import { createWorldBookLibrary } from './domain/worldbook-library.js'
@@ -2140,34 +2139,11 @@ export async function apply(ctx) {
     if (sceneIllustrations === null) throw new Error('当前版本未开放场景生图')
     return sceneIllustrations
   }
-  let tavernCompaction = null
   const backgroundTasks = createBackgroundTaskCoordinator({
     store: { readChat, writeChat, updateChat, patchChat, readState: chatPersistence.readSessionState, readRecoveryState: taskStateReader.read, readSlice: chatPersistence.readSlice, readSettlementCheckpoint: chatPersistence.readSettlementCheckpoint },
     timeline: storyTimeline,
-    blocked: function (chat) { return (tavernCompaction !== null && tavernCompaction.blocked(chat)) || Boolean(autoCompaction?.blocked(chat)) }
+    blocked: function (chat) { return Boolean(autoCompaction?.blocked(chat)) }
   })
-  tavernCompaction = createTavernCompactionCoordinator({
-    store: { chatForSession, updateChat },
-    activity: function (chat) { return backgroundTasks.activity(chat) },
-    now: Date.now
-  })
-  async function compactBackground(sessionId, operationId) {
-    const backgroundSessionId = await tavernCompaction.backgroundTarget(sessionId, operationId)
-    if (backgroundSessionId === '') return { status: 'skipped', message: '没有后台 Session' }
-    try {
-      const result = await backgroundAgentRunner.compact({ sessionId: backgroundSessionId })
-      if (result === null) return { status: 'succeeded', message: '没有可压缩的后台历史' }
-      if (typeof result.message === 'string' && result.message !== '') {
-        return { status: 'succeeded', message: result.message }
-      }
-      return {
-        status: 'succeeded',
-        message: 'Compacted ' + result.shadowedSeqs.length + ' history items (~' + result.shadowedTokenCount + ' tokens).'
-      }
-    } catch (error) {
-      return { status: 'failed', message: compactionFailureMessage(error) }
-    }
-  }
   const configuredCompactionEngines = new WeakSet()
   const pendingCompactionMessages = new WeakMap()
   const checkedCompactionPressure = new WeakSet()
@@ -3732,9 +3708,6 @@ export async function apply(ctx) {
         return { result: { status: 'completed', foreground: { status: 'succeeded', message: result ? '压缩完成' : '没有可压缩的历史' }, background: { status: 'skipped' } } }
       }
       case 'compactionStatus': return { state: (await sessionStateForSession(args && args.sessionId))?.contextCompaction || null }
-      case 'prepareCompaction': return { plan: await tavernCompaction.prepare(args && args.sessionId) }
-      case 'compactBackground': return { result: await compactBackground(args && args.sessionId, args && args.operationId) }
-      case 'completeCompaction': return { result: await tavernCompaction.complete(args && args.sessionId, args) }
       case 'syncSession': {
         const sync = await requestPerformance.stage('candidateSync', () => candidateTasks.sync(args && args.sessionId, { requestId: args && args.requestId, kind: args && args.kind }))
         requestPerformance.state({ foregroundRunning: agentRegistry.get(str(args?.sessionId))?.phase?.kind === 'running', backgroundBusy: sync.activity?.busy, backgroundRole: sync.activity?.role })
