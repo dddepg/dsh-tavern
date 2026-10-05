@@ -387,7 +387,9 @@ export async function apply(ctx) {
   const modelRequestLog = createModelRequestLog({
     readJson: async function (path) { return await profileData.readJson(path) },
     writeJson: async function (path, value) { return await profileData.writeJson(path, value) },
-    updateJson: async function (path, updater) { return await profileData.updateJson(path, updater) }
+    updateJson: async function (path, updater) { return await profileData.updateJson(path, updater) },
+    writeText: async function (path, text) { return await profileData.writeBytes(path, Buffer.from(text, 'utf8')) },
+    remove: async function (path) { return await profileData.remove(path) }
   })
   const tavernSkills = createTavernSkillModule({
     directory: dataRoot + '/skills',
@@ -3137,6 +3139,7 @@ export async function apply(ctx) {
     store: profileData, dispatch: (method, args) => dispatchMethod(method, args),
     chatForSession, listCards,
     requests: async chat => (await modelRequestLog.evidence(chat.id)).requests,
+    requestIndex: async chat => chat ? await modelRequestLog.list(chat.id) : [],
     native: async id => {
       const live = sessionDebugEvidence(id)
       if (live.loaded) return live.events

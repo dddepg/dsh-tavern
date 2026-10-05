@@ -119,18 +119,23 @@ test('session ownership writes once under concurrent requests and reuses disk ow
   let log = createModelRequestLog(adapter)
   const input = { chat: { id: 'owner' }, options: { sessionId: 'agent', messages: [] } }
   await Promise.all(Array.from({ length: 20 }, () => log.record(input)))
+  await log.list('owner')
   assert.equal(ownerReads.length, 1)
   assert.equal(ownerWrites.length, 1)
   await log.record(input)
   assert.equal(ownerReads.length, 1)
   log = createModelRequestLog(adapter)
   await log.record(input)
+  await log.list('owner')
   assert.equal(ownerReads.length, 2)
   assert.equal(ownerWrites.length, 1)
   fail = true
   const changed = { ...input, chat: { id: 'new-owner' } }
-  await assert.rejects(log.record(changed), /disk failure/)
+  // Evidence logging is off the request path: a disk failure is reported, never thrown at the model call.
   await log.record(changed)
+  await log.list('new-owner')
+  await log.record(changed)
+  await log.list('new-owner')
   assert.equal(files.get('model-request-sessions/agent.json').chatId, 'new-owner')
   assert.equal(ownerWrites.length, 3)
 })
@@ -145,4 +150,30 @@ test('请求凭据脱敏不修改原请求或提示词内容', async () => {
   assert.deepEqual(stored.request.messages, options.messages)
   assert.equal(options.apiKey, 'secret-a')
   assert.equal(options.headers.get('Authorization'), 'Bearer secret-b')
+})
+
+test('只保留最近 30 轮的请求原文，更早的保留索引与结果', async () => {
+  const files = new Map(), removed = []
+  const log = createModelRequestLog({
+    readJson: async path => structuredClone(files.get(path)),
+    writeJson: async (path, value) => files.set(path, structuredClone(value)),
+    updateJson: async (path, fn) => files.set(path, fn(structuredClone(files.get(path)))),
+    remove: async path => { removed.push(path); files.delete(path) }
+  })
+  const ids = []
+  for (let turn = 1; turn <= 35; turn++) {
+    const item = await log.record({ chat: { id: 'c' }, coordinates: { turn, step: 1 }, options: { messages: [{ role: 'user', content: [{ type: 'text', text: '第' + turn + '轮' }] }] } })
+    ids.push(item.id)
+    await log.complete({ chatId: 'c', id: item.id, text: '回复' + turn })
+  }
+  const index = await log.list('c')
+  assert.equal(index.length, 35)
+  assert.deepEqual(index.filter(entry => entry.pruned).map(entry => entry.turn), [1, 2, 3, 4, 5])
+  assert.deepEqual(removed, ids.slice(0, 5).map(id => 'model-requests/c/' + id + '.json'))
+  await assert.rejects(log.detail('c', ids[0]), /已清理/)
+  assert.equal((await log.detail('c', ids[5])).request.messages[0].content[0].text, '第6轮')
+  const [old] = (await log.evidence('c', 1)).requests
+  assert.equal(old.pruned, true)
+  assert.equal(old.request, null)
+  assert.equal(old.response.text, '回复1')
 })
