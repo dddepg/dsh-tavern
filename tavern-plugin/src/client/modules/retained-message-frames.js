@@ -89,6 +89,8 @@ function createRetainedTavernFrames(options) {
             const frame = item.node;
             frame.title = hidden ? "正在准备人物卡消息界面" : "人物卡消息界面";
             if (hidden) frame.setAttribute("aria-hidden", "true"); else frame.removeAttribute("aria-hidden");
+            // A page-fullscreen frame owns its geometry until it is restored.
+            if (frame.hasAttribute("data-dsh-tavern-expanded")) continue;
             Object.assign(frame.style, { height: (hidden ? descriptor.height || state.height : state.height) + "px",
                 position: hidden ? "absolute" : "", left: hidden ? "0" : "", top: hidden ? "0" : "",
                 width: "100%", opacity: hidden ? "0" : "", pointerEvents: hidden ? "none" : "",

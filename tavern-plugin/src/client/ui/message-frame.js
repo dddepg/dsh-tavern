@@ -152,14 +152,12 @@
             const frame = root?.querySelector('iframe:not([aria-hidden="true"])');
             try {
                 if (!frame) throw new Error("面板尚未加载，请稍后重试。");
-                try {
-                    if (typeof frame.requestFullscreen === "function") {
-                        await frame.requestFullscreen();
-                        return;
-                    }
-                } catch (_) { /* Embedded hosts may deny native fullscreen. */ }
-                if (!frame.isConnected) return;
+                // Fullscreen the page, not the iframe: a fullscreened iframe hides every
+                // host control, leaving only Esc to get out. The frame fills the page instead.
                 openTavernPageFullscreen(frame);
+                const root = frame.ownerDocument.documentElement;
+                try { if (typeof root.requestFullscreen === "function") await root.requestFullscreen(); }
+                catch (_) { /* Embedded hosts may deny native fullscreen; the page overlay remains. */ }
             } catch (error) { tavernErrorHub.report("展开大屏", error); }
         }
 
@@ -178,6 +176,8 @@
             let observer;
             const restore = () => {
                 observer?.disconnect();
+                doc.removeEventListener("fullscreenchange", onFullscreenChange);
+                if (doc.fullscreenElement === doc.documentElement) doc.exitFullscreen?.().catch(() => {});
                 frame.removeAttribute("data-dsh-tavern-expanded");
                 if (typeof frame.hidePopover === "function" && frame.matches(":popover-open")) frame.hidePopover();
                 if (previousPopover === null) frame.removeAttribute("popover");
@@ -190,13 +190,20 @@
                 if (previousFocus?.isConnected) previousFocus.focus();
             };
             const onKey = event => { if (event.key === "Escape") { event.preventDefault(); restore(); } };
+            // Esc during native fullscreen is consumed by the browser; leave the overlay with it.
+            let wasFullscreen = false;
+            const onFullscreenChange = () => {
+                if (doc.fullscreenElement) wasFullscreen = true;
+                else if (wasFullscreen) restore();
+            };
+            doc.addEventListener("fullscreenchange", onFullscreenChange);
             closeTavernPageFullscreen = restore;
             close.addEventListener("click", restore);
             doc.addEventListener("keydown", onKey);
             try {
                 // Keep the live iframe in place: reparenting would reload card scripts.
                 frame.setAttribute("data-dsh-tavern-expanded", "");
-                frame.style.cssText += ";position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;";
+                frame.style.cssText += ";position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;background:var(--dsw-alias-bg-base, Canvas)!important;";
                 if (typeof frame.showPopover === "function") {
                     frame.setAttribute("popover", "manual");
                     frame.showPopover();
