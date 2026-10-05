@@ -24,50 +24,99 @@ export function createStoryCompactionRequest(options, instruction) {
 
 // Story compaction keeps the latest rounds verbatim. DSH's idle (manual) compaction
 // can only retain the final surface node, so the older history is summarized and
-// these rounds are appended to the summary as an original-text transcript.
+// these rounds are appended to the summary as an original-text transcript block.
+// A later compaction splits that block back into rounds, so the quota always
+// counts the latest rounds whether they are live messages or carried transcript.
 export const RETAINED_STORY_ROUNDS = 10
+// Kept rounds may use at most this share of the model's context window.
+export const RETAINED_ROUNDS_WINDOW_SHARE = 0.25
+
+const TRANSCRIPT_HEADER = /^【最近 \d+ 轮原文（未压缩，按时间顺序）】\n\n/
+const transcriptHeader = count => `【最近 ${count} 轮原文（未压缩，按时间顺序）】\n\n`
 
 const textOf = message => (Array.isArray(message?.content) ? message.content : [])
   .filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n').trim()
 const isPlayerMessage = message => message?.role === 'user' && message.source?.kind !== 'plugin' && textOf(message) !== ''
+
+/** A message as story units: itself (without a carried transcript) plus that transcript's rounds. */
+function storyUnits(message) {
+  const blocks = message?.role === 'user' && Array.isArray(message.content) ? message.content : []
+  const index = blocks.findIndex(block => block?.type === 'text' && TRANSCRIPT_HEADER.test(block.text || ''))
+  if (index < 0) return [{ message, player: isPlayerMessage(message) }]
+  const rounds = blocks[index].text.replace(TRANSCRIPT_HEADER, '').split(/\n\n(?=\[玩家\]\n)/).filter(text => text.trim())
+  return [{ message: { ...message, content: blocks.filter((_, i) => i !== index) } }, ...rounds.map(text => ({ text, player: true }))]
+}
+
+function surfaceMessages(session) {
+  const nodes = session?.surface?.nodes
+  if (!nodes) return []
+  const bySeq = typeof session.eventAt === 'function' ? null : new Map(sessionEvents(session).map(event => [event.seq, event]))
+  return [...nodes].flatMap(seq => {
+    const event = bySeq ? bySeq.get(seq) : session.eventAt(seq)
+    return event?.type === 'user/message' ? [event.data] : event?.type === 'assistant/message' ? [event.data.message] : []
+  })
+}
 
 /**
  * Player rounds the native engine already keeps outside this request: automatic
  * pressure compaction retains its own recent tail, which counts toward the quota.
  */
 export function nativelyRetainedRounds(session, request) {
-  const nodes = session?.surface?.nodes
-  if (!nodes || !Array.isArray(request?.messages)) return 0
+  if (!Array.isArray(request?.messages)) return 0
   const inRequest = new Set(request.messages.map(message => message?.id).filter(Boolean))
-  const bySeq = typeof session.eventAt === 'function' ? null : new Map(sessionEvents(session).map(event => [event.seq, event]))
-  let count = 0
-  for (const seq of nodes) {
-    const event = bySeq ? bySeq.get(seq) : session.eventAt(seq)
-    if (event?.type === 'user/message' && !inRequest.has(event.data?.id) && isPlayerMessage(event.data)) count++
+  return surfaceMessages(session).filter(message => message?.role === 'user' && !inRequest.has(message.id) && isPlayerMessage(message)).length
+}
+
+const lineOf = unit => {
+  if (unit.text !== undefined) return unit.text
+  if (unit.message?.role === 'system') return ''
+  const text = textOf(unit.message)
+  return text === '' ? '' : (unit.message.role === 'user' ? '[玩家]\n' : '[正文]\n') + text
+}
+
+/** How many of the newest rounds fit both the round quota and the token budget. */
+function retentionPlan(history, rounds, { budget = Infinity, estimate = text => Math.ceil(text.length / 4) } = {}) {
+  const units = history.flatMap((message, source) => storyUnits(message).map(unit => ({ ...unit, source })))
+  const starts = units.flatMap((unit, index) => unit.player ? [index] : [])
+  let fit = 0, used = 0
+  while (fit < Math.min(rounds, starts.length)) {
+    const start = starts[starts.length - 1 - fit], end = fit === 0 ? units.length : starts[starts.length - fit]
+    used += estimate(units.slice(start, end).map(lineOf).filter(Boolean).join('\n\n'))
+    if (used > budget) break
+    fit++
   }
-  return count
+  return { units, starts, fit }
+}
+
+/**
+ * Whether retention would keep every round of this session verbatim, leaving
+ * nothing worth summarizing. Manual and scheduled compaction then skip.
+ */
+export function storyHistoryFullyRetained(session, rounds, options) {
+  const plan = retentionPlan(surfaceMessages(session), rounds, options)
+  return rounds > 0 && plan.fit === plan.starts.length
 }
 
 /**
  * Split a story compaction request: the summarizer sees only history older than
- * the latest `rounds` player rounds; those rounds come back as `appendix` text.
- * Returns `{ request }` unchanged when there is nothing to retain.
+ * the latest `rounds` rounds (as many as fit `budget` tokens); those rounds come
+ * back as `appendix` text. At least one round is always left to summarize
+ * (capacity recovery must make progress).
  */
-export function retainRecentStoryRounds(request, rounds = RETAINED_STORY_ROUNDS) {
-  if (rounds <= 0 || request?.purpose !== 'compaction' || !Array.isArray(request.messages) || request.messages.length < 2) return { request }
+export function retainRecentStoryRounds(request, rounds = RETAINED_STORY_ROUNDS, options = {}) {
+  if (!(rounds > 0) || request?.purpose !== 'compaction' || !Array.isArray(request.messages) || request.messages.length < 2) return { request }
   const history = request.messages.slice(0, -1)
-  const starts = history.flatMap((message, index) => isPlayerMessage(message) ? [index] : [])
-  if (starts.length === 0) return { request }
-  const cut = starts[Math.max(0, starts.length - rounds)]
-  if (!history.slice(0, cut).some(message => message.role !== 'system')) {
-    throw new Error(`最近 ${rounds} 轮之前没有可压缩的历史，暂不需要压缩`)
-  }
-  const transcript = history.slice(cut).filter(message => message.role !== 'system').flatMap(message => {
-    const text = textOf(message)
-    return text === '' ? [] : [(message.role === 'user' ? '[玩家]\n' : '[正文]\n') + text]
-  })
+  const { units, starts, fit } = retentionPlan(history, rounds, options)
+  const keep = Math.min(fit, starts.length - 1)
+  if (keep <= 0) return { request }
+  const cut = units[starts[starts.length - keep]]
+  // The summarizer input stays a byte-identical prefix of the foreground request
+  // (prompt cache). A previous summary is kept whole even when some of its carried
+  // rounds are kept again; that small overlap is cheaper than a cache miss.
+  const boundary = cut.text !== undefined ? cut.source + 1 : cut.source
+  const transcript = units.slice(starts[starts.length - keep]).map(lineOf).filter(Boolean)
   return {
-    request: { ...request, messages: [...history.slice(0, cut), ...history.slice(cut).filter(message => message.role === 'system'), request.messages.at(-1)] },
-    appendix: `【最近 ${Math.min(rounds, starts.length)} 轮原文（未压缩，按时间顺序）】\n\n` + transcript.join('\n\n')
+    request: { ...request, messages: [...history.slice(0, boundary), ...history.slice(boundary).filter(message => message?.role === 'system'), request.messages.at(-1)] },
+    appendix: transcriptHeader(keep) + transcript.join('\n\n')
   }
 }

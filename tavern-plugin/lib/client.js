@@ -13372,7 +13372,7 @@ function bindTavernFontZoom(node, win) {
             React.useEffect(function () { let active = true; rpc("getTavernSettings").then(function (result) { if (active) setPolicy(result.settings.contextCompaction || { mode: "manual", rounds: 20, percent: 80 }); }, function (error) { if (active) setNotice(error.message); }); return function () { active = false; }; }, []);
             async function save() {
                 setBusy(true); setNotice("");
-                try { const result = await rpc("updateTavernSettings", { patch: { contextCompaction: { mode: policy.mode, rounds: Number(policy.rounds), percent: Number(policy.percent) } } }); setPolicy(result.settings.contextCompaction); setNotice("已保存，下一个安全边界生效"); }
+                try { const result = await rpc("updateTavernSettings", { patch: { contextCompaction: { mode: policy.mode, rounds: Number(policy.rounds), percent: Number(policy.percent), ...(policy.retainRounds === undefined ? {} : { retainRounds: policy.retainRounds }) } } }); setPolicy(result.settings.contextCompaction); setNotice("已保存，下一个安全边界生效"); }
                 catch (error) { setNotice(String(error.message || error)); } finally { setBusy(false); }
             }
             return React.createElement("div", { className: "dsh-tavern-settings-group dsh-tavern-compaction-settings" },

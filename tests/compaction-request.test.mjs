@@ -53,7 +53,20 @@ test('story compaction summarizes only history before the latest rounds and appe
   const { request: older, appendix } = retainRecentStoryRounds(request, 2)
   assert.deepEqual(older.messages.map(m => m.content.at(-1).text), ['固定背景', '玩家1', '正文1', '玩家2', '正文2', '总结指令'])
   assert.equal(appendix, '【最近 2 轮原文（未压缩，按时间顺序）】\n\n[玩家]\n玩家3\n\n[正文]\n正文3\n\n[玩家]\n玩家4\n\n[正文]\n正文4')
-  assert.throws(() => retainRecentStoryRounds(request, 4), /最近 4 轮之前没有可压缩的历史/)
+  // At least one round is always summarized, so capacity recovery makes progress.
+  assert.match(retainRecentStoryRounds(request, 4).appendix, /^【最近 3 轮原文/)
+  assert.equal(retainRecentStoryRounds({ ...request, messages: [history[0], history[1], history[2], instruction] }, 4).appendix, undefined)
+
+  // Kept rounds also respect a token budget (rounds 4 and 3 each cost 5 here).
+  const budgeted = retainRecentStoryRounds(request, 3, { budget: 9, estimate: text => text.split('\n\n').length * 2 + 1 })
+  assert.match(budgeted.appendix, /^【最近 1 轮原文/)
+
+  // A later compaction splits the carried transcript back into rounds.
+  const checkpoint = { role: 'user', content: [{ type: 'text', text: '<compacted-summary>' }, { type: 'text', text: '旧摘要' }, { type: 'text', text: appendix }, { type: 'text', text: '</compacted-summary>' }], source: { kind: 'plugin', plugin: 'compaction' } }
+  const next = retainRecentStoryRounds({ purpose: 'compaction', messages: [history[0], checkpoint, say('user', '玩家5'), { role: 'assistant', content: [{ type: 'text', text: '正文5' }] }, instruction] }, 2)
+  assert.equal(next.appendix, '【最近 2 轮原文（未压缩，按时间顺序）】\n\n[玩家]\n玩家4\n\n[正文]\n正文4\n\n[玩家]\n玩家5\n\n[正文]\n正文5')
+  // The previous summary stays whole, so the summarizer input remains a prefix of the foreground request.
+  assert.deepEqual(next.request.messages, [history[0], checkpoint, instruction])
 
   const hooks = [], sent = [], events = []
   const dispatch = (r, index = 0) => index < hooks.length
@@ -82,4 +95,18 @@ test('rounds the native engine already keeps outside the request count toward th
   const request = { purpose: 'compaction', messages: [events[0].data, events[1].data.message] }
   assert.equal(nativelyRetainedRounds(session, request), 2)
   assert.equal(nativelyRetainedRounds(undefined, request), 0)
+})
+
+test('a history whose rounds all fit the retention needs no compaction, counting carried rounds', async () => {
+  const { storyHistoryFullyRetained } = await import('../tavern-plugin/lib/domain/story-compaction.js')
+  const events = [
+    { type: 'user/message', data: { id: 'c', role: 'user', content: [{ type: 'text', text: '【最近 2 轮原文（未压缩，按时间顺序）】\n\n[玩家]\n甲\n\n[正文]\n乙\n\n[玩家]\n丙' }], source: { kind: 'plugin' } } },
+    { type: 'user/message', data: { id: 'u', role: 'user', content: [{ type: 'text', text: '丁' }], source: { kind: 'human' } } },
+    { type: 'assistant/message', data: { message: { id: 'a', role: 'assistant', content: [{ type: 'text', text: '戊' }] } } }
+  ].map((event, seq) => ({ ...event, seq }))
+  const session = { surface: { nodes: [0, 1, 2] }, eventAt: seq => events[seq] }
+  assert.equal(storyHistoryFullyRetained(session, 3), true)
+  assert.equal(storyHistoryFullyRetained(session, 2), false)
+  assert.equal(storyHistoryFullyRetained(session, 3, { budget: 1 }), false, '超出保留预算的长轮次仍需压缩')
+  assert.equal(storyHistoryFullyRetained(session, 0), false)
 })

@@ -74,6 +74,7 @@ import { resolveAgentCompaction } from './agent-compaction.js'
 import { compactForegroundIfNeeded } from './domain/foreground-compaction.js'
 import { compactBackgroundIfNeeded, measureBackgroundBudget } from './domain/background-compaction.js'
 import { createAutoCompaction, installCompactionPolicy } from './domain/auto-compaction.js'
+import { RETAINED_ROUNDS_WINDOW_SHARE, storyHistoryFullyRetained } from './domain/story-compaction.js'
 import { createPerformanceDiagnostics } from './domain/performance-diagnostics.js'
 import { createBackgroundSuppressionReader } from './domain/background-surface.js'
 import { ensureCardWorkspaceMessage } from './domain/card-workspace-message.js'
@@ -2142,6 +2143,20 @@ export async function apply(ctx) {
     blocked: function (chat) { return Boolean(autoCompaction?.blocked(chat)) }
   })
   const configuredCompactionEngines = new WeakSet()
+  const overflowingCompactions = new Set()
+  // Rounds kept verbatim after a story summary, bounded by a share of the model window.
+  async function storyRetention({ sessionId, provider, model, signal }) {
+    // Provider-confirmed overflow must shrink as far as possible; it keeps no extra rounds.
+    const rounds = overflowingCompactions.has(sessionId) ? 0 : (await readTavernSettings()).contextCompaction.retainRounds
+    const info = provider && model ? await Promise.resolve(ctx.llm.resolveModelInfo?.(provider, model, signal)).catch(() => undefined) : undefined
+    const window = info?.context?.contextWindow
+    const meter = ctx.get('tokenMeter')
+    return {
+      rounds,
+      budget: Number.isFinite(window) && window > 0 ? Math.floor(window * RETAINED_ROUNDS_WINDOW_SHARE) : Infinity,
+      estimate: text => meter?.estimateMessage ? meter.estimateMessage({ role: 'user', content: [{ type: 'text', text }] }) : Math.ceil(text.length / 4)
+    }
+  }
   const pendingCompactionMessages = new WeakMap()
   const checkedCompactionPressure = new WeakSet()
   const compactionDisposers = new Set()
@@ -2189,8 +2204,16 @@ export async function apply(ctx) {
       return chat
     }, { source: 'compaction.background' }),
     async compact(id, side, options, signal) {
-      if (side === 'foreground' && options.openTurnCompact) return options.openTurnCompact()
       if (side === 'background') return backgroundAgentRunner.compact({ sessionId: id, signal })
+      // Kept rounds stay verbatim, so a history they cover entirely has nothing to summarize.
+      const covered = async session => {
+        const header = session.requestHeader?.()?.config
+        const retention = await storyRetention({ sessionId: id, provider: header?.provider, model: header?.model, signal })
+        return storyHistoryFullyRetained(session, retention.rounds, retention) ? retention.rounds : 0
+      }
+      const retained = options.agent ? await covered(options.agent.session) : await withCompactionSession(id, agent => covered(agent.session))
+      if (retained) return { message: `最近 ${retained} 轮剧情保留原文，暂无更早的历史需要压缩` }
+      if (options.openTurnCompact) return options.openTurnCompact()
       return withCompactionSession(id, async agent => {
         await retireOldForegroundFrames(agent, agent.phase?.kind === 'running' ? agent.phase.turn : undefined)
         return (await agentCompaction(agent)).compactNow(agent, signal)
@@ -2202,6 +2225,12 @@ export async function apply(ctx) {
     if (configuredCompactionEngines.has(engine)) return engine
     configuredCompactionEngines.add(engine)
     const dispose = installCompactionPolicy(engine, async (target, trigger, signal, fallback, forced) => {
+      if (trigger !== 'context-overflow') return compactionPolicyFor(target, trigger, signal, fallback, forced)
+      overflowingCompactions.add(target.session.id)
+      try { return await compactionPolicyFor(target, trigger, signal, fallback, forced) }
+      finally { overflowingCompactions.delete(target.session.id) }
+    }, { beforeRegion: compactionRegionGuard })
+    async function compactionPolicyFor(target, trigger, signal, fallback, forced) {
       // Our early pre-step and the host hook share one pressure attempt. Overflow
       // recovery remains independent and retains the host request retry budget.
       if (trigger === 'pressure' && pendingCompactionMessages.has(target)) {
@@ -2230,7 +2259,8 @@ export async function apply(ctx) {
         record: () => autoCompaction.recordForeground(target.session.id),
         scheduled: () => autoCompaction.run(target.session.id, { agent: target, signal, openTurnCompact: forced, pendingMessages })
       })
-    }, { beforeRegion: async target => {
+    }
+    async function compactionRegionGuard(target) {
       const background = backgroundAgentRunner.requestContext(target.session.id)
       if (!background || ['image', 'phone'].includes(background.task)) return
       const chat = await sessionStateForSession(background.parentSessionId)
@@ -2242,7 +2272,7 @@ export async function apply(ctx) {
         participant.compactionPlannedAt = Date.now()
         return current
       }, { source: 'compaction.background' })
-    } })
+    }
     compactionDisposers.add(dispose)
     collectedCompactionEngines.register(engine, dispose, dispose)
     return engine
@@ -4064,6 +4094,7 @@ export async function apply(ctx) {
     str,
     updateChat,
     worldbookRecallLog,
+    storyRetention,
   })
 
   registerTurnLifecycleHooks({

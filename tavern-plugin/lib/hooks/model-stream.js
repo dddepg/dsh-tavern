@@ -1,5 +1,5 @@
 import { createImportContextPreparation, needsImportContextPreparation } from '../domain/import-context-preparation.js'
-import { RETAINED_STORY_ROUNDS, createStoryCompactionRequest, nativelyRetainedRounds, retainRecentStoryRounds, usesStoryCompaction } from '../domain/story-compaction.js'
+import { createStoryCompactionRequest, nativelyRetainedRounds, retainRecentStoryRounds, usesStoryCompaction } from '../domain/story-compaction.js'
 import { installCompactionRequestProjection } from '../domain/compaction-request.js'
 import { installWorkspaceInstructionPresentation } from '../domain/workspace-instruction-presentation.js'
 import { presentModelError } from '../domain/model-error-presentation.js'
@@ -15,6 +15,7 @@ export function registerModelStreamHooks({
   fullTemplateRuntime,
   modelRequestLog,
   requestCoordinates,
+  storyRetention,
   runtimePrompt,
   sessionStateForSession,
   sessionStore,
@@ -51,7 +52,8 @@ export function registerModelStreamHooks({
     if (needsImportContextPreparation(chat)) throw new Error('导入对话尚未完成首次上下文容量检查，暂不调用摘要模型')
     const story = createStoryCompactionRequest(request, runtimePrompt('story-compaction'))
     const session = sessionStore.get(story.sessionId) || agentRegistry.get(story.sessionId)?.session
-    return retainRecentStoryRounds(story, RETAINED_STORY_ROUNDS - nativelyRetainedRounds(session, story))
+    const retention = await storyRetention(story)
+    return retainRecentStoryRounds(story, retention.rounds - nativelyRetainedRounds(session, story), retention)
   })
 
   ctx.on('llm/stream', function (options, next) {
