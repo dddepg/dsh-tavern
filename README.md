@@ -178,6 +178,8 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 
 本项目没有 QQ 群、微信群或其他群聊。
 
+提功能需求前，请先看[项目范围：做什么，不做什么](docs/scope.md)。项目已进入稳定阶段，只专注人物卡兼容、稳定性和性能。
+
 反馈故障时，可从对话顶部的“日志”下载执行记录；分享前请检查其中的对话和附件隐私。
 
 ## 贡献者与致谢
