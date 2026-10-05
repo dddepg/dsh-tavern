@@ -1,5 +1,5 @@
 import { createImportContextPreparation, needsImportContextPreparation } from '../domain/import-context-preparation.js'
-import { createStoryCompactionRequest, usesStoryCompaction } from '../domain/story-compaction.js'
+import { RETAINED_STORY_ROUNDS, createStoryCompactionRequest, nativelyRetainedRounds, retainRecentStoryRounds, usesStoryCompaction } from '../domain/story-compaction.js'
 import { installCompactionRequestProjection } from '../domain/compaction-request.js'
 import { installWorkspaceInstructionPresentation } from '../domain/workspace-instruction-presentation.js'
 import { presentModelError } from '../domain/model-error-presentation.js'
@@ -44,11 +44,14 @@ export function registerModelStreamHooks({
     return Boolean(chat)
   })
   installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)), async request => {
-    // Story/script chats summarize with the story prompt; other sessions keep DSH's.
+    // Story/script chats summarize with the story prompt and keep the latest rounds
+    // verbatim after the summary; other sessions keep DSH's prompt.
     const chat = await chatForSession(str(request.sessionId))
-    if (!usesStoryCompaction(chat)) return request
+    if (!usesStoryCompaction(chat)) return { request }
     if (needsImportContextPreparation(chat)) throw new Error('导入对话尚未完成首次上下文容量检查，暂不调用摘要模型')
-    return createStoryCompactionRequest(request, runtimePrompt('story-compaction'))
+    const story = createStoryCompactionRequest(request, runtimePrompt('story-compaction'))
+    const session = sessionStore.get(story.sessionId) || agentRegistry.get(story.sessionId)?.session
+    return retainRecentStoryRounds(story, RETAINED_STORY_ROUNDS - nativelyRetainedRounds(session, story))
   })
 
   ctx.on('llm/stream', function (options, next) {

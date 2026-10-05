@@ -33,10 +33,53 @@ test('one hook projects, applies the story prompt and sends a single summary req
     ? hooks[index](request, () => dispatch(request, index + 1))
     : (async function * () { sent.push(request); yield { type: 'finish', reason: { kind: 'stop' } } })()
   const ctx = { on: (_, hook) => hooks.push(hook), llm: { stream: request => dispatch(request), resolveModelInfo: async () => undefined } }
-  installCompactionRequestProjection(ctx, async () => true, async request => createStoryCompactionRequest(request, '剧情压缩提示'))
+  installCompactionRequestProjection(ctx, async () => true, async request => ({ request: createStoryCompactionRequest(request, '剧情压缩提示') }))
   const instruction = Object.freeze({ role: 'user', content: Object.freeze([{ type: 'text', text: '原生提示' }]), source: Object.freeze({ kind: 'plugin', plugin: 'dsh-compaction-basic' }) })
   const host = Object.freeze({ purpose: 'compaction', sessionId: 's', messages: Object.freeze([metadata, instruction]) })
   for await (const _ of ctx.llm.stream(host)) { /* drain */ }
   assert.equal(sent.length, 1)
   assert.deepEqual(sent[0].messages.map(m => m.content[0]?.text), ['剧情压缩提示'])
+})
+
+test('story compaction summarizes only history before the latest rounds and appends them verbatim', async () => {
+  const { installCompactionRequestProjection } = await import('../tavern-plugin/lib/domain/compaction-request.js')
+  const { retainRecentStoryRounds } = await import('../tavern-plugin/lib/domain/story-compaction.js')
+  const say = (role, text, source = { kind: 'human' }) => ({ role, content: [{ type: 'text', text }], source })
+  const history = [say('system', '固定背景', undefined)]
+  for (let i = 1; i <= 4; i++) history.push(say('user', '玩家' + i), { role: 'assistant', content: [{ type: 'thinking', text: '思考' }, { type: 'text', text: '正文' + i }] })
+  const instruction = say('user', '总结指令', { kind: 'plugin', plugin: 'dsh-compaction-basic' })
+  const request = { purpose: 'compaction', sessionId: 's', messages: [...history, instruction] }
+
+  const { request: older, appendix } = retainRecentStoryRounds(request, 2)
+  assert.deepEqual(older.messages.map(m => m.content.at(-1).text), ['固定背景', '玩家1', '正文1', '玩家2', '正文2', '总结指令'])
+  assert.equal(appendix, '【最近 2 轮原文（未压缩，按时间顺序）】\n\n[玩家]\n玩家3\n\n[正文]\n正文3\n\n[玩家]\n玩家4\n\n[正文]\n正文4')
+  assert.throws(() => retainRecentStoryRounds(request, 4), /最近 4 轮之前没有可压缩的历史/)
+
+  const hooks = [], sent = [], events = []
+  const dispatch = (r, index = 0) => index < hooks.length
+    ? hooks[index](r, () => dispatch(r, index + 1))
+    : (async function * () {
+        sent.push(r)
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: '摘要' } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      })()
+  const ctx = { on: (_, hook) => hooks.push(hook), llm: { stream: r => dispatch(r), resolveModelInfo: async () => undefined } }
+  installCompactionRequestProjection(ctx, async () => true, async r => retainRecentStoryRounds(r, 2))
+  for await (const event of ctx.llm.stream(request)) events.push(event)
+  assert.equal(sent.length, 1)
+  assert.ok(!JSON.stringify(sent[0].messages).includes('玩家3'))
+  assert.deepEqual(events.filter(e => e.type === 'block-end').map(e => [e.index, e.block.text]), [[0, '摘要'], [1, appendix]])
+  assert.equal(events.at(-1).type, 'finish')
+})
+
+test('rounds the native engine already keeps outside the request count toward the retained quota', async () => {
+  const { nativelyRetainedRounds } = await import('../tavern-plugin/lib/domain/story-compaction.js')
+  const user = (id, text, kind = 'human') => ({ type: 'user/message', data: { id, role: 'user', content: [{ type: 'text', text }], source: { kind } } })
+  const events = [user('a', '旧'), { type: 'assistant/message', data: { message: { id: 'b' } } }, user('c', '近1'), user('frame', '帧', 'plugin'), user('d', '近2')]
+    .map((event, seq) => ({ ...event, seq }))
+  const session = { surface: { nodes: events.map(e => e.seq) }, eventAt: seq => events[seq] }
+  const request = { purpose: 'compaction', messages: [events[0].data, events[1].data.message] }
+  assert.equal(nativelyRetainedRounds(session, request), 2)
+  assert.equal(nativelyRetainedRounds(undefined, request), 0)
 })
