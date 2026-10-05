@@ -51,13 +51,23 @@ function withMutation(dshHome, attemptId, generation, callback) {
     assertOwner(dshHome, attemptId, generation)
     try {
       fs.mkdirSync(gate)
-      fs.writeFileSync(path.join(gate, 'token'), gateToken, { flag: 'wx', mode: 0o600 })
-      break
     } catch (error) {
-      if (error.code !== 'EEXIST') throw error
-      if (Date.now() >= deadline) throw failure('INSTALLATION_STATE_BUSY', '安装状态正在写入或尚未安全结束，请勿并行重试。')
+      // Windows can report a sharing/delete-pending violation while another
+      // process removes this gate. Wait for mkdir to succeed; never remove a
+      // competing gate or enter the callback without acquiring it ourselves.
+      if (!['EEXIST', 'EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error
+      if (Date.now() >= deadline) {
+        // A permanent permissions failure must keep its original diagnostics.
+        if (error.code !== 'EEXIST') throw error
+        throw failure('INSTALLATION_STATE_BUSY', '安装状态正在写入或尚未安全结束，请勿并行重试。')
+      }
       sleep(10)
+      continue
     }
+    // We own the directory now. A failed token write retains it conservatively
+    // and must not be retried as if another process held the gate.
+    fs.writeFileSync(path.join(gate, 'token'), gateToken, { flag: 'wx', mode: 0o600 })
+    break
   }
   try {
     const result = callback(assertOwner(dshHome, attemptId, generation))
