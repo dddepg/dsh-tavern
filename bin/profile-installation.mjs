@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import installationState from './installation-state.cjs'
 import { recordInstallationReceipt } from './installation-receipt.mjs'
+import { assertRuntimeDependencies } from './runtime-dependencies.mjs'
 import { createUpdateState } from './update-state.mjs'
 import { recordUpdateDiagnostic } from './update-diagnostics.mjs'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -295,6 +296,8 @@ async function installProfileOwned(host, { attemptId, runInstall, runDsh }) {
       // Its previous lockfile is not the source repository's frozen lockfile.
       await runInstall('pnpm', ['install', '--no-frozen-lockfile'], { cwd: PROFILE_DIR })
       await runDsh(dsh, ['--profile', PROFILE, '--dump-config'], { host, timeoutMs: 60_000 })
+      // --dump-config never imports the plugin; a partial node_modules would only fail after restart.
+      assertRuntimeDependencies(SOURCE_ROOT)
       ensureSidebarDefaults()
       const [theme] = resolveHostDependencies({ dsh, host, requiredExports: { '@deepseek-ai/dsh-client-ui-theme': null } })
       if (patchThemeFontLimit(theme.directory)) console.log('已将 DSH 原有字号上限放宽到 32px。')
