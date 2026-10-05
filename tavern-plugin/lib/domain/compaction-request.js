@@ -13,15 +13,21 @@ export function projectCompactionRequest(request) {
   return messages.length === request.messages.length ? request : { ...request, messages }
 }
 
-export function installCompactionRequestProjection(ctx, ownsSession) {
+/**
+ * The single Tavern hook for summary requests. Every rewrite of the request
+ * (metadata projection, then `prepare`, e.g. the story prompt) is applied here as
+ * a plain transformation; only the final summarizer calls re-enter llm/stream.
+ * Separate re-dispatching hooks previously re-processed each other's copies
+ * (#146) and collided on their lineage marks (#148).
+ */
+export function installCompactionRequestProjection(ctx, ownsSession, prepare = async request => request) {
   // Segment requests re-enter llm/stream; copies other hooks make of them stay internal.
   const stream = request => ctx.llm.stream(markRequestHandled(request, 'compaction-projection'))
   ctx.on('llm/stream', (request, next) => {
     if (requestHandledBy(request, 'compaction-projection') || request?.purpose !== 'compaction' || !request.sessionId) return next()
     return (async function * () {
       if (!(await ownsSession(request.sessionId))) { yield* next(); return }
-      const projected = projectCompactionRequest(request)
-      yield* boundedCompaction(ctx, projected, stream)
+      yield* boundedCompaction(ctx, await prepare(projectCompactionRequest(request)), stream)
     })()
   })
 }

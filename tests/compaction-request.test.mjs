@@ -24,3 +24,19 @@ test('marking a frozen, already-marked request copies it instead of throwing (#1
   assert.ok(requestHandledBy(marked, 'story-compaction') && requestHandledBy(marked, 'compaction-projection'))
   assert.ok(!requestHandledBy(request, 'story-compaction'))
 })
+
+test('one hook projects, applies the story prompt and sends a single summary request (#146/#148)', async () => {
+  const { installCompactionRequestProjection } = await import('../tavern-plugin/lib/domain/compaction-request.js')
+  const { createStoryCompactionRequest } = await import('../tavern-plugin/lib/domain/story-compaction.js')
+  const hooks = [], sent = []
+  const dispatch = (request, index = 0) => index < hooks.length
+    ? hooks[index](request, () => dispatch(request, index + 1))
+    : (async function * () { sent.push(request); yield { type: 'finish', reason: { kind: 'stop' } } })()
+  const ctx = { on: (_, hook) => hooks.push(hook), llm: { stream: request => dispatch(request), resolveModelInfo: async () => undefined } }
+  installCompactionRequestProjection(ctx, async () => true, async request => createStoryCompactionRequest(request, '剧情压缩提示'))
+  const instruction = Object.freeze({ role: 'user', content: Object.freeze([{ type: 'text', text: '原生提示' }]), source: Object.freeze({ kind: 'plugin', plugin: 'dsh-compaction-basic' }) })
+  const host = Object.freeze({ purpose: 'compaction', sessionId: 's', messages: Object.freeze([metadata, instruction]) })
+  for await (const _ of ctx.llm.stream(host)) { /* drain */ }
+  assert.equal(sent.length, 1)
+  assert.deepEqual(sent[0].messages.map(m => m.content[0]?.text), ['剧情压缩提示'])
+})

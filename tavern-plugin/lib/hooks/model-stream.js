@@ -43,7 +43,13 @@ export function registerModelStreamHooks({
     const chat = await sessionStateForSession(sessionId)
     return Boolean(chat)
   })
-  installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)))
+  installCompactionRequestProjection(ctx, async sessionId => backgroundAgentRunner.owns(sessionId) || Boolean(await sessionStateForSession(sessionId)), async request => {
+    // Story/script chats summarize with the story prompt; other sessions keep DSH's.
+    const chat = await chatForSession(str(request.sessionId))
+    if (!usesStoryCompaction(chat)) return request
+    if (needsImportContextPreparation(chat)) throw new Error('导入对话尚未完成首次上下文容量检查，暂不调用摘要模型')
+    return createStoryCompactionRequest(request, runtimePrompt('story-compaction'))
+  })
 
   ctx.on('llm/stream', function (options, next) {
     const sessionId = str(options && options.sessionId)
@@ -52,23 +58,6 @@ export function registerModelStreamHooks({
       requestCoordinates.set(sessionId, Object.assign({}, coordinates, {
         source: { kind: 'model', provider: str(options.provider), model: str(options.model) }
       }))
-    }
-    if (options !== null && typeof options === 'object' && options.purpose === 'compaction' && !requestHandledBy(options, 'story-compaction')) {
-      const fallback = next()
-      return (async function * () {
-        const chat = await chatForSession(sessionId)
-        if (!usesStoryCompaction(chat)) {
-          yield * fallback
-          return
-        }
-        if (needsImportContextPreparation(chat)) throw new Error('导入对话尚未完成首次上下文容量检查，暂不调用摘要模型')
-        const request = createStoryCompactionRequest(options, runtimePrompt('story-compaction'))
-        if (request === options) {
-          yield * fallback
-          return
-        }
-        yield * ctx.llm.stream(markRequestHandled(request, 'story-compaction'))
-      })()
     }
     const projectedRequest = (requestHandledBy(options, 'full-template') || importContextPreparation.isPrepared(options)) ? null : foregroundStrategies.projectRequest(options, coordinates)
     if (projectedRequest !== null) return ctx.llm.stream(projectedRequest)
