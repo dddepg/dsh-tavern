@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "69e740c0e39d2d54ed83778d5fee2fa38cffb7a4",
-  "releaseSequence": 531,
+  "revision": "36104efb6d2e544a9039d50512b840b0c5e9fda1",
+  "releaseSequence": 532,
   "version": "2.5.0",
   "files": [
     {
@@ -261,8 +261,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "e2352bcfe6c25f84ebfee578db803d43495baae46a748b6e7a0e51913f783aef",
-      "size": 3665
+      "sha256": "8ac4134391c81b757c41c2ffac44be1ce614aca5d80b164f1cbb67a128df9911",
+      "size": 3820
     },
     {
       "path": "patches/dsh-better-sidebar@0.19.1.patch",
