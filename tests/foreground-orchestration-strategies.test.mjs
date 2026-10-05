@@ -214,3 +214,22 @@ test('切换预设前段时开始新请求序列，DSH 替换系统消息头而�
   assert.deepEqual(await step(3), { sections: ['预设乙', '人物卡'], series: true })
   assert.deepEqual(await step(4), { sections: ['预设乙', '人物卡'], series: false })
 })
+
+test('请求证据标出系统消息中的预设前段，供请求上下文界面区分', async () => {
+  const run = strategies({ nativePlay: {
+    async modeFor() { return 'story' },
+    filterMessages(messages) { return messages },
+    async resolvePreset() { return { front: { entries: [{ role: 'system', content: '预设前置' }] } } },
+    async prepareTurn() { return { frame: { userInput: { projectedText: '输入' } } } },
+    appendFrame(input) { return { messages: input.messages, receipt: {} } },
+    recordFrame() {}, async visibleTools() { return [] }, controlledToolNames: new Set()
+  } })
+  const chat = run.chats.get('native')
+  await run.value.assembleSystemPrompt({ sections: [], tools: [] }, { sessionId: 'native', chat, fixedSystemSections: [] })
+  await run.value.prepareStep({ sessionId: 'native', payload: { turn: 1, step: 1, messages: [userMessage('x')] }, decision: { kind: 'enter', messages: [userMessage('x')] }, chat })
+  const system = { role: 'system', content: [{ type: 'text', text: '附加指令\n\n预设前置\n\n人物卡' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }
+  const request = run.value.projectRequest({ sessionId: 'native', messages: [system, userMessage('x')] })
+  assert.deepEqual(request.messages[0].source.sections, [{ name: 'tavern:runtime-preset-front', text: '预设前置' }])
+  assert.deepEqual(request.messages[0].content, system.content, '发给模型的内容不变')
+  assert.equal(system.source.sections, undefined, '轨迹中的消息不被修改')
+})

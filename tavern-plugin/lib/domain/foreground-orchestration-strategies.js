@@ -239,6 +239,20 @@ export function createCompatibilityOrchestrationStrategy(options) {
 // trajectory (manual, scheduled and native compaction) then starts with exactly
 // the bytes the foreground sent, and keeps the provider's prefix cache. Projecting
 // it only at request time made every compaction request diverge from token one.
+// Request evidence only: mark where the front phase sits inside the native system
+// message so the request viewer can still label it. Message sources never reach
+// the provider, and the trajectory keeps its own unannotated message.
+function labelPresetFront(messages, texts) {
+  if (!Array.isArray(messages) || !texts?.length) return messages
+  const index = messages.findIndex(message => message?.role === 'system' && message.source?.plugin === '@deepseek-ai/dsh-system-prompt')
+  const message = messages[index]
+  const body = (message?.content || []).map(block => block?.type === 'text' ? block.text : '').join('')
+  if (index < 0 || !texts.every(text => body.includes(text))) return messages
+  const copy = messages.slice()
+  copy[index] = { ...message, source: { ...message.source, sections: texts.map(text => ({ name: 'tavern:runtime-preset-front', text })) } }
+  return copy
+}
+
 function presetFrontSections(snapshot) {
   const entries = Array.isArray(snapshot?.front?.entries) ? snapshot.front.entries : []
   return entries.filter(entry => str(entry?.content).trim() !== '')
@@ -250,6 +264,8 @@ export function createNativePlayOrchestrationStrategy(options) {
   // Digest of the front rendered by the latest assembly, and of the one last entered into a step.
   const renderedFronts = new Map()
   const enteredFronts = new Map()
+  // Front texts of the step being prepared, only to label the request evidence.
+  const frontTexts = new Map()
 
   async function prepareStep(input) {
     const sessionId = input.sessionId
@@ -337,6 +353,8 @@ export function createNativePlayOrchestrationStrategy(options) {
       request = Object.assign({}, request)
       delete request.system
     }
+    const labelled = labelPresetFront(request.messages, frontTexts.get(sessionId))
+    if (labelled !== request.messages) request = Object.assign({}, request, { messages: labelled })
     if (request === optionsValue) return null
     return markRequestHandled(request, PROJECTED)
   }
@@ -349,6 +367,7 @@ export function createNativePlayOrchestrationStrategy(options) {
 
   function clearRequestState(sessionId) {
     stagedRequests.delete(str(sessionId))
+    frontTexts.delete(str(sessionId))
   }
 
   async function assembleSystemPrompt(assembly, input) {
@@ -376,6 +395,7 @@ export function createNativePlayOrchestrationStrategy(options) {
       const raw = await options.resolvePreset(input.chat)
       const front = presetFrontSections(resolveRuntimePresetMacros(raw, { charName: input.chat?.cardName, macroState: input.chat?.macroState }).snapshot)
       sections.unshift(...front)
+      frontTexts.set(input.sessionId, front.map(section => section.text))
       renderedFronts.set(input.sessionId, createHash('sha256').update(JSON.stringify(front.map(section => section.text))).digest('hex'))
     }
     assembly.sections = sections
