@@ -599,7 +599,9 @@ export function createApplicationUpdater(options) {
     let launchObserved = false
     try {
       const child = spawnProcess(execPath, args, {
-        cwd: sourceRoot,
+        // Never start the update chain inside the app it replaces: on Windows a process
+        // whose working directory is in there makes the final directory swap fail (EBUSY).
+        cwd: dshHome,
         detached: true,
         windowsHide: true,
         stdio: platform === 'win32' ? ['ignore', 'ignore', 'pipe'] : 'ignore',

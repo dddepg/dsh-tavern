@@ -165,8 +165,11 @@ test('jsDelivr 发布序号阻止缓存倒退，并允许无 GitHub 更新', asy
 
     metadata.releaseSequence = 43
     const child = { pid: 4321, once(event, listener) { if (event === 'spawn') queueMicrotask(listener); return this }, unref() {} }
-    const changed = await createApplicationUpdater({ ...common, platform: 'linux', spawnProcess() { return child } }).start()
+    let launchCwd
+    const home = path.join(root, 'home')
+    const changed = await createApplicationUpdater({ ...common, dshHome: home, platform: 'linux', spawnProcess(_command, _args, options) { launchCwd = options.cwd; return child } }).start()
     assert.equal(changed.phase, 'running')
+    assert.equal(launchCwd, home, '更新链不能以被替换的程序目录作为工作目录（Windows 会 EBUSY）')
     assert.equal(changed.checkSource, 'jsdelivr')
   } finally {
     await rm(root, { recursive: true, force: true })
