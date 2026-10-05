@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "d7414f9477b3b64948526a5161faad50426d62d8",
-  "releaseSequence": 518,
+  "revision": "99a6933dff54965d380750e3fe9e9dd524f12065",
+  "releaseSequence": 519,
   "version": "2.5.0",
   "files": [
     {
@@ -131,13 +131,18 @@
     },
     {
       "path": "bin/profile-installation.mjs",
-      "sha256": "475551193f7bdec2f66d1ef0f8e3a31d516cefbc0a239417734791e9d7586870",
-      "size": 16860
+      "sha256": "24cc14dc68123478c9818f6a6de705a81ce3151431dc38bcded4a7517c4d5507",
+      "size": 17079
     },
     {
       "path": "bin/prune-installed-files.mjs",
       "sha256": "d5c7cb32ddbb7938a60f209149e4b033da258144a432e171f02f6316ae354abf",
       "size": 3461
+    },
+    {
+      "path": "bin/runtime-dependencies.mjs",
+      "sha256": "5dacde2f4f14b08e3c5f5b20ac47432f08b596636f31610470421bdea85fd260",
+      "size": 1750
     },
     {
       "path": "bin/service-lifecycle.mjs",
