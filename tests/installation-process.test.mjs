@@ -273,3 +273,26 @@ test('an explicit new root ignores stale registry and ancestry environment marke
   assert.notEqual(inner.processDirectory, stale)
   assert.match(inner.stdout, /fresh root/)
 })
+
+test('a wrapper that reuses a finished wrapper PID ignores that predecessor\'s stop marker', async t => {
+  const { clearStaleWrapperFiles } = await import('../bin/installation-process.mjs')
+  const { mkdtempSync, writeFileSync, utimesSync, existsSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const pathModule = (await import('node:path')).default
+  const directory = mkdtempSync(pathModule.join(tmpdir(), 'wrapper-pid-reuse-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const startedAt = Date.now()
+  const stale = pathModule.join(directory, 'stopping-4242')
+  writeFileSync(stale, '')
+  utimesSync(stale, (startedAt - 60000) / 1000, (startedAt - 60000) / 1000)
+  const unrelated = pathModule.join(directory, 'stopping-777')
+  writeFileSync(unrelated, '')
+  utimesSync(unrelated, (startedAt - 60000) / 1000, (startedAt - 60000) / 1000)
+  clearStaleWrapperFiles(directory, 4242, startedAt)
+  assert.equal(existsSync(stale), false)
+  assert.equal(existsSync(unrelated), true)
+  // A cancellation written for this wrapper after it started is kept.
+  writeFileSync(stale, '')
+  clearStaleWrapperFiles(directory, 4242, startedAt)
+  assert.equal(existsSync(stale), true)
+})

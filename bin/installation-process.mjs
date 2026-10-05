@@ -1,5 +1,5 @@
 import { spawn, execFile } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -517,9 +517,25 @@ function startWindowsJob({ command, args, directory, ancestors, shell }, pid, se
 // The wrapper registers its own group before running any user command. It stays
 // alive after command exit until the supervisor cleans the WHOLE tree, including
 // orphaned grandchildren and separately grouped nested installation stages.
+/**
+ * Per-wrapper files are keyed by PID, and Windows reuses PIDs within seconds. A
+ * finished step leaves `stopping-<pid>` behind (its supervisor closes the gate on
+ * cleanup), so a later wrapper that drew the same PID saw itself as cancelled and
+ * aborted at once ("安装进程正在停止"). Anything carrying this PID that predates this
+ * process belonged to a dead predecessor; a supervisor's real cancellation for this
+ * wrapper can only be written after it was spawned.
+ */
+export function clearStaleWrapperFiles(directory, pid, startedAt) {
+  for (const name of [`stopping-${pid}`, `windows-stopped-${pid}`, `windows-job-${pid}.json`, `windows-${pid}-result.json`]) {
+    const file = path.join(directory, name)
+    try { if (statSync(file).mtimeMs < startedAt) unlinkSync(file) } catch {}
+  }
+}
+
 function runChildWrapper(configuration) {
   const { command, args, directory, ancestors, shell } = configuration
   const pid = process.pid
+  clearStaleWrapperFiles(directory, pid, Date.now() - process.uptime() * 1000 - 20)
   const registration = path.join(directory, `${pid}.json`)
   writeFileSync(`${registration}.tmp`, JSON.stringify({ pid, ancestors }), { flag: 'wx', mode: 0o600 })
   renameSync(`${registration}.tmp`, registration)
