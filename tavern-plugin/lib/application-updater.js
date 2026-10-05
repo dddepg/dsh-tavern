@@ -399,6 +399,14 @@ export function createApplicationUpdater(options) {
         return { ...interrupted, ...identity }
       }
     }
+    // Status must apply the same stale-lock rule as a new install would; otherwise a
+    // lock the installer would reclaim keeps the update button disabled forever.
+    if (owner && installationState.reclaimStaleInstallation(dshHome, owner)) {
+      if (current?.phase === 'completed' && current.attemptId === owner.attemptId) return { ...current, ...identity }
+      const interrupted = { phase: 'failed', attemptId: owner.attemptId, repairRequired: true, repairSince: now(), host: await host(), failedAt: now(), error: '上次更新已中断（安装进程均已退出或超过 1 小时无进展），已解除安装锁，可以修复安装。' }
+      await writeStatus(interrupted, { expectedAttemptId: current?.attemptId })
+      return { ...interrupted, ...identity }
+    }
     if (owner) {
       const active = current?.attemptId === owner.attemptId ? current : {}
       const elapsed = now() - (Number(owner.startedAt) || Date.parse(owner.startedAt) || Number(active.startedAt) || now())
