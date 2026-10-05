@@ -297,3 +297,16 @@ test('状态查询按与安装相同的规则回收残留锁，更新按钮不�
   assert.equal(status.repairRequired, true)
   await assert.rejects(readFile(path.join(lock, 'owner.json')), { code: 'ENOENT' })
 })
+
+test('没有安装锁的遗留「进行中」记录：超过 1 小时转为可修复，不再永久禁用更新', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-orphan-record-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.5.0' }))
+  const updater = createApplicationUpdater({ dataRoot: root, sourceRoot: root, runtimeHost: 'cli' })
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'running', attemptId: 'a', startedAt: Date.now() - 5 * 60_000 }))
+  assert.equal((await updater.status()).phase, 'blocked', 'a recent record stays fenced')
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'blocked', attemptId: 'a', startedAt: Date.now() - 2 * 60 * 60_000 }))
+  const status = await updater.status()
+  assert.equal(status.phase, 'failed')
+  assert.equal(status.repairRequired, true)
+})
