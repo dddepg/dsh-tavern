@@ -1550,6 +1550,10 @@ window.__ModuleLoader__.load({
 		/** Persist a skin choice; DEFAULT_SKIN clears the stored value. */
 		function writeSavedSkin(id) {
 			writeStorage(STORAGE_KEY, id === DEFAULT_SKIN ? null : id);
+			// Tavern: picking one half of a scheme family is also a scheme choice.
+			// Record it, or the next restore would flip back to the other half.
+			const skin = SKINS.find((skinDefinition) => skinDefinition.id === id);
+			if (typeof skin?.schemeFamily === "string") writeBuiltinLast(skin.colorScheme);
 		}
 
 		/** Wallpaper data URL (null when unset). */

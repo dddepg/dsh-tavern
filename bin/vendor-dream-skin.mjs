@@ -60,6 +60,9 @@ replace(/return snapshot\.themes\?\.find\(\(theme\) => theme\.id === selectedId\
 replace(/const current = ctx\.theme\.getTheme\(\)\.preference;\n(\t*)if \(current !== saved\) ctx\.theme\.setTheme\(saved\);/, 'const current = ctx.theme.getTheme().preference;\n$1// The saved id can be the LIGHT half of a scheme family, and the shipped\n$1// factory default is exactly that: apply the member the native preference\n$1// asks for instead of the raw saved id.\n$1const target = resolveSchemeSkin(saved, nativeScheme(ctx.theme.getTheme()));\n$1if (current !== target) ctx.theme.setTheme(target);')
 replace(/const current = ctx\.theme\.getTheme\(\)\.preference;\n(\t*)if \(current === savedSkin\) \{/, 'const current = ctx.theme.getTheme().preference;\n$1const target = resolveSchemeSkin(savedSkin, nativeScheme(ctx.theme.getTheme()));\n$1if (current === target) {')
 replace(/ctx\.theme\.setTheme\(savedSkin\);/, 'ctx.theme.setTheme(target);')
+// Picking one half of a family in the skin picker is a scheme choice too; record
+// it so the restore above does not flip the user back to the other half.
+replace(/function writeSavedSkin\(id\) \{\n(\t*)writeStorage\(STORAGE_KEY, id === DEFAULT_SKIN \? null : id\);/, 'function writeSavedSkin(id) {\n$1writeStorage(STORAGE_KEY, id === DEFAULT_SKIN ? null : id);\n$1// Tavern: picking one half of a scheme family is also a scheme choice.\n$1// Record it, or the next restore would flip back to the other half.\n$1const skin = SKINS.find((skinDefinition) => skinDefinition.id === id);\n$1if (typeof skin?.schemeFamily === "string") writeBuiltinLast(skin.colorScheme);')
 replace(/\[WALLPAPER_KEY\]: "data:image[^\n]+/, '[WALLPAPER_KEY]: null,')
 replace(/\[WALLPAPER_URL_KEY\]: "https:[^\n]+/, '[WALLPAPER_URL_KEY]: null,')
 replace(/\[WALLPAPER_GRADIENT_KEY\]: "radial-gradient[^\n]+/, '[WALLPAPER_GRADIENT_KEY]: null,')

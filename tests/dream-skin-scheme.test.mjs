@@ -74,3 +74,15 @@ test('every skin restore path routes through the scheme family', () => {
   assert.doesNotMatch(client, /if \(current !== saved\) ctx\.theme\.setTheme\(saved\);/)
   assert.doesNotMatch(client, /setTheme\(savedSkin\);/)
 })
+
+test('picking one half of a family in the skin picker records its scheme', () => {
+  // Otherwise a light pick under a recorded `dark` would flip back on the next restore.
+  const writes = []
+  const writeSavedSkin = new Function('writeStorage', 'STORAGE_KEY', 'DEFAULT_SKIN', 'SKINS', 'writeBuiltinLast', `${extract('writeSavedSkin', 'readWallpaper')}\nreturn writeSavedSkin`)(
+    () => {}, 'skin', 'system', [...themes, { id: 'mist', colorScheme: 'dark', tokens: {} }], scheme => writes.push(scheme))
+  writeSavedSkin('tavern-terracotta')
+  writeSavedSkin('tavern-terracotta-dark')
+  writeSavedSkin('mist')
+  writeSavedSkin('system')
+  assert.deepEqual(writes, ['light', 'dark'])
+})
