@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "cbf461a12af1957fd509fc3a43fed28dafdf1732",
-  "releaseSequence": 522,
+  "revision": "cf0d795e0fc535cbfeee6b6f56521a65d533a8f7",
+  "releaseSequence": 523,
   "version": "2.5.0",
   "files": [
     {
@@ -1211,8 +1211,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/request-lineage.js",
-      "sha256": "28cc184b5897dbaad73256fcdb4b413dd8f9b0148ed7a1295acb1da6985949ca",
-      "size": 1206
+      "sha256": "be66404cf5d5dbad27e852e0dc131fd70bb981c48e45162ed883d34e0d413231",
+      "size": 1388
     },
     {
       "path": "tavern-plugin/lib/domain/request-performance.js",
