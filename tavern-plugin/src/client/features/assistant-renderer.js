@@ -1,5 +1,88 @@
 		function createTavernFrameSlashExecutor(ctx, hostWindow) {
 			hostWindow = hostWindow || window;
+            // A deliberately bounded, read-only subset of ST slash commands. Parse
+            // every stage before reading anything; never forward a mixed pipeline.
+            function slashError(message) {
+                return Object.assign(new Error(message), { code: "UNSUPPORTED_SLASH_PIPELINE" });
+            }
+            function decodeSlashText(value) {
+                value = value.trim();
+                if ((value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0]) value = value.slice(1, -1);
+                return value.replace(/\\([\\|"'])/g, '$1');
+            }
+            function readPipeline(line) {
+                const stages = [];
+                let start = 0, quote = '', escaped = false;
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (escaped) { escaped = false; continue; }
+                    if (ch === '\\') { escaped = true; continue; }
+                    if (quote) { if (ch === quote) quote = ''; continue; }
+                    if ((ch === '"' || ch === "'") && (i === start || /[\s=]/.test(line[i - 1]))) { quote = ch; continue; }
+                    if (ch === '|') { stages.push(line.slice(start, i).trim()); start = i + 1; }
+                }
+                if (quote) throw slashError('人物卡命令引号未闭合');
+                stages.push(line.slice(start).trim());
+                return stages.map(function (stage) {
+                    const match = /^\/(pass|return|findentry|findlore|findwi)(?:\s+([\s\S]*))?$/i.exec(stage);
+                    if (!match) throw slashError('暂不支持这条人物卡命令管道；/pass 和 /findentry 只能与只读命令组合，未发送消息');
+                    const command = match[1].toLowerCase();
+                    let text = match[2] || '';
+                    if (command === 'pass' || command === 'return') return { command: 'pass', text: decodeSlashText(text) };
+                    const args = {};
+                    while (true) {
+                        const named = /^([a-zA-Z_]\w*)=/.exec(text);
+                        if (!named) break;
+                        const key = named[1];
+                        if (!['file', 'field'].includes(key) || Object.hasOwn(args, key)) throw slashError('不支持或重复的 /findentry 参数: ' + key);
+                        text = text.slice(named[0].length);
+                        let end = 0;
+                        if (text[0] === '"' || text[0] === "'") {
+                            const quote = text[0]; end = 1;
+                            for (; end < text.length; end++) {
+                                if (text[end] === '\\') { end++; continue; }
+                                if (text[end] === quote) { end++; break; }
+                            }
+                            if (end < text.length && !/\s/.test(text[end])) throw slashError('/findentry 引号后需要空格');
+                        } else {
+                            while (end < text.length && !/\s/.test(text[end])) end++;
+                        }
+                        args[key] = decodeSlashText(text.slice(0, end));
+                        text = text.slice(end).trimStart();
+                    }
+                    const field = args.field || 'key';
+                    if (!args.file) throw slashError('/findentry 需要 file=当前世界书名称（或 current）');
+                    if (!['key', 'keysecondary', 'comment', 'name', 'content', 'uid'].includes(field)) throw slashError('暂不支持 /findentry 字段: ' + field);
+                    return { command: 'findentry', file: args.file, field: field, text: decodeSlashText(text) };
+                });
+            }
+            async function executeReadPipeline(line, sessionId) {
+                const stages = readPipeline(line);
+                let pipe = '';
+                for (const stage of stages) {
+                    const text = stage.text.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    if (stage.command === 'pass') { pipe = text; continue; }
+                    const file = stage.file.replace(/\{\{pipe\}\}/gi, function () { return pipe; });
+                    const result = await rpc('getTavernHelperWorldbook', { name: file }, sessionId);
+                    const query = text.toLowerCase();
+                    let found = null, best = Infinity;
+                    for (const entry of result?.worldbook?.entries || []) {
+                        const field = stage.field;
+                        const value = field === 'key' ? entry.strategy?.keys : field === 'keysecondary' ? entry.strategy?.keys_secondary?.keys
+                            : field === 'comment' ? entry.name : entry[field];
+                        for (const item of Array.isArray(value) ? value : [value]) {
+                            if (item === undefined || item === null || !query) continue;
+                            const candidate = String(item).toLowerCase();
+                            const position = candidate.indexOf(query);
+                            // Exact matches outrank substrings. Stable ties retain book order.
+                            const score = candidate === query ? 0 : position < 0 ? Infinity : 1 + position + (candidate.length - query.length) / (candidate.length + 1);
+                            if (score < best) { best = score; found = entry; }
+                        }
+                    }
+                    pipe = found?.uid === undefined ? '' : String(found.uid);
+                }
+                return pipe;
+            }
 			return function (line, sessionId, options) {
                 if (options && typeof options.inputText === "string") {
                     const text = options.inputText.trim();
@@ -10,6 +93,7 @@
                         return { submitted:true };
                     });
                 }
+                if (/^\s*\/(?:pass|return|findentry|findlore|findwi)(?:\s|$)/i.test(String(line))) return executeReadPipeline(String(line), sessionId);
                 if (/^\/ejs(?:-refresh)?(?:\s|$)/.test(String(line))) return rpc("executeFullTemplateCommand", {text:line}, sessionId).then(function(result){return result.pipe;});
 				const draftMatch = /^\/setinput(?: ([\s\S]*))?$/.exec(String(line || ""));
                 // Preflight before touching the composer: otherwise the greedy
@@ -379,11 +463,17 @@
                     frameSizing: liveState.view?.tavernRuntimePolicy?.frameSizing,
                     helperContextReader: () => liveTavernView.getSnapshot(props.sessionId).view?.tavernHelper,
 					trustedCardMode: Boolean(liveState.view && liveState.view.tavernRuntimePolicy && liveState.view.tavernRuntimePolicy.trustedCardMode),
+					htmlSketches: Boolean(liveState.view && groupOfMode(liveState.view.mode) === "card"),
 					frameOwner: props.frameOwner,
                     eagerFrame: storyTurn > 0 && storyTurn === latestProjectionTurn,
 					executeSlash: props.executeSlash,
 					sessionId: props.sessionId,
 					turn: storyTurn,
+					scriptLayer: (function () {
+						const messageId = liveState.view?.tavernHelper?.turnMessageIds?.[String(storyTurn)];
+						return settled && !sessionTransitioning && Number.isSafeInteger(messageId) && liveState.view?.tavernRuntimePolicy?.trustedCardMode
+							? { sessionId: props.sessionId, messageId: messageId } : null;
+					})(),
 					renderMessageImages: props.renderMessageImages,
 					mentions: mentions,
 					t: props.t
@@ -406,7 +496,9 @@
                     && typeof prepared.text === "string" && prepared.text.trim()
                     ? React.createElement(TavernPreparedScriptMessage, {key:props.sessionId+":"+prepared.lifecycleRevision, sessionId:props.sessionId, preparedText:prepared.text, executeSlash:props.executeSlash}) : null;
                 const body = legacyGreeting ? React.createElement(TavernLegacyGreeting, {key:props.sessionId+":greeting", source:greetingSource, sessionId:props.sessionId, executeSlash:props.executeSlash}, rendered) : rendered;
-				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, pendingMessage, illustration, mvuReceiptNode, inlineStatus);
+                const refusalNotice = settled && !sessionTransitioning ? tavernModelRefusalNotice((data.blocks || []).filter(block => block && block.kind === "text").map(block => String(block.text || "")).join("\n")) : "";
+                const refusalNode = refusalNotice ? React.createElement("div", { className: "dsh-tavern-refusal-notice", role: "note" }, refusalNotice) : null;
+				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, refusalNode, pendingMessage, illustration, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
 				const liveState = useScopedLiveTavernView(props.sessionId, String(props.messageId || ""), [["mode"], ["forkTurnsByMessageId", String(props.messageId || "")]]);

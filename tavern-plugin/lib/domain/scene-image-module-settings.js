@@ -1,7 +1,27 @@
 import { channelSettings, imageCredentialRef, channelNeedsKey } from './scene-image-channels.js'
 import { imageStyleSettings, SCENE_STYLE_PRESETS } from './scene-image-style.js'
 
+import { createHash } from 'node:crypto'
+
 const path = 'scene-images/settings.json'
+// NovelAI artist-library previews: small images Tavern keeps beside its own
+// settings, keyed by entry id. The image module only stores their revision.
+const PREVIEW_DIR = 'scene-images/artist-previews/'
+const PREVIEW_MAX_BYTES = 512 * 1024
+const PREVIEW_ID = /^[a-z0-9]{1,12}$/
+function previewMediaType(data) {
+  if (data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'image/png'
+  if (data[0] === 255 && data[1] === 216 && data[2] === 255) return 'image/jpeg'
+  if (data.subarray(0, 4).toString() === 'RIFF' && data.subarray(8, 12).toString() === 'WEBP') return 'image/webp'
+  return ''
+}
+function previewBytes(value) {
+  const text = typeof value === 'string' ? value.replace(/^data:image\/[\w.+-]+;base64,/, '') : ''
+  if (!text || text.length > Math.ceil(PREVIEW_MAX_BYTES * 4 / 3) + 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(text)) throw new Error('画师串预览图须为不超过 512 KB 的图片')
+  const data = Buffer.from(text, 'base64')
+  if (data.length > PREVIEW_MAX_BYTES || !previewMediaType(data)) throw new Error('画师串预览图须为不超过 512 KB 的 PNG、JPEG 或 WebP 图片')
+  return data
+}
 function document(value = {}) {
   // Opt in explicitly; keep saved choices when reading older configurations.
   if (!Object.keys(value).length) return { version: 4, provider: 'openai', enabled: false, style: imageStyleSettings(), providers: {} }
@@ -54,9 +74,26 @@ export function createModuleSceneImageSettings({ store, credentials, imageModule
       let next = current
       if (edits) {
         const style = imageStyleSettings({ ...doc.style, ...input.style })
+        // New preview images arrive inline; only their revision goes to the image module,
+        // and the bytes are written once the settings themselves have been accepted.
+        const uploads = new Map()
+        if (Array.isArray(input.artists)) input = { ...input, artists: input.artists.map(entry => {
+          if (!entry || typeof entry !== 'object' || entry.previewData === undefined) return entry
+          const { previewData, ...rest } = entry
+          if (typeof rest.id !== 'string' || !PREVIEW_ID.test(rest.id)) throw new Error('画师串格式不正确')
+          if (!previewData) return { ...rest, preview: '' }
+          const data = previewBytes(previewData)
+          uploads.set(rest.id, data)
+          return { ...rest, preview: createHash('sha256').update(data).digest('hex').slice(0, 12) }
+        }) }
+        if (uploads.size && typeof store.writeBytes !== 'function') throw new Error('当前存储不支持保存预览图')
         const adapted = await migrationInput({ ...channelSettings(current), ...input, provider: id }, current)
         next = await service().configure(adapted)
         doc.style = style
+        for (const [artist, data] of uploads) await store.writeBytes(PREVIEW_DIR + artist, data)
+        // Drop previews of removed entries or entries whose preview was cleared.
+        const kept = new Set((next.artists || []).filter(entry => entry.preview).map(entry => entry.id))
+        for (const entry of current.artists || []) if (entry.preview && !kept.has(entry.id)) await store.remove(PREVIEW_DIR + entry.id).catch(() => {})
       }
       await store.updateJson(path, value => {
         const latest = document(value || {})
@@ -67,6 +104,12 @@ export function createModuleSceneImageSettings({ store, credentials, imageModule
       })
       return read()
     }),
+    readArtistPreview: async id => {
+      if (typeof id !== 'string' || !PREVIEW_ID.test(id) || typeof store.readBytes !== 'function') throw new Error('预览图不存在')
+      const data = await store.readBytes(PREVIEW_DIR + id)
+      if (!data?.length) throw new Error('预览图不存在')
+      return { data, mediaType: previewMediaType(data) || 'application/octet-stream' }
+    },
     testConnection: input => serial(async () => { const current = await read(input?.provider); return service().test(await migrationInput({ ...channelSettings(current), ...input, provider: current.provider }, current)) }),
     listModels: input => serial(async () => { const current = await read(input?.provider); return service().models(await migrationInput({ ...channelSettings(current), ...input, provider: current.provider }, current)) }),
   }

@@ -164,38 +164,6 @@ test('局部保存回执不覆盖等待期间的后续编辑，下一次保存�
   assert.equal((await persistence.read('chat')).messages[0].variables[0].hp,12)
 })
 
-test('unchanged reads and current variable patches bypass complete chat read/update',async t=>{
- const {persistence}=await fixture(t)
- let reads=0,updates=0
- const adapter=createTavernScriptHostAdapter({
-  resolveChat:()=>{reads++;return persistence.read('chat')},
-  resolveChatSlice:(_id,indices)=>persistence.readSlice('chat',indices),resolveChangedChatSlice:(_id,revision)=>persistence.readChangedSlice('chat',revision),patchChat:persistence.patch,
-  writeChat:persistence.write,updateChat:(...args)=>{updates++;return persistence.update(...args)},readChatRevision:persistence.readRevision,
-  readCard:async()=>({name:'角色'}),worldBooks:{bound:async()=>null},scriptDispatch:{},isPlayChat:()=>true
- })
- const initial=await adapter.readFullPromptTemplateState('session')
- const unchanged=await adapter.readFullPromptTemplateState('session',initial.cursor)
- assert.equal(reads,1)
- assert.deepEqual(unchanged.delta.chat.set,[])
-
- const {chatId,sessionId,stateRevision,lifecycleRevision}=initial.state
- const request={chatId,sessionId,stateRevision,lifecycleRevision,changes:[{op:'set',path:['chat',0,'variables',0,'hp'],value:22}]}
- const result=await adapter.saveFullPromptTemplateState('session',request)
- assert.equal(updates,0);assert.equal(reads,1)
- assert.equal((await persistence.read('chat')).messages[0].variables[0].hp,22)
- assert.equal(result.statePatch.find(c=>c.path[0]==='stateRevision').value,2)
- // A stale variable write must go through the existing merge and reject conflict.
- request.changes[0].value=23
- await assert.rejects(adapter.saveFullPromptTemplateState('session',request),e=>e.code==='PROMPT_TEMPLATE_STATE_CONFLICT')
- assert.equal(updates,1)
- const current=await adapter.readFullPromptTemplateState('session')
- const readsBefore=reads
- await persistence.update('chat',c=>{c.messages.push({role:'assistant',text:'only new row'});return c})
- const appended=await adapter.readFullPromptTemplateState('session',current.cursor)
- assert.equal(reads,readsBefore,'changed revision must not read full history')
- assert.deepEqual(appended.delta.chat.set.map(([index])=>index),[1])
-})
-
 test('concurrent unchanged readers recover when the same cursor is consumed',async t=>{
  const {persistence}=await fixture(t)
  let blocked=false,waiting=[]

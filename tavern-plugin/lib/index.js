@@ -41,8 +41,6 @@ import { createSessionViewReader, createSessionChatReader, createSessionSliceRea
 import { createSessionStateView, settlementTurn, pendingMvuSettlementState, projectDisplayRuntimeState } from './domain/chat-session-state.js'
 import { createSettlementProgressGuard } from './domain/settlement-progress-guard.js'
 import { createSettlementJobs } from './domain/settlement-jobs.js'
-import { createMvuConversion } from './domain/mvu-conversion.js'
-import { registerMvuConversionTools } from './domain/mvu-conversion-tools.js'
 import { rescueHistoryNotice } from './domain/chat-history-rescue.js'
 import { readHostCompatibility } from './domain/host-compatibility.js'
 import { installHostSessionPatch } from './domain/host-session-patch.js'
@@ -81,7 +79,9 @@ import { createBackgroundSuppressionReader } from './domain/background-surface.j
 import { ensureCardWorkspaceMessage } from './domain/card-workspace-message.js'
 import { createPromptTemplateGlobalVariables } from './domain/prompt-template-global-variables.js'
 import { createTavernApiDiagnostics } from './domain/tavern-api-diagnostics.js'
-import { generateHelperRaw, generateHelperCompletion } from './domain/helper-generation.js'
+import { generateHelper, generateHelperRaw, generateHelperCompletion, identifyHelperModelMessages } from './domain/helper-generation.js'
+import { validateHelperGenerateConfig, resolveHelperGenerationPreset, helperGenerationHistory } from './domain/helper-generation-prompts.js'
+import { createHelperGenerationTasks } from './domain/helper-generation-tasks.js'
 import { createBodyEditor } from './domain/body-editor.js'
 import { appendHelperUserSessionContext } from './domain/helper-user-session-context.js'
 import { sessionOpeningDescriptor, prepareSessionOpening } from './domain/session-opening.js'
@@ -128,6 +128,7 @@ import { compactionFailureMessage } from './domain/compaction-failure.js'
 import { createForegroundFrameSessionAdapter } from './domain/foreground-frame-session-adapter.js'
 import { HISTORY_RECALL_TOOL, createHistoryRecall, renderHistoryRecall } from './domain/history-recall.js'
 import { createModelRequestLog } from './domain/model-request-log.js'
+import { createDisplayRuntimeCoalescer } from './domain/display-runtime-coalescer.js'
 import { MVU_SUBMIT_UPDATE_TOOL, collectMvuHelperContext, createMvuSettlementModule } from './domain/mvu-background-settlement.js'
 import { applyMvuSettlementEffect } from './domain/mvu-settlement-effect.js'
 import { createMvuSettlementReconciler } from './domain/mvu-settlement-reconciler.js'
@@ -139,7 +140,8 @@ import {
   projectCharacterDesignDocument
 } from './domain/character-design-document.js'
 import { createLedgerEditor } from './domain/ledger-editor.js'
-import { readLedger } from './domain/story-ledger.js'
+import { readLedger, LEDGER_SUBMIT_TOOL } from './domain/story-ledger.js'
+import { createManualLedger } from './domain/manual-ledger.js'
 import { POSTURE_SUBMIT_TOOL, POSTURE_SUBMIT_TOOL_NAME, normalizePostureSubmission } from './domain/posture-submission.js'
 import { TAVERN_COMPATIBILITY_CAPABILITIES, createTavernCompatibilityDiagnosticStore } from './domain/tavern-compatibility-diagnostics.js'
 import { createMvuDiagnosticStore, createMvuDiagnosticExport, sanitizeRuntimeDiagnostics, sanitizeModuleFailure, sanitizeMvuLoadDiagnostic, redactMvuLoadError } from './domain/mvu-diagnostics.js'
@@ -149,6 +151,7 @@ import { createPresetLibrary } from './domain/preset-library.js'
 import { createForegroundOrchestrationStrategies } from './domain/foreground-orchestration-strategies.js'
 import { clearFailedTurnSurface } from './domain/rollback-surface.js'
 import { assistantResultForTurn } from './domain/session-turn-result.js'
+import { forkTurnsByMessageId as forkTargetsFromSession } from './domain/conversation-fork-targets.js'
 import { createTavernRetryLimiter } from './domain/tavern-retry-limiter.js'
 import { lastTavernHelperVariables, projectTavernHelperContext, hydrateTavernHelperMessages, replaceTavernHelperVariables, HELPER_MESSAGE_COLD_WINDOW } from './domain/tavern-helper-context.js'
 import { projectTavernHelperWorldbook } from './domain/tavern-helper-worldbook.js'
@@ -386,7 +389,9 @@ export async function apply(ctx) {
   const modelRequestLog = createModelRequestLog({
     readJson: async function (path) { return await profileData.readJson(path) },
     writeJson: async function (path, value) { return await profileData.writeJson(path, value) },
-    updateJson: async function (path, updater) { return await profileData.updateJson(path, updater) }
+    updateJson: async function (path, updater) { return await profileData.updateJson(path, updater) },
+    writeText: async function (path, text) { return await profileData.writeBytes(path, Buffer.from(text, 'utf8')) },
+    remove: async function (path) { return await profileData.remove(path) }
   })
   const tavernSkills = createTavernSkillModule({
     directory: dataRoot + '/skills',
@@ -496,6 +501,8 @@ export async function apply(ctx) {
   const cardPreparation = createCardPreparation({ id: function () { return uid('card') }, now: Date.now })
 
   // ---------- 模型调用 ----------
+  const helperGenerationTasks = createHelperGenerationTasks()
+  ctx.effect(() => () => helperGenerationTasks.dispose())
   function modelSelection(sessionId) {
     // 会话级选择优先：与官方 api-proxy 相同的读取路径
     if (typeof sessionId === 'string' && sessionId !== '') {
@@ -548,6 +555,7 @@ export async function apply(ctx) {
     return groups.filter(function (group) { return group.models.length > 0 })
   }
   async function callModel(opts) {
+    opts.signal?.throwIfAborted()
     const sel = opts.background === true ? backgroundModelSelection(await backgroundConfigForSession(opts.sessionId)) : modelSelection(opts.sessionId)
     if (sel === null) throw new Error('没有可用的模型配置，请先在当前会话的模型选择器中选择模型')
     const cfg = { provider: sel.provider, model: sel.model }
@@ -555,18 +563,22 @@ export async function apply(ctx) {
     // Codex Responses API 不接受 temperature；其他模型仍保留候选温度阶梯。
     if (typeof opts.temperature === 'number' && sel.provider !== 'openai-codex') cfg.temperature = opts.temperature
     if (typeof opts.maxTokens === 'number') cfg.maxTokens = opts.maxTokens
-    const prepared = await llm.prepareCall(cfg)
-    const options = Object.assign({}, prepared.config, { messages: opts.messages, system: opts.system })
+    const prepared = await llm.prepareCall(cfg, opts.signal)
+    opts.signal?.throwIfAborted()
+    const options = Object.assign({}, prepared.config, { messages: identifyHelperModelMessages(opts.messages), system: opts.system }, opts.signal ? { signal: opts.signal } : {})
     let text = ''
     let finish = null
     try {
       for await (const chunk of prepared.stream(options)) {
+        opts.signal?.throwIfAborted()
         if (chunk.type === 'text-delta') text += chunk.text
         else if (chunk.type === 'finish') finish = chunk.reason
       }
     } catch (err) {
+      opts.signal?.throwIfAborted()
       throw new Error('模型流失败: ' + (err && (err.message || err.code) || err))
     }
+    opts.signal?.throwIfAborted()
     if (finish !== null && finish !== undefined && (finish.kind === 'error' || finish.kind === 'aborted')) {
       const f = finish.failure
       throw new Error('模型调用失败: ' + (f !== undefined && f !== null ? (f.message || f.code) : finish.kind))
@@ -996,7 +1008,22 @@ export async function apply(ctx) {
       diagnostics: await resourceDiagnosticProjection(chat)
     })
   }
-  const openingPreparation = createOpeningPreparation({ readCard, worldBooks, extensionSettings: tavernExtensionSettings, readRuntimeExtensions: async cardPath => tavernRemoteAssets.pinExtensions(await readCardExtensions(cardPath)), generateRaw: (config, context) => generateHelperRaw(config, { ...context, callModel: opts => callModel({ ...opts, background: true }) }) })
+  const helperGenerationPreset = (name, snapshot) => resolveHelperGenerationPreset(name, snapshot, {
+    catalog: () => presetLibrary.catalog(), read: readPreset, readDocument: readPresetDocument, selected: () => runtimePresets.state()
+  })
+  const openingPreparation = createOpeningPreparation({ readCard, worldBooks, extensionSettings: tavernExtensionSettings,
+    readRuntimeExtensions: async cardPath => tavernRemoteAssets.pinExtensions(await readCardExtensions(cardPath)),
+    generateRaw: (config, context) => generateHelperRaw(config, { ...context, callModel: opts => callModel({ ...opts, background: true, signal: context.signal }) }),
+    generate: async (config, context) => {
+      validateHelperGenerateConfig(config)
+      const presetSnapshot = await helperGenerationPreset(config.preset_name, context.presetSnapshot)
+      const activeSnapshot = config.preset_name && config.preset_name !== 'in_use'
+        ? await helperGenerationPreset('in_use', context.presetSnapshot) : presetSnapshot
+      context.signal?.throwIfAborted()
+      return generateHelper(config, { ...context, presetSnapshot, presetRegexScripts: activeSnapshot?.regexScripts || [], callModel: opts => callModel({ ...opts, background: true, signal: context.signal }) })
+    }
+  })
+  ctx.effect(() => () => openingPreparation.dispose())
   async function getCardOpenings(cardPath, userName, requestMode, previewTransport) {
     const startedAt = performance.now(), stages = {}
     let success = false
@@ -1527,16 +1554,7 @@ export async function apply(ctx) {
     const liveSession = sessionStore.get(str(chat.sessionId)) || agentRegistry.get(str(chat.sessionId))?.session
     const latestAssistant = latestStoryTurn > 0 ? assistantResultForTurn(liveSession, latestStoryTurn) : null
     const latestAssistantMessageId = str(latestAssistant?.event?.data?.message?.id)
-    const forkTurnsByMessageId = {}
-    const visibleTurns = new Set(debugTurns.map(item => item.turn))
-    const messagesByTurn = new Map()
-    for (const event of sessionEvents(liveSession)) {
-      const turn = Number(event.data?.turn)
-      if (!visibleTurns.has(turn)) continue
-      if (event.type === 'turn/start') messagesByTurn.delete(turn)
-      if (event.type === 'assistant/message' && event.data?.message?.source?.kind === 'model') messagesByTurn.set(turn, event.data.message.id)
-    }
-    for (const [turn, messageId] of messagesByTurn) if (messageId) forkTurnsByMessageId[messageId] = turn
+    const forkTurnsByMessageId = forkTurnsForChat(chat)
     const {inputSources,inputTemplateDisplays}=inputFieldsProjection.project(persistedProjection ? chat : {...chat,_storageRevision:undefined}, options.inputChanges)
     const cardUpdate = ['story', 'script'].includes(chat.mode || 'story') && chat.requestMode !== 'sillytavern'
       ? await cardUpdateStatus(chat) : { available: false }
@@ -1588,6 +1606,7 @@ export async function apply(ctx) {
       statusBarPlacement: chat.statusBarPlacement === 'body' ? 'body' : 'sidebar',
       posture: chat.posture || '',
       ledger: readLedger(chat.ledger),
+      ledgerTask: manualLedger.project(chat),
       characterDesigns: projectCharacterDesignDocument(chat.characterDesignDocument),
       characterDesignTask: manualCharacterDesign.project(chat),
       phoneChat: phoneChat.project(chat, card),
@@ -1604,7 +1623,7 @@ export async function apply(ctx) {
       tavernStatusView: replyDisplay.statusView || null,
       tavernStatusViews: replyDisplay.statusViews || [],
       mvuReceipts: mvuReceiptsOf(chat),
-      tavernHelper: helperContext ? { ...helperContext, openingHost: sessionOpeningDescriptor(chat, card), ...(deferResources ? {} : {worldbook: helperWorldbook}), globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
+      tavernHelper: helperContext ? { ...helperContext, playerName: str(chat.macroState?.userName).trim() || '你', characterName: str(card?.name || chat.cardName), character: {name:str(card?.name || chat.cardName), path:str(chat.cardPath)}, openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], preset: activePresetSnapshot?.regexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
       tavernMvuRuntime: chat.mvu && chat.mvu.enabled === true ? {
         owner: chat.mvu.owner === 'official' ? 'official' : 'legacy',
         commit: OFFICIAL_MVU_VERSION.commit,
@@ -1721,7 +1740,14 @@ export async function apply(ctx) {
   })
   function mvuReceiptsOf(chat, changes) { return sessionStateView.receipts(chat, changes) }
   function rollbackViewFields(chat, evidence, changes) { return sessionStateView.rollback(chat, evidence, changes) }
-  function volatileSessionViewFields(chat, activity, changes) { return sessionStateView.volatile(chat, activity, changes) }
+  // Derived from live session events, which change without a chat revision (see conversation-fork-targets.js).
+  function forkTurnsForChat(chat) {
+    const session = sessionStore.get(str(chat?.sessionId)) || agentRegistry.get(str(chat?.sessionId))?.session
+    return forkTargetsFromSession(session, chat?.regeneratedDshTurns)
+  }
+  function volatileSessionViewFields(chat, activity, changes) {
+    return { ...sessionStateView.volatile(chat, activity, changes), forkTurnsByMessageId: forkTurnsForChat(chat) }
+  }
 
   async function projectCachedSessionView(chat, previous, activity) {
     const mode = chat.mode || 'story'
@@ -1973,7 +1999,7 @@ export async function apply(ctx) {
     resolveModelSelection: async input => backgroundModelSelection(await backgroundConfigForSession(input.sessionId)) || input.selection,
     resolveWebSearch: async input => (await backgroundConfigForSession(input.sessionId))?.webSearchEnabled === true,
     resolveBackgroundTasks: async input => input.backgroundTasks || normalizeBackgroundTasks((await backgroundConfigForSession(input.sessionId))?.backgroundTasks),
-    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL],
+    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL, LEDGER_SUBMIT_TOOL],
     sharedTools: [sharedWorldbookSearch(searchWorldbook), {
       tool: HISTORY_RECALL_TOOL,
       async execute({ input, args }) {
@@ -2044,6 +2070,17 @@ export async function apply(ctx) {
     store: { readChat, updateChat },
     readWorldBook: async chat => worldBooks.bound(chat.cardPath, await readChatCard(chat), chat),
     now: Date.now
+  })
+  const manualLedger = createManualLedger({
+    store: { chatForSession, updateChat },
+    runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
+    beginTask: async (chat, sessionId) => {
+      if (agentRegistry.get(sessionId)?.phase?.kind === 'running' || chat.regenInProgress) throw new Error('前台正在生成，请完成后再整理台账。')
+      return await backgroundTasks.begin(chat, 'ledger')
+    },
+    ensureSession: async sessionId => {
+      if (!agentRegistry.get(sessionId)?.session) await agentRegistry.resume({ resumeSessionId: sessionId })
+    }
   })
   const manualCharacterDesign = createManualCharacterDesign({
     publishWorldbook: publishCharacterDesign,
@@ -3111,11 +3148,15 @@ export async function apply(ctx) {
     finally { performanceDiagnostics.record(method, performance.now() - started) }
   }
 
+  const displayRuntimeCaptures = createDisplayRuntimeCoalescer({
+    write: (sessionId, turn, partIndex, runtime) => captureDisplayRuntime(sessionId, turn, partIndex, runtime)
+  })
   const gameplayApi = createGameplayApi({
     controller: () => ctx.get('sessionController'), registry: agentRegistry, llm, dataRoot,
     store: profileData, dispatch: (method, args) => dispatchMethod(method, args),
     chatForSession, listCards,
     requests: async chat => (await modelRequestLog.evidence(chat.id)).requests,
+    requestIndex: async chat => chat ? await modelRequestLog.list(chat.id) : [],
     native: async id => {
       const live = sessionDebugEvidence(id)
       if (live.loaded) return live.events
@@ -3165,19 +3206,34 @@ export async function apply(ctx) {
       case 'getUpdateStatus': return { status: await applicationUpdater.status() }
       case 'checkUpdate': return { status: await applicationUpdater.check() }
       case 'startUpdate': return { status: await applicationUpdater.start() }
+      case 'cancelUpdate': return { status: await applicationUpdater.cancel() }
       case 'prepareSessionOpening': {
         const chat = await chatForSession(args && args.sessionId)
         if (!chat) throw new Error('找不到原对话')
         return await prepareSessionOpening({ chat, card: await readChatCard(chat), swipeId: args.swipeId, message: args.message, preparation: openingPreparation })
       }
+      case 'generateTavernHelper':
       case 'generateTavernHelperRaw': {
-        const chat = await chatForSession(args && args.sessionId)
-        if (!chat) throw new Error('找不到当前游戏')
-        const backgroundCall = opts => callModel({ ...opts, background: true })
-        if (args.completion) return { text: await generateHelperCompletion(args.completion, { callModel: backgroundCall, sessionId: chat.sessionId }) }
-        return { text: await generateHelperRaw(args.config, { callModel: backgroundCall, sessionId: chat.sessionId,
-          history: projectTavernHelperContext(chat).messages.map(message => ({ role: message.role, text: message.message })) }) }
+        return await helperGenerationTasks.run(args?.sessionId, args?.config?.generation_id, async signal => {
+          const chat = await chatForSession(args?.sessionId)
+          if (!chat) throw new Error('找不到当前游戏')
+          signal.throwIfAborted()
+          const backgroundCall = opts => callModel({ ...opts, background: true, signal })
+          if (method === 'generateTavernHelperRaw' && args.completion) return { text: await generateHelperCompletion(args.completion, { callModel: backgroundCall, sessionId: chat.sessionId }) }
+          const context = { callModel: backgroundCall, sessionId: chat.sessionId, history: helperGenerationHistory(chat) }
+          if (method === 'generateTavernHelperRaw') return { text: await generateHelperRaw(args.config, context) }
+          validateHelperGenerateConfig(args.config)
+          const card = await readChatCard(chat)
+          const presetSnapshot = await helperGenerationPreset(args.config.preset_name, chat.runtimePresetSnapshot || null)
+          const worldBook = await worldBooks.bound(chat.cardPath, card, chat)
+          const extensions = await readCardExtensions(chat.cardPath, chat)
+          signal.throwIfAborted()
+          return { text: await generateHelper(args.config, { ...context, chat, card, worldBook, presetSnapshot, extensions,
+            presetRegexScripts: chat.runtimePresetSnapshot?.regexScripts || [], characterVariables: extensions?.variables || {} }) }
+        }, args?.generationToken)
       }
+      case 'stopTavernHelperGeneration': return { stopped: helperGenerationTasks.stop(args?.sessionId, args?.generationId, { generationToken: args?.generationToken, pending: args?.pending }) }
+      case 'stopAllTavernHelperGeneration': return { stopped: true, generationIds: helperGenerationTasks.stopAll(args?.sessionId, args?.pendingGenerations) }
       case 'callOpeningRuntime': return await openingPreparation.callRuntime(args && args.id, args && args.method, args && args.args)
       case 'saveOpeningSelection': return openingPreparation.select(args && args.id, args && args.openingId)
       case 'initializeOpeningTemplate': try { return openingInitializationPayload(await openingPreparation.applyTemplateInitial(args.id, await requestPerformance.stage('templateInitialize', () => fullTemplateRuntime.forSession('opening:' + args.id).initializeVariables([]))), args.compact) } finally { fullTemplateRuntime.cancel('opening:' + args.id) }
@@ -3531,7 +3587,7 @@ export async function apply(ctx) {
         return { card: { path: sourceChat.cardPath, name: card.name }, chatId: sourceChat.id }
       }
       case 'attachPlayChatDebug': return { reference: await attachPlayChatDebug(args && args.targetSessionId, args && args.sourceSessionId, args && args.turn) }
-      case 'captureDisplayRuntime': return await captureDisplayRuntime(args && args.sessionId, args && args.turn, args && args.partIndex, args && args.runtime)
+      case 'captureDisplayRuntime': return await displayRuntimeCaptures.capture(args && args.sessionId, args && args.turn, args && args.partIndex, args && args.runtime)
 	      case 'getTavernHelperContext': {
         if (!args?.eventId && args?.openingWindow === 1) {
           const window = await readOpeningWindow(args.sessionId)
@@ -3667,6 +3723,7 @@ export async function apply(ctx) {
         return hydrateTavernHelperMessages(chat, args && args.from, args && args.to)
       }
       case 'designCharacter': return await manualCharacterDesign.start(args || {})
+      case 'consolidateLedger': return await manualLedger.start(args || {})
       case 'sendPhoneMessage': return { phoneChat: await phoneChat.send(args || {}) }
       case 'runCompaction': {
         const id = str(args && args.sessionId), chat = await chatForSession(id)
@@ -3908,7 +3965,6 @@ export async function apply(ctx) {
 
   // ---------- DSH 回合生命周期 ----------
   const requestCoordinates = new Map()
-  const storyCompactionRequests = new WeakSet()
   const tavernRetryLimiter = createTavernRetryLimiter({
     owns: async function (agent) {
       const sessionId = agent && agent.session ? agent.session.id : ''
@@ -3941,7 +3997,7 @@ export async function apply(ctx) {
     })
   }
 
-  const controlledToolNames = new Set(['tavern_read_variables', 'tavern_card_draft', 'tavern_convert_to_mvu', 'tavern_design_mvu_appearance', 'tavern_read_mvu_appearance', 'tavern_update_mvu_appearance', 'tavern_validate_mvu_conversion', ...CARD_MEMORY_TOOLS, 'bash', 'pwsh', ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_user_profile_confirm', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response'])
+  const controlledToolNames = new Set(['tavern_read_variables', ...CARD_MEMORY_TOOLS, 'bash', 'pwsh', ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'web_search', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_user_profile_confirm', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response'])
   const foregroundStrategies = createForegroundOrchestrationStrategies({
     compatibility: {
       beforeTurn: async function (input) {
@@ -4035,7 +4091,6 @@ export async function apply(ctx) {
     runtimePrompt,
     sessionStateForSession,
     sessionStore,
-    storyCompactionRequests,
     str,
     updateChat,
     worldbookRecallLog,
@@ -4089,7 +4144,6 @@ export async function apply(ctx) {
     })
 
     registerVariableReadTool({tools,defineTool,chatForSession})
-    registerMvuConversionTools({ tools, defineTool, conversion: createMvuConversion({ resources: fileResources }), chatForSession })
 
     registerCardReadingTools({
       cardMemory,

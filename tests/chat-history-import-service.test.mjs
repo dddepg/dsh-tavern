@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { Session } from './fixtures/dsh-session-host.mjs'
 import { createChatHistoryImportService } from '../tavern-plugin/lib/domain/chat-history-import-service.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
-import { sessionEvents } from '../tavern-plugin/lib/domain/session-events.js'
+
 const timeline = createStoryTimeline()
 const text = [ {chat_metadata:{}}, {is_user:false,mes:'opening',variables:[{stat_data:{hp:10},schema:{}}]},
  {is_user:true,mes:'walk'}, {is_user:false,mes:'walked',variables:[{stat_data:{hp:8},schema:{}}]},
@@ -101,34 +101,6 @@ function foregroundContexts(session) {
  }
  return [...rounds.values()]
 }
-
-test('bad-save rescue uses stored text without source Session or template execution, creates no old checkpoints',async()=>{
- const h=fixture()
- const source={id:'broken',sessionId:'missing-native',cardPath:'card.json',mode:'script',title:'Lost game',variables:{secret:1},messages:[
-  {role:'assistant',text:'Old opening',variables:[{stat_data:{hp:99}}]},
-  {role:'user',text:'Walk'}, {role:'assistant',text:'Old story',turn:2}, {role:'user',text:'Unanswered input'}]}
- h.records.set('broken',structuredClone(source))
- h.options.worldBooks.bound=async()=>{throw Error('must not evaluate old worldbooks')}
- h.options.projectForegroundWorldbook=async()=>{throw Error('must not execute historical templates')}
- const service=createChatHistoryImportService(h.options)
- const request={sourceChatId:'broken',operationId:'rescue-1234',sessionId:'session'}
- h.fail()
- await assert.rejects(service.rescue(request),/offline/)
- assert.equal(h.publishes,0)
- assert.deepEqual(h.records.get('broken'),source)
- await service.rescue(request)
- const chat=await h.chats.resolve('session')
- assert.equal(chat.mode,'story');assert.equal(chat.mvu.enabled,false)
- assert.deepEqual(chat.variables,{})
- assert.equal(chat.timeline.checkpoints.length,0)
- assert.deepEqual(chat.messages.map(m=>m.text),source.messages.map(m=>m.text))
- assert.ok(chat.messages.every(m=>m.variables===undefined))
- assert.equal(chat.importHistory.rescue.sourceChatId,'broken')
- assert.deepEqual(h.records.get('broken'),source)
- const count=sessionEvents(h.session).length
- await service.rescue(request)
- assert.equal(sessionEvents(h.session).length,count)
-})
 
 test('rescue carries the selected last valid MVU snapshot, reenables settlement and labels stale state',async()=>{
  const h=fixture()

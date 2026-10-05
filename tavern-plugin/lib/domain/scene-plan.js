@@ -43,10 +43,14 @@ export function createScenePlans({ store }) {
     const previousScene = previous?.scene?.environment ? { environment: previous.scene.environment } : {}
     if (previousScene.environment && !block('scene', 'environment', previousScene.environment.text)) missingBlocks.push({ owner: 'scene', field: 'environment' })
     const input = { targetKey: target.key, turn: target.turn, profile, gapComplete, sources, characters: candidates.map(person => ({ id: person.id, name: person.name, fields: Object.fromEntries(Object.entries(person.fields).map(([field, value]) => [field, value.text])) })), previousScene: Object.fromEntries(Object.entries(previousScene).map(([field, value]) => [field, { text: value.text }])), missingBlocks }
-    return { chatId, target, profile, generation: data.generation, sources, people, previousScene, previousTurn: previous?.turn, gapComplete, input, saved, block }
+    return { chatId, target, profile, generation: data.generation, sources, people, previousScene, previousTurn: previous?.turn, previousMoment: previous?.moment || 'end', gapComplete, input, saved, block }
   }
   async function commit(prepared, submission) {
-    keys(submission, ['description', 'characters', 'subjects', 'scene', 'continuity', 'expressions'], 'plan')
+    keys(submission, ['description', 'characters', 'subjects', 'scene', 'continuity', 'expressions', 'moment', 'orientation', 'negative'], 'plan')
+    const moment = submission.moment ?? 'end', orientation = submission.orientation ?? ''
+    assert(['end', 'earlier'].includes(moment), 'moment 必须是 end 或 earlier')
+    assert(['', 'portrait', 'landscape', 'square'].includes(orientation), 'orientation 必须是 portrait、landscape 或 square')
+    const negative = text(submission.negative ?? '', 'negative', 600)
     assert(['continued', 'changed', 'uncertain'].includes(submission.continuity), 'continuity 必须是 continued、changed 或 uncertain')
     assert(submission.continuity !== 'continued' || prepared.gapComplete, '期间剧情有裁剪，不能确认 continued；请使用 uncertain 并按当前依据重建动态状态')
     assert(Array.isArray(submission.characters) && submission.characters.length <= 8, 'characters 必须是最多 8 项的数组')
@@ -147,7 +151,10 @@ export function createScenePlans({ store }) {
     for (const field of sceneFields) if (scene[field]?.text) promptParts.push((pendingBlocks[scene[field].blockId] || prepared.block('scene', field, scene[field].text)).tags)
     const prompt = promptParts.join('\n')
     assert(prompt.trim() && prompt.length <= 12000, '组合提示词为空或超过 12000 字符')
-    const frame = { targetKey: prepared.target.key, turn: prepared.target.turn, profile: prepared.profile, description, subjects, scene, characterRefs: Object.keys(characterVersions), blockIds, prompt }
+    // An earlier moment of the turn is drawn from its own text; the next image
+    // re-reads the rest of that turn instead of continuing from this frame.
+    const frame = { targetKey: prepared.target.key, turn: prepared.target.turn, profile: prepared.profile, description, subjects, scene, characterRefs: Object.keys(characterVersions), blockIds, prompt,
+      ...(moment === 'earlier' ? { moment } : {}), ...(orientation ? { orientation } : {}), ...(negative ? { negative } : {}) }
     frame.id = digest(frame)
     await store.updateJson(pathFor(prepared.chatId), previous => {
       const data = previous || empty()

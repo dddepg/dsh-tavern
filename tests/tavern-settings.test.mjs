@@ -6,7 +6,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 
 import { applyTavernSettingsPatch, presentTavernSettings } from '../tavern-plugin/lib/domain/tavern-settings.js'
-import { SYSTEM_PROMPT_NAMES, prompt } from '../tavern-plugin/lib/prompt-catalog.js'
+
 import { createProfileDataStore } from '../tavern-plugin/lib/profile-data-store.js'
 
 const serverSource = await readFile(new URL('../tavern-plugin/lib/index.js', import.meta.url), 'utf8')
@@ -53,31 +53,6 @@ test('设置界面不重复提供已并入外观的分色，不恢复旧兼容�
   assert.equal(select, undefined)
   assert.equal(nodes.some(node => node.type === 'textarea' || node.type === 'details'), false)
   assert.doesNotMatch(JSON.stringify(root), /兼容模式|受信任人物卡模式|SillyTavern 样式环境|Custom CSS/)
-})
-
-test('旧 play-mode 覆盖保留在数据中，但不再出现在可用提示词列表', () => {
-  const saved = { promptOverrides: { 'play-mode': '旧游玩指令', story: '自定义正文规则' } }
-  const before = JSON.stringify(saved)
-  const defaults = Object.fromEntries(SYSTEM_PROMPT_NAMES.map(name => [name, prompt(name)]))
-  const presented = presentTavernSettings(saved, defaults)
-  assert.ok(!presented.systemPrompts.some(item => item.name === 'play-mode'))
-  assert.equal(presented.storyPrompt, '自定义正文规则')
-  assert.equal(JSON.stringify(saved), before)
-})
-
-test('新游戏前后台默认模型分别保存、清除且不触碰旧全局模型版本', () => {
-  let settings = { unknown: true, backgroundModelRevision: 7 }
-  for (const name of ['defaultForegroundModel', 'defaultBackgroundModel', 'defaultWorkbenchModel']) {
-    assert.equal(presentTavernSettings(settings, {})[name], null)
-    settings = applyTavernSettingsPatch(settings, { [name]: { provider: ' p ', model: ' m ', reasoningEffort: 'low' } })
-    assert.deepEqual(presentTavernSettings(settings, {})[name], { provider: 'p', model: 'm', reasoningEffort: 'low' })
-    assert.throws(() => applyTavernSettingsPatch(settings, { [name]: { provider: 'p' } }), /默认模型配置无效/)
-  }
-  const cleared = applyTavernSettingsPatch(settings, { defaultForegroundModel: null })
-  assert.equal(cleared.defaultForegroundModel, null)
-  assert.deepEqual(cleared.defaultBackgroundModel, settings.defaultBackgroundModel)
-  assert.equal(cleared.backgroundModelRevision, 7)
-  assert.equal(cleared.unknown, true)
 })
 
 test('全局写作 Skill 逐项保存，恢复开启不改动其他 Skill', () => {

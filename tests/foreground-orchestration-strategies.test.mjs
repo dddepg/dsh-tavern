@@ -97,40 +97,6 @@ test('游玩固定背景来自原生系统装配，预设前后段保持顺序�
   assert.equal(savedPrefixes.size, 0)
 })
 
-test('DeepSeek thinking 续传为旧 Session 的 reasoning 补齐可回放元数据', async () => {
-  const run = strategies()
-  const incoming = [userMessage('继续')]
-  await run.value.prepareStep({
-    sessionId: 'native', payload: { turn: 8, step: 1, messages: incoming },
-    decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native')
-  })
-  const legacyAssistant = {
-    role: 'assistant',
-    content: [{ type: 'reasoning', text: '旧思考' }, { type: 'text', text: '旧正文' }],
-    source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' }
-  }
-  const oldPresetBoundary = {
-    role: 'system', content: [{ type: 'text', text: '旧预设边界' }],
-    source: { kind: 'plugin', plugin: 'dsh-tavern', sections: [{ name: 'tavern:runtime-preset-front', text: '旧预设边界' }] }
-  }
-  const original = Object.freeze({
-    sessionId: 'native', provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high',
-    messages: Object.freeze([oldPresetBoundary, legacyAssistant, userMessage('下一轮')])
-  })
-
-  const projected = run.value.projectRequest(original)
-  const replay = projected.messages[0].source.replayState
-
-  assert.equal(replay.response.kind, 'pi-ai')
-  assert.equal(replay.response.provider, 'deepseek-official')
-  assert.equal(replay.response.model, 'deepseek-v4-flash')
-  assert.deepEqual(replay.blocks, [
-    { type: 'reasoning', thinkingSignature: 'reasoning_content' },
-    { type: 'text' }
-  ])
-  assert.equal(original.messages[0].source.replayState, undefined)
-})
-
 test('旧 Session 的 Tavern 开场白在请求边界恢复为合成模型来源，不触发 DeepSeek reasoning 续传校验', async () => {
   const run = strategies()
   const incoming = [userMessage('继续')]

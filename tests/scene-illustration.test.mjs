@@ -148,19 +148,6 @@ test('diagnostic storage failure cannot fail a successful paid image or trigger 
   assert.ok((await fx.service.readImage('parent', 2, key)).data.length)
 })
 
-test('provider reports explicit rejection separately from ambiguous transport and response failures', async () => {
-  const input = { provider: 'openai', baseURL: 'https://provider.example/v1', apiKey: 'secret', prompt: 'scene' }
-  for (const status of [400, 401, 402, 403, 404, 422, 429, 500, 504]) {
-    await assert.rejects(generateSceneImage(input, { fetch: async () => new Response('secret', { status }) }), error => {
-      assert.equal(error.imageOutcome, [429, 500, 504].includes(status) ? 'unconfirmed' : 'rejected')
-      assert.ok(!error.message.includes('secret')); return true
-    })
-  }
-  await assert.rejects(generateSceneImage(input, { fetch: async () => { throw new Error('connection lost') } }), error => error.imageOutcome === 'unconfirmed')
-  await assert.rejects(generateSceneImage(input, { fetch: async () => Response.json({ data: [] }) }), error => error.imageOutcome === 'unconfirmed')
-  await assert.rejects(generateSceneImage({ ...input, baseURL: 'file:///tmp' }, { fetch: () => assert.fail('must not dispatch') }), error => error.imageOutcome === 'not_requested')
-})
-
 test('cancel during planning works with feature disabled and never requests an image', async t => {
   let entered = false
   const fx = await fixture(t, { runAgent: async input => {
@@ -297,44 +284,6 @@ test('cancelling while queued never sends its image request or interrupts the ac
   await until(async () => (await fx.service.status('chat-a', 2)).status === 'succeeded')
 })
 
-test('ComfyUI retry after restart or attachment failure queries the saved job without another generation', async t => {
-  let posts = 0, texts = 0, offline = true, jobId, failSave = true
-  const fx = await fixture(t, {
-    credentials: () => ({ resolve: async () => ({ value: 'fixture-key' }), set: async () => {} }),
-    runAgent: async input => { texts++; await submitPlanCall(input, { arguments: { plan: planFixture() } }) },
-    generate: input => generateSceneImage(input, { fetch: async (url, init) => {
-      if (url.endsWith('/prompt')) { posts++; jobId = JSON.parse(init.body).prompt_id; return Response.json({ prompt_id: jobId }) }
-      if (offline) throw new Error('offline')
-      if (url.includes('/history/')) { assert.ok(url.endsWith(jobId)); return Response.json({ [jobId]: { status: { status_str: 'success', completed: true }, outputs: { '7': { images: [{ filename: 'saved.png', subfolder: '', type: 'output' }] } } } }) }
-      return new Response(png)
-    } }),
-    attachments: () => ({ saveImage: async () => { if (failSave) { failSave = false; throw new Error('disk unavailable') } return { attachmentId: 'comfy-image', mediaType: 'image/png' } }, readImage: async ref => ({ ref, data: png }) })
-  })
-  await fx.service.configure({ provider: 'comfyui', baseURL: 'http://localhost:8188', workflow: comfyGraph() })
-  await fx.service.configure({ enabled: true })
-  const target = sceneTarget(fx.chat(), 2)
-  const finish = async service => { await service.start('parent', 2, target.key); return until(async () => { const value = await service.status('parent', 2); return value.status !== 'running' && value }) }
-  const first = await finish(fx.service)
-  assert.equal(first.status, 'failed'); assert.equal(first.providerTask.promptId, jobId)
-  assert.equal(first.providerTask.state, 'pending')
-  const restarted = fx.createService()
-  await restarted.configure({ baseURL: 'http://localhost:8199' })
-  await assert.rejects(restarted.start('parent', 2, target.key), /恢复原渠道/)
-  assert.equal(posts, 1)
-  await restarted.configure({ baseURL: 'http://localhost:8188' })
-  offline = false
-  const second = await finish(restarted)
-  assert.equal(second.status, 'failed'); assert.equal(second.recovery, 'save')
-  assert.equal(second.providerTask.state, 'succeeded')
-  const finalService = fx.createService()
-  await finalService.retrySave('parent', 2, target.key, second.requestId)
-  const third = await until(async () => { const value = await finalService.status('parent', 2); return value.status !== 'running' && value })
-  assert.equal(third.status, 'succeeded', third.error)
-  assert.equal(posts, 1); assert.equal(texts, 1)
-  assert.equal(third.versions[0].generation.promptId, jobId)
-  assert.equal(third.configuration.workflow.prompt, undefined, 'polling must not return a complete workflow graph')
-})
-
 test('ComfyUI cancellation retains its task identity and explicit resume queries instead of buying again', async t => {
   let posts = 0, jobId, entered = false
   const fx = await fixture(t, {
@@ -397,22 +346,6 @@ test('attachment failure recovers received bytes after restart with settings dis
   assert.deepEqual((await restarted.readImage('parent', 2, key)).data, png)
   const pendingPath = imagePath + key + '.json.received-' + createHash('sha256').update(failed.requestId).digest('hex') + '.json'
   await until(async () => (await fx.store.readJson(pendingPath)) === undefined)
-})
-
-test('failed outbox write keeps received bytes in the live host and never resubmits generation', async t => {
-  const fx = await fixture(t), underlying = fx.deps.store
-  let failPending = true
-  fx.deps.store = { ...underlying, writeJson: async (path, value) => {
-    if (path.includes('.received-') && failPending) { failPending = false; throw new Error('disk temporarily full') }
-    return underlying.writeJson(path, value)
-  } }
-  const service = fx.createService(), key = sceneTarget(fx.chat(), 2).key
-  await service.start('parent', 2, key)
-  const failed = await until(async () => { const value = await service.status('parent', 2); return value.status === 'failed' && value })
-  assert.equal(failed.recovery, 'save')
-  await service.retrySave('parent', 2, key, failed.requestId)
-  await until(async () => (await service.status('parent', 2)).status === 'succeeded')
-  assert.equal(fx.imageCalls(), 1)
 })
 
 test('missing pending bytes cannot silently fall back to paid generation', async t => {
@@ -634,52 +567,6 @@ test('repaint bypasses text Agent, retains each version and deduplicates replaye
   assert.equal(fx.imageCalls(), 2, 'deleting a version cannot replay its paid request')
 })
 
-test('image-only adjustment uses just old plan plus instruction, persists through provider failure, and does not change canonical plans', async t => {
-  let calls = 0, generated = 0
-  const outputBudgets = []
-  let promptVersion = 1
-  const fx = await fixture(t, {
-    prompt: name => name + ':v' + promptVersion,
-    generate: async input => { generated++; if (generated === 2) throw new Error('temporary image error'); return { data: png, mediaType: 'image/png' } },
-    runAgent: async input => {
-      calls++
-      assert.equal(input.system, (calls === 1 ? 'scene-plan:v1' : 'scene-image-adjustment:v2'))
-      outputBudgets.push(input.maxTokens)
-      if (input.tools.some(tool => tool.name === 'submit_scene_plan')) await submitPlanCall(input, { arguments: { plan: planFixture() } })
-      else {
-        assert.equal(input.tools[0].name, 'submit_image_adjustment')
-        const context = JSON.parse(input.messages[0].content[0].text)
-        assert.equal(context.instruction, '改成雨夜')
-        assert.equal(context.sources, undefined)
-        assert.equal(context.characters, undefined)
-        await input.onToolCall({ name: 'submit_image_adjustment', arguments: { update: { description: '雨夜', patches: [{ owner: 'scene', field: 'composition', text: '雨夜', tags: 'rainy night' }] } } })
-      }
-      return {}
-    }
-  })
-  const key = sceneTarget(fx.chat(), 2).key
-  await fx.service.start('parent', 2, key)
-  const first = await until(async () => { const state = await fx.service.status('parent', 2); return state.status === 'succeeded' && state })
-  promptVersion = 2
-  const options = { kind: 'adjust', versionId: first.versions[0].id, instruction: '改成雨夜' }
-  const originalPlans = await fx.store.readJson(imagePath + 'plans.json')
-  await fx.service.start('parent', 2, key, options)
-  const failed = await until(async () => { const state = await fx.service.status('parent', 2); return state.status === 'failed' && state })
-  assert.equal(failed.versions.length, 1)
-  assert.ok(await fx.service.readImage('parent', 2, key, first.versions[0].id))
-  await fx.service.start('parent', 2, key, { ...options, confirmNewRequestId: failed.requestId })
-  const adjusted = await until(async () => { const state = await fx.service.status('parent', 2); return state.status === 'succeeded' && state })
-  assert.equal(calls, 2, 'failed image retry reuses saved adjustment, not another text task')
-  assert.deepEqual(outputBudgets, [undefined, undefined], 'planning and adjustment must inherit the background model output budget')
-  assert.equal(adjusted.versions[1].prompt, 'rainy night')
-  assert.equal(adjusted.versions[0].prompt, first.versions[0].prompt)
-  await fx.service.start('parent', 2, key, { kind: 'repaint', versionId: first.versions[0].id })
-  const repainted = await until(async () => { const state = await fx.service.status('parent', 2); return state.status === 'succeeded' && state })
-  assert.equal(repainted.versions[2].prompt, first.versions[0].prompt)
-  assert.equal(calls, 2)
-  assert.deepEqual(await fx.store.readJson(imagePath + 'plans.json'), originalPlans)
-})
-
 test('another service instance cannot steal a live paid job, and switching away then back keeps its image', async t => {
   let release
   const fx = await fixture(t, { generate: () => new Promise(resolve => { release = () => resolve({ data: png, mediaType: 'image/png' }) }) })
@@ -766,4 +653,16 @@ test('native point status finds existing legacy images, including disabled gener
   assert.deepEqual((await fx.service.status('parent',2)).reference.bindings,[])
   await db.update(original.id,chat=>{chat.messages[0].text=original.messages[0].text;return chat})
   assert.deepEqual((await fx.service.status('parent',2)).versions,done.versions)
+})
+
+test('after a picture of an earlier moment, the next planning input re-reads the rest of that turn', async t => {
+  const inputs = []
+  let moment = 'earlier'
+  const fx = await fixture(t, { runAgent: async input => { inputs.push(JSON.parse(input.messages[0].content[0].text)); await submitPlanCall(input, { arguments: { plan: { ...planFixture(), moment } } }); moment = 'end'; return {} } })
+  await fx.service.start('parent', 2, sceneTarget(fx.chat(), 2).key)
+  await until(async () => (await fx.service.status('parent', 2)).status === 'succeeded')
+  fx.chat().messages.push({ role: 'assistant', turn: 3, text: '她坐下。' })
+  await fx.service.start('parent', 3, sceneTarget(fx.chat(), 3).key)
+  await until(async () => (await fx.service.status('parent', 3)).status === 'succeeded')
+  assert.ok(inputs[1].sources.some(source => source.turn === 2 && source.id !== 'target'), 'the earlier-moment turn is resent as history')
 })

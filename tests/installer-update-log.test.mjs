@@ -28,7 +28,7 @@ test('安装长输出保留最早错误和末尾结果，先脱敏再截取',asy
  try{
   const text='EARLY_GIT_ERROR\n'+('noise\n'.repeat(3000))+'password='+('secret'.repeat(3000))+'\nFINAL_RESULT\n'
   await writeFile(path.join(root,'install.sh'),"#!/bin/sh\ncat <<'OUTPUT'\n"+text+'OUTPUT\n')
-  await updateApplication({host:'cli',sourceRoot:root,statusFile:path.join(root,'status.json'),delay:0,log(){}})
+  await assert.rejects(updateApplication({host:'cli',sourceRoot:root,dshHome:root,statusFile:path.join(root,'status.json'),delay:0,log(){}}), /未确认配置验证和安装完成/)
   const output=readUpdateDiagnostics(root).records.find(r=>r.event==='installer.output')
   assert.match(output.outputHead,/EARLY_GIT_ERROR/);assert.match(output.output,/FINAL_RESULT/)
   assert.ok(output.omittedCharacters>0);assert.doesNotMatch(JSON.stringify(output),/secret/)

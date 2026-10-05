@@ -27,6 +27,61 @@ export function apply(ctx) {
           return
         }
       }
+      // Truncation scenario: only the latest user input decides, so later turns answer normally.
+      const latestUser = JSON.stringify(input.messages.slice(input.messages.findLastIndex(message => message.role === 'assistant') + 1))
+      if (process.env.E2E_TRUNCATE_LOG) await appendFile(process.env.E2E_TRUNCATE_LOG, JSON.stringify({ at: Date.now(), tools: [...tools], tail: input.messages.slice(-4).map(m => ({ role: m.role, content: JSON.stringify(m.content).slice(0, 160) })) }) + '\n')
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && /E2E_TRUNCATE_(TEXT|THINK|LOOP)/.test(latestUser)) {
+        yield { type: 'block-start', index: 0, blockType: 'reasoning' }
+        yield { type: 'text-delta', index: 0, text: '构思正文。' }
+        yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: '构思正文。' } }
+        if (!latestUser.includes('E2E_TRUNCATE_THINK')) {
+          // LOOP models a degenerate repetition that only stops at the provider output limit.
+          const text = latestUser.includes('E2E_TRUNCATE_LOOP') ? '<content>\n' + '雨水顺着屋檐落下，她又说了一遍。'.repeat(Number(process.env.E2E_TRUNCATE_LOOP_REPEAT) || 40000) : '<content>\n你推开酒馆的门，雨水顺着'
+          yield { type: 'block-start', index: 1, blockType: 'text' }
+          for (let offset = 0; offset < text.length; offset += 64) yield { type: 'text-delta', index: 1, text: text.slice(offset, offset + 64) }
+        }
+        yield { type: 'finish', reason: { kind: 'max-tokens' } }
+        return
+      }
+      const latestInput = JSON.stringify(input.messages.slice(input.messages.findLastIndex(message => message.role === 'assistant') + 1))
+      // Mid-stream filter: part of the body already streamed, then the provider cuts it off.
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && latestInput.includes('E2E_FILTER_MIDSTREAM')) {
+        const text = '<content>\n你推开酒馆的门，她抬起头，'
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        // Real providers cut the stream after the text has already rendered; the
+        // pause lets the browser materialize the streaming turn before the error.
+        await new Promise(resolve => { const timer = setTimeout(resolve, 1500); input.signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true }) })
+        if (input.signal?.aborted) { yield { type: 'finish', reason: { kind: 'aborted', failure: { message: 'aborted', code: 'ABORTED' } } }; return }
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+        return
+      }
+      // Poisoned history: a committed round's content trips the filter on every later request.
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && JSON.stringify(input.messages).includes('E2E_POISON') && !latestInput.includes('E2E_POISON')) {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: '<content>\n她抬起头，' }
+        await new Promise(resolve => { const timer = setTimeout(resolve, 1500); input.signal?.addEventListener('abort', () => { clearTimeout(timer); resolve() }, { once: true }) })
+        yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+        return
+      }
+      // Refusal scenario: the latest marker decides; settlement and candidate tasks are unaffected.
+      const marked = JSON.stringify(input.messages)
+      if (!tools.has('mvu_submit_update') && !tools.has('candidate_submit_choices') && !tools.has('posture_submit')
+        && (marked.includes('E2E_CONTENT_FILTER') || marked.includes('E2E_REFUSE_TEXT'))) {
+        if (marked.lastIndexOf('E2E_CONTENT_FILTER') > marked.lastIndexOf('E2E_REFUSE_TEXT')) {
+          yield { type: 'finish', reason: { kind: 'error', failure: { message: 'Provider finish_reason: content_filter', code: 'PI_AI_ERROR' } } }
+          return
+        }
+        const block = { type: 'text', text: '我无法协助生成涉及这类露骨内容的描写。\n\n如果您希望继续推进后续剧情，可以换一个方向。' }
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: block.text }
+        yield { type: 'block-end', index: 0, block }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
       const recovery = await recoveryBlocks(input, tools)
       if (recovery) {
         for (const [index, block] of recovery.entries()) {
@@ -80,6 +135,8 @@ export function apply(ctx) {
       for (const [index, block] of blocks.entries()) {
         if (heldAttempt !== undefined && block.type === 'tool-call') await appendFile(process.env.TAVERN_E2E_BACKGROUND_DIR + '/background-late.jsonl', JSON.stringify({attempt:heldAttempt, tool:block.name})+'\n')
         yield { type: 'block-start', index, blockType: block.type }
+        // Real providers stream text before closing the block; helper generation reads deltas.
+        if (block.type === 'text') yield { type: 'text-delta', index, text: block.text }
         yield { type: 'block-end', index, block }
       }
       yield { type: 'finish', reason: { kind: blocks.some(block => block.type === 'tool-call') ? 'tool-calls' : 'stop' } }

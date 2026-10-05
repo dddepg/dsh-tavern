@@ -106,7 +106,7 @@
 
 **方式一：一键安装包（推荐）**
 
-**[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.4/DSH-Tavern-Desktop-2.0.13-x64-Setup5.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。[图文教程 →](https://flizzywine.github.io/dsh-tavern/#a02--section-2)
+**[下载 Windows 安装包](https://github.com/flizzywine/dsh-tavern/releases/download/v2.5/DSH-Tavern-Desktop-2.0.13-x64-Setup7.exe)**（x64），双击运行，保持联网，按提示完成。以后从桌面「DSH Tavern」快捷方式打开，无需另装 Node.js 或 DSH Desktop。[图文教程 →](https://flizzywine.github.io/dsh-tavern/#a02--section-2)
 
 **方式二：借助 DSH Desktop**
 
@@ -177,6 +177,8 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 - **[Discord 讨论频道](https://discord.com/channels/1134557553011998840/1538577327028445194)**：需要类脑社区成员资格才能进入。
 
 本项目没有 QQ 群、微信群或其他群聊。
+
+提功能需求前，请先看[项目范围：做什么，不做什么](docs/scope.md)。项目已进入稳定阶段，只专注人物卡兼容、稳定性和性能。
 
 反馈故障时，可从对话顶部的“日志”下载执行记录；分享前请检查其中的对话和附件隐私。
 

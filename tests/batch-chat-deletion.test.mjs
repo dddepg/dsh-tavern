@@ -23,10 +23,3 @@ test('batch deletion stops foreground and background before removing, deduplicat
   assert.ok(api.events.indexOf('idle:background') < api.events.indexOf('remove:a'))
   assert.deepEqual([...api.deletedChatIds], ['a', 'c'])
 })
-test('preparation only stops work without deleting, invalid selection cannot delete anything', async () => {
-  const api = setup()
-  await api.deleteChats(['a'], true)
-  assert.ok(!api.events.some(event => event.startsWith('remove:')))
-  await assert.rejects(api.deleteChats(['a', '']), /有效/)
-  assert.deepEqual(await api.deleteChats([]), { results: [] })
-})

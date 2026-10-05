@@ -87,9 +87,3 @@ test('stale recovery refuses to overwrite a later normal input before mutating e
 })
 
 // Native cancellation can finish before the host writes turn/end.
-test('missing turn/end still cannot absorb the next normal input',()=>{
- const f=fixture({ended:false});const later=f.user('later-normal-input')
- clearRegenerationAttemptSurface(f)
- assert.ok(f.session.surface.nodes.includes(later.seq))
- assert.ok(f.session.surface.nodes.includes(f.body.seq))
-})

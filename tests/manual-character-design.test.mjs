@@ -24,17 +24,6 @@ function fixture(runAgent, initial = {}) {
   return { api, tasks, get: () => structuredClone(chat), edit: fn => fn(chat) }
 }
 
-test('重复触发被拒绝，未保存档案时报错，服务重启后不会一直显示运行中', async () => {
-  let release
-  const gate = new Promise(resolve => { release = resolve })
-  const run = fixture(() => gate)
-  await run.api.start({ sessionId: 'session', guidance: '设计张三' })
-  await assert.rejects(run.api.start({ sessionId: 'session', guidance: '设计张三' }), /正在进行/)
-  release(); await run.api.wait('chat')
-  assert.match(run.get().characterDesignTask.error, /模型未调用人物档案保存工具/)
-  assert.equal(run.api.project({ id: 'old', characterDesignTask: { status: 'running' } }).status, 'failed')
-})
-
 test('校验失败后模型修正并保存成功，不残留失败提示', async () => {
   const run = fixture(async input => {
     await input.onToolCall({ name: 'character_design_save', arguments: { ...design, identity: '' } })

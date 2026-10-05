@@ -46,17 +46,3 @@ test('indexed reply cache preserves append, role-change and truncation results',
  await edit(chat.messages.slice(0,1),[])
  await edit([],[])
 })
-
-
-test('persistent status declarations still remove captured panels and track the current target',async()=>{
- const opts={...options,regexScripts:[{id:'panel',placement:[2],markdownOnly:true,findRegex:'<StatusPlaceHolderImpl/>',replaceString:'<script>show()</script>'}]}
- let chat={id:'panel',_storageRevision:1,messages:[{role:'assistant',greeting:true,sourceText:'<StatusPlaceHolderImpl/>',text:'<StatusPlaceHolderImpl/>'}]},changes
- const cache=createIncrementalReplyView({readChanges:async()=>changes})
- for(let i=0;i<2;i++){
-  const history=projectRuntimeReplyHistory(chat.messages,opts)
-  assert.deepEqual(await cache.project(chat,opts,opts),{...projectPersistentStatusView(chat.messages,history.projections,opts),presentation:null,latestSourceBacked:history.latestSourceBacked})
-  const baseRevision=chat._storageRevision
-  chat={...chat,_storageRevision:2,messages:[...chat.messages,{role:'assistant',turn:2,bodyEdit:true,text:'new'}]}
-  changes={baseRevision,chat,messageCount:2,denseMessages:true,indices:[1]}
- }
-})

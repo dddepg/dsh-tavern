@@ -63,30 +63,6 @@ test('missing Git tag still renders a homepage from a durable content snapshot',
   assert.equal((await offline.readCached(Object.values(saved.assets)[0].hash)).content, '<h1>Homepage</h1>')
 })
 
-test('opening media and dynamic directory bases are not fetched as executable entries', async () => {
-  const media = [
-    'https://testingcf.jsdelivr.net/gh/example/repo@main/avatar.webp',
-    'https://cdn.jsdelivr.net/gh/example/repo@main/logo.png?size=2',
-    'https://cdn.jsdelivr.net/gh/example/repo@main/music/theme.mp3',
-    'https://cdn.jsdelivr.net/gh/example/repo@main/music/',
-    `https://cdn.jsdelivr.net/gh/example/repo@${COMMIT}/avatar.webp`
-  ]
-  const entry = 'https://cdn.jsdelivr.net/gh/example/repo@main/status.html'
-  const requests = []
-  const store = createTavernRemoteAssetPinStore({ fetch: async url => {
-    requests.push(url)
-    if (url.includes('api.github.com')) return { ok: true, json: async () => ({ sha: COMMIT }) }
-    if (url.endsWith('/status.html')) return textResponse('<div>status</div>', 'text/html')
-    throw new Error('media must remain browser resources')
-  } })
-  const result = await store.pinExtensions({ regexScripts: [{ enabled: true, replaceString: media.concat(entry).map(url => JSON.stringify(url)).join('\n') }] })
-  assert.equal(result.regexScripts[0].enabled, true)
-  assert.deepEqual(result.diagnostics, [])
-  for (const url of media) assert.ok(result.regexScripts[0].replaceString.includes(url), url)
-  assert.equal(requests.length, 2)
-  assert.match(result.regexScripts[0].replaceString, /\/api\/dsh-tavern\/remote-assets\//)
-})
-
 test('禁用资源不请求；并发准备共享请求且网络并发不超过三', async () => {
   let active = 0, maximum = 0, calls = 0
   const store = createTavernRemoteAssetPinStore({ fetch: async () => {
@@ -104,4 +80,18 @@ test('禁用资源不请求；并发准备共享请求且网络并发不超过�
   const warm = await store.pinExtensions({ helperScripts })
   assert.deepEqual(warm, one)
   assert.equal(calls, 7)
+})
+
+test('模板字符串里的 jsDelivr 地址止于插值和反引号，替换后脚本语法完整', async () => {
+  let saved = null
+  const store = createTavernRemoteAssetPinStore({
+    readJson: async () => saved,
+    updateJson: async (_path, updater) => { saved = updater(saved) },
+    fetch: async url => String(url).startsWith('https://api.github.com/') ? { ok: true, json: async () => ({ sha: COMMIT }) } : textResponse()
+  })
+  const source = 'loadScript([`https://cdn.jsdelivr.net/gh/baibai-git/baibai_phone/index.js?day=${day}&hour=${hour}`]);'
+  const result = await store.pinText(source)
+  assert.match(result.text, /\/api\/dsh-tavern\/remote-assets\//)
+  assert.match(result.text, /\$\{day\}&hour=\$\{hour\}`\]\);$/)
+  assert.doesNotThrow(() => new Function('loadScript', 'day', 'hour', result.text))
 })

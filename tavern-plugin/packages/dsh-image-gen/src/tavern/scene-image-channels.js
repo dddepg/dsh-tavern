@@ -1,4 +1,4 @@
-import { novelaiSettings, novelaiRequest, NOVELAI_MODELS } from './scene-image-novelai.js'
+import { novelaiSettings, novelaiRequest, novelaiArtists, novelaiEndpoints, NOVELAI_MODELS, NOVELAI_BASE_SECTIONS, NOVELAI_QUALITY_PRESETS, NOVELAI_UC_PRESETS, NOVELAI_SAMPLERS, NOVELAI_NOISE_SCHEDULES } from './scene-image-novelai.js'
 import { comfyWorkflow } from './scene-image-comfy-workflow.js'
 import { imageReferenceCapability } from './scene-image-reference.js'
 
@@ -17,8 +17,23 @@ const channels = [
 ]
 // Advanced controls are optional strings, like the existing form fields.
 export const IMAGE_ADVANCED_FIELDS = ['negativePrompt', 'steps', 'guidance']
+// NovelAI-only controls: positive prompt, official quality/undesired-content
+// presets, section ordering, sampling, image-to-image and reproducibility, plus
+// the selected endpoint and artist-library entry. The endpoint and artist lists
+// themselves are structured values, validated like a ComfyUI workflow.
+export const IMAGE_NOVELAI_PROMPT_FIELDS = ['qualityTags', 'qualityPreset', 'ucPreset', 'promptOrder', 'sectionWeights', 'useOrder', 'seed', 'referenceImage', 'imageStrength',
+  'sampler', 'noiseSchedule', 'cfgRescale', 'varietyBoost', 'endpoint', 'activeArtist']
+// Per-field length ceilings; unlisted extended fields keep the historical 200-character cap.
+const IMAGE_FIELD_LIMITS = {
+  negativePrompt: 4000, baseURL: 2000,
+  qualityTags: 600,
+  qualityPreset: 16, ucPreset: 16, imageStrength: 8,
+  promptOrder: 120, sectionWeights: 120,
+  useOrder: 8, seed: 20, referenceImage: 50000,
+  sampler: 32, noiseSchedule: 32, cfgRescale: 8, varietyBoost: 8, endpoint: 16, activeArtist: 16
+}
 for (const channel of channels) {
-  const advanced = ['novelai', 'webui', 'comfyui'].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === 'qwen' ? ['negativePrompt'] : []
+  const advanced = channel.id === 'novelai' ? [...IMAGE_ADVANCED_FIELDS, ...IMAGE_NOVELAI_PROMPT_FIELDS] : ['webui', 'comfyui'].includes(channel.id) ? IMAGE_ADVANCED_FIELDS : channel.id === 'qwen' ? ['negativePrompt'] : []
   channel.fields = [...channel.fields, ...advanced]
 }
 // Keep the old sentinel readable for stored records, never offer it as a provider.
@@ -34,7 +49,7 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
   for (const field of defaults.fields) {
     if (value[field] !== undefined && typeof value[field] !== 'string') throw new Error('渠道配置须为文本')
     result[field] = (value[field] ?? defaults[field] ?? '').trim()
-    if (result[field].length > (field === 'negativePrompt' ? 4000 : field === 'baseURL' ? 2000 : 200)) throw new Error('渠道配置过长')
+    if (result[field].length > (IMAGE_FIELD_LIMITS[field] ?? 200)) throw new Error('渠道配置过长')
   }
   for (const field of ['steps', 'guidance']) {
     if (!result[field]) continue
@@ -55,7 +70,46 @@ export function channelSettings(value = {}, id = value.provider || 'openai') {
     const dimensions = result.size.match(/^(\d+)x(\d+)$/)
     if (!dimensions || dimensions.slice(1).some(value => Number(value) < 64 || Number(value) > 2048 || Number(value) % 8)) throw new Error('WebUI 尺寸须为宽x高，每边 64–2048 且为 8 的倍数')
   }
-  if (id === 'novelai') novelaiSettings(result)
+  if (id === 'novelai') {
+    // Prompt controls accept a full permutation only; partial or duplicated
+    // orders would silently drop sections from the assembled caption.
+    if (result.promptOrder) {
+      const order = result.promptOrder.split(',').map(section => section.trim()).filter(Boolean)
+      if (order.length !== NOVELAI_BASE_SECTIONS.length || new Set(order).size !== order.length || order.some(section => !NOVELAI_BASE_SECTIONS.includes(section))) throw new Error('promptOrder 须为 quality,scene,style,artist 的完整排列')
+    }
+    if (result.sectionWeights) {
+      const weights = result.sectionWeights.split(',').map(weight => weight.trim()).filter(Boolean)
+      if (weights.length > NOVELAI_BASE_SECTIONS.length) throw new Error('sectionWeights 数量不能超过 4')
+      if (weights.some(weight => !/^\d+(\.\d+)?$/.test(weight) || Number(weight) <= 0)) throw new Error('sectionWeights 须为正数，例如 1.5,1,1,0.75')
+    }
+    if (result.useOrder) {
+      if (!['true', 'false'].includes(result.useOrder.toLowerCase())) throw new Error('useOrder 须填 true 或 false')
+      result.useOrder = result.useOrder.toLowerCase()
+    }
+    if (result.seed && (!/^\d+$/.test(result.seed) || Number(result.seed) > 0xFFFFFFFF)) throw new Error('种子须为 0–4294967295 的非负整数')
+    // Official presets stay opt-in: 'none' keeps the prompt the user typed alone.
+    result.qualityPreset = (result.qualityPreset || 'none').toLowerCase()
+    if (!NOVELAI_QUALITY_PRESETS.includes(result.qualityPreset)) throw new Error('官方质量词预设只能选择 none、light 或 standard')
+    result.ucPreset = (result.ucPreset || 'none').toLowerCase()
+    if (!NOVELAI_UC_PRESETS.includes(result.ucPreset)) throw new Error('官方负面预设只能选择 none、light、heavy 或 human-focus')
+    if (result.imageStrength) {
+      if (!/^\d+(?:\.\d+)?$/.test(result.imageStrength) || Number(result.imageStrength) > 1) throw new Error('图片参考强度须为 0–1 的数值')
+      result.imageStrength = String(Number(result.imageStrength))
+    }
+    result.sampler ||= 'k_euler_ancestral'
+    if (!NOVELAI_SAMPLERS.includes(result.sampler)) throw new Error('请选择有效的 NovelAI 采样器')
+    if (result.sampler === 'ddim_v3' && result.model.startsWith('nai-diffusion-5')) throw new Error('V5 不支持 DDIM 采样器，请换用其他采样器')
+    result.noiseSchedule ||= 'karras'
+    if (!NOVELAI_NOISE_SCHEDULES.includes(result.noiseSchedule)) throw new Error('请选择有效的 NovelAI 噪声表')
+    if (result.cfgRescale) {
+      if (!/^\d+(?:\.\d+)?$/.test(result.cfgRescale) || Number(result.cfgRescale) > 1) throw new Error('CFG Rescale 须为 0–1 的数值')
+      result.cfgRescale = String(Number(result.cfgRescale))
+    }
+    if (result.varietyBoost && !['true', 'false'].includes(result.varietyBoost)) throw new Error('Variety Boost 须为开启或关闭')
+    Object.assign(result, novelaiEndpoints(value.endpoints, result.endpoint, result.baseURL), novelaiArtists(value))
+    if (result.activeArtist && !result.artists.some(artist => artist.id === result.activeArtist)) result.activeArtist = ''
+    novelaiSettings(result)
+  }
   if (id === 'comfyui') {
     result.workflow = comfyWorkflow(value.workflow)
     for (const field of IMAGE_ADVANCED_FIELDS) if (result[field] && !result.workflow?.bindings[field === 'negativePrompt' ? 'negative' : field]?.length) throw new Error('工作流缺少 ' + field + ' 映射，请重新导入支持该参数的工作流或清空该设置')
@@ -82,8 +136,28 @@ export function imageExpressionGuidance(config) {
   return 'NovelAI：tags 优先用简洁英文绘图标签，必要关系用短英文句子。人物外貌、服装、动作、表情、位置只放各自的人物块，不在 scene 中重写。scene 只放人数、环境、镜头和关系；人数与性别须有依据，不猜测。V4/V4.5/V5 会分开提交角色描述，人数标签如 2girls 放 scene，单个人物只写 girl/boy/other，不写 1girl，不使用 | 人物分隔语法。保留稳定身份与事实，只转换表达。'
 }
 
+/** The picture's own orientation turns a configured WxH size or W:H ratio
+ * around, keeping its resolution. Square settings and named sizes (1K, 2K)
+ * stay as configured; so does everything when the user fixed the orientation. */
+export function orientedChannelSettings(config, input = {}) {
+  const orientation = input.style?.orientation === 'fixed' ? '' : input.plan?.orientation
+  if (!['portrait', 'landscape'].includes(orientation)) return config
+  const turn = (width, height) => orientation === 'portrait' ? width > height : width < height
+  const result = { ...config }
+  const size = typeof config.size === 'string' && config.size.match(/^(\d+)([x*])(\d+)$/)
+  if (size && turn(Number(size[1]), Number(size[3]))) result.size = size[3] + size[2] + size[1]
+  const ratio = typeof config.aspectRatio === 'string' && config.aspectRatio.match(/^(\d+):(\d+)$/)
+  if (ratio && turn(Number(ratio[1]), Number(ratio[2]))) result.aspectRatio = ratio[2] + ':' + ratio[1]
+  return result
+}
+/** Negative tags the picture itself asks for, added after the configured ones. */
+export function imageNegativePrompt(configured, input = {}) {
+  const extra = typeof input.plan?.negative === 'string' ? input.plan.negative.trim() : ''
+  return [configured || '', extra].filter(Boolean).join(', ')
+}
+
 export function imageChannelRequest(input) {
-  const config = channelSettings(input)
+  const config = orientedChannelSettings(channelSettings(input), input)
   const references = input.referenceImages || []
   const capability = imageReferenceCapability(config)
   if (!Array.isArray(references) || references.length && (!capability.supported || references.length > capability.maxImages)) throw new Error('当前渠道不支持所选参考图，未发送请求')
@@ -100,7 +174,7 @@ export function imageChannelRequest(input) {
     if (config.authType === 'none') delete headers.authorization
     else if (config.authType === 'basic') headers.authorization = 'Basic ' + Buffer.from(config.username + ':' + input.apiKey, 'utf8').toString('base64')
     const [width, height] = config.size.split('x').map(Number)
-    body = { prompt, width, height, batch_size: 1, n_iter: 1, seed: -1, send_images: true, save_images: false, ...(config.negativePrompt ? { negative_prompt: config.negativePrompt } : {}), ...(config.steps ? { steps: Number(config.steps) } : {}), ...(config.guidance ? { cfg_scale: Number(config.guidance) } : {}) }
+    body = { prompt, width, height, batch_size: 1, n_iter: 1, seed: -1, send_images: true, save_images: false, ...(imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {}), ...(config.steps ? { steps: Number(config.steps) } : {}), ...(config.guidance ? { cfg_scale: Number(config.guidance) } : {}) }
   } else if (config.provider === 'gemini') {
     path = 'interactions'; delete headers.authorization; headers['x-goog-api-key'] = input.apiKey
     body = { model: config.model, input: [{ type: 'text', text: prompt }], response_format: { type: 'image', mime_type: 'image/png', aspect_ratio: config.aspectRatio, image_size: config.size } }
@@ -115,7 +189,7 @@ export function imageChannelRequest(input) {
   } else if (config.provider === 'qwen') {
     if (!config.model.startsWith('qwen-image')) throw new Error('百炼渠道当前只接入 Qwen-Image，不支持其他万相模型')
     path = 'services/aigc/multimodal-generation/generation'
-    body = { model: config.model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size: config.size, n: 1, prompt_extend: false, ...(config.negativePrompt ? { negative_prompt: config.negativePrompt } : {}) } }
+    body = { model: config.model, input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }, parameters: { size: config.size, n: 1, prompt_extend: false, ...(imageNegativePrompt(config.negativePrompt, input) ? { negative_prompt: imageNegativePrompt(config.negativePrompt, input) } : {}) } }
   } else if (config.provider === 'grok') {
     if (!['1k', '2k'].includes(config.size)) throw new Error('Grok 分辨率须为 1k 或 2k')
     body = { model: config.model, prompt, n: 1, aspect_ratio: config.aspectRatio, resolution: config.size }

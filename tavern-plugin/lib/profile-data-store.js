@@ -31,6 +31,8 @@ export function createProfileDataStore(options) {
         compact: async (current, frame) => options.compact(current?.toString('utf8'), frame.toString('utf8'))
       })
     },
+    async readBytes(relativePath) { return files.read(resolveSafePath(dataRoot, relativePath)) },
+    async writeBytes(relativePath, data) { return files.write(resolveSafePath(dataRoot, relativePath), data) },
     async writeJson(relativePath, value) { return files.write(resolveSafePath(dataRoot, relativePath), encodeJson(value)) },
     async updateJson(relativePath, updater) {
       const result = await files.update(resolveSafePath(dataRoot, relativePath), async function (current) {
