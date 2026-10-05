@@ -175,41 +175,54 @@ export function createPresetLibrary({ resources: fileResources, state: profileDa
     chat.runtimePresetSnapshot = await bypassPlans.snapshot(plan.id)
     return true
   }
+  // Inspecting, converting and parsing a multi-MB preset dominates the catalog; the
+  // summary depends only on the file text, so it is reused until the text changes.
+  const summaryCache = new Map()
+  function summarize(presetPath, text) {
+    const conversion = previewPresetConversion(text, presetPath)
+    // Same field precedence as readPreset().
+    const preset = Object.assign({ path: presetPath, previewPath: fileResources.absolute(presetPath),
+      dshPreset: conversion && conversion.dshPreset || null }, inspectPreset(text, presetPath))
+    let document
+    try { document = JSON.parse(text) } catch { document = undefined }
+    const extractableRegexScripts = runtimeRegexScriptsOf(preset, document)
+    const phaseCounts = Object.fromEntries(['front', 'middle', 'back'].map(function (phase) {
+      return [phase, Array.isArray(preset.dshPreset && preset.dshPreset[phase]) ? preset.dshPreset[phase].length : 0]
+    }))
+    const phasedEntryKeys = new Set(['front', 'middle', 'back'].flatMap(function (phase) {
+      return (Array.isArray(preset.dshPreset && preset.dshPreset[phase]) ? preset.dshPreset[phase] : []).map(function (entry) { return str(entry && entry.id) })
+    }))
+    return {
+      path: preset.path,
+      previewPath: preset.previewPath,
+      title: preset.title,
+      valid: preset.valid,
+      recognized: preset.recognized,
+      promptCount: preset.promptCount,
+      phaseCounts,
+      unassignedPromptCount: (preset.entries || []).filter(function (entry) { return !phasedEntryKeys.has(str(entry && entry.entryKey)) }).length,
+      enabledCount: preset.enabledCount || 0,
+      regexCount: extractableRegexScripts.length,
+      enabledRegexCount: extractableRegexScripts.filter(function (script) { return script.enabled !== false }).length,
+      warning: preset.warning,
+      error: preset.error
+    }
+  }
   async function listPresets() {
     const result = []
-    const inspectedPresets = []
-    for (const presetPath of await fileResources.list('preset')) {
-      const inspected = await readPreset(presetPath)
-      inspectedPresets.push({ path: presetPath, inspected })
+    const listed = new Set()
+    for (const listedPath of await fileResources.list('preset')) {
+      const presetPath = normalizeResourcePath(listedPath, 'preset')
+      const text = await fileResources.readText(presetPath)
+      if (text === undefined) continue // A listed file may disappear before it is read.
+      listed.add(presetPath)
+      const cached = summaryCache.get(presetPath)
+      if (cached && cached.text === text) { result.push(structuredClone(cached.summary)); continue }
+      const summary = summarize(presetPath, text)
+      summaryCache.set(presetPath, { text, summary })
+      result.push(structuredClone(summary))
     }
-    for (const record of inspectedPresets) {
-      const presetPath = record.path
-      const inspected = record.inspected
-      if (!inspected) continue // A listed file may disappear before it is read.
-      const preset = inspected
-      const extractableRegexScripts = runtimeRegexScriptsOf(preset, await readPresetDocument(preset.path))
-      const phaseCounts = Object.fromEntries(['front', 'middle', 'back'].map(function (phase) {
-        return [phase, Array.isArray(preset.dshPreset && preset.dshPreset[phase]) ? preset.dshPreset[phase].length : 0]
-      }))
-      const phasedEntryKeys = new Set(['front', 'middle', 'back'].flatMap(function (phase) {
-        return (Array.isArray(preset.dshPreset && preset.dshPreset[phase]) ? preset.dshPreset[phase] : []).map(function (entry) { return str(entry && entry.id) })
-      }))
-      result.push({
-        path: preset.path,
-        previewPath: preset.previewPath,
-        title: preset.title,
-        valid: preset.valid,
-        recognized: preset.recognized,
-        promptCount: preset.promptCount,
-        phaseCounts,
-        unassignedPromptCount: (preset.entries || []).filter(function (entry) { return !phasedEntryKeys.has(str(entry && entry.entryKey)) }).length,
-        enabledCount: preset.enabledCount || 0,
-        regexCount: extractableRegexScripts.length,
-        enabledRegexCount: extractableRegexScripts.filter(function (script) { return script.enabled !== false }).length,
-        warning: preset.warning,
-        error: preset.error
-      })
-    }
+    for (const cachedPath of summaryCache.keys()) if (!listed.has(cachedPath)) summaryCache.delete(cachedPath)
     return result
   }
   async function importPreset(payload) {
