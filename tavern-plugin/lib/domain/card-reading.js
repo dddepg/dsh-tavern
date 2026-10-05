@@ -8,14 +8,6 @@ function fieldText(value) {
   return typeof value === 'string' ? value : (value === undefined || value === null ? '' : String(value))
 }
 
-export function cardFieldCatalog(card) {
-  const source = card !== null && typeof card === 'object' ? card : {}
-  return READABLE_CARD_FIELDS.map(function (field) {
-    const text = fieldText(source[field])
-    return { field, chars: text.length, empty: text.length === 0 }
-  })
-}
-
 export function readCardField(card, request = {}) {
   const field = typeof request.field === 'string' ? request.field : ''
   if (!READABLE_CARD_FIELDS.includes(field)) throw new Error('不支持的人物卡字段: ' + field)

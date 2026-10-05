@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { createFileResourceStore, normalizeResourcePath, resourceUri, safeResourceName, stripPngTextChunks } from '../tavern-plugin/lib/domain/file-resources.js'
+import { createFileResourceStore, normalizeResourcePath, safeResourceName, stripPngTextChunks } from '../tavern-plugin/lib/domain/file-resources.js'
 
 function pngCardBuffer(card) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -22,7 +22,7 @@ function pngCardBuffer(card) {
 
 test('资源相对路径就是身份，并拒绝目录逃逸', () => {
   assert.equal(normalizeResourcePath('cards/阿芙拉.json', 'card'), 'cards/阿芙拉.json')
-  assert.equal(resourceUri('materials/长篇 小说.md'), 'tavern-file:materials%2F%E9%95%BF%E7%AF%87%20%E5%B0%8F%E8%AF%B4.md')
+  assert.equal(normalizeResourcePath('materials/长篇 小说.md', 'source'), 'materials/长篇 小说.md')
   assert.throws(() => normalizeResourcePath('../cards/x.json'), /路径不合法/)
   assert.throws(() => normalizeResourcePath('materials/x.md', 'card'), /类型不匹配/)
   assert.throws(() => safeResourceName('CON.txt'), /文件名不合法/)

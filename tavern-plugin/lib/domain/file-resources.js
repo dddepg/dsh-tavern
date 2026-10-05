@@ -49,10 +49,6 @@ export function resourceKind(value) {
   return Object.entries(KIND_DIR).find(function (entry) { return normalized.startsWith(entry[1] + '/') })[0]
 }
 
-export function resourceUri(value) {
-  return 'tavern-file:' + encodeURIComponent(normalizeResourcePath(value))
-}
-
 function extensionForText(name, fallback = '.txt') {
   const safe = safeResourceName(name)
   const ext = path.extname(safe).toLowerCase()
@@ -548,7 +544,6 @@ export function createFileResourceStore(options = {}) {
     copyTail = operation.catch(() => {})
     return operation
   }
-
 
   async function importCard(payload, card) {
     await ensure()

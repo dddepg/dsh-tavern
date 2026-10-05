@@ -2,7 +2,7 @@ import { replaceSessionSurface } from './session-surface-mutations.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { editableReplyParts } from './reply-presentation.js'
 import { locateRegenerationSurface } from './rollback-surface.js'
-import { sessionEvents, appendSessionEvent } from './session-events.js'
+import { sessionEvents } from './session-events.js'
 
 function latest(chat) {
   const message = chat.messages?.at(-1)

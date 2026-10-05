@@ -5,7 +5,7 @@ import { createCardPreparation } from '../tavern-plugin/lib/domain/card-preparat
 import { createScriptContinuity } from '../tavern-plugin/lib/domain/script-continuity.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
 import { renderTavernMacros } from '../tavern-plugin/lib/domain/tavern-macro-engine.js'
-import { projectReplyPresentation } from '../tavern-plugin/lib/domain/reply-presentation.js'
+import { projectReplyLayers } from '../tavern-plugin/lib/domain/reply-presentation.js'
 import { createTurnOrchestrator } from '../tavern-plugin/lib/domain/turn-orchestration.js'
 import { createForegroundFrameBuilder, foregroundFrameText } from '../tavern-plugin/lib/domain/agent-input-frame.js'
 import { createContextPlanner } from '../tavern-plugin/lib/domain/context-planner.js'
@@ -136,7 +136,7 @@ function harness(mode, options = {}) {
     } : undefined,
     resolvePresetRegexScripts: options.resolvePresetRegexScripts,
     projectUserTemplate: options.projectUserTemplate,
-    projectReply: projectReplyPresentation,
+    projectReply: projectReplyLayers,
     projectWorldBookTemplates: options.projectWorldBookTemplates,
     projectForegroundWorldbook: options.projectForegroundWorldbook,
     recordWorldbookRecall: options.recordWorldbookRecall,

@@ -29,9 +29,7 @@ export function placementKey(entry) {
   const position = entry.position === 'before_char' ? 0 : entry.position === 'after_char' ? 1 : Number(entry.position ?? 0)
   return position === 4 ? `4:${entry.depth ?? 4}:${entry.role ?? 0}` : String(position)
 }
-export function dynamicPlacementKeys(entries) {
-  return new Set(entries.filter(entry => entry.enabled !== false && (entry.constant !== true || entry.group)).map(placementKey))
-}
+
 function integer(value, fallback, max = 1000) {
   return value == null || value === '' || !Number.isFinite(Number(value)) ? fallback : Math.max(0, Math.min(max, Math.trunc(Number(value))))
 }
@@ -164,22 +162,6 @@ function filterGroups(candidates, activated, textFor, random, reject) {
     for (const entry of pool) if (entry !== winner) remove(entry, { groupReason: overrides.length ? 'priority' : 'weight', winners: winner ? [winner.ref] : [], weight: option(entry, 'groupWeight', 100) })
   }
   return candidates.filter(entry => retained.has(entry))
-}
-
-/** Script keyword queries share the ordinary matcher and group rules, without a recall quota. */
-export function selectScriptWorldbookEntries(entries, keywords, condition = {}, settings = {}, random = Math.random) {
-  const text = (Array.isArray(keywords) ? keywords : [keywords]).map(str).join('\n')
-  const candidates = priorityOrder(entries).map(entry => ({ ...entry,
-    caseSensitive: entry.caseSensitive ?? settings.caseSensitive,
-    matchWholeWords: entry.matchWholeWords ?? settings.matchWholeWords
-  })).filter(entry => {
-    if (/^@@dont_activate(?:\s|$)/m.test(str(entry.content))) return false
-    if (condition.constant != null && (entry.constant === true) !== condition.constant) return false
-    if (condition.disabled != null && (entry.enabled === false) !== condition.disabled) return false
-    if (condition.vectorized != null && Boolean(entry.vectorized ?? entry.rawEntry?.vectorized) !== condition.vectorized) return false
-    return entry.constant === true || keywordEvaluation(entry, text, [{ text, source: 'script' }]).matched
-  })
-  return filterGroups(candidates, [], () => text, random, () => {})
 }
 
 /** ST-style bounded history, keyword conditions, inclusion groups and recursion.

@@ -1,6 +1,6 @@
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { randomUUID } from 'node:crypto'
-import { sessionEvents, appendSessionEvent } from './session-events.js'
+import { sessionEvents } from './session-events.js'
 
 const body = message => String(message?.text ?? '')
 const textOf = message => (message?.content || []).filter(block => block.type === 'text').map(block => block.text).join('\n')

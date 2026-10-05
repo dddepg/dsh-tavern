@@ -461,7 +461,6 @@ window.__ModuleLoader__.load({
 			return { phase: String(activity.phase || "idle"), busy: busy, role: role, label: label, blockReason: blockReason };
 		}
 
-        // @include modules/history-viewport.js
 
 		function useLiveTavernView(sessionId, revision, paths) {
             const dependencyKey = JSON.stringify(paths);
@@ -728,7 +727,6 @@ window.__ModuleLoader__.load({
 			registerTavernStartPage(ctx, slots);
 			playControlsFeature.register({ ctx: ctx, slots: slots });
 			assistantRendererFeature.register({ ctx: ctx, slots: slots });
-			// Native history paging owns loading; TavernWindowedNode bounds live bodies without shadowing its slots.
 			ctx.effect(function () {
 				return slots.inject("conversation.input.right", function () { return slots.register({
 					name: "conversation.input.right",

@@ -956,8 +956,6 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-profile-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .dsh-tavern-profile-choices p { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .dsh-tavern-history-window { min-height: 0; display: flex; flex-direction: column; flex: 1; }
-.dsh-tavern-history-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; position: sticky; top: 0; z-index: 2; background: var(--dsw-specific-input-major); }
-.dsh-tavern-history-controls small { color: var(--dsw-alias-label-tertiary); }
 
 /* Shared in-app text prompt. Replaces window.prompt, which Electron never implements;
    every previous caller failed silently on desktop. */

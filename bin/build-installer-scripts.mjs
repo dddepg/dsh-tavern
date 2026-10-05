@@ -25,7 +25,6 @@ export function embedModule(source, pattern, moduleSource) {
   if (!pattern.test(text)) throw new Error(`embedded module marker not found: ${pattern}`)
   return text.replace(pattern, (_, start, end) => start + moduleSource + end)
 }
-export function embedDownloadModule(source, pattern) { return embedModule(source, pattern, readModule('bin/download.cjs')) }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const check = process.argv.includes('--check')

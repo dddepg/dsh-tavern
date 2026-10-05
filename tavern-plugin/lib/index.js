@@ -451,9 +451,6 @@ export async function apply(ctx) {
   function str(v) {
     return typeof v === 'string' ? v : (v === undefined || v === null ? '' : String(v))
   }
-  function clampInt(v, min, max, def) {
-    return Number.isInteger(v) && v >= min && v <= max ? v : def
-  }
   function sleep(ms) {
     return new Promise(function (resolve) { setTimeout(resolve, ms) })
   }
