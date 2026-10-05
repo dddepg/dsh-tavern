@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "caf44ba46c18fb24fb4112b0388666dadf200b86",
-  "releaseSequence": 525,
+  "revision": "2bcbefe4bbb9f561609728aba864a59e7ab06b3f",
+  "releaseSequence": 526,
   "version": "2.5.0",
   "files": [
     {
@@ -401,8 +401,8 @@
     },
     {
       "path": "tavern-plugin/lib/application-updater.js",
-      "sha256": "c7e2c39c4a4b7c215226d2b1bb296fe8a0385bfb684cfc2ec6dccd27c75446ee",
-      "size": 36716
+      "sha256": "b878ac9c32cb894722ad37f818af8eeab32341b6db702ab448d558ae19c37fd7",
+      "size": 37467
     },
     {
       "path": "tavern-plugin/lib/background-agent-runner.js",
