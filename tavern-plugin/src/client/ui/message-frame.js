@@ -162,17 +162,24 @@
         }
 
         let closeTavernPageFullscreen = null;
+        const TAVERN_FULLSCREEN_BAR = 40;
         function openTavernPageFullscreen(frame) {
             closeTavernPageFullscreen?.();
             const doc = frame.ownerDocument;
             const previousStyle = frame.getAttribute("style");
             const previousPopover = frame.getAttribute("popover");
             const previousFocus = doc.activeElement;
+            // Host controls get their own strip above the frame. Floating them over the
+            // card would cover whatever the card placed in that spot, and no position is
+            // safe for every card.
+            const bar = doc.createElement("div");
+            bar.style.cssText = "position:fixed;inset:0 0 auto 0;width:100vw;height:" + TAVERN_FULLSCREEN_BAR + "px;margin:0;padding:0 12px;box-sizing:border-box;border:0;display:flex;align-items:center;justify-content:flex-end;background:var(--dsw-alias-bg-base, Canvas);z-index:2147483647;";
             const close = doc.createElement("button");
             close.type = "button";
             close.className = "dsh-tavern-btn";
             close.textContent = "退出大屏";
-            close.style.cssText = "position:fixed;inset:16px 16px auto auto;margin:0;padding:10px 16px;z-index:2147483647;";
+            close.style.cssText = "margin:0;padding:4px 12px;";
+            bar.append(close);
             let observer;
             const restore = () => {
                 observer?.disconnect();
@@ -184,7 +191,7 @@
                 else frame.setAttribute("popover", previousPopover);
                 if (previousStyle === null) frame.removeAttribute("style");
                 else frame.setAttribute("style", previousStyle);
-                close.remove();
+                bar.remove();
                 doc.removeEventListener("keydown", onKey);
                 if (closeTavernPageFullscreen === restore) closeTavernPageFullscreen = null;
                 if (previousFocus?.isConnected) previousFocus.focus();
@@ -203,14 +210,14 @@
             try {
                 // Keep the live iframe in place: reparenting would reload card scripts.
                 frame.setAttribute("data-dsh-tavern-expanded", "");
-                frame.style.cssText += ";position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;background:var(--dsw-alias-bg-base, Canvas)!important;";
+                frame.style.cssText += ";position:fixed!important;inset:" + TAVERN_FULLSCREEN_BAR + "px 0 auto 0!important;width:100vw!important;height:calc(100dvh - " + TAVERN_FULLSCREEN_BAR + "px)!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;background:var(--dsw-alias-bg-base, Canvas)!important;";
                 if (typeof frame.showPopover === "function") {
                     frame.setAttribute("popover", "manual");
                     frame.showPopover();
-                    close.setAttribute("popover", "manual");
+                    bar.setAttribute("popover", "manual");
                 }
-                doc.body.append(close);
-                if (close.hasAttribute("popover")) close.showPopover();
+                doc.body.append(bar);
+                if (bar.hasAttribute("popover")) bar.showPopover();
                 close.focus();
                 observer = new doc.defaultView.MutationObserver(() => {
                     if (!frame.isConnected || frame.getAttribute("aria-hidden") === "true") restore();
