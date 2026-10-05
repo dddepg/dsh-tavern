@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "28c27f20b40d9befc3d76936f43fb970887d5213",
-  "releaseSequence": 510,
+  "revision": "52feffa596623c85a54ba90a67270f9a105dd422",
+  "releaseSequence": 511,
   "version": "2.5.0",
   "files": [
     {
@@ -431,13 +431,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "d170e418ece006a9bf847df5b22002d5ebf725d038ca910c3c0145ddc37f7bed",
-      "size": 240659
+      "sha256": "2b85ff687765ff47a2c0b75de8c8d8da9ca14b9bee9773ce6cf87d119d620708",
+      "size": 240767
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "747f11aa38d91fc679965ac490a1d9382ed6948b053f37b5677331453d5d9e82",
-      "size": 1555302
+      "sha256": "3054db10c27d417c21b0d7e4f6d5f29a276ffdd53aa6ac473ddb30039a7044cb",
+      "size": 1557345
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -4406,8 +4406,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/turn-history.js",
-      "sha256": "f4eab2c379cb87faa8446b5826cf8680efc4e0b78a304c956dbb5a1dc1e98c86",
-      "size": 17386
+      "sha256": "fcc92ba66b3194e897fd7671e8c822b2db33ea9edaa8530353efccd03d29b433",
+      "size": 17763
     },
     {
       "path": "tavern-plugin/src/client/features/user-profile.js",
@@ -4561,8 +4561,8 @@
     },
     {
       "path": "tavern-plugin/src/client/modules/retained-message-frames.js",
-      "sha256": "0cd1378b7bb0a1ca642f8cbe4859a4e5c70d342a3ade717035f85cb160e1b735",
-      "size": 11536
+      "sha256": "92358593cf49637c0915d4f67f9bd07a51d493ca7869eb7263908903644e62f1",
+      "size": 11689
     },
     {
       "path": "tavern-plugin/src/client/modules/runtime-generation-monitor.js",
@@ -4731,8 +4731,8 @@
     },
     {
       "path": "tavern-plugin/src/client/ui/message-frame.js",
-      "sha256": "dd451ba7afff2fa50a5db1cb2ed308b89553d7e4807e303e55ccabad8cea4f39",
-      "size": 34214
+      "sha256": "94944f3c32080c5e8964cae594fba4747f19fcc3a3d8088fa1aef36712d02d4e",
+      "size": 35614
     },
     {
       "path": "tavern-plugin/src/client/ui/visible-refresh.js",
