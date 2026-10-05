@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "revision": "64a168553b54f667b8eb18201bfddb205d6d269d",
-  "releaseSequence": 502,
+  "revision": "10750ba10a632842004fd200d97dcf3af743278a",
+  "releaseSequence": 503,
   "version": "2.5.0",
   "files": [
     {
       "path": "bin/application-update.mjs",
-      "sha256": "713e4c126776ab05f5a8da14362ebb809dfbb5c18cc0c25f1a8fc5f1b7c3f6d1",
-      "size": 14979
+      "sha256": "01ff8cb04dcb6ed42eaf999a5f823bdf138e9822a4751ba47dfbd0d82ec071d3",
+      "size": 15030
     },
     {
       "path": "bin/benchmark-chat-snapshots.mjs",
@@ -81,8 +81,8 @@
     },
     {
       "path": "bin/installation-process.mjs",
-      "sha256": "4d95ba28e521f4772270ab56bc4dd12c55c31e6bfc552dbdc8a97453258d95b3",
-      "size": 35201
+      "sha256": "cdf3397c8c7c06d91dd5f89788130ec37cd5b85d008f1d8dd628c975935738e8",
+      "size": 35310
     },
     {
       "path": "bin/installation-receipt.mjs",
@@ -91,8 +91,8 @@
     },
     {
       "path": "bin/installation-state.cjs",
-      "sha256": "010344801c4ad34548babe622bf40e6343b7be8a78552330d9ae8ab56e48fda7",
-      "size": 17115
+      "sha256": "d2232d931e1c6b9eb41a1624b8e485b4eafa6a3e31cadfdf8fbd1e8380b06c88",
+      "size": 17556
     },
     {
       "path": "bin/launcher-environment.mjs",
@@ -111,8 +111,8 @@
     },
     {
       "path": "bin/plugin-dependencies.mjs",
-      "sha256": "89deb2a5e0b2c3c209acb0a552d42bd09188806833a1c81aa8678ede3250b379",
-      "size": 9618
+      "sha256": "d41bb3f47cdcd6e3bae050915c6af872db4f722efa95988a98a43ed840a79ef1",
+      "size": 10500
     },
     {
       "path": "bin/plugin-package-guard.mjs",
@@ -141,8 +141,8 @@
     },
     {
       "path": "bin/service-lifecycle.mjs",
-      "sha256": "13b8c228e92add9dfb6a0fe2e038fcd9f4b40fe6830d7264af899939bfdd49ad",
-      "size": 16162
+      "sha256": "cbb2f8218b83464c840ae8cc8e42ebb5db36b5b7ebd119e44c71014b718b7dd8",
+      "size": 16294
     },
     {
       "path": "bin/service-process-identity.mjs",
@@ -151,8 +151,8 @@
     },
     {
       "path": "bin/service-startup.mjs",
-      "sha256": "e52b49cf93336d4801729f17f7755cfe222ed1f3de423c8937ef4111718c8f45",
-      "size": 1829
+      "sha256": "3ddc2327d883c8b08b66e4e4244cc10f2424f7bbe74e2fdb6e321f678edad0a2",
+      "size": 2090
     },
     {
       "path": "bin/session-prefix-migration.mjs",
@@ -246,13 +246,13 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "b9744b6dd2662ae1dc4a08a273bb360183cfe233ebcb8b8fbb54ded2e2dd28f3",
-      "size": 70321
+      "sha256": "6ae78d7eff72234e00c950e1a117a944abac99c08d6e7d55cca87d85e8e326ad",
+      "size": 70777
     },
     {
       "path": "install.sh",
-      "sha256": "bd42d39cb184817b22714d99599fd9ffb3a7cfa21703d673b1c1e3d871dd7a99",
-      "size": 53344
+      "sha256": "b9525e2b46504daa520c2e79b315346361a4cbf3f4d590c12c14e6d3880f21ae",
+      "size": 53800
     },
     {
       "path": "package.json",
@@ -281,8 +281,8 @@
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "b035671c7de535192a9f745fa20d6daacc32a0da179e763d400c7adc946a8408",
-      "size": 593
+      "sha256": "14631770ad6b8bfd18dd97e83997e742fe0f6ddedc1fbf11a2d9cf47ab6ed963",
+      "size": 756
     },
     {
       "path": "presets/tavern-background/agent.cordis.yml",
