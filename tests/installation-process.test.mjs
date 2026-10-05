@@ -291,8 +291,10 @@ test('a wrapper that reuses a finished wrapper PID ignores that predecessor\'s s
   clearStaleWrapperFiles(directory, 4242, startedAt)
   assert.equal(existsSync(stale), false)
   assert.equal(existsSync(unrelated), true)
-  // A cancellation written for this wrapper after it started is kept.
+  // A cancellation written for this wrapper after it started is kept. Set the time
+  // explicitly: Linux file timestamps are coarse and can trail Date.now() by milliseconds.
   writeFileSync(stale, '')
+  utimesSync(stale, (startedAt + 1000) / 1000, (startedAt + 1000) / 1000)
   clearStaleWrapperFiles(directory, 4242, startedAt)
   assert.equal(existsSync(stale), true)
 })
