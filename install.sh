@@ -141,8 +141,9 @@ fi
 cat >"${TEMP_DIR}/installation-state.cjs" <<'DSH_INSTALLATION_STATE_MODULE'
 'use strict'
 // Dependency-free installation ownership, also embedded in standalone bootstraps.
-// An abandoned lock is deliberately NOT reclaimed by age or by a dead owner PID:
-// package-manager descendants may still be writing to this installation.
+// An abandoned lock is reclaimed only when every recorded writer (owner and
+// registered stage processes) is gone, or after an idle period longer than any
+// supervised stage may run. Otherwise a closed window locks the user out forever.
 const fs = require('node:fs')
 const path = require('node:path')
 const { randomUUID } = require('node:crypto')
@@ -152,6 +153,10 @@ const sleep = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 const failure = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra })
 const lockPath = dshHome => path.join(path.resolve(dshHome), LOCK_NAME)
 const uncertain = lockDir => ({ lockDir, state: 'uncertain', unsafeToRetry: true })
+// Longer than the whole supervised update (30 minutes), which refreshes progress per stage.
+const STALE_IDLE_MS = 60 * 60 * 1000
+// A dead owner may have just spawned descendants that registered nothing yet.
+const DEAD_OWNER_GRACE_MS = 60 * 1000
 
 function readInstallation(dshHome) {
   const lockDir = lockPath(dshHome)
@@ -282,6 +287,72 @@ function makeHandle(dshHome, initialOwner, { created = false, adopted = false } 
   }
 }
 
+function alive(pid) {
+  try { process.kill(pid, 0); return true } catch (error) { return error.code !== 'ESRCH' }
+}
+
+// Owner plus every PID recorded under processes/<stage>/ (registrations and supervisors).
+function recordedPids(lockDir, owner) {
+  const pids = new Set(Number.isSafeInteger(owner?.pid) && owner.pid > 1 ? [owner.pid] : [])
+  const base = path.join(lockDir, 'processes')
+  let stages = []
+  try { stages = fs.readdirSync(base) } catch (error) { if (error.code !== 'ENOENT') return null }
+  for (const stage of stages) {
+    let names
+    try { names = fs.readdirSync(path.join(base, stage)) } catch { continue }
+    for (const name of names.filter(name => /^(\d+|supervisor)\.json$/.test(name))) {
+      try {
+        const pid = JSON.parse(fs.readFileSync(path.join(base, stage, name), 'utf8')).pid
+        if (Number.isSafeInteger(pid) && pid > 1) pids.add(pid)
+      } catch (error) { if (error.code !== 'ENOENT') return null }
+    }
+  }
+  return pids
+}
+
+function lastActivity(lockDir, owner) {
+  let latest = Math.max(0, ...[owner?.updatedAt, owner?.progressAt, owner?.startedAt].filter(Number.isFinite))
+  for (const name of ['.', 'owner.json']) {
+    try { latest = Math.max(latest, fs.statSync(path.join(lockDir, name)).mtimeMs) } catch {}
+  }
+  return latest
+}
+
+function staleReason(lockDir, owner, now = Date.now()) {
+  const idle = now - lastActivity(lockDir, owner)
+  if (idle > STALE_IDLE_MS) return 'idle'
+  if (owner?.state === 'reserved' || owner?.state === 'uncertain' || idle < DEAD_OWNER_GRACE_MS) return ''
+  const pids = recordedPids(lockDir, owner)
+  return pids && pids.size > 0 && [...pids].every(pid => !alive(pid)) ? 'writers-exited' : ''
+}
+
+// Move a stale lock aside atomically, then confirm it was the one judged stale.
+function reclaimStale(dshHome, owner) {
+  const lockDir = lockPath(dshHome)
+  const reason = staleReason(lockDir, owner)
+  if (!reason) return false
+  const removed = `${lockDir}.stale-${randomUUID()}`
+  try { fs.renameSync(lockDir, removed) } catch (error) {
+    if (error.code === 'ENOENT') return true
+    return false
+  }
+  let moved = null
+  try { moved = JSON.parse(fs.readFileSync(path.join(removed, 'owner.json'), 'utf8')) } catch {}
+  if ((moved?.generation || '') !== (owner?.generation || '')) {
+    // A successor took the path between our read and rename; give it back.
+    try { fs.renameSync(removed, lockDir) } catch {}
+    return false
+  }
+  try { fs.rmSync(removed, { recursive: true, force: true }) } catch {}
+  process.stderr.write(`已清理残留的安装锁（${reason === 'idle' ? '超过 1 小时无进展' : '原安装进程均已退出'}）：${lockDir}\n`)
+  return true
+}
+
+function busy(owner, lockDir) {
+  const since = Number.isFinite(owner?.startedAt) ? `（开始于 ${new Date(owner.startedAt).toLocaleString()}）` : ''
+  return failure('INSTALLATION_BUSY', `已有安装或更新任务占用此目录${since}，请等待其结束。若确认没有安装在运行，可删除 ${lockDir} 后重试；1 小时无进展也会自动解除。`, { owner, lockDir })
+}
+
 function acquireInstallation(options = {}) {
   const { dshHome, sourceRoot = '', statusFile = '', adopt = false, state = 'running' } = options
   if (typeof dshHome !== 'string' || !dshHome) throw new TypeError('dshHome is required')
@@ -291,25 +362,28 @@ function acquireInstallation(options = {}) {
   if (!Number.isSafeInteger(pid) || pid < 0) throw new TypeError('pid must be a non-negative integer')
   const lockDir = lockPath(dshHome)
   fs.mkdirSync(path.resolve(dshHome), { recursive: true })
-  try { fs.mkdirSync(lockDir) } catch (error) {
-    if (error.code !== 'EEXIST') throw error
-    const owner = readInstallation(dshHome)
-    if (!explicitAttempt || owner?.attemptId !== attemptId) {
-      throw failure('INSTALLATION_BUSY', '已有安装或更新任务占用此目录；尚未确认其子进程结束，请勿并行重试。', { owner, lockDir })
+  for (let reclaimed = false; ;) {
+    try { fs.mkdirSync(lockDir); break } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      const owner = readInstallation(dshHome)
+      if (!explicitAttempt || owner?.attemptId !== attemptId) {
+        if (!reclaimed && reclaimStale(dshHome, owner)) { reclaimed = true; continue }
+        throw busy(owner, lockDir)
+      }
+      if (owner.unsafeToRetry || owner.state === 'blocked') throw failure('INSTALLATION_UNSAFE', '上次安装尚未安全结束，安装目录仍被锁定。', { owner, unsafeToRetry: true })
+      if (!adopt) return makeHandle(dshHome, owner)
+      const adoptedOwner = withMutation(dshHome, attemptId, owner.generation, current => {
+        if (current.state !== 'reserved' || current.pid) throw failure('INSTALLATION_BUSY', '此安装任务已经开始，不能再次启动。', { owner: current })
+        // Rotate fencing generation so the old reservation handle cannot release or
+        // overwrite a running child, even if its delayed spawn callback fires.
+        const next = { ...current, generation: randomUUID(), pid, state: 'running',
+          sourceRoot: sourceRoot || current.sourceRoot, statusFile: statusFile || current.statusFile, updatedAt: Date.now() }
+        delete next.lockDir
+        writeOwner(lockDir, next)
+        return next
+      })
+      return makeHandle(dshHome, adoptedOwner, { adopted: true })
     }
-    if (owner.unsafeToRetry || owner.state === 'blocked') throw failure('INSTALLATION_UNSAFE', '上次安装尚未安全结束，安装目录仍被锁定。', { owner, unsafeToRetry: true })
-    if (!adopt) return makeHandle(dshHome, owner)
-    const adoptedOwner = withMutation(dshHome, attemptId, owner.generation, current => {
-      if (current.state !== 'reserved' || current.pid) throw failure('INSTALLATION_BUSY', '此安装任务已经开始，不能再次启动。', { owner: current })
-      // Rotate fencing generation so the old reservation handle cannot release or
-      // overwrite a running child, even if its delayed spawn callback fires.
-      const next = { ...current, generation: randomUUID(), pid, state: 'running',
-        sourceRoot: sourceRoot || current.sourceRoot, statusFile: statusFile || current.statusFile, updatedAt: Date.now() }
-      delete next.lockDir
-      writeOwner(lockDir, next)
-      return next
-    })
-    return makeHandle(dshHome, adoptedOwner, { adopted: true })
   }
   const owner = { attemptId, generation: randomUUID(), pid, startedAt: Date.now(),
     sourceRoot, statusFile, state, dshHome: path.resolve(dshHome) }

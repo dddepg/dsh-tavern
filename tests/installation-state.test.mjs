@@ -149,3 +149,49 @@ test('cancellation retries the same logical attempt if adoption rotates its fenc
   assert.equal(cancellationRequested(dshHome, reservation.attemptId), true)
   updater.release()
 })
+
+function age(lockDir, milliseconds) {
+  const fs = createRequire(import.meta.url)('node:fs')
+  const owner = JSON.parse(readFileSync(path.join(lockDir, 'owner.json'), 'utf8'))
+  const past = Date.now() - milliseconds
+  writeFileSync(path.join(lockDir, 'owner.json'), JSON.stringify({ ...owner, startedAt: past, updatedAt: past }))
+  for (const name of ['owner.json', '.']) fs.utimesSync(path.join(lockDir, name), past / 1000, past / 1000)
+}
+
+test('a lock whose owner and recorded stage processes all exited is reclaimed', async t => {
+  const dshHome = home(t)
+  const exited = await child('')
+  const abandoned = acquireInstallation({ dshHome, pid: exited.pid })
+  abandoned.retain('window closed')
+  const stage = path.join(abandoned.lockDir, 'processes', 'stage-1')
+  createRequire(import.meta.url)('node:fs').mkdirSync(stage, { recursive: true })
+  writeFileSync(path.join(stage, `${exited.pid}.json`), JSON.stringify({ pid: exited.pid, ancestors: [] }))
+  age(abandoned.lockDir, 5 * 60 * 1000)
+  const successor = acquireInstallation({ dshHome })
+  assert.equal(successor.created, true)
+  assert.throws(() => abandoned.update({ progress: 1 }), { code: 'INSTALLATION_OWNERSHIP_LOST' })
+  successor.release()
+})
+
+test('a lock with a live recorded writer stays busy until it is idle past the stale limit', async t => {
+  const dshHome = home(t)
+  const exited = await child('')
+  const abandoned = acquireInstallation({ dshHome, pid: exited.pid })
+  const stage = path.join(abandoned.lockDir, 'processes', 'stage-1')
+  createRequire(import.meta.url)('node:fs').mkdirSync(stage, { recursive: true })
+  writeFileSync(path.join(stage, `${process.pid}.json`), JSON.stringify({ pid: process.pid, ancestors: [] }))
+  age(abandoned.lockDir, 5 * 60 * 1000)
+  assert.throws(() => acquireInstallation({ dshHome }), error => error.code === 'INSTALLATION_BUSY' && error.message.includes(abandoned.lockDir))
+  age(abandoned.lockDir, 2 * 60 * 60 * 1000)
+  const successor = acquireInstallation({ dshHome })
+  assert.equal(successor.created, true)
+  successor.release()
+})
+
+test('a fresh lock with a dead owner is not reclaimed during the startup grace period', async t => {
+  const dshHome = home(t)
+  const exited = await child('')
+  const owner = acquireInstallation({ dshHome, pid: exited.pid })
+  assert.throws(() => acquireInstallation({ dshHome }), { code: 'INSTALLATION_BUSY' })
+  assert.equal(readInstallation(dshHome).attemptId, owner.attemptId)
+})
