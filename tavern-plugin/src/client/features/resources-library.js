@@ -36,10 +36,6 @@
 			useVisibleDataRefresh(props.visible, function (event) { return tavernDataChangeAffects(event, ["scripts", "cards", "sessions"], "resources"); }, refresh, props.sessionId);
 			const h = React.createElement;
 				const readOnly = !view || view.mode !== "card";
-			const mounted = view && view.workspace && Array.isArray(view.workspace.mountedResources) ? view.workspace.mountedResources : [];
-			function isMounted(kind, path) {
-				return mounted.some(function (item) { return item && item.kind === kind && item.path === path; });
-			}
 			async function renameResource(item, label) {
 				const current = item.path.split("/").pop();
 				const name = await askTavernText({ title: "重命名文件", initialValue: current, maxLength: 120 });
@@ -82,7 +78,6 @@
 					const boundCard = kind === "source" && Array.isArray(item.boundCards) ? item.boundCards[0] : null;
 					const availableCards = cards.filter(function (card) { return !card.readError && card.script == null; });
 					const meta = (item.chunkCount ? item.chunkCount + " 块 · " : "") + (boundCard ? "已绑定：" + boundCard.name : "未绑定");
-					const on = isMounted(kind, path);
 					const name = h("button", { className: "dsh-tavern-resource-name dsh-tavern-resource-open", title: "查看工作版：" + label, onClick: function () { openScript(item); } }, label);
 					if (readOnly) return h("div", { key: path, className: "dsh-tavern-resource-row" }, h("div", { className: "dsh-tavern-resource-row-main" }, name, h("span", { className: "dsh-tavern-resource-meta" }, meta)));
 					const bindingOpen = bindingPath === path && !boundCard;
@@ -102,9 +97,9 @@
 					);
 					const mention = h("button", {
 						type: "button",
-						className: "dsh-tavern-resource-mention" + (on ? " mounted" : ""),
-						title: on ? "再次在对话中引用" : "在对话中引用",
-						"aria-label": (on ? "再次在对话中引用：" : "在对话中引用：") + label,
+						className: "dsh-tavern-resource-mention",
+						title: "在对话中引用",
+						"aria-label": "在对话中引用：" + label,
 						disabled: busy,
 						onClick: function () { props.appendMention(kind, path, label); }
 					}, "@");

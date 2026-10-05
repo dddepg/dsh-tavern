@@ -1002,7 +1002,8 @@ export async function apply(ctx) {
       context: {
         chatId: str(chat.id), mode: 'card',
         card: str(chat.cardPath) === '' ? null : { path: str(chat.cardPath), name: str(chat.cardName) },
-        mountedResources: Array.isArray(chat.workspace && chat.workspace.mountedResources) ? chat.workspace.mountedResources : []
+        // Only linked play records are session resources; files are addressed by path.
+        playChats: (Array.isArray(chat.workspace && chat.workspace.mountedResources) ? chat.workspace.mountedResources : []).filter(item => item && item.kind === 'play-chat')
       },
       bindings: await resourceBindingProjection(),
       diagnostics: await resourceDiagnosticProjection(chat)
@@ -2951,7 +2952,7 @@ export async function apply(ctx) {
     void queueSettlement(chat.id)
     return false
   }
-  // ---------- 卡片工作台：挂载剧本与新卡创建 ----------
+  // ---------- 卡片工作台：剧本素材与新卡创建 ----------
   async function sourceWindowOf(chat) {
     const out = []
     for (const sourcePath of (chat.workspace && chat.workspace.sourcePaths) || []) {

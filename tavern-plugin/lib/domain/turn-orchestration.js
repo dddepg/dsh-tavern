@@ -4,10 +4,10 @@ import { inputAttachments } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { composeTavernRegexScripts } from './card-extension-reading.js'
 import { scriptPromptFrameInputs, consumeScriptPrompts } from './tavern-script-prompts.js'
-import { rememberTavernResources } from './workspace-resources.js'
 import { projectBackgroundInput } from './runtime-content-projection.js'
 import { lastTavernHelperVariables } from './tavern-helper-context.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
+import { normalizeResourcePath } from './file-resources.js'
 
 export const cordisToolNames = Object.freeze([
   'cordis_inspect_list',
@@ -353,8 +353,9 @@ export function createTurnOrchestrator(options) {
     }
 
     if (mode === 'card') {
+      // An @ mention only names the file to work on in this message; it is not
+      // remembered as a session resource. Only linked play records persist.
       const state = object(chat.workspace)
-      state.mountedResources = rememberTavernResources(state.mountedResources, userText)
       chat.workspace = state
       const prepared = (Array.isArray(state.sourcePaths) ? state.sourcePaths : state.sourceIds || []).length > 0 ? await workspace.prepare(chat, turn) : null
       const plan = await planner.plan({ purpose: 'card', sourcePrepared: prepared })
@@ -466,6 +467,13 @@ export function createTurnOrchestrator(options) {
     const cardPath = cardPathOf(chat)
     const fields = object(input.fields), rawOperations = Array.isArray(input.rawOperations) ? input.rawOperations : []
     if (!Object.keys(fields).length && !rawOperations.length) throw new Error('没有提供需要修改的字段')
+    // Like editing code: any card file can be targeted by path; the workbench's own
+    // card is only the default.
+    const target = str(input.path).trim() === '' ? '' : normalizeResourcePath(str(input.path).trim(), 'card')
+    if (target !== '' && target !== cardPath) {
+      const other = await store.updateCard(target, fields, { ts: now(), summary: '卡片 Agent 直接保存' }, rawOperations)
+      return { saved: true, mode: 'card', path: target, changed: other.changed, createsCard: false, changedFields: other.changedFields || [] }
+    }
     let result
     if (!cardPath) {
       if (rawOperations.length) throw new Error('新人物卡创建前不能修改 raw，请先创建人物卡')

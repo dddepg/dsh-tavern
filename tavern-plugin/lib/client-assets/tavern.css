@@ -397,7 +397,6 @@ body.dsh-tavern-shell-active span:has(.dsh-tavern-hero-lockup) + span { display:
   background: var(--dsh-tavern-accent-soft);
   color: var(--dsh-tavern-accent-active);
 }
-.dsh-tavern-resource-mention.mounted { color: var(--dsh-tavern-accent-active); }
 .dsh-tavern-resource-mention:focus-visible,
 .dsh-tavern-resource-menu > summary:focus-visible {
   outline: 2px solid var(--dsh-tavern-accent);
