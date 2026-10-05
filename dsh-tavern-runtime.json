@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
-  "revision": "03814170b82af4c271783b4b74724fbf649b1a01",
-  "releaseSequence": 533,
+  "revision": "1082ee565142d4f8bcbf3a9d49108fc24ebbb684",
+  "releaseSequence": 534,
   "version": "2.5.0",
   "files": [
     {
       "path": "bin/application-update.mjs",
-      "sha256": "01ff8cb04dcb6ed42eaf999a5f823bdf138e9822a4751ba47dfbd0d82ec071d3",
-      "size": 15030
+      "sha256": "c41ebe93064b8a79cd89fa3c50f2f5e27d158ea5eb2fa923e5897a8f52f3d719",
+      "size": 16048
     },
     {
       "path": "bin/benchmark-chat-snapshots.mjs",
@@ -251,8 +251,8 @@
     },
     {
       "path": "install.ps1",
-      "sha256": "50100f27ef5d4de59ed9af454927361a0098a51697c0f76e4b941b57bdbe6ab4",
-      "size": 71392
+      "sha256": "8d2b7907d56c7113a4ca04d83a46e967ed759a3a8e5adcd7a4e8fd5f2977a555",
+      "size": 71665
     },
     {
       "path": "install.sh",
@@ -401,8 +401,8 @@
     },
     {
       "path": "tavern-plugin/lib/application-updater.js",
-      "sha256": "b878ac9c32cb894722ad37f818af8eeab32341b6db702ab448d558ae19c37fd7",
-      "size": 37467
+      "sha256": "f06fe5ccea4eea49797ad17b2dea3173895abc53f0a9c958542cc907bf1db5e2",
+      "size": 37645
     },
     {
       "path": "tavern-plugin/lib/background-agent-runner.js",
