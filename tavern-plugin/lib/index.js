@@ -140,7 +140,8 @@ import {
   projectCharacterDesignDocument
 } from './domain/character-design-document.js'
 import { createLedgerEditor } from './domain/ledger-editor.js'
-import { readLedger } from './domain/story-ledger.js'
+import { readLedger, LEDGER_SUBMIT_TOOL } from './domain/story-ledger.js'
+import { createManualLedger } from './domain/manual-ledger.js'
 import { POSTURE_SUBMIT_TOOL, POSTURE_SUBMIT_TOOL_NAME, normalizePostureSubmission } from './domain/posture-submission.js'
 import { TAVERN_COMPATIBILITY_CAPABILITIES, createTavernCompatibilityDiagnosticStore } from './domain/tavern-compatibility-diagnostics.js'
 import { createMvuDiagnosticStore, createMvuDiagnosticExport, sanitizeRuntimeDiagnostics, sanitizeModuleFailure, sanitizeMvuLoadDiagnostic, redactMvuLoadError } from './domain/mvu-diagnostics.js'
@@ -1605,6 +1606,7 @@ export async function apply(ctx) {
       statusBarPlacement: chat.statusBarPlacement === 'body' ? 'body' : 'sidebar',
       posture: chat.posture || '',
       ledger: readLedger(chat.ledger),
+      ledgerTask: manualLedger.project(chat),
       characterDesigns: projectCharacterDesignDocument(chat.characterDesignDocument),
       characterDesignTask: manualCharacterDesign.project(chat),
       phoneChat: phoneChat.project(chat, card),
@@ -1997,7 +1999,7 @@ export async function apply(ctx) {
     resolveModelSelection: async input => backgroundModelSelection(await backgroundConfigForSession(input.sessionId)) || input.selection,
     resolveWebSearch: async input => (await backgroundConfigForSession(input.sessionId))?.webSearchEnabled === true,
     resolveBackgroundTasks: async input => input.backgroundTasks || normalizeBackgroundTasks((await backgroundConfigForSession(input.sessionId))?.backgroundTasks),
-    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL],
+    backgroundTools: [...WORLD_BOOK_FILTER_TOOLS, POSTURE_SUBMIT_TOOL, CHARACTER_DESIGN_READ_TOOL, CHARACTER_DESIGN_SAVE_TOOL, CHARACTER_DESIGN_REUSE_TOOL, MVU_SUBMIT_UPDATE_TOOL, CANDIDATE_SUBMIT_TOOL, SCRIPT_READ_TOOL, SCRIPT_POINT_TOOL, LEDGER_SUBMIT_TOOL],
     sharedTools: [sharedWorldbookSearch(searchWorldbook), {
       tool: HISTORY_RECALL_TOOL,
       async execute({ input, args }) {
@@ -2068,6 +2070,17 @@ export async function apply(ctx) {
     store: { readChat, updateChat },
     readWorldBook: async chat => worldBooks.bound(chat.cardPath, await readChatCard(chat), chat),
     now: Date.now
+  })
+  const manualLedger = createManualLedger({
+    store: { chatForSession, updateChat },
+    runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
+    beginTask: async (chat, sessionId) => {
+      if (agentRegistry.get(sessionId)?.phase?.kind === 'running' || chat.regenInProgress) throw new Error('前台正在生成，请完成后再整理台账。')
+      return await backgroundTasks.begin(chat, 'ledger')
+    },
+    ensureSession: async sessionId => {
+      if (!agentRegistry.get(sessionId)?.session) await agentRegistry.resume({ resumeSessionId: sessionId })
+    }
   })
   const manualCharacterDesign = createManualCharacterDesign({
     publishWorldbook: publishCharacterDesign,
@@ -3710,6 +3723,7 @@ export async function apply(ctx) {
         return hydrateTavernHelperMessages(chat, args && args.from, args && args.to)
       }
       case 'designCharacter': return await manualCharacterDesign.start(args || {})
+      case 'consolidateLedger': return await manualLedger.start(args || {})
       case 'sendPhoneMessage': return { phoneChat: await phoneChat.send(args || {}) }
       case 'runCompaction': {
         const id = str(args && args.sessionId), chat = await chatForSession(id)
