@@ -102,3 +102,26 @@ test('layout evidence is bounded, persists through replay and deduplicates witho
   assert.equal((await capture('session', 459, 0, { layout: { ...layout, height: 400 } })).captured, true)
   assert.equal((await records.read('chat')).messages[458].displayRuntime.frames[0].layout.height, 400)
 })
+
+import { createDisplayRuntimeCoalescer } from '../tavern-plugin/lib/domain/display-runtime-coalescer.js'
+
+test('frame runtime reports are coalesced; first capture, errors and layout save at once', async () => {
+  let clock = 0
+  const timers = []
+  const writes = []
+  const coalescer = createDisplayRuntimeCoalescer({ intervalMs: 15000, now: () => clock,
+    setTimer: (fn, ms) => { timers.push({ fn, at: clock + ms }); return timers.length }, clearTimer: () => {},
+    write: async (sessionId, turn, partIndex, runtime) => { writes.push(runtime.dom); return { captured: true } } })
+  const report = (dom, extra = {}) => coalescer.capture('s', 3, 0, { panelId: 'status', dom, ...extra })
+  assert.equal((await report('a')).captured, true)
+  clock = 1000; assert.equal((await report('b')).deferred, true)
+  clock = 2000; assert.equal((await report('c')).deferred, true)
+  clock = 3000; assert.equal((await report('d', { errors: [{ kind: 'error', message: 'boom' }] })).captured, true)
+  clock = 4000; await report('e', { errors: [{ kind: 'error', message: 'boom' }] })
+  assert.deepEqual(writes, ['a', 'd'])
+  // One trailing write carries only the latest deferred report.
+  clock = 18000; for (const timer of timers.splice(0)) timer.fn()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(writes, ['a', 'd', 'e'])
+  clock = 40000; assert.equal((await report('f', { errors: [{ kind: 'error', message: 'boom' }] })).captured, true)
+})

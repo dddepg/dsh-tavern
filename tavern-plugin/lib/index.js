@@ -128,6 +128,7 @@ import { compactionFailureMessage } from './domain/compaction-failure.js'
 import { createForegroundFrameSessionAdapter } from './domain/foreground-frame-session-adapter.js'
 import { HISTORY_RECALL_TOOL, createHistoryRecall, renderHistoryRecall } from './domain/history-recall.js'
 import { createModelRequestLog } from './domain/model-request-log.js'
+import { createDisplayRuntimeCoalescer } from './domain/display-runtime-coalescer.js'
 import { MVU_SUBMIT_UPDATE_TOOL, collectMvuHelperContext, createMvuSettlementModule } from './domain/mvu-background-settlement.js'
 import { applyMvuSettlementEffect } from './domain/mvu-settlement-effect.js'
 import { createMvuSettlementReconciler } from './domain/mvu-settlement-reconciler.js'
@@ -3134,6 +3135,9 @@ export async function apply(ctx) {
     finally { performanceDiagnostics.record(method, performance.now() - started) }
   }
 
+  const displayRuntimeCaptures = createDisplayRuntimeCoalescer({
+    write: (sessionId, turn, partIndex, runtime) => captureDisplayRuntime(sessionId, turn, partIndex, runtime)
+  })
   const gameplayApi = createGameplayApi({
     controller: () => ctx.get('sessionController'), registry: agentRegistry, llm, dataRoot,
     store: profileData, dispatch: (method, args) => dispatchMethod(method, args),
@@ -3570,7 +3574,7 @@ export async function apply(ctx) {
         return { card: { path: sourceChat.cardPath, name: card.name }, chatId: sourceChat.id }
       }
       case 'attachPlayChatDebug': return { reference: await attachPlayChatDebug(args && args.targetSessionId, args && args.sourceSessionId, args && args.turn) }
-      case 'captureDisplayRuntime': return await captureDisplayRuntime(args && args.sessionId, args && args.turn, args && args.partIndex, args && args.runtime)
+      case 'captureDisplayRuntime': return await displayRuntimeCaptures.capture(args && args.sessionId, args && args.turn, args && args.partIndex, args && args.runtime)
 	      case 'getTavernHelperContext': {
         if (!args?.eventId && args?.openingWindow === 1) {
           const window = await readOpeningWindow(args.sessionId)
