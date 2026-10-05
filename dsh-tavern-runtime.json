@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "387d3638d6f69185328b64336ca969148b390f59",
-  "releaseSequence": 504,
+  "revision": "3af46e218820b9cb4548aa59d71be3985f3aee5b",
+  "releaseSequence": 505,
   "version": "2.5.0",
   "files": [
     {
@@ -186,8 +186,8 @@
     },
     {
       "path": "bin/vendor-dream-skin.mjs",
-      "sha256": "44b20132ec299d5a87cc1aae725456c70457f0c3c15d555d9e94067b15f1f5cc",
-      "size": 2071
+      "sha256": "8bc5b3065f8fc166fd0656593a4f08938fe4a5521fe62cd8bd3d048f6a663de0",
+      "size": 6271
     },
     {
       "path": "bin/vendor-plugin-package.mjs",
@@ -431,13 +431,13 @@
     },
     {
       "path": "tavern-plugin/lib/client-assets/tavern.css",
-      "sha256": "e935b8014a8653215d6f414d97be1f9cb3083b37837c3645ff1d0f9b526e31bb",
-      "size": 240472
+      "sha256": "d170e418ece006a9bf847df5b22002d5ebf725d038ca910c3c0145ddc37f7bed",
+      "size": 240659
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "04c2ef4deeb3f63943c9c73054c01e013751119b6c7b4d1d1d1d835a78d919d6",
-      "size": 1553305
+      "sha256": "83290d3dee711c6e102c0c8faa73a124298478ca3c3020686dbc5b571a09a030",
+      "size": 1553496
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -3691,8 +3691,8 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/client.js",
-      "sha256": "7df3c874264079b15634afc0316f85cba852514da340c8d025feeaa9d5d240e3",
-      "size": 268977
+      "sha256": "34e8095466b2e7e1a0690973e0f402692acc420204abc8a1e5ade72ec7871174",
+      "size": 271471
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/lib/index.js",
@@ -3711,13 +3711,13 @@
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/README.md",
-      "sha256": "fc60c09eae928950ebe01860c8c1c3b6cc7452cbb8a316a7ffc6ff0af40c9fe8",
-      "size": 837
+      "sha256": "69487c195a6670eae918d2dd4adc0b6edc63db6a79ae61c6096caec5d70216f7",
+      "size": 1213
     },
     {
       "path": "tavern-plugin/packages/dsh-dream-skin/tavern-themes.json",
-      "sha256": "6c5dedbbdc6794a5be1a3143ee9f02c4822ecf587e32faad2679a71ab5619550",
-      "size": 3019
+      "sha256": "573c44a927e0b77728863e752d6ab576c5769107716d01e45ae4110255de1a43",
+      "size": 3101
     },
     {
       "path": "tavern-plugin/packages/dsh-image-gen/.github/workflows/ci.yml",
