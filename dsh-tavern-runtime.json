@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "cf0d795e0fc535cbfeee6b6f56521a65d533a8f7",
-  "releaseSequence": 523,
+  "revision": "7b5c2d2824da8f73998bfa180c1e51c7cd87aa1b",
+  "releaseSequence": 524,
   "version": "2.5.0",
   "files": [
     {
@@ -671,13 +671,13 @@
     },
     {
       "path": "tavern-plugin/lib/domain/compaction-failure.js",
-      "sha256": "c553e6400dcc8d63fc16e56f4828d0da3e4732118cd9a0bac3ee7abd08648b72",
-      "size": 1628
+      "sha256": "3c7ce65a9bea6d902a7c5c40413aa0365adc3461590c15150124c5e9552eac69",
+      "size": 2058
     },
     {
       "path": "tavern-plugin/lib/domain/compaction-request.js",
-      "sha256": "84dd4e91afeea99510215be0443cde2bb755488f6731b691c4aa6eb8429bd321",
-      "size": 1566
+      "sha256": "a01e4e13befe3ebfa1d6e70bbe12b540037acbb6676dd2864c823a4434555312",
+      "size": 1962
     },
     {
       "path": "tavern-plugin/lib/domain/compatibility-request.js",
@@ -1595,11 +1595,6 @@
       "size": 690
     },
     {
-      "path": "tavern-plugin/lib/domain/tavern-compaction.js",
-      "sha256": "675b433ca84a067a532f8e18597ac765fb8e71b27c0f4b0717a7d5b89505ec0a",
-      "size": 6218
-    },
-    {
       "path": "tavern-plugin/lib/domain/tavern-compatibility-diagnostics.js",
       "sha256": "b7cbc8ce01278e98743a2e4dc1fe7969eb7be6299b5a441b90dc108d1e17e06e",
       "size": 3770
@@ -1866,8 +1861,8 @@
     },
     {
       "path": "tavern-plugin/lib/hooks/model-stream.js",
-      "sha256": "627f17275dd1186cb24c5ed6874b8f7a96a9f6a62025d9ffce65901130c8f800",
-      "size": 6603
+      "sha256": "26567bc22c788b9bb3dbc859a320a65aa174b5ffe4b82c63deb5861567343673",
+      "size": 6263
     },
     {
       "path": "tavern-plugin/lib/hooks/request.js",
@@ -1886,8 +1881,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "0ad6cd1defa39a0b0009b392430cf9d389fbd62963519c53631fda4e7ae2b6e0",
-      "size": 259367
+      "sha256": "115e816b3c523720b2b70d2353ea9354934840a646a37f86d0b760fdbbb1e588",
+      "size": 257764
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
