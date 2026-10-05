@@ -1948,7 +1948,8 @@ html.dsh-tavern-hide-process [data-chat-flow-kind="turn-process"]:has([data-turn
 }
 
 .dsh-tavern-status-runtime.single-panel { position: relative; }
-.dsh-tavern-status-runtime.single-panel > .dsh-tavern-panel-toolbar { position: absolute; top: 4px; right: 4px; z-index: 1; padding: 0; border: 0; background: transparent; }
+/* A row above the card, never floating over it: card UIs put their own controls in that corner. */
+.dsh-tavern-status-runtime.single-panel > .dsh-tavern-panel-toolbar { justify-content: flex-end; gap: 4px; padding: 4px 4px 0; margin: 0 0 4px; border: 0; background: transparent; }
 .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh { width: 28px; height: 28px; padding: 0; background: var(--dsw-specific-input-major); opacity: .75; }
 .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh:hover, .dsh-tavern-status-runtime.single-panel .dsh-tavern-panel-refresh:focus-visible { opacity: 1; }
 
