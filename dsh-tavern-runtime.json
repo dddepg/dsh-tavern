@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "2bcbefe4bbb9f561609728aba864a59e7ab06b3f",
-  "releaseSequence": 526,
+  "revision": "21a1e9ad78f50bb2ad08ca92f9759d4c0beb2284",
+  "releaseSequence": 527,
   "version": "2.5.0",
   "files": [
     {
@@ -26,8 +26,8 @@
     },
     {
       "path": "bin/build-plugin-package.mjs",
-      "sha256": "85469a6c329b1ca1098e9f46cac3acc845e76f0f2dc6fe465793d10dfd997ca9",
-      "size": 1530
+      "sha256": "c9c07554fab00b6c61257cc57f90e6c6a2a3fc8aaae9d9d6adffe9c8c7ee738a",
+      "size": 1502
     },
     {
       "path": "bin/build-tavern-client.mjs",
