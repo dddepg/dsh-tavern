@@ -603,7 +603,8 @@ async function runCommandLine(argv) {
     let pending
     const launch = () => {
       pending = runInstallationProcess(command, args, {
-        label, timeoutMs, signal: controller.signal, processDirectory, stdio: 'inherit',
+        // No stage may wait on the console: a prompt would hang behind piped output.
+        label, timeoutMs, signal: controller.signal, processDirectory, stdio: ['ignore', 'inherit', 'inherit'],
         shell: process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command),
       })
     }

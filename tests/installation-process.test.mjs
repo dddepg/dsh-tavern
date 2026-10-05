@@ -180,8 +180,8 @@ test('Windows containment publishes a suspended-assigned job before resuming it'
   assert.match(source, /Windows job .*no verified empty-job receipt/)
 })
 
-function launchCli(args, env = process.env) {
-  const child = spawn(process.execPath, [fileURLToPath(moduleUrl), '--run', ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+function launchCli(args, env = process.env, stdin = 'ignore') {
+  const child = spawn(process.execPath, [fileURLToPath(moduleUrl), '--run', ...args], { env, stdio: [stdin, 'pipe', 'pipe'] })
   let stdout = '', stderr = ''
   child.stdout.on('data', chunk => { stdout += chunk })
   child.stderr.on('data', chunk => { stderr += chunk })
@@ -191,6 +191,15 @@ function launchCli(args, env = process.env) {
   })
   return { child, completion }
 }
+
+test('standalone CLI never lets a stage wait on the console', async () => {
+  // The installer's console stays open; a stage that reads it (e.g. a pnpm prompt) must see EOF, not hang.
+  const { child, completion } = launchCli(['fixture', String(fixtureTimeout), process.execPath, '-e', 'process.stdin.resume(); process.stdin.on("end", () => console.log("stdin closed"))'], process.env, 'pipe')
+  const result = await completion
+  child.stdin.destroy()
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /stdin closed/)
+})
 
 test('standalone CLI preserves output and enforces stage deadlines', async () => {
   const good = await launchCli(['fixture', String(fixtureTimeout), process.execPath, '-e', 'console.log("cli output")']).completion
