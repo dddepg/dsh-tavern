@@ -45,8 +45,16 @@ test('nativeScheme reads the built-in pointer behind an active skin', () => {
   assert.equal(nativeScheme({ preference: 'light' }), 'light')
   // `system` resolves through the built-in active theme, which is still the
   // resolved light/dark while the preference itself is `system`.
+  // A recorded concrete scheme outranks `system`: on a remote browser the host
+  // preference resets to `system` on every reconnect (mobile lock/resume).
+  assert.equal(nativeScheme({ preference: 'system', active: { colorScheme: 'light' } }), 'dark')
+  globalThis.__builtinLast = 'light'
+  assert.equal(nativeScheme({ preference: 'system', active: { colorScheme: 'dark' } }), 'light')
+  // With nothing recorded, `system` follows the OS through the built-in active theme.
+  globalThis.__builtinLast = null
   assert.equal(nativeScheme({ preference: 'system', active: { colorScheme: 'dark' } }), 'dark')
   assert.equal(nativeScheme({ preference: 'system', active: { colorScheme: 'light' } }), 'light')
+  globalThis.__builtinLast = 'dark'
   // A skin owns `preference`, so the recorded built-in choice is all that is left.
   assert.equal(nativeScheme({ preference: 'tavern-terracotta' }), 'dark')
   globalThis.__builtinLast = null

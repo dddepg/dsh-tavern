@@ -1782,11 +1782,17 @@ window.__ModuleLoader__.load({
 		function nativeScheme(snapshot) {
 			const preference = snapshot?.preference;
 			if (preference === "light" || preference === "dark") return preference;
+			// A remote browser's host preference is process-local and falls back to
+			// `system` on every reconnect (lock screen, app resume). That `system` is a
+			// reset, not a choice: a recorded concrete scheme (built-in light/dark, or
+			// one half of a family picked in the skin picker) must outrank it.
+			const recorded = readBuiltinLast();
+			if (recorded !== null) return recorded;
 			if (preference === "system") {
 				const scheme = snapshot?.active?.colorScheme;
 				return scheme === "light" || scheme === "dark" ? scheme : null;
 			}
-			return readBuiltinLast();
+			return null;
 		}
 		/**
 		 * Map a skin to the same-family member matching scheme: skins sharing a
