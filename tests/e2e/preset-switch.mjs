@@ -26,7 +26,7 @@ export async function presetSwitch({ page, step, savedChat, inspectRound, output
       const body = `预设切换后继续游玩，金币 ${gold}。`
       await page.getByText(body, { exact: true }).filter({ visible: true }).first().waitFor()
       await page.getByText('酒馆状态', { exact: true }).filter({ visible: true }).first().click()
-      const status = page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold')
+      const status = page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold')
       await status.filter({ hasText: new RegExp(`^金币：${gold}$`) }).waitFor()
       await inspectRound(`preset-${key || 'builtin'}`, gold, body, ++rounds)
       const requests = (await readFile(join(output, 'preset-requests.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse)

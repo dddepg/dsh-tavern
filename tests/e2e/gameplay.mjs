@@ -112,7 +112,7 @@ async function inspectScreen() {
   await page.getByText('你获得了十枚金币。', { exact: false }).filter({ visible: true }).first().waitFor()
   await page.getByText(/变量已更新/).filter({ visible: true }).first().waitFor()
   await openStatus()
-  await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
+  await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame:not([aria-hidden="true"])')
     .locator('#e2e-gold').filter({ hasText: /^金币：10$/ }).waitFor()
   await page.getByText('站在柜台前，收下奖励。', { exact: true }).filter({ visible: true }).waitFor()
 }
@@ -120,7 +120,7 @@ try {
   await step('准备独立运行环境', async () => {
     if (compactionScenario) {
       await mkdir(data, { recursive: true })
-      await writeFile(join(data, 'tavern-settings.json'), JSON.stringify({ contextCompaction: { mode: compactionScenario === 'rounds' ? 'rounds' : ['manual', 'overflow', 'legacy'].includes(compactionScenario) ? 'manual' : 'percent', rounds: 2, percent: 50 } }))
+      await writeFile(join(data, 'tavern-settings.json'), JSON.stringify({ contextCompaction: { mode: compactionScenario === 'rounds' ? 'rounds' : ['manual', 'overflow', 'legacy'].includes(compactionScenario) ? 'manual' : 'percent', rounds: 2, percent: 50, retainRounds: 2 } }))
       await writeFile(join(output, 'model-control.json'), JSON.stringify({ foregroundPadding: compactionScenario === 'overflow' ? 4000 : 650, backgroundPadding: 0, window: compactionScenario === 'overflow' ? 262144 : 32768 }))
     }
     if (displayScenario) {
@@ -259,7 +259,7 @@ try {
     await page.getByRole('button', { name: '开始新游戏', exact: true }).click()
     await page.getByRole('textbox', { name: /发消息|Message/ }).waitFor()
     await openStatus()
-    await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame')
+    await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame:not([aria-hidden="true"])')
       .locator('#e2e-gold').filter({ hasText: /^金币：0$/ }).waitFor()
   })
   if(process.argv.includes('--native-format'))await step('确认新局直接写入原生分页存档',assertNativeStorage)
@@ -579,7 +579,7 @@ try {
       assert.equal(await composer.innerText(), '再次领取奖励')
       await composer.press('Enter')
       await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).waitFor()
-      await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：20$/ }).waitFor()
+      await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：20$/ }).waitFor()
       await inspectRound('second-turn', 20, '你再次领取了奖励，金币累计二十枚。')
     })
     await step('重新生成最新正文', async () => {
@@ -587,7 +587,7 @@ try {
       await page.getByPlaceholder('指导意见（可选）：例如“写得更长，侧重心理描写”').fill('雨夜重写')
       await page.getByRole('button', { name: '生成并替换正文', exact: true }).click()
       await page.getByText('雨夜里，你重新领取了奖励。', { exact: true }).filter({ visible: true }).first().waitFor()
-      await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
+      await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
       assert.equal(await page.getByText('雨夜里，你重新领取了奖励。', { exact: true }).filter({ visible: true }).count(), 1)
       await inspectRound('regenerated', 30, '雨夜里，你重新领取了奖励。')
       assert.equal(await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).filter({ visible: true }).count(), 0)
@@ -604,7 +604,7 @@ try {
       await inspectRound('edited', 30, '手工编辑：你把奖励放进了背包。')
       await page.reload()
       await page.getByText('手工编辑：你把奖励放进了背包。', { exact: true }).filter({ visible: true }).first().waitFor()
-      await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
+      await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：30$/ }).waitFor()
       const afterEdit = (await savedChat()).messages.at(-1)
       assert.deepEqual(afterEdit.variables, beforeEdit.variables, '编辑正文不能重新结算或修改变量')
       assert.deepEqual(afterEdit.mvu.receipt, beforeEdit.mvu.receipt)
@@ -613,7 +613,7 @@ try {
     await step('回退最新一轮，恢复上一轮金币', async () => {
       await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
       await page.getByRole('menuitem', { name: /回退第.*轮|回退本轮/ }).click()
-      await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：10$/ }).waitFor()
+      await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：10$/ }).waitFor()
       inspectSaved(await savedChat())
       await page.reload()
       await inspectScreen()
@@ -632,7 +632,7 @@ try {
         await receipt.getByRole('button', { name: '重新结算变量', exact: true }).click()
         await page.getByPlaceholder('例如：这轮还没有交付物品，不要扣除库存。').fill('E2E 修正金币为四十')
         await page.getByRole('button', { name: '重新结算', exact: true }).click()
-        await page.frameLocator('.dsh-tavern-status-runtime iframe').locator('#e2e-gold').filter({ hasText: /^金币：40$/ }).waitFor()
+        await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：40$/ }).waitFor()
         assert.deepEqual(prose(await savedChat()), prose(before), '重新结算不能改写正文或新增轮次')
         await page.reload()
         await inspectRound('rollback-resettled', 40, '你获得了十枚金币。', 1)
@@ -651,7 +651,7 @@ try {
     const before=await savedChat()
     await restartServer()
     const expected=[...before.messages].reverse().find(row=>row.variables?.[row.swipeId||0]).variables[0].stat_data.gold
-    await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame').locator('#e2e-gold').filter({hasText:new RegExp('^金币：'+expected+'$')}).waitFor()
+    await page.frameLocator('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame:not([aria-hidden="true"])').locator('#e2e-gold').filter({hasText:new RegExp('^金币：'+expected+'$')}).waitFor()
     // The long-archive fixture deliberately starts with unfinished historical
     // display derivation. Restart may finish those four derived fields; story,
     // variables, receipts and every other extension field must remain identical.

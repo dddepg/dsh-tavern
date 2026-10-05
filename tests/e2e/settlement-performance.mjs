@@ -10,7 +10,7 @@ import { encodeMigratedSessionLog, encodeCurrentGeneration, parseSessionLog } fr
 // compatibility context can be hundreds of MB and preview formatting dominates
 // the very performance this probe measures. Still inspect the real status DOM.
 async function statusFrame(page) {
-  const handle = await page.waitForFunction(() => document.querySelector('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame'), null, {timeout:120000})
+  const handle = await page.waitForFunction(() => document.querySelector('.dsh-tavern-status-runtime iframe.dsh-tavern-message-frame:not([aria-hidden="true"])'), null, {timeout:120000})
   const frame = await handle.asElement().contentFrame(); await handle.dispose()
   assert.ok(frame, 'the mounted status frame must exist')
   return frame
