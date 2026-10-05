@@ -10,6 +10,7 @@ import { closeSync, copyFileSync, existsSync, openSync, readFileSync, unlinkSync
 import os from 'node:os'
 import path from 'node:path'
 import { INSTALL_HOSTS, SOURCE_ROOT, DSH_ROOT, RUNTIME_HOST, runtimeEnvironment, commandExists, sleep } from './launcher-environment.mjs'
+import { startupTimeoutMs } from './service-startup.mjs'
 
 // Own update execution and durable terminal outcomes, including installed-but-needs-restart.
 export function encodeWindowsPowerShellScript(source) {
@@ -59,8 +60,8 @@ export function parseUpdateOptions(args) {
 export async function startUpdatedService({ sourceRoot, dshHome, log = console.log, noOpen = false }) {
   try {
     const result = await promisify(execFile)(process.execPath, [path.join(sourceRoot, 'bin/dsh-tavern.mjs'), 'start'], {
-      cwd: sourceRoot, windowsHide: true, timeout: 45_000, maxBuffer: 4 * 1024 * 1024,
-      env: { ...runtimeEnvironment({ installation: false }), DSH_HOME: dshHome, DSH_TAVERN_CLI_HOME: dshHome, DSH_TAVERN_RUNTIME_HOST: 'cli', DSH_TAVERN_START_TIMEOUT: '30', ...(noOpen ? { DSH_TAVERN_NO_OPEN: '1' } : {}) },
+      cwd: sourceRoot, windowsHide: true, timeout: startupTimeoutMs('cli') + 15_000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...runtimeEnvironment({ installation: false }), DSH_HOME: dshHome, DSH_TAVERN_CLI_HOME: dshHome, DSH_TAVERN_RUNTIME_HOST: 'cli', ...(noOpen ? { DSH_TAVERN_NO_OPEN: '1' } : {}) },
     })
     if (result.stdout) log(result.stdout.trim())
   } catch (error) {

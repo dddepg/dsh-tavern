@@ -358,6 +358,7 @@ export async function startService() {
     await waitForServiceStartup({
       timeoutMs,
       alive: () => isProcessAlive(child.pid),
+      onSlow: () => console.log(`DSH Tavern 仍在初始化（首次启动较慢），最多等待 ${timeoutMs / 1000} 秒……`),
       ready: async () => {
         portOpen = await isPortOpen(state.port)
         serviceReady = portOpen && await isServiceReady(state.port)
