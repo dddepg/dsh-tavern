@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "594e2833578aa8946c58d7aa1614b51bf1f44af6",
-  "releaseSequence": 520,
+  "revision": "9f775b19168c46f880b7364015d497b344179b2c",
+  "releaseSequence": 521,
   "version": "2.5.0",
   "files": [
     {
@@ -721,8 +721,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-initialization.js",
-      "sha256": "0124d5efde783791bbe7fc1e2921d9d761d05c69e42036950595182aebdcb8d8",
-      "size": 20680
+      "sha256": "6714da870f3638da16037c15437404e28b0e9605e8cfca880e511b4b8018191c",
+      "size": 20841
     },
     {
       "path": "tavern-plugin/lib/domain/conversation-migration.js",
@@ -1451,8 +1451,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/session-seed-trajectory.js",
-      "sha256": "36678b3a34a39f5e6de218b312e0686d03d23ea7ffcd92583275e7c1788a179d",
-      "size": 5396
+      "sha256": "6189a6c8d0293933f9843ddfe38d34784054ab9f425be71a2ba1fc98fb789c41",
+      "size": 4539
     },
     {
       "path": "tavern-plugin/lib/domain/session-signal-transport.js",
@@ -1886,8 +1886,8 @@
     },
     {
       "path": "tavern-plugin/lib/index.js",
-      "sha256": "156f5834a3d50a0261b5fd3883cc9954d81ca23d4fdb947b369b864b6ef6ff87",
-      "size": 259312
+      "sha256": "64f17532740e48377cbc2c37e8cb58d9ed9d556543ed193f7ea940a28ae8e520",
+      "size": 259234
     },
     {
       "path": "tavern-plugin/lib/profile-data-store.js",
@@ -1896,8 +1896,8 @@
     },
     {
       "path": "tavern-plugin/lib/prompt-catalog.js",
-      "sha256": "1d0530f421bfd8ab5890d5d83610ff5a346de2751811e36fc550eb2e09034538",
-      "size": 2790
+      "sha256": "ec53ed02014a03a4b1df5426340207e73f5a8a068166d3dfd078467420bab9a0",
+      "size": 2768
     },
     {
       "path": "tavern-plugin/lib/README.md",
@@ -4223,11 +4223,6 @@
       "path": "tavern-plugin/prompts/candidate-story.md",
       "sha256": "ff061dd6f9e8aa4f530cfe8e16ab6a1fb44b8b288415c51dc2568b77e5d0c890",
       "size": 524
-    },
-    {
-      "path": "tavern-plugin/prompts/card-mode-greeting.md",
-      "sha256": "f3457a29febb57dd10b9fbab1c31bfe8dc460c1751a999b518d8db1ac74c4472",
-      "size": 163
     },
     {
       "path": "tavern-plugin/prompts/card-reference.md",
