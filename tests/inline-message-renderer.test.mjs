@@ -1097,6 +1097,29 @@ test('动态媒体 src 和属性观察器不重新代理，图片仍走缓存', 
   assert.match(image.getAttribute('src'), /^\/api\/dsh-tavern\/static-assets/)
 })
 
+test('iframe 是独立页面导航，不经静态缓存代理', () => {
+  const html = '<iframe src="https://app.example/hud/"></iframe><img src="https://app.example/a.png">'
+  for (const doc of [client.buildOpeningPreviewDocument(html), client.buildTavernFrameDocument({ content: html })]) {
+    assert.match(doc, /<iframe src="https:\/\/app.example\/hud\/"/)
+    assert.ok(doc.includes('/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://app.example/a.png')))
+  }
+  const script = client.buildTavernFrameDocument({ content: '<div></div>' }).match(/<script data-dsh-tavern-static-cache>([\s\S]*?)<\/script>/)[1]
+  let observe
+  class Element {
+    constructor(tag) { this.tagName = tag; this.nodeType = 1; this.attrs = {} }
+    setAttribute(k, v) { this.attrs[k] = v }
+    getAttribute(k) { return this.attrs[k] }
+  }
+  class Frame extends Element {}
+  Object.defineProperty(Frame.prototype, 'src', { configurable: true, get() { return this.attrs.src }, set(v) { this.attrs.src = v } })
+  vm.runInNewContext(script, { window: { HTMLIFrameElement: Frame }, Element, document: { documentElement: {} }, MutationObserver: class { constructor(fn) { observe = fn } observe() {} } })
+  const byProperty = new Frame('IFRAME'); byProperty.src = 'https://app.example/hud/?mode=landscape'
+  const byAttribute = new Frame('IFRAME'); byAttribute.setAttribute('src', 'https://app.example/hud/')
+  observe([byProperty, byAttribute].map(target => ({ target })))
+  assert.equal(byProperty.src, 'https://app.example/hud/?mode=landscape')
+  assert.equal(byAttribute.getAttribute('src'), 'https://app.example/hud/')
+})
+
 test('style 观察器无法改写的远程地址不回写，避免自触发死循环；带括号的引号地址也走缓存', () => {
   const document = client.buildTavernFrameDocument({ content: `<div style="background-image:url('https://img.example/Saki%20(5).png')"></div>` })
   assert.ok(document.includes('/api/dsh-tavern/static-assets?url=' + encodeURIComponent('https://img.example/Saki%20(5).png')))
@@ -1383,6 +1406,22 @@ test('trusted parent facade exposes real EJS readiness and restores the previous
   dispose()
   assert.equal(host.SillyTavern, previous)
   assert.equal(Object.hasOwn(host, 'TavernHelper'), false)
+})
+
+test('trusted #chat compatibility mount measures as the conversation pane', () => {
+  const paneRect = { x: 280, y: 82, width: 510, height: 640 }
+  const appended = []
+  const document = {
+    getElementById: () => null,
+    createElement: () => ({ style: { setProperty() {} }, appendChild() {}, remove() {} }),
+    querySelector: selector => selector === '[data-conversation-scroll]' ? { getBoundingClientRect: () => paneRect } : null,
+    documentElement: { getBoundingClientRect: () => ({ width: 1440, height: 800 }) },
+    body: { appendChild: node => appended.push(node) },
+  }
+  const dispose = client.installTavernTrustedHostFacade({ document }, { SillyTavern: {}, document: {} })
+  const chat = appended.find(node => node.id === 'chat')
+  assert.deepEqual(chat.getBoundingClientRect(), paneRect)
+  dispose()
 })
 
 test('retiring an older trusted facade cannot clear the newer one or restore a disposed frame', () => {

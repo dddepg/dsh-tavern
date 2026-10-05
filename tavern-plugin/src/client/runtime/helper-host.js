@@ -136,6 +136,12 @@
                 // This compatibility mount is not another chat viewport. Legacy
                 // panel padding must not add a second, page-level scroll range.
                 if (chatRoot.style) chatRoot.style.setProperty('display', 'contents', 'important');
+                // display:contents has no box, but scripts measure #chat as the reading
+                // pane (clip windows, "is my slot visible"). A 0x0 rect hides them.
+                chatRoot.getBoundingClientRect = function () {
+                    const pane = host.document.querySelector('[data-conversation-scroll]');
+                    return (pane || host.document.documentElement).getBoundingClientRect();
+                };
 				chatRoot.tavernCompatibilityOwners = 0;
 				host.document.body.appendChild(chatRoot);
 			}

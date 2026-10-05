@@ -42,11 +42,12 @@ test('缓存的 ESM、CSS 和 HTML 子资源继续改写到本地缓存入口', 
   const htmlBody = projectCachedResourceBody({
     url: 'https://cards.example.test/ui/index.html',
     mediaType: 'text/plain',
-    body: Buffer.from('<link href="/ui.css"><img src="https://img.example/cg.png"><a href="https://example.org">原链接</a>')
+    body: Buffer.from('<link href="/ui.css"><img src="https://img.example/cg.png"><a href="https://example.org">原链接</a><iframe src="https://app.example/hud/"></iframe>')
   }).toString('utf8')
   assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fcards\.example\.test%2Fui\.css/)
   assert.match(htmlBody, /static-assets\?url=https%3A%2F%2Fimg\.example%2Fcg\.png/)
   assert.match(htmlBody, /<a href="https:\/\/example\.org">/)
+  assert.match(htmlBody, /<iframe src="https:\/\/app\.example\/hud\/">/)
 })
 
 test('静态缓存允许本机、内网与 Fake-IP 地址，仍要求 HTTPS 且不携带凭据', function () {
