@@ -296,3 +296,23 @@ test('a wrapper that reuses a finished wrapper PID ignores that predecessor\'s s
   clearStaleWrapperFiles(directory, 4242, startedAt)
   assert.equal(existsSync(stale), true)
 })
+
+test('Windows job hosts resolve bare commands through PATHEXT like a shell (Desktop node.cmd shim)', async () => {
+  const { resolveWindowsCommand } = await import('../bin/installation-process.mjs')
+  const present = new Set(['C:\\dsh\\runtime-commands\\node.cmd', 'C:\\tools\\pnpm.exe'])
+  const exists = file => present.has(file)
+  const env = { Path: 'C:\\Windows;C:\\dsh\\runtime-commands;C:\\tools', PATHEXT: '.COM;.EXE;.BAT;.CMD' }
+  // CreateProcess("node") would only try node.exe and fail with ENOENT.
+  assert.equal(resolveWindowsCommand('node', env, 'X:\\Desktop.exe', exists), 'C:\\dsh\\runtime-commands\\node.cmd')
+  assert.equal(resolveWindowsCommand('pnpm', env, 'X:\\Desktop.exe', exists), 'C:\\tools\\pnpm.exe')
+  // Nothing on PATH: "node" is the runtime this wrapper already runs on.
+  assert.equal(resolveWindowsCommand('node', { PATH: '' }, 'X:\\Desktop.exe', () => false), 'X:\\Desktop.exe')
+  assert.equal(resolveWindowsCommand('C:\\explicit\\tool.exe', env, 'X', exists), 'C:\\explicit\\tool.exe')
+})
+
+test('a Windows job host that failed to launch still acknowledges the stop request', async () => {
+  const source = await readFile(fileURLToPath(new URL('../bin/installation-process.mjs', import.meta.url)), 'utf8')
+  const failurePath = source.slice(source.indexOf('} catch {', source.indexOf('const windowsJobScript')))
+  // Without this receipt cleanup cannot confirm the tree and keeps the install lock.
+  assert.match(failurePath, /Set-Content -LiteralPath \$config\.stopped/)
+})

@@ -431,7 +431,15 @@ public static class TavernInstallationJob {
     if ($failure -is [System.ComponentModel.Win32Exception] -and $failure.NativeErrorCode -in @(2, 3)) { $code = 'ENOENT' }
     @{ error = @{ code = $code; message = $failure.Message } } | ConvertTo-Json -Compress | Set-Content -LiteralPath $config.result -Encoding UTF8
   }
-  while ($true) { Start-Sleep -Milliseconds 1000 }
+  # The job handle is already closed (KILL_ON_JOB_CLOSE), so nothing it held is still
+  # running. Acknowledge the supervisor's stop request, or cleanup can never confirm
+  # this tree and the installation lock stays held (INSTALLATION_CLEANUP_FAILED).
+  while ($true) {
+    if (-not (Test-Path -LiteralPath $config.stopped) -and @($config.stopFiles | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
+      Set-Content -LiteralPath $config.stopped -Value '' -Encoding UTF8
+    }
+    Start-Sleep -Milliseconds 100
+  }
 }
 `
 
@@ -485,11 +493,36 @@ export function resolveWindowsInstallationInvocation(command, args = [], options
   return { command: shell, args: ['/d', '/s', '/v:off', '/c', `"${line}"`], verbatimArguments: true }
 }
 
-function startWindowsJob({ command, args, directory, ancestors, shell }, pid, send) {
+/**
+ * CreateProcess only appends ".exe" when searching PATH; it never tries PATHEXT. On
+ * Desktop "node" exists only as a node.cmd shim (Electron run as Node), so a bare
+ * name that PowerShell resolved fine failed inside the job host with ENOENT. Resolve
+ * bare names the way a shell would; a batch result is then run through cmd.exe.
+ */
+export function resolveWindowsCommand(command, env = process.env, execPath = process.execPath, exists = existsSync) {
+  const name = String(command)
+  if (/[\\/]/.test(name)) return name
+  const pathKey = Object.keys(env).find(key => key.toUpperCase() === 'PATH')
+  const pathextKey = Object.keys(env).find(key => key.toUpperCase() === 'PATHEXT')
+  const extensions = path.extname(name) ? [''] : String((pathextKey && env[pathextKey]) || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+  for (const directory of String((pathKey && env[pathKey]) || '').split(';').filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = path.win32.join(directory.replace(/^"|"$/g, ''), name + extension.toLowerCase())
+      if (exists(candidate)) return candidate
+    }
+  }
+  // This wrapper is itself running on the Node runtime the caller asked for.
+  if (/^node(?:\.exe)?$/i.test(name)) return execPath
+  return name
+}
+
+function startWindowsJob({ command: requested, args, directory, ancestors, shell: requestedShell }, pid, send) {
   const base = path.join(directory, `windows-${pid}`)
   const resultFile = `${base}-result.json`
   const scriptFile = `${base}.ps1`
   const configFile = `${base}-config.json`
+  const command = resolveWindowsCommand(requested)
+  const shell = requestedShell || /\.(?:cmd|bat)$/i.test(command)
   const invocation = resolveWindowsInstallationInvocation(command, args, { shell })
   writeFileSync(scriptFile, windowsJobScript, { mode: 0o600 })
   writeFileSync(configFile, JSON.stringify({ ...invocation, result: resultFile,
