@@ -10,3 +10,12 @@ test('ordinary requests and summaries without placeholders retain object identit
     assert.equal(projectCompactionRequest(request), request)
   }
 })
+
+test('marking a frozen, already-marked request copies it instead of throwing (#148)', async () => {
+  const { markRequestHandled, requestHandledBy } = await import('../tavern-plugin/lib/domain/request-lineage.js')
+  const request = Object.freeze(markRequestHandled({ purpose: 'compaction', messages: [] }, 'story-compaction'))
+  const marked = markRequestHandled(request, 'compaction-projection')
+  assert.notEqual(marked, request)
+  assert.ok(requestHandledBy(marked, 'story-compaction') && requestHandledBy(marked, 'compaction-projection'))
+  assert.ok(!requestHandledBy(request, 'compaction-projection'))
+})
