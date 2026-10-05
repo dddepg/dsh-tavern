@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -59,6 +60,111 @@ test('cancellation survives concurrent progress without metadata read-modify-wri
   assert.throws(() => owner.update({ progress: 99 }), { code: 'INSTALLATION_OWNERSHIP_LOST' })
   assert.equal(successor.owner.progress, undefined)
   successor.release()
+})
+
+for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+  test(`mutation gate retries transient ${code} before recording cancellation`, t => {
+    const dshHome = home(t)
+    const owner = acquireInstallation({ dshHome })
+    const gate = path.join(owner.lockDir, '.mutation')
+    const mkdir = fs.mkdirSync
+    let attempts = 0
+    const mock = t.mock.method(fs, 'mkdirSync', function (directory, ...args) {
+      if (directory === gate && ++attempts <= 2) throw Object.assign(new Error('transient gate contention'), { code })
+      return mkdir.call(this, directory, ...args)
+    })
+    requestCancellation(dshHome, owner.attemptId)
+    assert.equal(attempts, 3)
+    assert.equal(cancellationRequested(dshHome, owner.attemptId), true)
+    assert.equal(existsSync(gate), false)
+    mock.mock.restore()
+    owner.update({ progress: 1 })
+    assert.equal(cancellationRequested(dshHome, owner.attemptId), true)
+    owner.release()
+  })
+
+  test(`persistent mutation gate ${code} remains bounded and preserves its cause`, t => {
+    const dshHome = home(t)
+    const owner = acquireInstallation({ dshHome })
+    const before = readFileSync(path.join(owner.lockDir, 'owner.json'), 'utf8')
+    const gate = path.join(owner.lockDir, '.mutation')
+    const denied = Object.assign(new Error('persistent gate failure'), { code, path: gate, syscall: 'mkdir' })
+    const mkdir = fs.mkdirSync
+    let now = Date.now(), attempts = 0
+    t.mock.method(Date, 'now', () => now)
+    t.mock.method(fs, 'mkdirSync', function (directory, ...args) {
+      if (directory === gate) { attempts++; now += 2000; throw denied }
+      return mkdir.call(this, directory, ...args)
+    })
+    assert.throws(() => requestCancellation(dshHome, owner.attemptId), error => error === denied)
+    assert.equal(attempts, 3)
+    assert.equal(cancellationRequested(dshHome, owner.attemptId), false)
+    assert.equal(readFileSync(path.join(owner.lockDir, 'owner.json'), 'utf8'), before)
+    assert.equal(existsSync(gate), false)
+  })
+}
+
+test('mutation gate contention never evicts another holder or runs an unguarded callback', t => {
+  const dshHome = home(t)
+  const owner = acquireInstallation({ dshHome })
+  const gate = path.join(owner.lockDir, '.mutation')
+  fs.mkdirSync(gate)
+  writeFileSync(path.join(gate, 'token'), 'other-holder')
+  const mkdir = fs.mkdirSync
+  let now = Date.now(), attempts = 0, called = false
+  t.mock.method(Date, 'now', () => now)
+  t.mock.method(fs, 'mkdirSync', function (directory, ...args) {
+    if (directory === gate) { attempts++; now += 2000 }
+    return mkdir.call(this, directory, ...args)
+  })
+  assert.throws(() => owner.withOwnership(() => { called = true }), { code: 'INSTALLATION_STATE_BUSY' })
+  assert.equal(attempts, 3)
+  assert.equal(called, false)
+  assert.equal(readFileSync(path.join(gate, 'token'), 'utf8'), 'other-holder')
+})
+
+test('mutation gate retries recheck ownership before writing after contention', t => {
+  const dshHome = home(t)
+  const owner = acquireInstallation({ dshHome })
+  const gate = path.join(owner.lockDir, '.mutation')
+  const filename = path.join(owner.lockDir, 'owner.json')
+  const successor = { ...JSON.parse(readFileSync(filename, 'utf8')), generation: 'successor-generation' }
+  const mkdir = fs.mkdirSync
+  let attempts = 0
+  t.mock.method(fs, 'mkdirSync', function (directory, ...args) {
+    if (directory === gate) {
+      attempts++
+      writeFileSync(filename, JSON.stringify(successor))
+      throw Object.assign(new Error('transient contention during ownership change'), { code: 'EPERM' })
+    }
+    return mkdir.call(this, directory, ...args)
+  })
+  assert.throws(() => owner.update({ progress: 99 }), { code: 'INSTALLATION_OWNERSHIP_LOST' })
+  assert.equal(attempts, 1)
+  assert.deepEqual(JSON.parse(readFileSync(filename, 'utf8')), successor)
+  assert.equal(existsSync(gate), false)
+})
+
+test('mutation token write failures fail closed without retrying an acquired gate', t => {
+  const dshHome = home(t)
+  const owner = acquireInstallation({ dshHome })
+  const gate = path.join(owner.lockDir, '.mutation')
+  const denied = Object.assign(new Error('cannot publish mutation token'), { code: 'EPERM' })
+  const write = fs.writeFileSync, mkdir = fs.mkdirSync
+  let attempts = 0, called = false
+  t.mock.method(fs, 'mkdirSync', function (directory, ...args) {
+    if (directory === gate) attempts++
+    return mkdir.call(this, directory, ...args)
+  })
+  t.mock.method(fs, 'writeFileSync', function (filename, ...args) {
+    if (filename === path.join(gate, 'token')) throw denied
+    return write.call(this, filename, ...args)
+  })
+  assert.throws(() => owner.withOwnership(() => { called = true }), error => error === denied)
+  assert.equal(attempts, 1)
+  assert.equal(called, false)
+  assert.equal(existsSync(gate), true)
+  assert.equal(readInstallation(dshHome).attemptId, owner.attemptId)
 })
 
 test('stopped-owner recovery requires explicit descendant verification and exact generation', async t => {
