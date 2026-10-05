@@ -18,7 +18,7 @@ export const SYSTEM_PROMPT_DEFINITIONS = Object.freeze([
 export const SYSTEM_PROMPT_NAMES = Object.freeze(SYSTEM_PROMPT_DEFINITIONS.map(function (item) { return item.name }))
 
 const knownNames = new Set([...SYSTEM_PROMPT_NAMES,
-  'card-mode-greeting', 'card-reference', 'card-task-edit', 'card-task-extract', 'card-task-script',
+  'card-reference', 'card-task-edit', 'card-task-extract', 'card-task-script',
   'card-task-worldbook', 'card-task-preset', 'card-task-debug-play'
 ])
 

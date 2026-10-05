@@ -1902,7 +1902,6 @@ export async function apply(ctx) {
     userPreferenceProfile,
     presets: runtimePresets,
     settings: readTavernSettings,
-    cardGreeting: function () { return runtimePrompt('card-mode-greeting') },
     emptyCardWorkspace,
     id: uid,
     native: {

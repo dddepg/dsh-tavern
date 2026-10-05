@@ -20,31 +20,26 @@ for (const phase of ['front', 'back']) test(`native Agent preserves fixed system
 })
 const openingEvents = session => sessionEvents(session).filter(e => e.type === 'assistant/message' && e.data.turn === 1)
 
-test('native card workbench starts empty or with a card and restores its greeting only once', native, async t => {
+test('native card workbench starts with no scripted exchange or greeting, and restores idempotently', native, async t => {
   for (const cardPath of ['', 'cards/test.json']) {
     const h = await createInitializationNative(process.env.DSH_BOOT_MODULE)
     t.after(() => h.dispose())
     const chat = await h.open().start({ ...h.input, cardPath, mode: 'card' })
     assert.equal(chat.mode, 'card')
     assert.equal(chat.nativeOpeningAppended, true)
-    assert.equal(openingEvents(h.target.session).length, 1)
+    assert.equal(openingEvents(h.target.session).length, 0)
     const initialMessages = h.target.session.deriveMessages()
     // A card-bound workbench also stores the empty-content fixed-system snapshot (card + constant worldbook).
     const prefix = initialMessages.filter(message => String(message.id).startsWith('tavern-session-prefix:'))
     assert.equal(prefix.length, cardPath ? 1 : 0)
     if (cardPath) assert.deepEqual(prefix[0].content, [])
-    const visible = initialMessages.filter(message => !prefix.includes(message))
-    assert.deepEqual(visible.map(message => message.role), ['user', 'assistant', 'user', 'assistant'])
-    assert.match(visible[0].content[0].text, /待编辑素材/)
-    assert.equal(visible[3].content[0].text, '工作台')
+    // Role and boundaries come from the system prompt, not a fake user/assistant exchange.
+    assert.deepEqual(initialMessages.filter(message => !prefix.includes(message)), [])
     await h.restoreDetached()
     const restored = await h.open().ensureOpening(h.input.sessionId)
     assert.equal(restored.id, chat.id)
-    assert.equal(openingEvents(h.target.session).length, 1)
     assert.equal(h.requests.length, 0)
     assert.deepEqual(h.target.session.deriveMessages(), initialMessages)
-    await h.continueWithAgent()
-    assert.ok(h.requests[0].messages.some(message => message.content?.some(block => /待编辑素材/.test(block.text || ''))))
   }
 })
 
