@@ -304,7 +304,9 @@ export function createSceneIllustrations(deps) {
         const snapshot = sceneInput(chat, target, historical)
         const basic = sceneSources(chat, target, snapshot)
         prepared = await plans.prepare({ chatId: chat.id, target, ...basic, profile })
-        material = sceneSources(chat, target, snapshot, prepared.previousTurn ?? target.turn)
+        // A previous picture of an earlier moment did not see the rest of its turn: include that turn again.
+        const sinceTurn = prepared.previousTurn === undefined ? target.turn : prepared.previousMoment === 'earlier' ? prepared.previousTurn - 1 : prepared.previousTurn
+        material = sceneSources(chat, target, snapshot, sinceTurn)
         prepared.sources = material.sources
         prepared.gapComplete = material.omitted.length === 0
         // Version/path hashes are host evidence, not useful model tokens. Keep
@@ -608,7 +610,7 @@ export function createSceneIllustrations(deps) {
     })
     return present(target, next)
   }
-  return { settings, configure, testConnection: connection.test, listModels: connection.models, status, start, cancel, retrySave, readImage, removeImage, setReference,
+  return { settings, configure, readArtistPreview: setup.readArtistPreview, testConnection: connection.test, listModels: connection.models, status, start, cancel, retrySave, readImage, removeImage, setReference,
     async dispose() { for (const job of jobs.values()) job.controller.abort(); await Promise.allSettled([...jobs.values()].map(job => job.promise)); imageHosts.delete(ownerId); imageAborters.delete(ownerId) }
   }
 }

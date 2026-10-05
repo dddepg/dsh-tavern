@@ -44,10 +44,10 @@
 			}
 			if (afterMessages.length > shared) operations.push({ op: "messages.append", values: clone(afterMessages.slice(shared)) });
 			if (afterMessages.length < beforeMessages.length) operations.push({ op: "messages.truncate", length: afterMessages.length });
-			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "lifecycleRevision"]) {
+			for (const key of ["turnMessageIds", "chatVariables", "scriptVariables", "globalVariables", "characterVariables", "worldbook", "character", "characterName", "playerName", "regexScripts", "lifecycleRevision"]) {
 				if (same(previous[key], target[key])) continue;
 				operations.push({ op: "value.replace", key: key, value: clone(target[key]) });
-				if (key === "chatVariables" || key === "scriptVariables") variablesChanged = true;
+				if (["chatVariables", "scriptVariables", "globalVariables", "characterVariables"].includes(key)) variablesChanged = true;
 			}
 			const stateRevision = Math.max(0, Number(target.stateRevision) || 0);
 			if (operations.length === 0 && Number(previousTurn) === turn && Number(previous.stateRevision) === stateRevision) return null;
@@ -109,6 +109,32 @@
 			const configuredSlashExecutor = options && options.executeSlash;
 			const invalidate = options && options.invalidate || function (sessionId) { liveTavernView.invalidate(sessionId); };
 			const channels = new Map();
+            const generationOwners = new Set();
+            function retireGenerations(document) {
+                if (!document?.generationJobs) return;
+                for (const job of document.generationJobs.values()) void Promise.resolve().then(job.stop).catch(function () {});
+                document.generationJobs.clear();
+                generationOwners.delete(document);
+            }
+            async function frameCall(document, method, args, sessionId, preparationId) {
+                const send = (name, payload) => preparationId
+                    ? invoke("callOpeningRuntime", {id:preparationId, method:name, args:payload})
+                    : invoke(name, payload, sessionId);
+                if (method !== "generateTavernHelper" && method !== "generateTavernHelperRaw") return send(method, args);
+                const generationId = String(args?.config?.generation_id || "dsh-frame-" + nextTavernFrameToken());
+                const generationToken = String(args?.generationToken || nextTavernFrameToken());
+                const jobs = document.generationJobs || (document.generationJobs = new Map());
+                if (jobs.has(generationId)) throw new Error("生成编号正在使用: " + generationId);
+                const job = {stop:() => send("stopTavernHelperGeneration", {generationId, generationToken, pending:true})};
+                jobs.set(generationId, job); generationOwners.add(document);
+                try {
+                    return await send(method, Object.assign({}, args, {generationToken,
+                        config:Object.assign({}, args?.config || {}, {generation_id:generationId})}));
+                } finally {
+                    if (jobs.get(generationId) === job) jobs.delete(generationId);
+                    if (!jobs.size) generationOwners.delete(document);
+                }
+            }
             const touchRelay = createTavernTouchRelay(hostWindow);
 			const frameSizeObservers = new Map();
             const sizingObservers = new Map();
@@ -200,7 +226,7 @@
                         document.layout = layout;
                         if (document.sizing.mode !== "content") applySizing(document, channel, layout.height);
                     }));
-                    if (!node) channels.delete(document.token);
+                    if (!node) { retireGenerations(document); channels.delete(document.token); }
 				};
 				return document;
 			}
@@ -239,9 +265,10 @@
 			}
 			function reconcile() {
 				if (desired.key === visible.key) {
-					if (pending) { pending = null; publish(); }
+					if (pending) { retireGenerations(pending); pending = null; publish(); }
 				} else if (!pending || pending.key !== desired.key) {
-					pending = desired;
+					if (pending && pending !== desired) retireGenerations(pending);
+                    pending = desired;
 					publish();
 				}
 			}
@@ -257,6 +284,7 @@
 				if (desired.key !== documentKey()) desired = createDocument();
 				if (sessionChanged) {
 					// Never keep an old conversation's page eligible for writes in a new one.
+                    for (const owner of Array.from(generationOwners)) retireGenerations(owner);
 					channels.clear();
 					visible = desired; pending = null;
 					height = (props.openingPreview ? 160 : restoredTavernFrameHeight(visible.heightKey, visible.content));
@@ -308,7 +336,8 @@
 					if (sourceDocument === pending && pending.key === desired.key) {
 						rememberHeight(pending, pending.height || (props.openingPreview ? 160 : restoredTavernFrameHeight(pending.heightKey, pending.content)));
 						touchRelay.stop();
-						visible = pending; pending = null;
+						retireGenerations(visible);
+                        visible = pending; pending = null;
 						publish();
 					}
 				} else if (data.type === "dsh-tavern-frame-touch-start" || data.type === "dsh-tavern-frame-scroll") {
@@ -364,6 +393,19 @@
 					// The pending frame initializes its private draft before it becomes visible.
 					if (sourceDocument.key !== desired.key) return;
                     if (data.method === "triggerTavernSlash") {
+                        // Only a pipe ending in /trigger starts the game. Scripts also query
+                        // (/pass {{user}}) or notify (/echo); answer those without starting.
+                        const line = String(data.args && data.args.line || "");
+                        if (!/(?:^|\|)\s*\/trigger(?:\s[^|]*)?\s*$/.test(line)) {
+                            const query = /^\s*\/pass\s+([\s\S]*)$/.exec(line);
+                            const names = { user: String(helperContext && helperContext.playerName || "你"), char: String(helperContext && helperContext.characterName || "角色") };
+                            const result = query ? { pipe: query[1].replace(/{{\s*(user|char)\s*}}/gi, function (_, key) { return names[key.toLowerCase()]; }).replace(/{{[^{}]*}}/g, "") }
+                                : /^\s*\/echo\b/.test(line) ? { pipe: "" } : null;
+                            if (current()) event.source.postMessage(result
+                                ? { type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }
+                                : { type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: "开局准备页只执行以 /trigger 结束的开局命令" }, "*");
+                            return;
+                        }
                         if (!sourceDocument.openingCommandStart) {
                             sourceDocument.openingCommandStart = Promise.resolve().then(async function () {
                                 if (!current() || sourceDocument !== visible) throw new Error("开场预览已失效，请重新打开");
@@ -386,13 +428,13 @@
                     }
 					(data.method === "submitTavernHelperInput"
                         ? submitOpening(sourceDocument, data.args && data.args.text)
-                        : invoke("callOpeningRuntime", { id: props.openingPreview.preparationId, method: data.method, args: data.args })).then(function (result) {
+                        : frameCall(sourceDocument, data.method, data.args, undefined, requestProps.openingPreview.preparationId)).then(function (result) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result }, "*");
 					}, function (error) {
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error.message || error) }, "*");
 					});
 				} else if (data.type === "dsh-tavern-helper-call" && props.sessionId) {
-					const allowedMethods = new Set(["generateTavernHelperRaw", "prepareSessionOpening", "createTavernHelperMessages", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook"]);
+					const allowedMethods = new Set(["generateTavernHelper", "generateTavernHelperRaw", "stopTavernHelperGeneration", "stopAllTavernHelperGeneration", "prepareSessionOpening", "createTavernHelperMessages", "updateTavernHelperPrompts", "updateTavernHelperVariables", "updateTavernHelperMessages", "getTavernHelperWorldbook", "replaceTavernHelperWorldbook"]);
 					if (data.method === "startSessionOpening") {
 						const request = sourceDocument.openingRequest;
 						const start = async function () {
@@ -422,18 +464,22 @@
 							return invoke("getSession", {}, props.sessionId).then(function (snapshot) {
 								const context = snapshot && snapshot.view && snapshot.view.tavernHelper;
 								if (context) helperContext = context;
-								return Object.assign({}, result || {}, context ? { context: context } : {});
+								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: context } : {});
 							});
 						}).then(function (result) {
 							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 						}, function (error) {
-							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error) }, "*");
+							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false, error: String(error && error.message || error), errorCode: String(error && error.code || "") }, "*");
 						});
 						return;
 					}
-					if (!allowedMethods.has(data.method)) return;
+                    if (!allowedMethods.has(data.method)) {
+                        event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: false,
+                            error: "当前消息不支持 Helper 方法: " + String(data.method || ""), errorCode: "UNSUPPORTED_HELPER_METHOD" }, "*");
+                        return;
+                    }
 					const args = Object.assign({}, data.args || {}, { sessionId: props.sessionId, expectedLifecycleRevision: Math.max(0, Number(helperContext && helperContext.lifecycleRevision) || 0) });
-					invoke(data.method, args, props.sessionId).then(function (result) {
+					frameCall(sourceDocument, data.method, args, requestProps.sessionId).then(function (result) {
 						if (current() && data.method === "prepareSessionOpening") sourceDocument.openingRequest = result;
 						if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
 					}, function (error) {
@@ -484,6 +530,7 @@
                         sizingObservers.clear();
                         frameVisibility.forEach(stop => stop());
                         frameVisibility.clear();
+                        for (const owner of Array.from(generationOwners)) retireGenerations(owner);
 						listener = null; lifetime++;
 						hostWindow.removeEventListener("message", receive);
 						cancelRuntimeReport();

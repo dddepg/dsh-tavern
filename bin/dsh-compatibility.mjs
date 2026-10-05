@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,7 +31,11 @@ export function assertCompatibleDshVersion(currentVersion, host = 'cli') {
   throw new Error(`已停止安装：检测到非适配 DSH 版本，当前 ${currentVersion || '未知'}，必须使用 ${adaptedDshVersion}。${guidance}`)
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Installers run this from a temp directory whose path may be a symlink (macOS
+// /var -> /private/var); compare real paths or the command silently does nothing.
+let isEntryPoint = false
+try { isEntryPoint = Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) } catch {}
+if (isEntryPoint) {
   if (process.argv[2] === '--check') {
     assertCompatibleDshVersion(extractDshVersion(process.argv[4]), process.argv[3])
   } else {

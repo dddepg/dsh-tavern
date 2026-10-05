@@ -80,6 +80,8 @@
 				return React.createElement("button", { className: props.inMenu ? "" : "dsh-tavern-choice-trigger", role: props.inMenu ? "menuitem" : undefined, disabled: busy || running, title: resultTitle || "前台使用剧情提示词、后台使用 DSH 内置提示词并联合压缩", onClick: compactContext }, busy ? "压缩中…" : (resultLabel || "压缩上下文"));
 			}
 
+			// @include modules/story-ledger.js
+
 			// @include script-navigation.js
 
         function TavernStorageMigration(props) {
@@ -345,7 +347,7 @@
                             h("button", { type: "button", className: "dsh-tavern-btn", disabled: guideBusy || !(view.guides || []).length, onClick: saveGuideLibrary }, "保存到 Guide 库")),
                         guideNotice ? h("p", { role: "status", className: "dsh-tavern-settings-desc" }, guideNotice) : null,
                         h("div", { className: "dsh-tavern-guide-add" },
-							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, maxLength: 2000, value: guideDraft, placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
+							h("textarea", { className: "dsh-tavern-regen-input", ref: guideInputRef, rows: 2, maxLength: 2000, value: guideDraft, "aria-label": "新 Guide 内容", placeholder: "例如：这段先放慢节奏，让角色把话说完，暂时不要推进到第二天。", onChange: function (e) { setGuideDraft(e.target.value); } }),
 							h("button", { className: "dsh-card-primary", disabled: guideBusy || guideDraft.trim() === "", onClick: addGuide }, guideBusy ? "保存中…" : "添加 Guide")
 						),
 						guideError ? h("div", { className: "dsh-card-error" }, guideError) : null
@@ -379,6 +381,7 @@
 							}) : h("div", { className: "dsh-tavern-status-empty" }, "点击“设计人物”，按你的要求创建或补充档案。")
 						)
 					),
+					h(TavernLedger, { sessionId: props.sessionId, ledger: view.ledger, ledgerTask: view.ledgerTask, busy: running || view.activity?.busy }),
 					h("section", { className: "dsh-tavern-status-section" },
 						h("div", { className: "dsh-tavern-status-label" }, "人物姿势"),
 						view.posture ? h("div", { className: "dsh-tavern-status-now" }, view.posture) : h("div", { className: "dsh-tavern-status-empty" }, "等待第一轮状态结算")
@@ -862,7 +865,7 @@
             const h = React.createElement;
             const [catalog, setCatalog] = React.useState([]);
             const [selection, setSelection] = React.useState(null);
-            const [tasks, setTasks] = React.useState({ variables: true, posture: true, characterDesign: false });
+            const [tasks, setTasks] = React.useState({ variables: true, posture: true, characterDesign: false, variableFeedback: true });
             const [saved, setSaved] = React.useState(null);
             const [features, setFeatures] = React.useState({ webSearchEnabled: false, sceneImagesEnabled: false, sceneImagesAvailable: false });
             const [loaded, setLoaded] = React.useState(false);
@@ -913,7 +916,7 @@
                     h("label", null, "推理强度", h("select", { "aria-label": "本局后台推理强度", className: "dsh-tavern-settings-select", value: selection?.reasoningEffort || "", disabled: !key || !efforts.length || busy, onChange: event => { const next = { ...selection }; if (event.target.value) next.reasoningEffort = event.target.value; else delete next.reasoningEffort; return save({ backgroundModel: next }); } },
                         h("option", { value: "" }, key ? "模型默认" : "跟随前台"), efforts.map(item => h("option", { key: item.id, value: item.id }, item.name || item.id)))),
                     ), h("section", { className: "dsh-local-section" }, h("h3", null, "后台结算"), h("p", { className: "dsh-local-help" }, "从下一次后台任务生效，正在运行的任务不变。"),
-                    [["variables", "变量结算", "MVU 卡建议开启，否则变量和状态栏可能不再同步。普通卡不执行此任务。"], ["posture", "人物姿势结算", "总结本轮结束时人物的位置、动作和姿势。"]].map(([name, title, description]) => h("label", { key: name, className: "dsh-tavern-background-task" },
+                    [["variables", "变量结算", "MVU 卡建议开启，否则变量和状态栏可能不再同步。普通卡不执行此任务。"], ["posture", "人物姿势结算", "总结本轮结束时人物的位置、动作和姿势。"], ["variableFeedback", "变量回灌前台", "每轮把上一轮变化的变量最新值告诉前台（单项最多 100 字），减少时间、地点、数值前后不一致。"]].map(([name, title, description]) => h("label", { key: name, className: "dsh-tavern-background-task" },
                         h("span", null, title, h("span", { className: "dsh-tavern-settings-desc" }, description)),
                         h("input", { type: "checkbox", role: "switch", "aria-label": title, checked: tasks[name], disabled: !loaded || busy, onChange: event => { return save({ backgroundTasks: { [name]: event.target.checked } }); } }))),
                     h("p", { className: "dsh-local-warning" }, "调整结算任务会使缓存失效，首次请求会增加耗时和费用。")), h("section", { className: "dsh-local-section" }, h("h3", null, "扩展功能"),
@@ -1018,7 +1021,26 @@
 			const turns = state.view && state.view.suppressedDshErrorTurns || [];
 			const hiddenTurns = state.view && state.view.hiddenDshErrorTurns;
 			const replayTurn = state.view && state.view.canReplayFailedTurn ? Number(state.view.replayFailedTurn) || null : null;
-			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local") + ":" + String(replayTurn || "");
+			const staleTurns = state.view && state.view.staleDshErrorTurns || [];
+			const filteredStreak = Number(state.view && state.view.filteredFailureStreak) || 0;
+			const canRewind = !!(state.view && state.view.canRegenerate === true);
+			const draft = props.useInput(snapshot => snapshot.draft);
+			const draftRef = React.useRef(draft);
+			draftRef.current = draft;
+			const revision = turns.join(",") + ":" + (Array.isArray(hiddenTurns) ? "saved:" + hiddenTurns.join(",") : "local") + ":" + String(replayTurn || "")
+				+ ":" + staleTurns.join(",") + ":" + filteredStreak + ":" + canRewind;
+			// Clearing a failed tail is the first half of both recovery actions.
+			async function clearFailedTail() {
+				const result = await rpc("rollbackTurn", { expectedTurn: null }, props.sessionId);
+				historyProjection.rolledBack(props.sessionId, result && result.view);
+				setCandidatePanel(null); setRegenPanel(null); setCandidateGuidePanel(null);
+				return result || {};
+			}
+			function refreshAfterRecovery() {
+				notifyTavernDataChanged(["sessions"], "play-controls");
+				liveTavernView.invalidate(props.sessionId);
+				tavernCoordination.invalidate(props.sessionId);
+			}
 			React.useEffect(function () {
 				const root = marker.current && marker.current.closest("[data-conversation-scroll]");
 				if (!root) return;
@@ -1033,6 +1055,28 @@
                         try { await submitFailedTurnReplay(props.sessionId); }
                         catch (error) { tavernErrorHub.report("重新生成本轮", error); }
                         finally { liveTavernView.invalidate(props.sessionId); }
+                    },
+                    staleTurns: staleTurns, filteredStreak: filteredStreak, canRewind: canRewind,
+                    onWithdraw: replayTurn === null ? undefined : async function () {
+                        try {
+                            const result = await clearFailedTail();
+                            const text = String(result.view && result.view.clearedInput || "");
+                            if (text.trim() !== "") {
+                                const current = String(draftRef.current || "");
+                                props.inputActions.setDraft(current.trim() === "" ? text : text + "\n" + current);
+                            }
+                        } catch (error) { tavernErrorHub.report("撤回这条输入", error); }
+                        finally { refreshAfterRecovery(); }
+                    },
+                    onRewind: replayTurn === null || !canRewind ? undefined : async function () {
+                        try {
+                            const cleared = await clearFailedTail();
+                            const target = Number(cleared.view && cleared.view.rollbackTargetTurn) || null;
+                            const result = await rpc("rollbackTurn", { expectedTurn: target }, props.sessionId);
+                            historyProjection.rolledBack(props.sessionId, result && result.view);
+                            if (result && result.view && result.view.rollbackWarning) tavernErrorHub.report("回退提示", new Error(result.view.rollbackWarning));
+                        } catch (error) { tavernErrorHub.report("回退上一轮", error); }
+                        finally { refreshAfterRecovery(); }
                     },
                     onError: function (error) { tavernErrorHub.report("保存错误提示状态失败", error); }
                 });

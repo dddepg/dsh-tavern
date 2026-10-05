@@ -1,5 +1,8 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { normalizeResourcePath, resourceKind } from '../domain/file-resources.js'
+import { WORLD_BOOK_PATCH_FIELDS } from '../domain/worldbook-resource.js'
+
+const ENTRY_ALIASES = { keys: 'primaryKeys', key: 'primaryKeys', secondary_keys: 'secondaryKeys', keysecondary: 'secondaryKeys', insertion_order: 'order', title: 'comment', name: 'comment', disable: 'disable' }
 
 export function registerWorldbookTools({
   chatForSession,
@@ -89,8 +92,8 @@ export function registerWorldbookTools({
           properties: {
             op: { type: 'string', required: true, enum: ['update', 'add', 'delete'] },
             ref: { type: 'string' },
-            patch: { type: 'object', additionalProperties: true },
-            entry: { type: 'object', additionalProperties: true }
+            patch: { type: 'object', additionalProperties: true, description: 'update 的字段，与 entry 使用相同字段名' },
+            entry: { type: 'object', additionalProperties: true, description: 'add 的新条目字段：comment 标题、content 正文、primaryKeys 关键词数组（也接受 keys）、secondaryKeys、enabled、constant、order 等' }
           }
         }
       }
@@ -117,7 +120,25 @@ export function registerWorldbookTools({
       const kind = resourceKind(normalized)
       if (kind !== 'worldbook' && kind !== 'card') throw new Error('世界书引用路径类型不正确')
       const source = kind === 'card' ? { kind: 'card', cardPath: normalized } : { kind: 'standalone', path: normalized }
-      const request = { operations: args.operations }
+      // Accept the SillyTavern spellings models naturally use; only fields that
+      // would otherwise be silently dropped are reported.
+      const operations = (Array.isArray(args.operations) ? args.operations : []).map(operation => {
+        const next = { ...operation }
+        for (const key of ['entry', 'patch']) {
+          if (!operation || typeof operation[key] !== 'object' || operation[key] === null) continue
+          const fields = {}
+          for (const [field, value] of Object.entries(operation[key])) {
+            const alias = ENTRY_ALIASES[field]
+            if (alias === 'disable') fields.enabled = value !== true
+            else fields[alias || field] = value
+          }
+          const unknown = Object.keys(fields).filter(field => !WORLD_BOOK_PATCH_FIELDS.includes(field))
+          if (unknown.length) throw new Error('世界书条目不认识字段 ' + unknown.join('、') + '，写入会丢失。可用字段：' + WORLD_BOOK_PATCH_FIELDS.join('、'))
+          next[key] = fields
+        }
+        return next
+      })
+      const request = { operations }
       if (Object.prototype.hasOwnProperty.call(args, 'name')) request.name = args.name
       if (Object.prototype.hasOwnProperty.call(args, 'description')) request.description = args.description
       const result = await worldBooks.update(source, request)

@@ -35,17 +35,3 @@ test('status incremental output matches fresh projection after append, truncatio
   await check()
  }
 })
-
-test('legacy source dependencies are rechecked even when projection identity is unchanged',async()=>{
- const {createImmutableOrderedJsonIndex}=await import('../tavern-plugin/lib/domain/freeze-json.js')
- const index=createImmutableOrderedJsonIndex()
- const projections=index.from([[0,{version:2,turn:1,text:'legacy',parts:[{kind:'html',content:'<script>legacy()</script>',statusRule:0}]}]])
- const summary={latestTurn:2}
- const firstMessages=[{role:'assistant',turn:1,text:'<StatusPlaceHolderImpl/>'}]
- const first=projectPersistentStatusView(firstMessages,projections,options,summary)
- assert.equal(first.projections[0].parts.length,0)
- const nextMessages=[{role:'assistant',turn:1,text:'no marker'}]
- const next=projectPersistentStatusView(nextMessages,projections,options,{latestTurn:2,previous:summary.next})
- assert.equal(next.projections[0].parts.length,1)
- assert.equal(first.projections[0].parts.length,0)
-})

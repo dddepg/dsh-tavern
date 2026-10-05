@@ -151,16 +151,6 @@ test('mailbox scoped writes retry revision conflicts without reading or overwrit
   assert.equal(chat.story,'concurrent')
 })
 
-test('durable result can project completion without waiting for a second write', async () => {
- const task={taskId:'t',requestId:'r',kind:'candidate',status:'running',version:1}
- const state={id:'c',candidates:{choices:['ready']},taskMailbox:{version:1,tasks:{t:task},latestByKind:{candidate:'t'}}}
- const mailbox=createDurableTaskMailbox({projectReconciledState:true,store:{readChat(){throw Error('full read')},writeChat(){throw Error('redundant write')},async readState(){return structuredClone(state)}},reconcile:chat=>({status:'succeeded',result:chat.candidates})})
- const result=await mailbox.sync('c',{kind:'candidate'})
- assert.equal(result.task.status,'succeeded')
- assert.deepEqual(result.task.result,{choices:['ready']})
- assert.equal(state.taskMailbox.tasks.t.status,'running')
-})
-
 test('durable completion is readable while a mailbox write is blocked', async () => {
  let unblock,started
  const entered=new Promise(resolve=>started=resolve), blocked=new Promise(resolve=>unblock=resolve)

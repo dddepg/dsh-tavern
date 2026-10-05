@@ -277,6 +277,53 @@ export function normalizeMvuToolSubmission(value) {
   }
 }
 
+function valueKind(value) {
+  return Array.isArray(value) ? '列表' : value !== null && typeof value === 'object' ? '对象' : typeof value === 'number' ? '数字' : typeof value === 'boolean' ? '布尔值' : value === null ? '空值' : '文本'
+}
+// A replace that changes a field's shape (list <-> text <-> object) makes MVU's
+// schema diverge and the card's view mis-render. Let the agent fix it and retry.
+function assertMvuValueKinds(operations, variables) {
+  const root = object(variables)
+  const compatible = (before, after) => before === after || (before === '数字' && after === '文本') || (before === '文本' && after === '数字')
+  const elementKind = list => {
+    const kinds = [...new Set(list.map(valueKind))]
+    return kinds.length === 1 ? kinds[0] : null
+  }
+  function lookup(keys) {
+    let target = keys[0] === 'stat_data' ? root : object(root.stat_data)
+    for (const key of keys) {
+      if (target === null || typeof target !== 'object' || !Object.hasOwn(target, key)) return { found: false }
+      target = target[key]
+    }
+    return { found: true, target }
+  }
+  const fail = (index, path, before, after, element) => {
+    throw new Error('变量操作 #' + (index + 1) + ' 类型不一致：' + path + (element ? ' 的列表元素' : '') + ' 当前是' + before + '，提交的是' + after + '；请按原类型提交（列表用 JSON 数组，元素与已有元素同形）')
+  }
+  for (const [index, operation] of operations.entries()) {
+    if (!['replace', 'insert', 'add'].includes(operation.op)) continue
+    const keys = operation.path.split('/').slice(1).map(key => key.replace(/~1/g, '/').replace(/~0/g, '~'))
+    const self = lookup(keys)
+    if (operation.op === 'replace' && self.found && self.target !== null) {
+      const before = valueKind(self.target), after = valueKind(operation.value)
+      if (!compatible(before, after)) fail(index, operation.path, before, after, false)
+      // Elements of a list keep the shape of the existing ones (MVU infers the element schema).
+      if (Array.isArray(self.target) && Array.isArray(operation.value) && self.target.length) {
+        const kind = elementKind(self.target)
+        const bad = kind && operation.value.find(item => !compatible(kind, valueKind(item)))
+        if (bad !== undefined && kind) fail(index, operation.path, kind, valueKind(bad), true)
+      }
+      continue
+    }
+    // Inserting into a list: the new element matches its siblings.
+    const parent = lookup(keys.slice(0, -1))
+    if (parent.found && Array.isArray(parent.target) && parent.target.length && (keys.at(-1) === '-' || /^\d+$/.test(keys.at(-1)))) {
+      const kind = elementKind(parent.target)
+      if (kind && !compatible(kind, valueKind(operation.value))) fail(index, operation.path, kind, valueKind(operation.value), true)
+    }
+  }
+}
+
 function resolveMvuValueMacros(value, input) {
   if (typeof value === 'string') {
     return resolveRuntimeMacroText(value, {
@@ -539,6 +586,7 @@ export function createMvuSettlementModule(options = {}) {
       try {
         if (!call || call.name !== MVU_SUBMIT_UPDATE_TOOL_NAME) throw new Error('后台 Agent 调用了未授权的变量工具')
         submission = resolveMvuSubmissionMacros(normalizeMvuToolSubmission(call.arguments), input)
+        assertMvuValueKinds(submission.operations, input.currentVariables)
         if (feedback && submission.operations.length === 0) throw new Error('上一批更新未通过校验，请修正完整 operations，不能用空数组跳过失败')
       } catch (error) {
         await record('submission-rejected', { error: error.message, argumentKeys: Object.keys(object(call?.arguments)), operations: object(call?.arguments).operations })

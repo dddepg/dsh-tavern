@@ -7,7 +7,7 @@ import { sessionEvents, appendSessionEvent } from './session-events.js'
 import { randomUUID } from 'node:crypto'
 import { createRegenerationRecovery } from './regeneration-recovery.js'
 import { isDeepStrictEqual } from 'node:util'
-import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, failedTurnReplayAvailability } from './rollback-surface.js'
+import { rollbackAvailability, clearFailedTurnSurface, locateRegenerationSurface, planRegenerationSurface, failedTurnReplayAvailability, replayableFailedTurn } from './rollback-surface.js'
 import { assertRegenerationSourceCurrent, replaceLastRound } from './last-round-replacement.js'
 import { diagnosticIdentity, regenerationTargetDiagnostic } from './regeneration-diagnostics.js'
 
@@ -301,7 +301,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (agent.phase !== undefined && agent.phase !== null && agent.phase.kind === 'running') throw new Error('正在生成，请先停止后再重新生成')
     const session = agent.session
     const events = sessionEvents(session)
-    const replay = failedTurnReplayAvailability({ events, nodes: session.surface?.nodes || [] })
+    const replay = failedTurnReplayAvailability({ events, nodes: session.surface?.nodes || [], cleared: chat.suppressedDshTurns || [] })
     const target = replay.target
     if (target === null) throw new Error(replay.reason)
     // Read the card before spending a generation: a broken card must fail here,
@@ -382,12 +382,16 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     if (failedTurns.length) {
       for (const turn of availability.unclearedTurns) clearFailedTurnSurface({ session, turn })
       chat = await updateChat(chat.id, current => {
+        // Clearing only hides uncommitted residue. The failed turn's own deferred
+        // bookkeeping may still be landing in the timeline; only story text must hold.
         assertRollbackSnapshot(rollbackBodyMessages(current), rollbackBodyMessages(originalChat))
-        assertRollbackSnapshot(current.timeline, originalChat.timeline)
         return { ...current, suppressedDshTurns: [...new Set([...(current.suppressedDshTurns || []), ...failedTurns])].sort((a, b) => a - b), updatedAt: Date.now() }
       }, { source: 'rollback.interrupted' })
       const result = await view(chat, card)
       result.clearedIncompleteTurns = failedTurns
+      // The failed input never reached the story; hand it back so the player can edit and resend it.
+      const tail = replayableFailedTurn({ events })
+      if (tail && failedTurns.includes(tail.turn)) result.clearedInput = tail.userText
       return result
     }
     const rollbackSurface = availability.target

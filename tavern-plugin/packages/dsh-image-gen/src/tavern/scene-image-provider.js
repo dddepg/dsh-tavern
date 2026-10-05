@@ -116,16 +116,42 @@ export async function generateSceneImage(input, deps = {}) {
   }
 }
 
+const NOVELAI_BUSY_RETRIES = 3
+// Exponential backoff with jitter, never shorter than the server's Retry-After, capped at 30s.
+function novelaiRetryDelay(response, attempt, baseMs = 2000) {
+  const header = Number(response.headers?.get?.('retry-after'))
+  const backoff = baseMs * 2 ** attempt * (0.5 + Math.random() / 2)
+  return Math.min(30000, Math.max(Number.isFinite(header) ? header * 1000 : 0, backoff))
+}
+function abortableDelay(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason)
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, ms)
+    function abort() { clearTimeout(timer); reject(signal.reason) }
+    signal?.addEventListener('abort', abort, { once: true })
+  })
+}
+
 async function requestSceneImage(input, deps) {
   if (input.provider === 'comfyui') return generateComfyImage(input, { ...deps, readBytes: boundedBytes, decodeImage: imageBytes })
   const request = deps.fetch || fetch
   const maxBytes = input.maxBytes || 20 * 1024 * 1024
   const spec = imageChannelRequest(input)
-  const response = await request(spec.url, {
+  const send = () => request(spec.url, {
     method: 'POST', redirect: 'error', signal: input.signal,
     headers: spec.headers,
     body: JSON.stringify(spec.body)
   })
+  let response = await send()
+  // NovelAI answers 429 when the account already has a generation running
+  // (e.g. in its own web UI) and same-protocol relays pass it through: the job
+  // was refused before generating, so waiting and resending cannot double-charge.
+  // Other channels and 5xx stay unretried; they do not prove the job was skipped.
+  for (let attempt = 0; input.provider === 'novelai' && response.status === 429 && attempt < NOVELAI_BUSY_RETRIES; attempt++) {
+    await response.body?.cancel()
+    await abortableDelay(novelaiRetryDelay(response, attempt, deps.retryBaseMs), input.signal)
+    response = await send()
+  }
   // Keep bounded, useful error fields; never forward arbitrary bodies or secrets.
   if (!response.ok) {
     let detail = {}

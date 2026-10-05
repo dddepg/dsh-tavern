@@ -152,58 +152,72 @@
             const frame = root?.querySelector('iframe:not([aria-hidden="true"])');
             try {
                 if (!frame) throw new Error("面板尚未加载，请稍后重试。");
-                try {
-                    if (typeof frame.requestFullscreen === "function") {
-                        await frame.requestFullscreen();
-                        return;
-                    }
-                } catch (_) { /* Embedded hosts may deny native fullscreen. */ }
-                if (!frame.isConnected) return;
+                // Fullscreen the page, not the iframe: a fullscreened iframe hides every
+                // host control, leaving only Esc to get out. The frame fills the page instead.
                 openTavernPageFullscreen(frame);
+                const root = frame.ownerDocument.documentElement;
+                try { if (typeof root.requestFullscreen === "function") await root.requestFullscreen(); }
+                catch (_) { /* Embedded hosts may deny native fullscreen; the page overlay remains. */ }
             } catch (error) { tavernErrorHub.report("展开大屏", error); }
         }
 
         let closeTavernPageFullscreen = null;
+        const TAVERN_FULLSCREEN_BAR = 40;
         function openTavernPageFullscreen(frame) {
             closeTavernPageFullscreen?.();
             const doc = frame.ownerDocument;
             const previousStyle = frame.getAttribute("style");
             const previousPopover = frame.getAttribute("popover");
             const previousFocus = doc.activeElement;
+            // Host controls get their own strip above the frame. Floating them over the
+            // card would cover whatever the card placed in that spot, and no position is
+            // safe for every card.
+            const bar = doc.createElement("div");
+            bar.style.cssText = "position:fixed;inset:0 0 auto 0;width:100vw;height:" + TAVERN_FULLSCREEN_BAR + "px;margin:0;padding:0 12px;box-sizing:border-box;border:0;display:flex;align-items:center;justify-content:flex-end;background:var(--dsw-alias-bg-base, Canvas);z-index:2147483647;";
             const close = doc.createElement("button");
             close.type = "button";
             close.className = "dsh-tavern-btn";
             close.textContent = "退出大屏";
-            close.style.cssText = "position:fixed;inset:16px 16px auto auto;margin:0;padding:10px 16px;z-index:2147483647;";
+            close.style.cssText = "margin:0;padding:4px 12px;";
+            bar.append(close);
             let observer;
             const restore = () => {
                 observer?.disconnect();
+                doc.removeEventListener("fullscreenchange", onFullscreenChange);
+                if (doc.fullscreenElement === doc.documentElement) doc.exitFullscreen?.().catch(() => {});
                 frame.removeAttribute("data-dsh-tavern-expanded");
                 if (typeof frame.hidePopover === "function" && frame.matches(":popover-open")) frame.hidePopover();
                 if (previousPopover === null) frame.removeAttribute("popover");
                 else frame.setAttribute("popover", previousPopover);
                 if (previousStyle === null) frame.removeAttribute("style");
                 else frame.setAttribute("style", previousStyle);
-                close.remove();
+                bar.remove();
                 doc.removeEventListener("keydown", onKey);
                 if (closeTavernPageFullscreen === restore) closeTavernPageFullscreen = null;
                 if (previousFocus?.isConnected) previousFocus.focus();
             };
             const onKey = event => { if (event.key === "Escape") { event.preventDefault(); restore(); } };
+            // Esc during native fullscreen is consumed by the browser; leave the overlay with it.
+            let wasFullscreen = false;
+            const onFullscreenChange = () => {
+                if (doc.fullscreenElement) wasFullscreen = true;
+                else if (wasFullscreen) restore();
+            };
+            doc.addEventListener("fullscreenchange", onFullscreenChange);
             closeTavernPageFullscreen = restore;
             close.addEventListener("click", restore);
             doc.addEventListener("keydown", onKey);
             try {
                 // Keep the live iframe in place: reparenting would reload card scripts.
                 frame.setAttribute("data-dsh-tavern-expanded", "");
-                frame.style.cssText += ";position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;";
+                frame.style.cssText += ";position:fixed!important;inset:" + TAVERN_FULLSCREEN_BAR + "px 0 auto 0!important;width:100vw!important;height:calc(100dvh - " + TAVERN_FULLSCREEN_BAR + "px)!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important;border:0!important;z-index:2147483646!important;background:var(--dsw-alias-bg-base, Canvas)!important;";
                 if (typeof frame.showPopover === "function") {
                     frame.setAttribute("popover", "manual");
                     frame.showPopover();
-                    close.setAttribute("popover", "manual");
+                    bar.setAttribute("popover", "manual");
                 }
-                doc.body.append(close);
-                if (close.hasAttribute("popover")) close.showPopover();
+                doc.body.append(bar);
+                if (bar.hasAttribute("popover")) bar.showPopover();
                 close.focus();
                 observer = new doc.defaultView.MutationObserver(() => {
                     if (!frame.isConnected || frame.getAttribute("aria-hidden") === "true") restore();
@@ -441,6 +455,7 @@
 		}
 
         // @include inline-fragment.js
+        // @include html-sketch.js
 
 		function renderTavernProjection(projection, options) {
 			const h = React.createElement;
@@ -453,13 +468,27 @@
 				return h(TavernMessageFrame, Object.assign({}, options, { key: "opening-runtime", content: content, partIndex: 0, eager: options.eagerFrame }));
 			}
 			return parts.map(function (part, index) {
-				if (part.kind === "markdown") return h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+				if (part.kind === "markdown") {
+					const markdown = h(TavernColoredMarkdown, { key: index, text: String(part.text || ""), streaming: options.streaming, labels: { code: options.codeLabels, footnotes: "脚注" }, codeLabels: options.codeLabels, fileMentions: options.mentions });
+					return options.scriptLayer && !options.streaming ? h(TavernScriptLayerPart, { key: index, layer: options.scriptLayer, partIndex: index, text: String(part.text || "") }, markdown) : markdown;
+				}
 				const content = String(part.content !== undefined ? part.content : part.html || "");
                 if (options.trustedCardMode === true && !options.openingPreview && parseTavernInlineFragment(content, window.document)) {
                     return h(TavernInlineFragment, {key:index, content:content});
                 }
 				return h(TavernMessageFrame, { key: index, content: content, sessionId: options.sessionId, turn: options.turn, partIndex: index, frameOwner: options.frameOwner, frameSizing: options.frameSizing, helperContext: options.helperContext, helperContextReader: options.helperContextReader, openingPreview: options.openingPreview, onSelectOpening: options.onSelectOpening, onSubmitOpening: options.onSubmitOpening, trustedCardMode: options.trustedCardMode, eager: options.eagerFrame, executeSlash: options.executeSlash });
 			});
+		}
+
+		function TavernScriptLayerPart(props) {
+			const native = React.useRef(null), layer = React.useRef(null);
+			React.useLayoutEffect(function () {
+				return mountTavernScriptLayer({ native: native.current, layer: layer.current, sessionId: props.layer.sessionId, messageId: props.layer.messageId });
+			}, [props.layer.sessionId, props.layer.messageId, props.partIndex, props.text]);
+			// Visibility is toggled by the layer itself; React never sets `hidden` here.
+			return React.createElement("div", { className: "dsh-tavern-script-part" },
+				React.createElement("div", { ref: native }, props.children),
+				React.createElement("div", { ref: layer, className: "mes_text dsh-tavern-script-layer", "data-dsh-script-layer": "", "data-session": props.layer.sessionId, "data-mesid": String(props.layer.messageId) }));
 		}
 
 		function renderTavernAssistantBlocks(input) {
@@ -482,7 +511,10 @@
 				if (block.kind === "text") {
 					if (input.projection && projected) continue;
 					const projection = input.projection;
-					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash })));
+					if (projection) rendered.push(h(React.Fragment, { key: index }, renderTavernProjection(projection, { streaming: input.streaming, codeLabels: codeLabels, mentions: input.mentions, sessionId: input.sessionId, turn: input.turn, frameSizing: input.frameSizing, helperContext: input.helperContext, helperContextReader: input.helperContextReader, trustedCardMode: input.trustedCardMode, eagerFrame: input.eagerFrame, frameOwner: input.frameOwner, executeSlash: input.executeSlash, scriptLayer: input.scriptLayer })));
+					else if (input.htmlSketches) rendered.push(h(React.Fragment, { key: index }, splitTavernHtmlSketches(block.text).map(function (part, partIndex) {
+						return part.kind === "sketch" ? h(TavernHtmlSketch, { key: partIndex, html: part.html }) : h(TavernColoredMarkdown, { key: partIndex, text: part.text, streaming: input.streaming, labels: { code: codeLabels, footnotes: "脚注" }, codeLabels: codeLabels, fileMentions: input.mentions });
+					})));
 					else rendered.push(h(TavernColoredMarkdown, { key: index, text: String(block.text || ""), streaming: input.streaming, labels: { code: codeLabels, footnotes: "脚注" }, codeLabels: codeLabels, fileMentions: input.mentions }));
 					projected = true;
 					continue;

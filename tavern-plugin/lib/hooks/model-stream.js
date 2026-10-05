@@ -3,6 +3,7 @@ import { createStoryCompactionRequest, usesStoryCompaction } from '../domain/sto
 import { installCompactionRequestProjection } from '../domain/compaction-request.js'
 import { installWorkspaceInstructionPresentation } from '../domain/workspace-instruction-presentation.js'
 import { presentModelError } from '../domain/model-error-presentation.js'
+import { markRequestHandled, requestHandledBy } from '../domain/request-lineage.js'
 
 export function registerModelStreamHooks({
   agentRegistry,
@@ -17,7 +18,6 @@ export function registerModelStreamHooks({
   runtimePrompt,
   sessionStateForSession,
   sessionStore,
-  storyCompactionRequests,
   str,
   updateChat,
   worldbookRecallLog,
@@ -38,7 +38,6 @@ export function registerModelStreamHooks({
       return Math.max(native, Math.ceil((text.length - nonAscii) / 4) + nonAscii * 2 + 8)
     }
   })
-  const fullTemplateRequests = new WeakMap()
   installWorkspaceInstructionPresentation(ctx, async sessionId => {
     if (backgroundAgentRunner.owns(sessionId)) return true
     const chat = await sessionStateForSession(sessionId)
@@ -54,7 +53,7 @@ export function registerModelStreamHooks({
         source: { kind: 'model', provider: str(options.provider), model: str(options.model) }
       }))
     }
-    if (options !== null && typeof options === 'object' && options.purpose === 'compaction' && !storyCompactionRequests.has(options)) {
+    if (options !== null && typeof options === 'object' && options.purpose === 'compaction' && !requestHandledBy(options, 'story-compaction')) {
       const fallback = next()
       return (async function * () {
         const chat = await chatForSession(sessionId)
@@ -68,11 +67,10 @@ export function registerModelStreamHooks({
           yield * fallback
           return
         }
-        storyCompactionRequests.add(request)
-        yield * ctx.llm.stream(request)
+        yield * ctx.llm.stream(markRequestHandled(request, 'story-compaction'))
       })()
     }
-    const projectedRequest = (fullTemplateRequests.has(options) || importContextPreparation.isPrepared(options)) ? null : foregroundStrategies.projectRequest(options, coordinates)
+    const projectedRequest = (requestHandledBy(options, 'full-template') || importContextPreparation.isPrepared(options)) ? null : foregroundStrategies.projectRequest(options, coordinates)
     if (projectedRequest !== null) return ctx.llm.stream(projectedRequest)
     const stream = next()
     const backgroundContext = backgroundAgentRunner.requestContext(sessionId)
@@ -83,11 +81,9 @@ export function registerModelStreamHooks({
       const chat = ownerSessionId === '' ? undefined : await chatHeaderForSession(ownerSessionId, [
         'requestMode', 'compatibilityTraces', 'bypassPlanId', 'runtimePresetSnapshot', 'foregroundFrames'
       ])
-      if (chat && ['story', 'script'].includes(chat.mode) && options.purpose === undefined && chat.requestMode !== 'sillytavern' && !fullTemplateRequests.has(options)) {
+      if (chat && ['story', 'script'].includes(chat.mode) && options.purpose === undefined && chat.requestMode !== 'sillytavern' && !requestHandledBy(options, 'full-template')) {
         const projected = await fullTemplateRuntime.forSession(ownerSessionId).projectRequestProjection({ messages: options.messages, system: options.system, model: options.model })
-        const templated = { ...options, ...projected }
-        fullTemplateRequests.set(templated, options)
-        yield * ctx.llm.stream(templated)
+        yield * ctx.llm.stream(markRequestHandled({ ...options, ...projected }, 'full-template'))
         return
       }
       let requestRecord = null
@@ -95,8 +91,9 @@ export function registerModelStreamHooks({
         const coordinates = requestCoordinates.get(sessionId) || {}
         requestRecord = await modelRequestLog.record({ chat, context: backgroundContext, coordinates, options })
         if (!backgroundContext && ['story', 'script'].includes(chat.mode)) {
-          try { await worldbookRecallLog.requested(chat, options, requestRecord.id) }
-          catch (error) { console.warn('dsh-tavern: 世界书请求日志关联失败', String(error?.message || error)) }
+          // Evidence only: scanning a multi-MB request must not delay the first token.
+          worldbookRecallLog.requested(chat, options, requestRecord.id)
+            .catch(error => console.warn('dsh-tavern: 世界书请求日志关联失败', String(error?.message || error)))
         }
       }
       let responseText = ''
@@ -114,7 +111,7 @@ export function registerModelStreamHooks({
         throw displayedError
       } finally {
         const completed = finish && finish.kind !== 'error' && finish.kind !== 'aborted'
-        foregroundStrategies.completeRequest(fullTemplateRequests.get(options) || options, completed)
+        foregroundStrategies.completeRequest(options, completed)
         if (chat && requestRecord) {
           try { await modelRequestLog.complete({ chatId: chat.id, id: requestRecord.id, text: responseText, finish, error: failure }) }
           catch (error) { console.error('dsh-tavern: 模型结果日志写入失败', str(error && error.message || error)) }

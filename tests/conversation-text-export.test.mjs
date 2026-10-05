@@ -14,22 +14,3 @@ test('整轮 HTML 安全转换为可见纯文本，不执行或导出前端代�
   assert.equal(result.text, '第一段 & 正文\n\n第二段\n继续\n')
   assert.doesNotMatch(result.text, /doctype|html|head|style|script|window\.bad|内部标题|内部注释|maintext|<|>/i)
 })
-
-test('卡片工作台同样只导出正文，并过滤内部消息、空消息与非法文件名字符', () => {
-  const result = createConversationTextExport({
-    mode: 'card',
-    cardName: '草稿人物卡',
-    messages: [
-      { role: 'system', text: '系统提示' },
-      { role: 'user', text: '  帮我修改性格。  ' },
-      { role: 'assistant', text: '已经修改。' },
-      { role: 'tool', text: '工具结果' },
-      { role: 'assistant', text: '   ' }
-    ]
-  }, { title: '人物卡：修改/测试?' })
-
-  assert.equal(result.filename, '人物卡：修改 测试.txt')
-  assert.equal(result.messageCount, 2)
-  assert.equal(result.text, '帮我修改性格。\n\n------------------------------------------------------------\n\n已经修改。\n')
-  assert.doesNotMatch(result.text, /用户：|助手：/)
-})

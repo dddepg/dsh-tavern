@@ -25,6 +25,12 @@ function same(left, right) {
   return isDeepStrictEqual(left, right)
 }
 
+// Bookkeeping stamps that every writer bumps, not story data. Like the root
+// updatedAt, two compatible writers (a settlement finishing and the next round
+// starting) must not conflict over them; keep the later one. Entries inside the
+// timeline stay strict.
+const MONOTONIC_STAMPS = new Set(['timeline.updatedAt'])
+
 function conflict(chatId, path) {
   const error = new Error('Tavern Chat 已被另一项操作修改，拒绝覆盖冲突字段：' + (path || '<root>'))
   error.code = 'DSH_TAVERN_CHAT_CONFLICT'
@@ -87,6 +93,10 @@ function mergeValue(base, latest, desired, path, chatId) {
     for (const key of keys) {
       if (path === '' && (key === STORAGE_REVISION || key === 'updatedAt')) continue
       const childPath = path === '' ? key : path + '.' + key
+      if (MONOTONIC_STAMPS.has(childPath)) {
+        const stamps = [latest[key], desired[key]].filter(Number.isFinite)
+        if (stamps.length) { result[key] = Math.max(...stamps); continue }
+      }
       const value = mergeValue(
         Object.prototype.hasOwnProperty.call(base, key) ? base[key] : MISSING,
         Object.prototype.hasOwnProperty.call(latest, key) ? latest[key] : MISSING,
