@@ -46,3 +46,15 @@ test('单局数据清单找出本局散落各处的数据，清理时不碰其�
   assert.equal(await exists(path.join(profile, 'data', 'chats')), true)
   assert.equal(await createGameFootprint({ dataRoot: data }).processDeferredDeletions(), 0)
 })
+
+test('已删除游戏的进行中调用不会把诊断写回', async () => {
+  const { createTavernApiDiagnostics } = await import('../tavern-plugin/lib/domain/tavern-api-diagnostics.js')
+  const files = new Map()
+  const storage = { updateJson: async (path, update) => { files.set(path, update(files.get(path))) }, remove: async path => { files.delete(path) } }
+  const diagnostics = createTavernApiDiagnostics(storage)
+  diagnostics.recordResourceSave('session-gone', { ok: true })
+  await diagnostics.forget('session-gone')
+  diagnostics.recordResourceSave('session-gone', { ok: true })
+  await new Promise(resolve => setTimeout(resolve, 650))
+  assert.equal(files.size, 0)
+})

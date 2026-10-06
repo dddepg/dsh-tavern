@@ -1247,6 +1247,7 @@ export async function apply(ctx) {
     deletedChatIds.add(chatId)
     if (footprint) {
       deletedSessionIds.add(footprint.foregroundSessionId)
+      await apiDiagnostics.forget(footprint.foregroundSessionId).catch(() => {})
       await backgroundAgentRunner.releaseFor(footprint.foregroundSessionId)
       // A session DSH still holds loaded would be written back; delete it on the next start.
       const live = footprint.items.filter(item => item.category === 'subsession' && agentRegistry.get(item.sessionId))
@@ -1338,11 +1339,11 @@ export async function apply(ctx) {
     try {
       const chatId = uid('chat'), sessionId = 'session-' + randomUUID()
       // 1. Card: reuse an identical local card; otherwise import the packaged one as a new card.
-      let cardPath = str(save.chat.cardPath)
+      let cardPath = str(save.chat.cardPath), importedCard = ''
       if (save.card?.payload) {
         let local = null
         try { local = await fileResources.originalCardPayload(cardPath) } catch {}
-        if (!local || JSON.stringify(local) !== JSON.stringify(save.card.payload)) cardPath = (await importCard(save.card.payload)).path
+        if (!local || JSON.stringify(local) !== JSON.stringify(save.card.payload)) cardPath = importedCard = (await importCard(save.card.payload)).path
       }
       if (save.script && (save.chat.mode || 'story') === 'script' && !await fileResources.scriptForCard(cardPath)) {
         await importScript(cardPath, { name: str(save.script.path).split('/').pop() || '剧本.txt', text: str(save.script.text) })
@@ -1383,7 +1384,13 @@ export async function apply(ctx) {
         next.id = chatId; next.sessionId = sessionId; next.cardPath = cardPath
         // Background agents, candidates and undo points name the source install's sessions.
         for (const key of ['forkedFrom', 'regenRecovery', 'regenInProgress', 'rollbackUndo', 'backgroundHistoryIds', 'candidateAgent']) delete next[key]
-        if (next.candidates && typeof next.candidates === 'object') { delete next.candidates.traceSessionId; delete next.candidates.traceSessionIds }
+        const scrub = value => {
+          if (Array.isArray(value)) { value.forEach(scrub); return }
+          if (!value || typeof value !== 'object') return
+          for (const key of ['traceSessionId', 'traceSessionIds', 'startedSessionId']) delete value[key]
+          Object.values(value).forEach(scrub)
+        }
+        scrub(next)
         next.timeline = { ...(next.timeline || {}), participants: { background }, operations: {} }
         next.timeline.checkpoints = (next.timeline.checkpoints || []).filter(checkpoint => revisionMap.has(Number(checkpoint.beforeRevision)))
           .map(checkpoint => ({ ...checkpoint, beforeRevision: revisionMap.get(Number(checkpoint.beforeRevision)), ...(checkpoint.participants ? { participants: { background } } : {}) }))
@@ -1408,9 +1415,12 @@ export async function apply(ctx) {
         // 5. Native session: same events and sequence numbers under the new id and this install's cwd.
         const events = renameJson(save.session.events)
         const selection = agentDefaultModel?.currentSelection?.() || {}
-        const handle = await ctx.get('agents').create({ sessionId, seed: events, inheritedEventCount: events.length,
-          meta: { cwd, isSeeded: true, agentPreset: str(save.session.header?.agentPreset) || 'tavern' },
-          agentOptions: { provider: selection.provider, model: selection.model } })
+        let handle
+        try {
+          handle = await ctx.get('agents').create({ sessionId, seed: events, inheritedEventCount: events.length,
+            meta: { cwd, isSeeded: true, agentPreset: str(save.session.header?.agentPreset) || 'tavern' },
+            agentOptions: { provider: selection.provider, model: selection.model } })
+        } catch (error) { throw new Error('存档包已损坏：模型会话记录无法恢复（' + str(error?.message || error).slice(0, 200) + '）') }
         created = true
         await sessionStore.flush(handle.agent.session)
         await handle.dispose()
@@ -1428,6 +1438,7 @@ export async function apply(ctx) {
           try { await rm(path.dirname(ctx.get('sessionPersistence').locate({ id: sessionId, cwd }).path), { recursive: true, force: true }) } catch {}
         }
         if (written) try { await conversationRegistry.remove(chatId) } catch {}
+        if (importedCard) try { await fileResources.remove(importedCard) } catch {}
         try { await rm(path.join(dataRoot, 'scene-images', createHash('sha256').update(chatId).digest('hex')), { recursive: true, force: true }) } catch {}
         throw error
       }

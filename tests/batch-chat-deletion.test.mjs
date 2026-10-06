@@ -14,11 +14,11 @@ function setup() {
     deferSessionDeletion: async items => { events.push('defer:' + items.map(item => item.path).join(',')) }
   }
   const backgroundAgentRunner = { releaseFor: async id => { events.push('release:' + id) } }
-  const api = new Function('readChat', 'str', 'storyTimeline', 'agentRegistry', 'cancelSettlement', 'conversationRegistry', 'deletedChatIds', 'gameFootprint', 'backgroundAgentRunner', 'deletedSessionIds', section + '; return { deleteChats };')(
+  const api = new Function('readChat', 'str', 'storyTimeline', 'agentRegistry', 'cancelSettlement', 'conversationRegistry', 'deletedChatIds', 'gameFootprint', 'backgroundAgentRunner', 'deletedSessionIds', 'apiDiagnostics', section + '; return { deleteChats };')(
     async id => ({ id, sessionId: id }), String,
     { inspect: () => ({ participants: { worker: { sessionId: 'background' } } }) }, workers,
     async id => { events.push('settlement:' + id) },
-    { remove: async id => { events.push('remove:' + id); if (id === 'bad') throw new Error('disk error') } }, deletedChatIds, gameFootprint, backgroundAgentRunner, new Set())
+    { remove: async id => { events.push('remove:' + id); if (id === 'bad') throw new Error('disk error') } }, deletedChatIds, gameFootprint, backgroundAgentRunner, new Set(), { forget: async id => { events.push('forget:' + id) } })
   return { ...api, events, deletedChatIds }
 }
 test('batch deletion stops foreground and background before removing, deduplicates, and continues after a failure', async () => {
@@ -32,5 +32,6 @@ test('batch deletion stops foreground and background before removing, deduplicat
   assert.ok(api.events.indexOf('remove:a') < api.events.indexOf('release:a'))
   assert.ok(api.events.includes('cleanup:log-a,gone-a'))
   assert.ok(api.events.includes('defer:live'), '仍被 DSH 持有的会话下次启动时再删')
+  assert.ok(api.events.includes('forget:a'), '已删局的调用诊断不再写回')
   assert.ok(!api.events.some(event => event.startsWith('cleanup:log-bad')))
 })
