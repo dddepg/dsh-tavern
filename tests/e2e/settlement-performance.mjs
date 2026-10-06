@@ -331,7 +331,8 @@ async function longOperationChecks({ page, step, savedChat, readLog, report }) {
     const reads = fullReads(offset)
     report.longOperations = { ...report.longOperations, [name]: { ms: Date.now() - started, fullReads: reads.length } }
     console.log('LONG-OP ' + name + ' ' + JSON.stringify(report.longOperations[name]))
-    assert.equal(reads.length, 0, name + ' must not read the complete Chat: ' + JSON.stringify(reads.map(event => event.caller?.slice(0, 4))))
+    // Baseline comparisons against older builds record the reads instead of failing.
+    if (process.env.TAVERN_PERF_ALLOW_FULL_READS !== '1') assert.equal(reads.length, 0, name + ' must not read the complete Chat: ' + JSON.stringify(reads.map(event => event.caller?.slice(0, 4))))
   }
   const before = await savedChat()
   const edited = '长档手工编辑：最后一轮正文。'
