@@ -890,7 +890,7 @@ export async function apply(ctx) {
     ])
     const chat = selected?.chat
     // Alias recovery and configuration adoption still require the original reader.
-    if (chat?.sessionId === sessionId && chat.backgroundConfigVersion === 1 && chat.conversationFeaturesVersion === 1) return chat
+    if (chat && chat.sessionId === sessionId && chat.backgroundConfigVersion === 1 && chat.conversationFeaturesVersion === 1) return chat
     return chatForSession(sessionId)
   }
   const chatSliceForSession = createSessionSliceReader({ links: readSessionMap, readSlice: chatPersistence.readSlice })
