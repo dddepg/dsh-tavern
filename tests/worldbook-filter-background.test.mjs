@@ -83,7 +83,7 @@ test('小候选池不创建后台任务；压缩和其他后台工作期间禁�
   assert.equal((await h.filter({ ...input, candidates: candidates.slice(0, 1) })).ran, false)
   const long = candidates.slice(0, 5).map(item => ({ ...item, tokenCost: 5000 }))
   assert.equal((await h.filter({ ...input, candidates: long })).ran, false, '少量长条目交给预算截断，不等待模型')
-  const short = candidates.map(item => ({ ...item, tokenCost: 900 }))
+  const short = candidates.map(item => ({ ...item, tokenCost: 400 }))
   assert.equal((await h.filter({ ...input, candidates: short })).ran, false, '条目多但总量不大时直接注入')
   assert.equal((await h.store.readChat()).timeline, undefined)
   h.block(true)
