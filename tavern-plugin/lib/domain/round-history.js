@@ -524,6 +524,13 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
       }
       throw error
     }
+    // The Chat commit above already hides this round. Persist its model-side
+    // shadow now, not on the host's delayed live buffer behind slower background
+    // and script steps: a crash in between would leave the round in the context.
+    if (typeof sessions.flush === 'function') {
+      try { await sessions.flush(session) }
+      catch (error) { rollbackWarning = [rollbackWarning, '正文已回退，模型上下文保存失败：' + str(error?.message || error)].filter(Boolean).join('；') }
+    }
     // Rewind immediately after the foreground commit; retain the timeline's retry
     // boundary so the next task can safely retry if this best-effort step fails.
     for (const participant of Object.values(storyTimeline.inspect({ chat }).participants || {})) {
