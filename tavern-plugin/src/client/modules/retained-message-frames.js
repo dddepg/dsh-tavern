@@ -31,6 +31,12 @@ function createRetainedTavernFrames(options) {
     const host = options.window, document = host.document, retention = options.retention;
     const records = new Map();
     let parking = null, retiring = null;
+    // A trusted status panel may mount its own overlay onto the DSH page, which Tavern
+    // cannot attribute to it. Leaving the conversation closes those panels so the next
+    // game is not covered; returning reloads them.
+    if (typeof retention.onLeave === "function") retention.onLeave(function (sessionId) {
+        for (const record of Array.from(records.values())) if (record.sessionId === sessionId && record.persistent) release(record);
+    });
     const retirements = new Map();
     function parked() {
         if (!parking) {
