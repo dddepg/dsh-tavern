@@ -12,6 +12,7 @@ export function registerTavernHttpRoutes({
   dispatch,
   fileResources,
   helperHistoryAccess,
+  mobileCardImport,
   performanceDiagnostics,
   runtimeGeneration,
   runtimeReadiness,
@@ -160,6 +161,20 @@ export function registerTavernHttpRoutes({
             const body = await image.read()
             res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': body.byteLength, 'Cache-Control': 'private, no-cache', ETag: image.revision, 'X-Content-Type-Options': 'nosniff' })
             res.end(body)
+            return
+          }
+          if (req.method === 'GET' && pathname === '/api/dsh-tavern/mobile-card-thumbnail') {
+            const query = new URL(req.url, 'http://x').searchParams
+            let thumbnail
+            try { thumbnail = await mobileCardImport.thumbnail(query.get('id')) } catch { thumbnail = undefined }
+            // JSON cards, unreadable images and unusual PNG variants fall back to a text placeholder.
+            if (thumbnail === undefined) {
+              res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' })
+              res.end('not found')
+              return
+            }
+            res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': thumbnail.body.byteLength, 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff' })
+            res.end(thumbnail.body)
             return
           }
           if (TAVERN_RELEASE_CAPABILITIES.sceneImages && req.method === 'GET' && pathname === '/api/dsh-tavern/scene-image-artist-preview') {

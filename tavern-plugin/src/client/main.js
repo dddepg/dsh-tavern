@@ -78,11 +78,81 @@ window.__ModuleLoader__.load({
 			});
 		}
 
+		const MOBILE_IMPORT_SORTS = Object.freeze([
+			{ id: "modified-desc", label: "修改时间 新→旧" },
+			{ id: "modified-asc", label: "修改时间 旧→新" },
+			{ id: "name-asc", label: "文件名 A→Z" },
+			{ id: "name-desc", label: "文件名 Z→A" },
+			{ id: "size-desc", label: "大小 大→小" },
+			{ id: "size-asc", label: "大小 小→大" },
+			{ id: "png-first", label: "PNG 优先" },
+			{ id: "json-first", label: "JSON 优先" }
+		]);
+		const MOBILE_IMPORT_SORT_STORAGE = "dsh-tavern-mobile-import-sort";
+		const MOBILE_IMPORT_SORT_DEFAULT = "modified-desc";
+
+		function mobileImportNameOf(file) {
+			return String(file && file.name || "");
+		}
+
+		function isMobileImportImage(name) {
+			return /\.png$/i.test(String(name || ""));
+		}
+
+		function readMobileImportSort() {
+			try {
+				const stored = window.localStorage.getItem(MOBILE_IMPORT_SORT_STORAGE);
+				if (MOBILE_IMPORT_SORTS.some(function (option) { return option.id === stored; })) return stored;
+			} catch (_error) {}
+			return MOBILE_IMPORT_SORT_DEFAULT;
+		}
+
+		function saveMobileImportSort(value) {
+			try { window.localStorage.setItem(MOBILE_IMPORT_SORT_STORAGE, value); } catch (_error) {}
+		}
+
+		let mobileImportCollator = null;
+		function mobileImportNameCompare(left, right) {
+			const leftName = mobileImportNameOf(left);
+			const rightName = mobileImportNameOf(right);
+			if (mobileImportCollator === null) {
+				try { mobileImportCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" }); }
+				catch (_error) { mobileImportCollator = false; }
+			}
+			return mobileImportCollator ? mobileImportCollator.compare(leftName, rightName) : (leftName < rightName ? -1 : (leftName > rightName ? 1 : 0));
+		}
+
+		function sortMobileImportFiles(files, sort) {
+			const items = files.slice();
+			const byName = mobileImportNameCompare;
+			const byExtension = function (jsonFirst) {
+				return function (left, right) {
+					const leftRank = isMobileImportImage(left.name) === jsonFirst ? 1 : 0;
+					const rightRank = isMobileImportImage(right.name) === jsonFirst ? 1 : 0;
+					return leftRank - rightRank || byName(left, right);
+				};
+			};
+			if (sort === "modified-asc") items.sort(function (left, right) { return Number(left.modifiedAt) - Number(right.modifiedAt) || byName(left, right); });
+			else if (sort === "name-asc") items.sort(byName);
+			else if (sort === "name-desc") items.sort(function (left, right) { return byName(right, left); });
+			else if (sort === "size-desc") items.sort(function (left, right) { return Number(right.size) - Number(left.size) || byName(left, right); });
+			else if (sort === "size-asc") items.sort(function (left, right) { return Number(left.size) - Number(right.size) || byName(left, right); });
+			else if (sort === "png-first") items.sort(byExtension(false));
+			else if (sort === "json-first") items.sort(byExtension(true));
+			else items.sort(function (left, right) { return Number(right.modifiedAt) - Number(left.modifiedAt) || byName(left, right); });
+			return items;
+		}
+
 		function MobileCardImportButton(props) {
 			const [catalog, setCatalog] = React.useState(null);
 			const [open, setOpen] = React.useState(false);
 			const [busy, setBusy] = React.useState(false);
 			const [error, setError] = React.useState("");
+			const [filter, setFilter] = React.useState("");
+			const [sort, setSort] = React.useState(readMobileImportSort);
+			const [selecting, setSelecting] = React.useState(false);
+			const [selected, setSelected] = React.useState(function () { return new Set(); });
+			const [progress, setProgress] = React.useState(null);
 			function load() {
 				return rpcWithTimeout("listMobileCardImports", {}).then(function (result) { setCatalog(result); return result; }, function () { setCatalog({ available: false, files: [] }); return { available: false, files: [] }; });
 			}
@@ -92,21 +162,101 @@ window.__ModuleLoader__.load({
 				if (current.available) { setOpen(true); load(); }
 				else if (props.inputRef.current) props.inputRef.current.click();
 			}
-			async function importFile(file) {
-				setBusy(true); setError("");
-				try { const result = await rpc("importMobileCard", { id: file.id }); setOpen(false); await props.onImported(result.card); }
-				catch (err) { setError(String(err && err.message || err)); }
-				finally { setBusy(false); }
+			function close() {
+				setOpen(false); setSelecting(false); setSelected(new Set()); setProgress(null); setError("");
 			}
+			function toggle(file) {
+				setSelected(function (previous) {
+					const next = new Set(previous);
+					if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
+					return next;
+				});
+			}
+			async function importQueue(queue) {
+				if (!queue.length) return;
+				setBusy(true); setError("");
+				const failures = [];
+				let last = null;
+				for (let index = 0; index < queue.length; index += 1) {
+					setProgress({ done: index + 1, total: queue.length });
+					try { const result = await rpc("importMobileCard", { id: queue[index].id }); last = result.card; }
+					catch (err) { failures.push(mobileImportNameOf(queue[index]) + "：" + String(err && err.message || err)); }
+				}
+				setBusy(false); setProgress(null);
+				if (last) { if (!failures.length) close(); await props.onImported(last); }
+				if (failures.length) {
+					setError(failures.length + " 个文件导入失败：\n" + failures.slice(0, 4).join("\n") + (failures.length > 4 ? "\n…" : ""));
+					await load();
+				}
+			}
+			async function importFile(file) { await importQueue([file]); }
 			const h = React.createElement;
+			const allFiles = catalog && Array.isArray(catalog.files) ? catalog.files : [];
+			const needle = filter.trim().toLowerCase();
+			const matched = needle ? allFiles.filter(function (file) { return mobileImportNameOf(file).toLowerCase().indexOf(needle) >= 0; }) : allFiles;
+			const files = sortMobileImportFiles(matched, sort);
+			const selectedFiles = sortMobileImportFiles(allFiles.filter(function (file) { return selected.has(file.id); }), sort);
+			const everyVisibleSelected = files.length > 0 && files.every(function (file) { return selected.has(file.id); });
+			function selectAllVisible() {
+				const ids = files.map(function (file) { return file.id; });
+				const every = everyVisibleSelected;
+				setSelected(function (previous) {
+					const next = new Set(previous);
+					for (const id of ids) { if (every) next.delete(id); else next.add(id); }
+					return next;
+				});
+			}
+			function thumbnailOf(file) {
+				return h("span", { className: "dsh-tavern-mobile-import-thumb" + (isMobileImportImage(file.name) ? "" : " placeholder"), "aria-hidden": "true" },
+					h("span", { className: "dsh-tavern-mobile-import-thumb-fallback" }, mobileImportNameOf(file).replace(/^.*\./, "").toUpperCase()),
+					isMobileImportImage(file.name) ? h("img", { src: "/api/dsh-tavern/mobile-card-thumbnail?id=" + encodeURIComponent(file.id), alt: "", loading: "lazy", decoding: "async", onError: function (event) { event.currentTarget.hidden = true; } }) : null);
+			}
+			function rowOf(file) {
+				const picked = selected.has(file.id);
+				return h("button", {
+					key: file.id,
+					className: "dsh-tavern-mobile-import-file" + (picked ? " selected" : ""),
+					disabled: busy,
+					"aria-pressed": selecting ? picked : undefined,
+					onClick: function () { if (selecting) toggle(file); else importFile(file); }
+				},
+					selecting ? h("span", { className: "dsh-tavern-mobile-import-mark", "aria-hidden": "true" }, "✓") : null,
+					thumbnailOf(file),
+					h("span", { className: "dsh-tavern-mobile-import-meta" },
+						h("b", { title: mobileImportNameOf(file) }, mobileImportNameOf(file)),
+						h("span", null, file.directory + " · " + Math.ceil(file.size / 1024) + " KB")));
+			}
+			function emptyState() {
+				if (needle) return h("div", { className: "dsh-tavern-empty" }, "没有匹配“" + filter.trim() + "”的文件");
+				return h("div", { className: "dsh-tavern-empty" }, catalog && catalog.storageAccessible === false ? "DSHA 无法读取下载目录。请在系统设置中允许 DSHA ‘访问所有文件’，然后点刷新；也可尝试系统文件选择器。" : "下载目录里还没有 PNG/JSON 人物卡。");
+			}
+			const countText = "共 " + allFiles.length + " 个文件"
+				+ (needle ? "，匹配 " + files.length + " 个" : "")
+				+ (selected.size ? "，已选 " + selected.size + " 个" : "")
+				+ (progress ? "，正在导入 " + progress.done + "/" + progress.total : "");
 			return h(React.Fragment, null,
 				h("button", { className: "dsh-tavern-btn primary", disabled: props.disabled || busy, onClick: activate }, "导入人物卡"),
 				open ? h("div", { className: "dsh-tavern-mobile-import", role: "dialog", "aria-modal": "true", "aria-label": "从手机下载目录导入人物卡" }, h("div", { className: "dsh-tavern-mobile-import-shell" }, h("div", { className: "dsh-tavern-mobile-import-panel" },
 					h("div", { className: "dsh-tavern-mobile-import-title" }, "从手机下载目录导入"),
 					h("div", { className: "dsh-tavern-question-sub" }, "把 PNG 或 JSON 人物卡放进手机 Download，回到这里点选。"),
+					h("div", { className: "dsh-tavern-mobile-import-count" }, countText),
 					error ? h("div", { className: "dsh-tavern-dock-error", role: "alert" }, error) : null,
-					h("div", { className: "dsh-tavern-mobile-import-list" }, catalog && catalog.files.length ? catalog.files.map(function (file) { return h("button", { key: file.id, className: "dsh-tavern-mobile-import-file", disabled: busy, onClick: function () { importFile(file); } }, h("b", null, file.name), h("span", null, file.directory + " · " + Math.ceil(file.size / 1024) + " KB")); }) : h("div", { className: "dsh-tavern-empty" }, catalog && catalog.storageAccessible === false ? "DSHA 无法读取下载目录。请在系统设置中允许 DSHA ‘访问所有文件’，然后点刷新；也可尝试系统文件选择器。" : "下载目录里还没有 PNG/JSON 人物卡。")),
-					h("div", { className: "dsh-tavern-library-head-actions" }, h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: load }, "刷新"), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { setOpen(false); if (props.inputRef.current) props.inputRef.current.click(); } }, "使用系统文件选择器"), h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { setOpen(false); } }, "关闭"))
+					h("div", { className: "dsh-tavern-mobile-import-tools" },
+						h("input", { className: "dsh-tavern-mobile-import-search", type: "search", value: filter, placeholder: "筛选文件名", disabled: busy, onChange: function (event) { setFilter(event.target.value); } }),
+						h("select", { className: "dsh-tavern-mobile-import-sort", value: sort, disabled: busy, "aria-label": "排序方式", onChange: function (event) { const value = event.target.value; setSort(value); saveMobileImportSort(value); } },
+							MOBILE_IMPORT_SORTS.map(function (option) { return h("option", { key: option.id, value: option.id }, option.label); }))),
+					selecting ? h("div", { className: "dsh-tavern-mobile-import-selection" },
+						h("span", { className: "dsh-tavern-mobile-import-selection-copy" }, selected.size ? "已选 " + selected.size + " 个（可跨筛选累计）" : "点条目勾选，可跨筛选累计"),
+						h("button", { className: "dsh-tavern-btn", disabled: busy || !files.length, onClick: selectAllVisible }, everyVisibleSelected ? "取消全选" : "全选 " + files.length + " 项"),
+						h("button", { className: "dsh-tavern-btn", disabled: busy || !selected.size, onClick: function () { setSelected(new Set()); } }, "清空选择"),
+						h("button", { className: "dsh-tavern-btn primary dsh-tavern-mobile-import-selection-primary", disabled: busy || !selectedFiles.length, onClick: function () { importQueue(selectedFiles); } }, "导入选中 " + selectedFiles.length + " 个")
+					) : null,
+					h("div", { className: "dsh-tavern-mobile-import-list" }, files.length ? files.map(rowOf) : emptyState()),
+					h("div", { className: "dsh-tavern-library-head-actions dsh-tavern-mobile-import-actions" },
+						h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: load }, "刷新"),
+						h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: function () { close(); if (props.inputRef.current) props.inputRef.current.click(); } }, "使用系统文件选择器"),
+						h("button", { className: "dsh-tavern-btn", disabled: busy || !allFiles.length, onClick: function () { setSelecting(!selecting); } }, selecting ? "退出多选" : "多选"),
+						h("button", { className: "dsh-tavern-btn", disabled: busy, onClick: close }, "关闭"))
 				))) : null
 			);
 		}

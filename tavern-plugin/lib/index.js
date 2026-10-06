@@ -3986,6 +3986,7 @@ export async function apply(ctx) {
     dispatch,
     fileResources,
     helperHistoryAccess,
+    mobileCardImport,
     performanceDiagnostics,
     runtimeGeneration,
     runtimeReadiness,
