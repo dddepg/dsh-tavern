@@ -176,6 +176,7 @@ import { resolveTavernDataRoot } from './domain/tavern-data.js'
 import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { createTavernSkillProvider } from './domain/tavern-skill-provider.js'
 import { canonicalTavernSkillName, createTavernSkillModule } from './domain/tavern-skills.js'
+import { readZipEntries } from './domain/zip-entries.js'
 import { createTavernConversationRegistry } from './domain/tavern-conversation-registry.js'
 import { installTavernTokenMeter } from './domain/tavern-token-meter.js'
 import { cordisToolNames, createTurnOrchestrator, dshFileToolNames } from './domain/turn-orchestration.js'
@@ -396,6 +397,17 @@ export async function apply(ctx) {
     writeText: async function (path, text) { return await profileData.writeBytes(path, Buffer.from(text, 'utf8')) },
     remove: async function (path) { return await profileData.remove(path) }
   })
+  // A single SKILL.md arrives as text; a skill folder arrives as a ZIP. Only UTF-8 Markdown is read.
+  function skillImportFiles(args) {
+    if (typeof args?.text === 'string') return { 'SKILL.md': args.text }
+    if (typeof args?.fileB64 !== 'string' || !args.fileB64) throw new Error('请选择 SKILL.md 或 Skill 文件夹的 .zip 压缩包')
+    const files = {}
+    for (const [name, bytes] of readZipEntries(Buffer.from(args.fileB64, 'base64'), { label: 'Skill 压缩包' })) {
+      if (name.startsWith('__MACOSX/') || /(^|\/)\.[^/]*$/.test(name) || !/\.md$/i.test(name)) continue
+      files[name] = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+    }
+    return files
+  }
   const tavernSkills = createTavernSkillModule({
     directory: dataRoot + '/skills',
     builtInDirectory: sourceRoot + '/presets/tavern/skills',
@@ -3547,6 +3559,7 @@ export async function apply(ctx) {
       case 'getSkill': return { skill: await tavernSkills.read(args.name), references: await tavernSkills.referenceFiles(args.name) }
       case 'assignSkill': return { skill: await tavernSkills.assign(args.name, args.agents) }
       case 'deleteSkill': await tavernSkills.remove(args.name); return { deleted: true }
+      case 'importSkill': return await tavernSkills.importBundle({ files: skillImportFiles(args), overwrite: args.overwrite === true })
       case 'getScriptInfo': {
         const script = await readScript(args && args.path)
         const info = scriptContinuity.inspect({ script: script, state: null, request: { kind: 'info' } })
