@@ -63,6 +63,7 @@ import { createServerTemplateSync } from './domain/server-template-sync.js'
 import { createServerTemplateRuntime } from './domain/server-template-runtime.js'
 import { estimateWorldBookTokens } from './domain/worldbook-activation.js'
 import { createWorldbookFilter, WORLD_BOOK_FILTER_TOOLS } from './domain/worldbook-filter.js'
+import { createWorldbookPrefilter } from './domain/worldbook-prefilter.js'
 import { adoptConversationFeatures, adoptConversationBackground, patchConversationBackground } from './domain/conversation-background.js'
 import { clearLegacyTavernDefault } from './domain/legacy-agent-default.js'
 import { conversationStateAtTurn, conversationForkBoundary } from './domain/conversation-fork-point.js'
@@ -2059,6 +2060,21 @@ export async function apply(ctx) {
     runAgent: input => backgroundAgentRunner.run(input), selection: backgroundModelSelection,
     beginTask: chat => backgroundTasks.begin(chat, 'worldbook-filter')
   })
+  // After each reply, judge the worldbook pool that reply brings into the next turn, so
+  // sending never waits for a model. Usually below the threshold: no request at all.
+  const worldbookPrefilter = createWorldbookPrefilter({
+    async run(chatId, signal) {
+      const chat = await readChat(chatId)
+      if (!chat || !['story', 'script'].includes(chat.mode || 'story') || chat.requestMode === 'sillytavern' || chat.regenInProgress) return
+      const latest = chat.messages?.at(-1)
+      if (latest?.role !== 'assistant' || latest.greeting === true || backgroundTasks.activity(chat).busy) return
+      if (backgroundModelSelection(chat) === null) return
+      const card = await readChatCard(chat)
+      signal.throwIfAborted()
+      await projectForegroundWorldbook({ chat, card, userText: '', purpose: 'prefilter', signal })
+    }
+  })
+  ctx.effect(() => () => worldbookPrefilter.dispose())
   const publishCharacterDesign = createCharacterDesignPublisher({ worldBooks, readCard })
   const characterDesignDocuments = createCharacterDesignDocumentTools({
     publishWorldbook: publishCharacterDesign,
@@ -2138,7 +2154,8 @@ export async function apply(ctx) {
   const backgroundTasks = createBackgroundTaskCoordinator({
     store: { readChat, writeChat, updateChat, patchChat, readState: chatPersistence.readSessionState, readRecoveryState: taskStateReader.read, readSlice: chatPersistence.readSlice, readSettlementCheckpoint: chatPersistence.readSettlementCheckpoint },
     timeline: storyTimeline,
-    blocked: function (chat) { return Boolean(autoCompaction?.blocked(chat)) }
+    blocked: function (chat) { return Boolean(autoCompaction?.blocked(chat)) },
+    preempt: async (chatId, role) => { if (role !== 'worldbook-filter') await worldbookPrefilter.cancel(chatId) }
   })
   const configuredCompactionEngines = new WeakSet()
   const overflowingCompactions = new Set()
@@ -2820,6 +2837,7 @@ export async function apply(ctx) {
       if (!signal.aborted && latest) {
         void mvuSettlementReconciler.wake(latest.sessionId)
         void candidateWorldbookPreparation.warm(latest.sessionId)
+        void worldbookPrefilter.start(chatId)
       }
     } catch {
       if (!signal.aborted) void mvuSettlementReconciler.scan()
@@ -3066,6 +3084,8 @@ export async function apply(ctx) {
     store: { chatForSession, readChat, readState: taskStateReader.read },
     tasks: backgroundTasks,
     queueBackground: queueSettlement,
+    prefilterWorldbook: chatId => worldbookPrefilter.start(chatId),
+    cancelPrefilter: chatId => worldbookPrefilter.cancel(chatId),
     cleanupFailedTurn: async function (input) {
       const mode = await turnOrchestrator.modeFor(input.sessionId)
       if (mode !== 'story' && mode !== 'script') return 0

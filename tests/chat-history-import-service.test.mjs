@@ -78,7 +78,9 @@ for (const textOnly of [false,true]) test(`历史导入装配真实筛选器仍�
  const frames=foregroundContexts(h.session)
  assert.match(frames[0],/walk rule/);assert.match(frames[1],/rest rule/)
  await project({chat:{id:'live',sessionId:'session',messages:[]},card:{},userText:'walk',worldBook})
- assert.equal(calls,1,'正常生成仍走真实模型筛选器')
+ assert.equal(calls,0,'发送正文不等待模型筛选')
+ await project({chat:{id:'live',sessionId:'session',messages:[{role:'assistant',turn:1,text:'walk'}]},card:{},userText:'',worldBook,purpose:'prefilter'})
+ assert.equal(calls,1,'回复结束后的预筛仍走真实模型筛选器')
 })
 
 test('世界书投影失败时明确指出历史轮次，不发布残缺导入，修复后可重试',async()=>{

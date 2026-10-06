@@ -2,11 +2,11 @@ import { worldbookRandomState, hasWorldbookRandom } from './worldbook-random.js'
 import { estimateWorldBookTokens } from './worldbook-activation.js'
 import { compactRecallDiagnostics, describeRecallEntries } from './worldbook-recall-log.js'
 import { isMvuUpdateEntry } from './worldbook-recall.js'
-import { prepareTemplateWorldbook, prepareWorldBookRecall, projectWorldBookTemplates, recordScreenedExclusions } from './worldbook-recall.js'
+import { prepareTemplateWorldbook, prepareWorldBookRecall, projectWorldBookTemplates } from './worldbook-recall.js'
 
 /** One request uses one bound-book snapshot for both selection and rendering. */
 export function createForegroundWorldbook({ bound, runtime, globalVariables, scanText = () => '', filterCandidates }) {
-  return async function project({ chat, card, userText, userTextInHistory = false, worldBook: snapshot, purpose = 'generation' }) {
+  return async function project({ chat, card, userText, userTextInHistory = false, worldBook: snapshot, purpose = 'generation', signal }) {
     try {
       let worldBook = snapshot || await bound(chat.cardPath, card, chat)
       const turn = Number([...(chat.messages || [])].reverse().find(message => message.role === 'assistant')?.turn) || 0
@@ -24,8 +24,8 @@ export function createForegroundWorldbook({ bound, runtime, globalVariables, sca
       const preparedActivations = worldBook?.templateActivationRequests || []
       let activationRequests = preparedActivations, recalled, projected
       const tokenCosts = {}
-      // Historical reconstruction must remain local even with the live filter installed.
-      let screeningDone = purpose === 'history-import' || !filterCandidates, screening, allowedRefs
+      // Only the post-reply prefilter may ask a model; sending and history import stay local.
+      let screeningDone = purpose !== 'prefilter' || !filterCandidates, screening, allowedRefs
       const protectedRefs = () => new Set(activationRequests.flatMap(request => [request.ref, request.sourceRef]))
       // Rebuild from the same snapshot and original scopes; speculative passes never mutate Chat.
       // Only requests from controllers still selected survive to the next pass.
@@ -55,7 +55,7 @@ export function createForegroundWorldbook({ bound, runtime, globalVariables, sca
               text: projected.renderedEntries.find(output => output.ref === entry.ref).text,
               match: recalled.diagnostics.find(item => item.ref === entry.ref)?.match
             }))
-            screening = await filterCandidates({ chat, card, userText, candidates, corpus: (worldBook?.view?.entries || []).filter(entry => entry.enabled !== false && !isMvuUpdateEntry(entry)) })
+            screening = await filterCandidates({ chat, card, userText, candidates, corpus: (worldBook?.view?.entries || []).filter(entry => entry.enabled !== false && !isMvuUpdateEntry(entry)), signal })
             allowedRefs = new Set(screening.selected)
             screeningDone = true
             continue
@@ -69,11 +69,8 @@ export function createForegroundWorldbook({ bound, runtime, globalVariables, sca
       const renderedRefs = new Set(projected.refs)
       const accepted = recalled.refs.filter(ref => renderedRefs.has(ref))
       const recorded = recalled.recordReads(chat.worldBookReads)
-      let nextReads = { ...chat.worldBookReads }
+      const nextReads = { ...chat.worldBookReads }
       for (const ref of accepted) nextReads[ref] = recorded[ref]
-      // BM25 drops are cheap to recompute; only a model verdict is worth remembering.
-      const screenedOut = new Set((screening?.decisions || []).filter(item => item.reason === '模型未选择保留').map(item => item.ref))
-      if (screenedOut.size) nextReads = recordScreenedExclusions(nextReads, (worldBook?.view?.entries || []).filter(entry => screenedOut.has(entry.ref)), turn)
       const evaluatedRefs = new Set((recalled.diagnostics || []).map(entry => entry.ref))
       const excluded = (worldBook?.view?.entries || []).filter(entry => !evaluatedRefs.has(entry.ref) && (entry.enabled === false || !String(entry.content || '').trim() || isMvuUpdateEntry(entry)))
         .map(entry => ({ ref: entry.ref, title: entry.title || entry.comment, reason: entry.enabled === false ? 'disabled' : !String(entry.content || '').trim() ? 'empty' : 'mvu-update' }))

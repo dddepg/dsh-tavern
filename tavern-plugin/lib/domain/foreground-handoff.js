@@ -27,6 +27,8 @@ export function createForegroundHandoff(options = {}) {
     if (chat !== undefined && activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) {
       await queueBackground(chat.id)
     }
+    // An unfinished prefilter is optional: sending cancels it instead of waiting.
+    if (chat !== undefined) await options.cancelPrefilter?.(chat.id)
     // A greeting is already story text. Direct typing may bypass candidate
     // preparation, so project its keywords locally before the first body request.
     if (chat && ['story', 'script'].includes(chat.mode) && !chat.preparedWorldBook &&
@@ -58,6 +60,9 @@ export function createForegroundHandoff(options = {}) {
         const activity = tasks.activity(chat)
         if (activity.role === 'settlement' && (activity.phase === 'pending' || activity.phase === 'running')) {
           await queueBackground(chat.id)
+        } else {
+          // No settlement this turn; the prefilter otherwise starts once settlement finishes.
+          void options.prefilterWorldbook?.(chat.id)
         }
       }, '启动后台结算')
       return true
