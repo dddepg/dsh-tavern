@@ -4,7 +4,7 @@ import { createLegacyCompatibleStorage } from './legacy-compatible-storage.js'
 import { createSessionMessageIndex } from './session-message-index.js'
 import { copyLazyHistoryHeader } from './lazy-history-read.js'
 import { Worker } from 'node:worker_threads'
-import { createScopedMessages } from './scoped-messages.js'
+import { createScopedMessages, isScopedMessages } from './scoped-messages.js'
 import { createIndexedArrayApi } from './indexed-array.js'
 import { copyJsonTree } from './copy-json-tree.js'
 import { projectSceneImageState, projectChatSessionState, projectDisplayRuntimeState, projectChatBackgroundConfig, projectSettlementCheckpoint } from './chat-session-state.js'
@@ -802,6 +802,7 @@ export function createChatJournalStore(options = {}) {
       if (produced === undefined) return copyJsonTree(current)
       // Normalize once before persistence. The already-JSON result can be
       // detached by copying its JSON containers without another full JSON string.
+      if (isScopedMessages(produced?.messages)) throw new Error('局部读取的对话不能整档保存')
       const next = jsonClone(produced)
       if (next === undefined || next === null || typeof next !== 'object' || Array.isArray(next)) throw new Error('Chat Journal 只能保存 JSON object')
       if (currentState == null && options.newConversations === true && next.mode !== 'card') {

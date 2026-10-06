@@ -122,3 +122,14 @@ test('显式应用新版同步刷新常驻背景、MVU 规则和模板世界书�
   assert.equal(removed.openingWorldbookSnapshot.document,null)
   assert.equal(await worldBooks.bound(chat.cardPath,card,{...chat,...removed}),null)
 })
+
+test('settled() answers from the header exactly when ensure() would not build or write', async () => {
+  const h = fixture()
+  const current = { id: 'chat', mode: 'story', cardContextSnapshot: '固定背景', cardContextSnapshotVersion: 7 }
+  assert.equal(h.api.settled(current), '固定背景')
+  assert.equal(await h.api.ensure({ ...current, messages: [] }), '固定背景')
+  assert.deepEqual(h.counts, { reads: 0, writes: 0, builds: 0 })
+  assert.equal(h.api.settled({ ...current, cardContextSnapshotVersion: 5 }), undefined)
+  assert.equal(h.api.settled({ ...current, cardContextSnapshot: '' }), undefined)
+  assert.equal(h.api.settled({ id: 'x', mode: 'card-extract' }), '')
+})

@@ -55,3 +55,16 @@ test('unknown model capacity and an oversized mandatory tail fail before touchin
     assert.equal(sessionEvents(h.session).length,before)
   }
 })
+test('ordinary and already-checked chats are decided from the header without a full read',async()=>{
+  const h=await fixture()
+  let fullReads=0
+  const options={...h.options,readChat:async()=>{fullReads++;return h.options.readChat()}}
+  for(const header of [{id:'chat'},{id:'chat',importHistory:{operationId:'x',contextPreparation:{status:'unchanged'}}}]){
+    const request=await createImportContextPreparation({...options,readHeader:async()=>header}).prepare(h.request)
+    assert.equal(request,h.request)
+  }
+  assert.equal(fullReads,0)
+  await createImportContextPreparation({...options,readHeader:async()=>({id:'chat',importHistory:h.chat.importHistory})}).prepare(h.request)
+  assert.equal(fullReads,1)
+  assert.equal(h.chat.importHistory.contextPreparation.status,'trimmed')
+})

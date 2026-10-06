@@ -63,9 +63,12 @@ export function planImportContext({ session, request, operationId, contextWindow
 
 const PREPARED = 'import-context-preparation'
 
-export function createImportContextPreparation({ readChat, updateChat, getSession, flush, modelInfo, estimateMessage }) {
+export function createImportContextPreparation({ readChat, readHeader, updateChat, getSession, flush, modelInfo, estimateMessage }) {
   async function prepare(request) {
     if (request.purpose !== undefined || requestHandledBy(request, PREPARED)) return request
+    // Only an imported chat awaiting its first check needs history rows.
+    const header = readHeader && await readHeader(request.sessionId, ['importHistory'])
+    if (header && !(header.importHistory && !header.importHistory.contextPreparation)) return request
     const chat = await readChat(request.sessionId)
     if (!needsImportContextPreparation(chat)) return request
     const session = getSession(request.sessionId)

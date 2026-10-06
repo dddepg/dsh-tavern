@@ -24,7 +24,7 @@ export function registerModelStreamHooks({
   worldbookRecallLog,
 }) {
   const importContextPreparation = createImportContextPreparation({
-    readChat: chatForSession, updateChat,
+    readChat: chatForSession, readHeader: chatHeaderForSession, updateChat,
     getSession: id => sessionStore.get(id) || agentRegistry.get(id)?.session,
     flush: session => sessionStore.flush(session),
     modelInfo: request => ctx.llm.resolveModelInfo(request.provider, request.model, request.signal),

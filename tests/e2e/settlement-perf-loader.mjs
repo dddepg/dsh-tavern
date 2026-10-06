@@ -28,9 +28,10 @@ export async function load(url, context, next) {
     replace('      async commit(input = {}) {', '      async commit(input = {}) {\n' + mark('commit-start') + '\ntry {')
     replace('      },\n      async fail(trace)', '} finally {' + mark('commit-return') + '}\n      },\n      async fail(trace)')
   } else if (url.endsWith('/chat-journal-store.js')) {
+    replace('  async function read(chatId) {', "  async function read(chatId) {\nconsole.log('[settlement-perf]'+JSON.stringify({stage:'full-read',at:performance.timeOrigin+performance.now(),caller:new Error().stack.split('\\n').slice(2,11).map(line=>line.replace(/file:.*?\\/tavern-plugin\\//,'tavern-plugin/'))}));")
     replace('  async function cachedState(chatId) {', "  async function cachedState(chatId) {\nconst perfCaller=new Error().stack.split('\\n').slice(2,11).map(line=>line.replace(/file:.*?\\/tavern-plugin\\//,'tavern-plugin/'));")
     replace('    const load = { stamp }', "    console.log('[settlement-perf]'+JSON.stringify({stage:'full-read-miss',at:performance.timeOrigin+performance.now(),caller:perfCaller}));\n    const load = { stamp }")
-    replace('        const saved = await native.patch(chatId,expectedRevision,changes,metadata.assertCurrent)', "        const saved = await native.patch(chatId,expectedRevision,changes,metadata.assertCurrent)\nif(saved)console.log('[settlement-perf]'+JSON.stringify({stage:'native-head-published',at:performance.timeOrigin+performance.now(),source:metadata.source,revision:saved.revision}));")
+    replace('        const saved = await native.patch(chatId,expectedRevision,normalized,metadata.assertCurrent,metadata.returnProjection)', "        const saved = await native.patch(chatId,expectedRevision,normalized,metadata.assertCurrent,metadata.returnProjection)\nif(saved)console.log('[settlement-perf]'+JSON.stringify({stage:'native-head-published',at:performance.timeOrigin+performance.now(),source:metadata.source,revision:saved.revision}));")
     for (const state of ['state','currentState']) {
       const seam=`        const saved=await native.write(chatId,${state},next,changes,metadata.assertCurrent)`
       replace(seam,seam+"\nconsole.log('[settlement-perf]'+JSON.stringify({stage:'native-head-published',at:performance.timeOrigin+performance.now(),source:metadata.source,revision:saved.revision}));")

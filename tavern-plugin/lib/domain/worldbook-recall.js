@@ -1,3 +1,4 @@
+import { isScopedMessages } from './scoped-messages.js'
 import { worldbookPlacement } from './worldbook-placement.js'
 import { entryRandom, renderWorldbookRandom } from './worldbook-random.js'
 import { projectAgentContent } from './runtime-content-projection.js'
@@ -68,6 +69,8 @@ function templateResource(entry, book) {
 }
 
 function transcriptOf(chat) {
+  // Only a runtime that reads its own session history accepts a partial Chat.
+  if (isScopedMessages(chat?.messages)) throw new Error('世界书模板需要完整历史，但只读取了最近楼层')
   return (Array.isArray(chat && chat.messages) ? chat.messages : []).filter(Boolean).map(function (message) {
     return {
       role: message.role === 'user' ? 'user' : 'assistant',

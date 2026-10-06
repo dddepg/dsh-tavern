@@ -22,7 +22,7 @@ import { createTemplateWindowReader, templateStateFields } from './domain/templa
 import { createSessionResourceAccess } from './domain/session-resource-access.js'
 import { worldBookDisplayName } from './domain/worldbook-resource.js'
 import { createConversationMigration } from './domain/conversation-migration.js'
-import { createTaskStateReader } from './domain/task-state-reader.js'
+import { createTaskStateReader, taskStateFields } from './domain/task-state-reader.js'
 import { installHostProjectionReplay } from './domain/host-projection-replay.js'
 import { readSettlementInput } from './domain/settlement-input.js'
 import { createHelperHistoryAccess } from './domain/helper-history-access.js'
@@ -890,6 +890,14 @@ export async function apply(ctx) {
     // Alias recovery and configuration adoption still require the original reader.
     if (chat?.sessionId === sessionId && chat.backgroundConfigVersion === 1 && chat.conversationFeaturesVersion === 1) return chat
     return chatForSession(sessionId)
+  }
+  const chatSliceForSession = createSessionSliceReader({ links: readSessionMap, readSlice: chatPersistence.readSlice })
+  // Header plus floor count; null keeps the complete reader for legacy stories.
+  async function openingStateForSession(sessionId) {
+    const selected = await chatSliceForSession(sessionId, [], [...taskStateFields, 'preparedWorldBook'])
+    if (!selected?.denseMessages || Object.values(selected.chat.timeline?.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')) return null
+    const first = selected.messageCount === 1 ? (await chatSliceForSession(sessionId, [0], ['_storageRevision']))?.chat.messages[0] : undefined
+    return { chat: selected.chat, messageCount: selected.messageCount, firstGreeting: first?.greeting === true }
   }
   const taskStateReader = createTaskStateReader({
     readSlice: chatPersistence.readSlice, readState: chatPersistence.readSessionState,
@@ -2030,6 +2038,9 @@ export async function apply(ctx) {
     resolveStablePrefix: async function (input) {
       // Image tasks share the opening snapshot; current-worldbook replacement stays disabled above
       // because a requested illustration may target an earlier story turn.
+      const header = await chatHeaderForSession(input.sessionId, ['cardContextSnapshot', 'cardContextSnapshotVersion', 'cardEditContext', 'cardReferenceContext'])
+      const settled = header ? playCardSnapshots.settled(header) : undefined
+      if (settled !== undefined) return settled
       const chat = await chatForSession(input.sessionId)
       return chat ? await ensurePlayCardSnapshot(chat) : ''
     },
@@ -3042,7 +3053,7 @@ export async function apply(ctx) {
       writeChat,
       writeChatHeader,
       updateChat,
-      readChatSlice: createSessionSliceReader({ links: readSessionMap, readSlice: chatPersistence.readSlice }),
+      readChatSlice: chatSliceForSession,
       patchChat,
       updateCard,
       createCard: createWorkspaceCard
@@ -3087,7 +3098,7 @@ export async function apply(ctx) {
   const foregroundHandoff = createForegroundHandoff({
     turns: turnOrchestrator,
     prepareOpeningWorldBook: prepareNextWorldBookContext,
-    store: { chatForSession, readChat, readState: taskStateReader.read },
+    store: { chatForSession, readChat, readState: taskStateReader.read, stateForSession: taskStateReader.forSession, openingStateForSession },
     tasks: backgroundTasks,
     queueBackground: queueSettlement,
     prefilterWorldbook: chatId => worldbookPrefilter.start(chatId),
