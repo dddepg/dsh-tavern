@@ -41,6 +41,12 @@ export function sceneTarget(chat, turn) {
     if(chat.sceneTargets[turn])return {...chat.sceneTargets[turn]}
     throw Object.assign(new Error('这段正文已不存在'),{code:'SCENE_TARGET_UNAVAILABLE'})
   }
+  return computeSceneTarget(chat, turn)
+}
+
+/** The key from the chat itself, ignoring any precomputed sceneTargets (they embed the chat id). */
+export function computeSceneTarget(chat, turn) {
+  turn = Number(turn)
   const index = (chat.messages || []).findIndex(message => message?.role === 'assistant' && Number(message.turn || (message.greeting ? 1 : 0)) === Number(turn))
   if (index < 0) throw Object.assign(new Error('这段正文已不存在'), { code: 'SCENE_TARGET_UNAVAILABLE' })
   const message = chat.messages[index]
