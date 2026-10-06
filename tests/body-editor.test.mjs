@@ -125,3 +125,11 @@ test('bounded body edit whose revision moved falls back to the complete update a
   await assert.rejects(h.editor.save(h.session.id, { token: next.token, texts: ['过时编辑'] }), /已变化/)
   assert.equal((await h.p.read('chat')).messages.at(-1).sourceText, '别处改过')
 })
+
+test('在正文末尾追加文字时保留与后续结构块之间的空行，美化正则仍能匹配', async () => {
+  const h = fixture('剑光飞过。\n\n<name>秦晚晴</name>')
+  const edit = await h.editor.read(h.session.id)
+  assert.equal(edit.parts[0].text, '剑光飞过。\n\n')
+  await h.editor.save(h.session.id, { token: edit.token, texts: ['剑光飞过。她笑了。', '秦晚晴'] })
+  assert.equal(h.chat.messages[1].sourceText, '剑光飞过。她笑了。\n\n<name>秦晚晴</name>')
+})

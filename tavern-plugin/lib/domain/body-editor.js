@@ -124,8 +124,11 @@ export function createBodyEditor({ chats, sessions, timeline, activity, project,
       if (!Array.isArray(texts) || texts.length !== parts.filter(part => part.kind === 'text').length || texts.some(text => typeof text !== 'string')) throw new Error('编辑文本格式无效')
       if (!texts.some(text => text.trim())) throw new Error('正文不能为空')
       if (texts.some(text => editableReplyParts(text).some(part => part.kind !== 'text'))) throw new Error('这里只能编辑文本，不能新增 HTML')
+      // Cards' status blocks must start on their own line. An edit box hides the blank lines
+      // around a text part, so keep the original edges when the edited text has none.
+      const keepEdges = (original, edited) => (/^\s/.test(edited) ? '' : original.match(/^\s*/)[0]) + edited + (/\s$/.test(edited) ? '' : original.match(/\s*$/)[0])
       let index = 0
-      const text = parts.map(part => part.kind === 'text' ? texts[index++] : part.text).join('')
+      const text = parts.map(part => part.kind === 'text' ? keepEdges(part.text, texts[index++]) : part.text).join('')
       if (text === source(message)) return present(chat)
       const reply = await project(text, chat)
       const patch = {
