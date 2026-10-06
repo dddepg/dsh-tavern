@@ -177,6 +177,7 @@ import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem'
 import { createTavernSkillProvider } from './domain/tavern-skill-provider.js'
 import { canonicalTavernSkillName, createTavernSkillModule } from './domain/tavern-skills.js'
 import { readZipEntries } from './domain/zip-entries.js'
+import { createGameFootprint } from './domain/game-footprint.js'
 import { createTavernConversationRegistry } from './domain/tavern-conversation-registry.js'
 import { installTavernTokenMeter } from './domain/tavern-token-meter.js'
 import { cordisToolNames, createTurnOrchestrator, dshFileToolNames } from './domain/turn-orchestration.js'
@@ -270,6 +271,7 @@ export async function apply(ctx) {
   const cardMemory = createCardMemory({ dataRoot })
   const stablePrefixStorage = createSessionStablePrefixStorage(dataRoot + '/session-prefixes')
   const profileData = createProfileDataStore({ dataRoot })
+  const gameFootprint = createGameFootprint({ dataRoot })
   // Oldest floor each browser session has viewed; the template window covers it.
   const templateHistoryFrom = new Map()
   const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData,
@@ -1220,8 +1222,17 @@ export async function apply(ctx) {
   }
   async function deleteChat(chatId) {
     await stopChatForDeletion(chatId)
+    const chat = await readChat(str(chatId))
+    const footprint = chat ? await gameFootprint.describe(chat) : null
     const result = await conversationRegistry.remove(chatId)
     deletedChatIds.add(chatId)
+    if (footprint) {
+      await backgroundAgentRunner.releaseFor(footprint.foregroundSessionId)
+      // A session DSH still holds live would be written back; leave it archived instead.
+      footprint.items = footprint.items.filter(item => item.category !== 'subsession' || !agentRegistry.get(item.sessionId))
+      const cleanup = await gameFootprint.removeLeftovers(footprint)
+      if (cleanup.failures.length) console.warn('dsh-tavern: 删除游戏后有残留未清理', chatId, cleanup.failures.slice(0, 5))
+    }
     return result
   }
   async function exportConversation(chatId, sessionId, title) {
