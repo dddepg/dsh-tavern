@@ -2043,6 +2043,20 @@ window.__ModuleLoader__.load({
 			pollWhileBusy: false,
 			isTerminalError: isMissingTavernCardError
 		});
+		// Side panels read the session view too. Started together with the conversation's own
+		// first read they had no delta cursor yet, so each downloaded the whole view (a few MB
+		// for heavy cards). Waiting for the conversation's view makes theirs a delta read.
+		function readSessionViewAfterLive(sessionId) {
+			const ready = function (state) { return state.phase === "ready" || state.phase === "unavailable" || state.phase === "retrying"; };
+			const wait = ready(liveTavernView.getSnapshot(sessionId)) ? Promise.resolve() : new Promise(function (resolve) {
+				let stop = null, done = false;
+				const timer = window.setTimeout(finish, 10000);
+				function finish() { if (done) return; done = true; window.clearTimeout(timer); if (stop) stop(); resolve(); }
+				stop = liveTavernView.subscribe(sessionId, function (state) { if (ready(state)) finish(); });
+				if (done) stop();
+			});
+			return wait.then(function () { return rpc("getSession", { sessionId: sessionId }, sessionId); });
+		}
 		function coordinationView(result, sessionId) {
 			const sync = result && result.sync ? result.sync : (result || {});
 			const tasks = sync.tasks && typeof sync.tasks === "object" ? sync.tasks : {};
@@ -14228,7 +14242,7 @@ function bindTavernFontZoom(node, win) {
 			const [bindingPath, setBindingPath] = React.useState("");
 			const sourceInput = React.useRef(null);
 			function refresh() {
-					return Promise.all([rpc("listResources", {}, props.sessionId), rpc("getSession", { sessionId: props.sessionId }, props.sessionId)]).then(function (all) {
+					return Promise.all([rpc("listResources", {}, props.sessionId), readSessionViewAfterLive(props.sessionId)]).then(function (all) {
 						setResources(all[0] || { resources: [] });
 						setView(all[1] && all[1].view ? all[1].view : null);
 						setCards(all[0] && all[0].cards || []);
@@ -14547,7 +14561,7 @@ function bindTavernFontZoom(node, win) {
 			function usePresetCatalog(sessionId, errorSink, visible) {
 				const [catalog, setCatalog] = React.useState({ presets: [], activePresetPath: "", activePresetTitle: "", sessionMode: "" });
 				function refresh() {
-					return Promise.all([rpc("listPresets", {}, sessionId), rpc("getSession", { sessionId: sessionId }, sessionId)]).then(function (all) {
+					return Promise.all([rpc("listPresets", {}, sessionId), readSessionViewAfterLive(sessionId)]).then(function (all) {
 						const result = all[0] || {}; const view = all[1] && all[1].view;
 						const next = { presets: result.presets || [], activePresetPath: result.activePresetPath || "", activePresetTitle: result.activePresetTitle || "", sessionMode: view && view.mode || "", runtimePreset: view && view.runtimePreset || null };
 						setCatalog(next); if (errorSink) errorSink(""); return next;
@@ -15731,7 +15745,7 @@ function bindTavernFontZoom(node, win) {
 			const [selected, setSelected] = React.useState("");
 			const [refreshes, setRefreshes] = React.useState({});
 			const view = props.view;
-			const statuses = view && isPlayMode(view.mode) ? (view.tavernStatusViews || (view.tavernStatusView ? [view.tavernStatusView] : [])) : [];
+			const statuses = view && isPlayMode(view.mode) ? (view.tavernStatusViews || []) : [];
 			const manual = entries.filter(function (entry) { return entry.sessionId === props.sessionId && entry.pinned; });
 			const newest = manual.reduce(function (latest, entry) { return !latest || entry.activation > latest.activation ? entry : latest; }, null);
 			React.useEffect(function () { if (newest) setSelected(newest.id); }, [props.sessionId, newest && newest.activation]);

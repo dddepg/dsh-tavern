@@ -11,7 +11,7 @@
 			const [bindingPath, setBindingPath] = React.useState("");
 			const sourceInput = React.useRef(null);
 			function refresh() {
-					return Promise.all([rpc("listResources", {}, props.sessionId), rpc("getSession", { sessionId: props.sessionId }, props.sessionId)]).then(function (all) {
+					return Promise.all([rpc("listResources", {}, props.sessionId), readSessionViewAfterLive(props.sessionId)]).then(function (all) {
 						setResources(all[0] || { resources: [] });
 						setView(all[1] && all[1].view ? all[1].view : null);
 						setCards(all[0] && all[0].cards || []);

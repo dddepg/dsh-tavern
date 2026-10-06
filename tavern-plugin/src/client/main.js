@@ -408,6 +408,20 @@ window.__ModuleLoader__.load({
 			pollWhileBusy: false,
 			isTerminalError: isMissingTavernCardError
 		});
+		// Side panels read the session view too. Started together with the conversation's own
+		// first read they had no delta cursor yet, so each downloaded the whole view (a few MB
+		// for heavy cards). Waiting for the conversation's view makes theirs a delta read.
+		function readSessionViewAfterLive(sessionId) {
+			const ready = function (state) { return state.phase === "ready" || state.phase === "unavailable" || state.phase === "retrying"; };
+			const wait = ready(liveTavernView.getSnapshot(sessionId)) ? Promise.resolve() : new Promise(function (resolve) {
+				let stop = null, done = false;
+				const timer = window.setTimeout(finish, 10000);
+				function finish() { if (done) return; done = true; window.clearTimeout(timer); if (stop) stop(); resolve(); }
+				stop = liveTavernView.subscribe(sessionId, function (state) { if (ready(state)) finish(); });
+				if (done) stop();
+			});
+			return wait.then(function () { return rpc("getSession", { sessionId: sessionId }, sessionId); });
+		}
 		function coordinationView(result, sessionId) {
 			const sync = result && result.sync ? result.sync : (result || {});
 			const tasks = sync.tasks && typeof sync.tasks === "object" ? sync.tasks : {};
