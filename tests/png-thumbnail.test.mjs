@@ -211,3 +211,16 @@ test('非 Android 宿主不提供手机缩略图', async function () {
   const imports = createMobileCardImport({ runtimeHost: 'cli', roots: [] })
   await assert.rejects(imports.thumbnail('downloads:abc'), /不允许从手机下载目录导入/)
 })
+
+test('解压炸弹与超大尺寸在分配大块内存前就拒绝', () => {
+  // 声明 16×16，图像数据却能解压出 64MB：解压必须按头部算出的长度截止。
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(16, 0); header.writeUInt32BE(16, 4); header[8] = 8; header[9] = 2
+  const bomb = Buffer.concat([SIGNATURE, pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(Buffer.alloc(64 * 1024 * 1024))), pngChunk('IEND', Buffer.alloc(0))])
+  assert.ok(bomb.length < 200 * 1024)
+  assert.throws(function () { renderPngThumbnail(bomb) }, /长度异常/)
+  // 2 亿像素只看头部就拒绝，不会去解压。
+  header.writeUInt32BE(20000, 0); header.writeUInt32BE(10000, 4)
+  const huge = Buffer.concat([SIGNATURE, pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(Buffer.alloc(16))), pngChunk('IEND', Buffer.alloc(0))])
+  assert.throws(function () { renderPngThumbnail(huge) }, /像素过多/)
+})

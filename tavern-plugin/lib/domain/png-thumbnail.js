@@ -2,7 +2,8 @@ import { deflateSync, inflateSync } from 'node:zlib'
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const DEFAULT_MAX_EDGE = 160
-const MAX_PIXELS = 40 * 1000 * 1000
+// Decoding holds the inflated rows plus two RGBA copies; keep a phone-sized ceiling.
+const MAX_PIXELS = 16 * 1000 * 1000
 
 const CRC_TABLE = (function () {
   const table = new Uint32Array(256)
@@ -188,8 +189,11 @@ function decodePng(buffer) {
   if (![1, 2, 4, 8, 16].includes(bitDepth)) throw new Error('不支持的 PNG 位深')
   if (bitDepth < 8 && colorType !== 0 && colorType !== 3) throw new Error('不支持的 PNG 位深')
   if (!chunks.idat.length) throw new Error('PNG 缺少图像数据')
-  const raw = inflateSync(Buffer.concat(chunks.idat))
   const stride = Math.ceil(width * channels * bitDepth / 8)
+  // A tiny IDAT can inflate without bound; the header fixes the exact size the rows need.
+  let raw
+  try { raw = inflateSync(Buffer.concat(chunks.idat), { maxOutputLength: height * (stride + 1) + 1 }) }
+  catch (error) { throw new Error(error?.code === 'ERR_BUFFER_TOO_LARGE' ? 'PNG 图像数据长度异常' : 'PNG 图像数据无法解压') }
   const bytesPerPixel = Math.max(1, Math.ceil(channels * bitDepth / 8))
   if (raw.length < height * (stride + 1)) throw new Error('PNG 图像数据长度异常')
   const pixels = unfilter(raw, height, stride, bytesPerPixel)
