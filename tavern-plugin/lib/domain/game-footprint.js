@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readdir, readFile, rm } from 'node:fs/promises'
+import { readdir, readFile, rm, writeFile, mkdir, rename } from 'node:fs/promises'
 import path from 'node:path'
 import { currentBackgroundSessionId, referencedBackgroundSessionIds } from './background-identity.js'
 
@@ -42,7 +42,9 @@ export function createGameFootprint({ dataRoot, sessionsRoot = path.join(path.di
     return found
   }
 
-  async function describe(chat) {
+  // ownsSession(id): whether a background session really belongs to this game. Imported
+  // saves and old bugs can leave another game's ids in history; never delete those.
+  async function describe(chat, { ownsSession = async () => true } = {}) {
     const chatId = str(chat?.id)
     if (!safeName(chatId)) throw new Error('无效的游戏编号')
     const foreground = str(chat.sessionId)
@@ -53,6 +55,7 @@ export function createGameFootprint({ dataRoot, sessionsRoot = path.join(path.di
       chat.candidates?.traceSessionId, ...(Array.isArray(chat.candidates?.traceSessionIds) ? chat.candidates.traceSessionIds : []),
       sceneAgent?.sessionId
     ].map(str).filter(id => id && id !== foreground))
+    for (const id of [...background]) if (!await ownsSession(id)) background.delete(id)
     const sessionIds = [foreground, ...background].filter(Boolean)
     const items = []
     const add = (category, relative, kind = 'file') => items.push({ category, kind, path: file(relative) })
@@ -68,6 +71,7 @@ export function createGameFootprint({ dataRoot, sessionsRoot = path.join(path.di
     for (const id of sessionIds) {
       add('log', 'model-request-sessions/' + encodeURIComponent(id) + '.json')
       for (const kind of ['mvu', 'api-calls', 'compatibility']) add('log', 'diagnostics/' + kind + '-' + sha(id) + '.json')
+      add('log', 'diagnostics/mvu-' + sha(id) + '.jsonl')
       add('cache', 'template-work/' + sha(id) + '.json')
       if (safeName(id)) add('cache', 'session-prefixes/' + id + '.json')
     }
@@ -103,5 +107,29 @@ export function createGameFootprint({ dataRoot, sessionsRoot = path.join(path.di
     if (!safeName(str(digest))) return null
     try { return await readFile(file('scene-images/worldbooks/' + digest + '.json')) } catch { return null }
   }
-  return Object.freeze({ describe, removeLeftovers, readSceneFiles, readSceneWorldbook })
+  // DSH keeps a session it has opened loaded and would write it back if its files were
+  // removed now. Such sessions are deleted on the next start, before anything loads them.
+  const pendingPath = file('pending-session-deletions.json')
+  async function deferSessionDeletion(items) {
+    if (!items.length) return
+    let pending = []
+    try { pending = JSON.parse(await readFile(pendingPath, 'utf8')) } catch {}
+    const next = [...new Set([...pending, ...items.map(item => path.resolve(item.path))])]
+    await mkdir(path.dirname(pendingPath), { recursive: true })
+    await writeFile(pendingPath + '.tmp', JSON.stringify(next))
+    await rename(pendingPath + '.tmp', pendingPath)
+  }
+  async function processDeferredDeletions() {
+    let pending
+    try { pending = JSON.parse(await readFile(pendingPath, 'utf8')) } catch { return 0 }
+    let removed = 0
+    const sessions = path.resolve(sessionsRoot) + path.sep
+    for (const target of Array.isArray(pending) ? pending : []) {
+      if (typeof target !== 'string' || !path.resolve(target).startsWith(sessions)) continue
+      try { await rm(path.resolve(target), { recursive: true, force: true }); removed++ } catch {}
+    }
+    await rm(pendingPath, { force: true })
+    return removed
+  }
+  return Object.freeze({ describe, removeLeftovers, readSceneFiles, readSceneWorldbook, deferSessionDeletion, processDeferredDeletions })
 }

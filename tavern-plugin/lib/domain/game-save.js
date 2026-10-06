@@ -49,7 +49,7 @@ function unpackState(packed, blobs) {
   for (const [key, value] of Object.entries(packed)) {
     if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.$dshSaveBlob === 'string') {
       if (!blobs.has(value.$dshSaveBlob)) throw new Error('存档包缺少数据块：' + value.$dshSaveBlob.slice(0, 12))
-      state[key] = JSON.parse(blobs.get(value.$dshSaveBlob))
+      try { state[key] = JSON.parse(blobs.get(value.$dshSaveBlob)) } catch { throw new Error('存档包已损坏：数据块无法读取') }
     } else state[key] = value
   }
   return state
@@ -91,14 +91,14 @@ export function buildGameSave(input) {
 export function readGameSave(buffer, { tavernVersion } = {}) {
   const files = readZipEntries(buffer, { label: '存档包' })
   const text = path => { const data = files.get(path); if (!data) throw new Error('存档包缺少 ' + path); return data.toString('utf8') }
-  const manifest = JSON.parse(text('manifest.json'))
-  if (manifest.format !== GAME_SAVE_FORMAT) throw new Error('这不是 DSH Tavern 存档包')
-  if (!Number.isSafeInteger(manifest.formatVersion) || manifest.formatVersion > GAME_SAVE_FORMAT_VERSION || (tavernVersion && newerVersion(manifest.tavernVersion, tavernVersion))) {
-    throw new Error('存档由更新版本的酒馆（' + manifest.tavernVersion + '）导出，请先更新酒馆再导入')
-  }
+  const parse = (value, path) => { try { return JSON.parse(value) } catch { throw new Error('存档包已损坏：' + path + ' 无法读取') } }
+  const manifest = parse(text('manifest.json'), 'manifest.json')
+  if (manifest?.format !== GAME_SAVE_FORMAT) throw new Error('这不是 DSH Tavern 存档包')
+  if (!Number.isSafeInteger(manifest.formatVersion) || manifest.formatVersion > GAME_SAVE_FORMAT_VERSION) throw new Error('存档包格式（第 ' + manifest.formatVersion + ' 版）比当前酒馆支持的新，请先更新酒馆再导入')
+  if (tavernVersion && newerVersion(manifest.tavernVersion, tavernVersion)) throw new Error('存档由更新版本的酒馆（' + manifest.tavernVersion + '）导出，当前是 ' + tavernVersion + '，请先更新酒馆再导入')
   const blobs = new Map()
   for (const [path, data] of files) if (path.startsWith('blobs/')) blobs.set(path.slice(6, -5), data.toString('utf8'))
-  const revisions = manifest.contents.revisions.map(revision => ({ revision, state: unpackState(JSON.parse(text('chat/revisions/' + revision + '.json')), blobs) }))
+  const revisions = manifest.contents.revisions.map(revision => ({ revision, state: unpackState(parse(text('chat/revisions/' + revision + '.json'), 'chat/revisions/' + revision + '.json'), blobs) }))
   let scene = null
   if (manifest.contents.sceneImages) {
     scene = {
@@ -109,9 +109,9 @@ export function readGameSave(buffer, { tavernVersion } = {}) {
   }
   return {
     manifest,
-    chat: unpackState(JSON.parse(text('chat/current.json')), blobs),
+    chat: unpackState(parse(text('chat/current.json'), 'chat/current.json'), blobs),
     revisions,
-    session: JSON.parse(text('session/foreground.json')),
+    session: parse(text('session/foreground.json'), 'session/foreground.json'),
     card: files.has('card/payload.json') ? { path: manifest.source.cardPath, payload: JSON.parse(text('card/payload.json')) } : null,
     script: files.has('script/script.json') ? JSON.parse(text('script/script.json')) : null,
     scene
