@@ -2528,19 +2528,14 @@ export async function apply(ctx) {
       error = str(caught && caught.message || caught)
       prepared = prepareWorldBookRecall({ turn, chat: snapshot, card: null, worldBook: null })
     }
-    const latest = await readChat(snapshot.id)
-    if (latest === undefined) return null
-    const current = storyTimeline.inspect({ chat: latest })
-    if (current.branchId !== inspected.branchId || Number(current.revision) !== Number(inspected.revision)) return latest
     const context = error === null ? str(prepared.context).trim() : ''
-    latest.preparedWorldBookContext = context
-    latest.preparedWorldBook = {
+    const preparedWorldBook = {
       schemaVersion: 2,
       diagnostics: compactRecallDiagnostics(prepared.diagnostics),
       ts: Date.now(),
       turn,
-      branchId: current.branchId,
-      revision: current.revision,
+      branchId: inspected.branchId,
+      revision: inspected.revision,
       mode: error === null ? str(prepared.kind) : 'error',
       refs: error === null ? prepared.refs : [],
       totalChars: Number(prepared.totalChars) || 0,
@@ -2548,9 +2543,18 @@ export async function apply(ctx) {
       empty: error !== null || context === '',
       failed: error !== null
     }
-    latest.worldBookError = error
-    latest.lastWorldBookRecall = Object.assign({}, latest.preparedWorldBook)
+    const fields = { preparedWorldBookContext: context, preparedWorldBook, worldBookError: error, lastWorldBookRecall: { ...preparedWorldBook } }
     signal?.throwIfAborted()
+    // Unchanged since the snapshot: patch only these header fields instead of
+    // rewriting and diffing the complete history.
+    const saved = Number.isSafeInteger(snapshot._storageRevision) && await patchChat(snapshot.id, snapshot._storageRevision,
+      Object.entries(fields).map(([key, value]) => ({ op: 'set', path: [key], value })), { source: 'worldbook.projection' })
+    if (saved) return Object.assign(snapshot, fields, { _storageRevision: saved._storageRevision, updatedAt: saved.updatedAt })
+    const latest = await readChat(snapshot.id)
+    if (latest === undefined) return null
+    const current = storyTimeline.inspect({ chat: latest })
+    if (current.branchId !== inspected.branchId || Number(current.revision) !== Number(inspected.revision)) return latest
+    Object.assign(latest, structuredClone(fields))
     await writeChat(latest, { source: 'worldbook.projection' })
     return latest
   }
@@ -3038,6 +3042,8 @@ export async function apply(ctx) {
       writeChat,
       writeChatHeader,
       updateChat,
+      readChatSlice: createSessionSliceReader({ links: readSessionMap, readSlice: chatPersistence.readSlice }),
+      patchChat,
       updateCard,
       createCard: createWorkspaceCard
     },
