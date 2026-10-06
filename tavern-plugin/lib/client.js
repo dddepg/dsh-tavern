@@ -1142,8 +1142,8 @@ window.__ModuleLoader__.load({
 			if (trace) payload._traceId = trace.id;
 			if (sessionId) payload.sessionId = sessionId;
 			const viewRead = method === "getSession" ? beginSessionViewRead(payload.sessionId) : null;
-			if (viewRead) { payload.viewSync = 1; payload.resourceSync = 1; payload.openingWindow = 1; if (completeHistorySessions.has(payload.sessionId)) payload.fullView = true; payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
-			if (method === "getTavernHelperContext" && !payload.eventId && !payload.fullView && !completeHistorySessions.has(payload.sessionId)) payload.openingWindow = 1;
+			if (viewRead) { payload.viewSync = 1; payload.resourceSync = 1; payload.openingWindow = 1; if (historyFromSessions.has(payload.sessionId)) payload.historyFrom = historyFromSessions.get(payload.sessionId); payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
+			if (method === "getTavernHelperContext" && !payload.eventId && !payload.fullView) payload.openingWindow = 1;
 			const requestBody = JSON.stringify(payload);
 			if (trace) {
 				try { trace.requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).length : requestBody.length; }
@@ -2226,13 +2226,17 @@ window.__ModuleLoader__.load({
 			return state;
 		}
 
-        const completeHistorySessions = new Set();
-        const completeHistoryLoads = new Map();
-        function requestCompleteHistory(sessionId) {
-            if(completeHistoryLoads.has(sessionId))return completeHistoryLoads.get(sessionId);
-            completeHistorySessions.add(sessionId);
-            const task=rpc("getSession",{fullView:true},sessionId).then(result=>liveTavernView.setView(sessionId,result.view)).finally(()=>completeHistoryLoads.delete(sessionId));
-            completeHistoryLoads.set(sessionId,task);
+        // Scrolling into older floors extends the session's history window by one
+        // page; later view syncs keep that range instead of a complete history.
+        const TAVERN_HISTORY_PAGE = 120;
+        const historyFromSessions = new Map();
+        const historyLoads = new Map();
+        function requestOlderHistory(sessionId, windowFrom) {
+            if(historyLoads.has(sessionId))return historyLoads.get(sessionId);
+            const current=historyFromSessions.get(sessionId);
+            historyFromSessions.set(sessionId,Math.max(0,Math.min(current ?? windowFrom,windowFrom)-TAVERN_HISTORY_PAGE));
+            const task=rpc("getSession",{},sessionId).then(result=>liveTavernView.setView(sessionId,result.view)).finally(()=>historyLoads.delete(sessionId));
+            historyLoads.set(sessionId,task);
             return task;
         }
 
@@ -11501,12 +11505,12 @@ function bindTavernFontZoom(node, win) {
                     const observer = new IntersectionObserver(entries=>{
                         if(entries.some(entry=>entry.isIntersecting)) {
                             observer.disconnect();
-                            void requestCompleteHistory(props.sessionId).catch(error=>tavernErrorHub.report("读取历史",error));
+                            void requestOlderHistory(props.sessionId,currentView.historyWindow.from).catch(error=>tavernErrorHub.report("读取历史",error));
                         }
                     });
                     observer.observe(historyNode.current);
                     return ()=>observer.disconnect();
-                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision]);
+                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision,currentView?.historyWindow?.from]);
 				const tail = props.useTurnData("turn-tail");
 				const owner = React.useMemo(function () {
 					if (!turnRef || turnRef.status !== "closed" || !data.finalNode || !tail || !tail.closing || tail.closing.finalNode.seq !== data.finalNode.seq) return undefined;

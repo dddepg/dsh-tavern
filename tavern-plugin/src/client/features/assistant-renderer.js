@@ -469,12 +469,12 @@
                     const observer = new IntersectionObserver(entries=>{
                         if(entries.some(entry=>entry.isIntersecting)) {
                             observer.disconnect();
-                            void requestCompleteHistory(props.sessionId).catch(error=>tavernErrorHub.report("读取历史",error));
+                            void requestOlderHistory(props.sessionId,currentView.historyWindow.from).catch(error=>tavernErrorHub.report("读取历史",error));
                         }
                     });
                     observer.observe(historyNode.current);
                     return ()=>observer.disconnect();
-                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision]);
+                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision,currentView?.historyWindow?.from]);
 				const tail = props.useTurnData("turn-tail");
 				const owner = React.useMemo(function () {
 					if (!turnRef || turnRef.status !== "closed" || !data.finalNode || !tail || !tail.closing || tail.closing.finalNode.seq !== data.finalNode.seq) return undefined;

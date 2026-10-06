@@ -24,7 +24,7 @@ import { worldBookDisplayName } from './domain/worldbook-resource.js'
 import { createConversationMigration } from './domain/conversation-migration.js'
 import { createTaskStateReader, taskStateFields } from './domain/task-state-reader.js'
 import { installHostProjectionReplay } from './domain/host-projection-replay.js'
-import { createBoundedHistory, readRowsAt } from './domain/bounded-history.js'
+import { createBoundedHistory, readRecentWindow, readRowsAt } from './domain/bounded-history.js'
 import { readSettlementInput } from './domain/settlement-input.js'
 import { createHelperHistoryAccess } from './domain/helper-history-access.js'
 import { createInputFieldsProjection } from './domain/input-fields-projection.js'
@@ -269,7 +269,8 @@ export async function apply(ctx) {
   const cardMemory = createCardMemory({ dataRoot })
   const stablePrefixStorage = createSessionStablePrefixStorage(dataRoot + '/session-prefixes')
   const profileData = createProfileDataStore({ dataRoot })
-  const completeTemplateHistorySessions = new Set()
+  // Oldest floor each browser session has viewed; the template window covers it.
+  const templateHistoryFrom = new Map()
   const fullTemplateRuntime = createServerTemplateRuntime({ store: profileData,
     rpc: (method, args) => dispatchMethod(method, args, true),
     onDiagnostic: diagnostic => console.warn('dsh-tavern: 服务端模板进程异常:', diagnostic)
@@ -1402,7 +1403,7 @@ export async function apply(ctx) {
       if (!selected || selected.chat.sessionId !== sessionId || selected.chat.backgroundConfigVersion !== 1 || selected.chat.conversationFeaturesVersion !== 1) return undefined
       return selected
     },
-    resolveTemplateWindow: createTemplateWindowReader({ links: readSessionMap, readWindow: chatPersistence.readWindow, access: { issue: input => helperHistoryAccess.issue(input) }, completeSessions: completeTemplateHistorySessions }),
+    resolveTemplateWindow: createTemplateWindowReader({ links: readSessionMap, readWindow: chatPersistence.readWindow, access: { issue: input => helperHistoryAccess.issue(input) }, historyFrom: sessionId => templateHistoryFrom.get(sessionId) }),
     resolveChatSlice: createSessionSliceReader({links:readSessionMap, readSlice:chatPersistence.readSlice}),
     resolveChatSliceAt: async (sessionId,revision,indices) => {
       const chatId=(await readSessionMap())[sessionId]
@@ -1843,10 +1844,12 @@ export async function apply(ctx) {
     return result
   }
   const helperHistoryAccess = createHelperHistoryAccess({read: (id,args) => chatPersistence.readHelperContext(id,args)})
-  async function readOpeningWindow(sessionId) {
+  // `historyFrom`: the oldest floor the browser has scrolled to; the window grows
+  // to cover it instead of switching the whole session to a complete view.
+  async function readOpeningWindow(sessionId, historyFrom) {
     const chatId = (await readSessionMap())[str(sessionId)]
     if (!chatId) return null
-    const window = await chatPersistence.readWindow(chatId,{limit:HELPER_MESSAGE_COLD_WINDOW,requirePartial:true})
+    const window = await readRecentWindow(chatPersistence.readWindow,chatId,{limit:HELPER_MESSAGE_COLD_WINDOW,from:historyFrom,requirePartial:true})
     if (!window || window.from===0 || window.chat.sessionId!==sessionId
       || window.chat.backgroundConfigVersion!==1 || window.chat.conversationFeaturesVersion!==1
       || !['story','script'].includes(window.chat.mode || 'story')
@@ -3788,7 +3791,8 @@ export async function apply(ctx) {
       }
       case 'getFullTemplateRuntimeInfo': throw new Error('提示词模板已迁移到服务端，请刷新页面');
       case 'getSession': {
-        if(args?.fullView === true)completeTemplateHistorySessions.add(args.sessionId)
+        if(args?.fullView === true)templateHistoryFrom.set(args.sessionId,0)
+        else if(Number.isSafeInteger(args?.historyFrom) && args.historyFrom >= 0)templateHistoryFrom.set(args.sessionId,args.historyFrom)
         return sessionViews.response(args || {})
       }
       case 'hydrateTavernHelperMessages': {

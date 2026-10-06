@@ -193,8 +193,8 @@ window.__ModuleLoader__.load({
 			if (trace) payload._traceId = trace.id;
 			if (sessionId) payload.sessionId = sessionId;
 			const viewRead = method === "getSession" ? beginSessionViewRead(payload.sessionId) : null;
-			if (viewRead) { payload.viewSync = 1; payload.resourceSync = 1; payload.openingWindow = 1; if (completeHistorySessions.has(payload.sessionId)) payload.fullView = true; payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
-			if (method === "getTavernHelperContext" && !payload.eventId && !payload.fullView && !completeHistorySessions.has(payload.sessionId)) payload.openingWindow = 1;
+			if (viewRead) { payload.viewSync = 1; payload.resourceSync = 1; payload.openingWindow = 1; if (historyFromSessions.has(payload.sessionId)) payload.historyFrom = historyFromSessions.get(payload.sessionId); payload.viewCursor = viewRead.cursor; if (viewRead.receiptSync) payload.receiptSync = 1; }
+			if (method === "getTavernHelperContext" && !payload.eventId && !payload.fullView) payload.openingWindow = 1;
 			const requestBody = JSON.stringify(payload);
 			if (trace) {
 				try { trace.requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).length : requestBody.length; }
@@ -477,13 +477,17 @@ window.__ModuleLoader__.load({
 			return state;
 		}
 
-        const completeHistorySessions = new Set();
-        const completeHistoryLoads = new Map();
-        function requestCompleteHistory(sessionId) {
-            if(completeHistoryLoads.has(sessionId))return completeHistoryLoads.get(sessionId);
-            completeHistorySessions.add(sessionId);
-            const task=rpc("getSession",{fullView:true},sessionId).then(result=>liveTavernView.setView(sessionId,result.view)).finally(()=>completeHistoryLoads.delete(sessionId));
-            completeHistoryLoads.set(sessionId,task);
+        // Scrolling into older floors extends the session's history window by one
+        // page; later view syncs keep that range instead of a complete history.
+        const TAVERN_HISTORY_PAGE = 120;
+        const historyFromSessions = new Map();
+        const historyLoads = new Map();
+        function requestOlderHistory(sessionId, windowFrom) {
+            if(historyLoads.has(sessionId))return historyLoads.get(sessionId);
+            const current=historyFromSessions.get(sessionId);
+            historyFromSessions.set(sessionId,Math.max(0,Math.min(current ?? windowFrom,windowFrom)-TAVERN_HISTORY_PAGE));
+            const task=rpc("getSession",{},sessionId).then(result=>liveTavernView.setView(sessionId,result.view)).finally(()=>historyLoads.delete(sessionId));
+            historyLoads.set(sessionId,task);
             return task;
         }
 

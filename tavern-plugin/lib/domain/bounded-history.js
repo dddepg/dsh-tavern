@@ -98,3 +98,17 @@ export async function readRowsAt(readWindow, chatId, revision, indices) {
   const { messages: _rows, ...head } = header
   return { chat: { ...head, messages: sorted.map(index => rows.get(index)) }, messageCount, denseMessages: sorted.every(index => rows.has(index)) }
 }
+
+/** The latest `limit` floors, extended on the same revision back to `from` when
+ * the reader has already viewed older history. `requirePartial` keeps the old
+ * contract of returning null for a history the window would cover entirely. */
+export async function readRecentWindow(readWindow, chatId, { limit, from, requirePartial = false } = {}) {
+  const extended = Number.isSafeInteger(from) && from >= 0
+  let window = await readWindow(chatId, { limit, requirePartial: requirePartial && !extended })
+  while (window && extended && window.from > from) {
+    const page = await readWindow(chatId, { limit: Math.min(500, window.from - from), before: window.from, revision: window.revision, fields: ['_storageRevision'] })
+    if (!page || page.revision !== window.revision || page.to !== window.from - 1) return null
+    window = { ...window, from: page.from, chat: { ...window.chat, messages: page.chat.messages.concat(window.chat.messages) } }
+  }
+  return window
+}
