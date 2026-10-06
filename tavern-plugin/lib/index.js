@@ -28,7 +28,7 @@ import { createBoundedHistory } from './domain/bounded-history.js'
 import { readSettlementInput } from './domain/settlement-input.js'
 import { createHelperHistoryAccess } from './domain/helper-history-access.js'
 import { createInputFieldsProjection } from './domain/input-fields-projection.js'
-import { createScopedMessages } from './domain/scoped-messages.js'
+import { createScopedMessages, isScopedMessages } from './domain/scoped-messages.js'
 import {registerVariableReadTool} from './domain/read-variables.js'
 import { createBackgroundSessionRetirement, installRetiredBackgroundFilter } from './domain/background-session-retirement.js'
 import { createCardMemory, CARD_MEMORY_TOOLS } from '../packages/dsh-tavern-card-memory/index.js'
@@ -1886,6 +1886,8 @@ export async function apply(ctx) {
   const playCardSnapshots = createPlayCardSnapshots({ worldBooks, planner: contextPlanner, readCard: readChatCard, writeChat, captureSceneWorldbook, userPreferenceProfile })
   const ensurePlayCardSnapshot = playCardSnapshots.ensure
   async function ensureNativeSystemPrefix(session, chat) {
+    // Rebuilding the snapshot persists the complete Chat; a bounded history cannot.
+    if (isScopedMessages(chat?.messages) && playCardSnapshots.settled(chat) === undefined) chat = await chatForSession(session.id)
     const before = readSessionStablePrefix(session)
     const revision = Number(chat.cardContextRevision) || 0
     const cardAgent = chat.mode === 'card' && chat.cardEditContext?.version !== 1
@@ -2535,6 +2537,22 @@ export async function apply(ctx) {
   // A story request reads the header, every floor its world book scans (plus the
   // current input or latest body), the latest reply and the latest variable floor.
   // Card mode, old saves and unknown depths keep the complete Chat.
+  // Request hooks: header, latest reply and variable floor, the two latest MVU
+  // replies (variable feedback) and every floor changed since this process last
+  // synchronized the session's native surface. The first hook per session in a
+  // process, lost change coverage or card mode read the complete Chat.
+  const surfaceSyncedRevisions = new Map()
+  async function hookChatForSession(sessionId) {
+    const chatId = (await readSessionMap())[str(sessionId)]
+    const synced = chatId ? surfaceSyncedRevisions.get(str(sessionId)) : undefined
+    const changed = synced === undefined ? undefined : await chatPersistence.readChangedIndices(chatId, synced)
+    const mvuReplies = rows => rows.filter(row => row?.role === 'assistant' && row.variables?.[Math.max(0, Number(row.swipeId) || 0)]?.stat_data !== undefined).length >= 2
+    const selected = changed?.indices && await boundedHistory.read(chatId, str(sessionId), { lastAssistant: true, lastVariables: true, enough: mvuReplies, include: changed.indices, revision: changed.revision })
+    const chat = selected && ['story', 'script'].includes(selected.chat.mode || 'story') && selected.chat.requestMode !== 'sillytavern'
+      ? normalizeChat(selected.chat) : await chatForSession(sessionId)
+    if (chat?._storageRevision !== undefined) surfaceSyncedRevisions.set(str(sessionId), chat._storageRevision)
+    return chat
+  }
   async function storyContext({ sessionId, chatId }) {
     const need = { storyRows: async header => (await worldBookScanDepth(header)) + 1, lastAssistant: true, lastVariables: true }
     const selected = chatId === undefined ? await boundedHistory.forSession(sessionId, need) : await boundedHistory.read(chatId, undefined, need)
@@ -4120,7 +4138,7 @@ export async function apply(ctx) {
   registerRequestHooks({
     backgroundAgentRunner,
     cardMemory,
-    chatForSession,
+    chatForSession: hookChatForSession,
     ctx,
     foregroundStrategies,
     persistClearedBodyEdits,
@@ -4151,7 +4169,7 @@ export async function apply(ctx) {
 
   registerTurnLifecycleHooks({
     backgroundAgentRunner,
-    chatForSession,
+    hookChatForSession,
     clearRuntimePresetRequestState,
     contentText,
     ctx,

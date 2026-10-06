@@ -22,7 +22,7 @@ export async function synchronizeBodyEdits(session, chat, flush, persistChat) {
   const cleared = []
   let sessionDirty = false
   for (const message of chat.messages || []) {
-    if (!message.bodyEdit) continue
+    if (!message?.bodyEdit) continue
     const { id, seq, turn } = message.bodyEdit
     if (recorded.has(id)) continue
     let targetSeq = session.surface?.nodes.includes(seq) ? seq : null

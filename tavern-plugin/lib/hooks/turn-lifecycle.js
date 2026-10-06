@@ -7,7 +7,7 @@ import { synchronizeTemplateHistory } from '../domain/template-history.js'
 
 export function registerTurnLifecycleHooks({
   backgroundAgentRunner,
-  chatForSession,
+  hookChatForSession,
   clearRuntimePresetRequestState,
   contentText,
   ctx,
@@ -82,7 +82,7 @@ export function registerTurnLifecycleHooks({
     const agent = context && context.agent
     if (agent === undefined || agent.session === undefined) return assembly
     if (backgroundAgentRunner.owns(agent.session.id)) return assembly
-    const chat = await chatForSession(agent.session.id)
+    const chat = await hookChatForSession(agent.session.id)
     if (chat) await synchronizeTemplateHistory(agent.session, chat, session => sessionStore.flush(session))
     if (chat) await synchronizeBodyEdits(agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
     if (chat && chat.requestMode !== 'sillytavern' && ['story', 'script', 'card'].includes(await turnOrchestrator.modeFor(agent.session.id))) {

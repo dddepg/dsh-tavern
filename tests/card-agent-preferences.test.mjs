@@ -51,11 +51,12 @@ test('真实卡片 Agent 请求：偏好仅在 system，附加指令置顶且修
   const implementation = source.slice(source.indexOf('  async function ensureNativeSystemPrefix('), source.indexOf('  async function ensureNativeCardWorkspace('))
   const ensurePrefix = vm.runInNewContext(`(${implementation.trim()})`, {
     readSessionStablePrefix, ensureSessionStablePrefix, ensureSessionVariableDirectory,
-    ensurePlayCardSnapshot: snapshots.ensure, stablePrefixStorage: undefined, sessionStore: { flush: session => h.ctx.sessions.flush(session) }
+    ensurePlayCardSnapshot: snapshots.ensure, playCardSnapshots: snapshots, isScopedMessages: () => false, chatForSession: async () => chat,
+    stablePrefixStorage: undefined, sessionStore: { flush: session => h.ctx.sessions.flush(session) }
   })
   const strategy = createNativePlayOrchestrationStrategy({ modeFor: async () => 'card', visibleTools: async () => [], controlledToolNames: new Set(),
     cardSystemPrompt: () => '卡片 Agent 职责', workspaceContext: () => '卡片资源工作区' })
-  registerTurnLifecycleHooks({ ctx: h.ctx, chatForSession: async () => chat, ensureNativeSystemPrefix: ensurePrefix,
+  registerTurnLifecycleHooks({ ctx: h.ctx, hookChatForSession: async () => chat, ensureNativeSystemPrefix: ensurePrefix,
     backgroundAgentRunner: { owns: () => false }, fullTemplateRuntime: { cancel() {} }, clearRuntimePresetRequestState() {},
     userMessageForTurn: () => null, contentText: () => '', foregroundHandoff: { end() {} },
     sessionStore: { flush: session => h.ctx.sessions.flush(session) }, foregroundStrategies: strategy, turnOrchestrator: { modeFor: async () => 'card' },
