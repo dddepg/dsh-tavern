@@ -5,7 +5,9 @@ const tavernHostThemeListeners = new Set();
 let tavernHostThemeObserver = null, tavernHostTheme = null;
 function readTavernHostTheme(win) {
     const value = parseFloat(win.getComputedStyle(win.document.body).getPropertyValue("--dsh-content-font-size"));
-    return { fontSize: Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14, textColorOverrides: tavernTextColorOverrides(win) };
+    // DSH resolves its theme on <html color-scheme> and marks dark with body[data-ds-dark-theme].
+    return { fontSize: Number.isFinite(value) && value >= 8 && value <= 48 ? value : 14, textColorOverrides: tavernTextColorOverrides(win),
+        colorScheme: win.document.body.hasAttribute("data-ds-dark-theme") ? "dark" : "light" };
 }
 function currentTavernHostTheme(win) {
     return tavernHostTheme || readTavernHostTheme(win);
@@ -25,7 +27,7 @@ function subscribeTavernHostTheme(win, listener) {
                 queued = false;
                 if (!tavernHostThemeObserver) return;
                 const next = readTavernHostTheme(win);
-                if (next.fontSize === tavernHostTheme.fontSize && next.textColorOverrides.quote === tavernHostTheme.textColorOverrides.quote) return;
+                if (next.fontSize === tavernHostTheme.fontSize && next.textColorOverrides.quote === tavernHostTheme.textColorOverrides.quote && next.colorScheme === tavernHostTheme.colorScheme) return;
                 tavernHostTheme = next;
                 tavernHostThemeListeners.forEach(function (notify) { notify(next); });
             });
