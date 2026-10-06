@@ -155,7 +155,7 @@ export function createNativeConversationStorage({dataRoot,onIO}){
   const page=await pages.readHistoryPage(id,{cursor:{snapshotId:view.snapshotCursor.snapshotId,before:end},limit})
   chat.messages=[]
   for(const row of page.messages)chat.messages.push(await t.get(row.message.runtimeRef))
-  return {chat,messageCount:view.messageCount,from,to:end-1,revision:view.state.chatRevision}
+  return {chat,messageCount:view.messageCount,from,to:end-1,revision:view.state.chatRevision,worldMessage:view.state.worldMessage??null}
  }
  async function readSlice(id,indices=[],fields,pinned){
   const view=pinned||await head(id)

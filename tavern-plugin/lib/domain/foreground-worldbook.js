@@ -9,7 +9,7 @@ export function createForegroundWorldbook({ bound, runtime, globalVariables, sca
   return async function project({ chat, card, userText, userTextInHistory = false, worldBook: snapshot, purpose = 'generation', signal }) {
     try {
       let worldBook = snapshot || await bound(chat.cardPath, card, chat)
-      const turn = Number([...(chat.messages || [])].reverse().find(message => message.role === 'assistant')?.turn) || 0
+      const turn = Number([...(chat.messages || [])].reverse().find(message => message?.role === 'assistant')?.turn) || 0
       const randomState = worldbookRandomState(chat, turn)
       // Older versions recorded the next-turn preview as a read. Let the first
       // real request re-evaluate that preview without suppressing its entries.

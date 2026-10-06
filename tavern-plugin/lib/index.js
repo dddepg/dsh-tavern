@@ -24,6 +24,7 @@ import { worldBookDisplayName } from './domain/worldbook-resource.js'
 import { createConversationMigration } from './domain/conversation-migration.js'
 import { createTaskStateReader, taskStateFields } from './domain/task-state-reader.js'
 import { installHostProjectionReplay } from './domain/host-projection-replay.js'
+import { createBoundedHistory } from './domain/bounded-history.js'
 import { readSettlementInput } from './domain/settlement-input.js'
 import { createHelperHistoryAccess } from './domain/helper-history-access.js'
 import { createInputFieldsProjection } from './domain/input-fields-projection.js'
@@ -2075,7 +2076,7 @@ export async function apply(ctx) {
   // sending never waits for a model. Usually below the threshold: no request at all.
   const worldbookPrefilter = createWorldbookPrefilter({
     async run(chatId, signal) {
-      const chat = await readChat(chatId)
+      const chat = await storyContext({ chatId })
       if (!chat || !['story', 'script'].includes(chat.mode || 'story') || chat.requestMode === 'sillytavern' || chat.regenInProgress) return
       const latest = chat.messages?.at(-1)
       if (latest?.role !== 'assistant' || latest.greeting === true || backgroundTasks.activity(chat).busy) return
@@ -2529,6 +2530,16 @@ export async function apply(ctx) {
   async function worldBookScanDepth(chat) {
     try { return historyScanDepth(await worldBooks.bound(chat.cardPath, await readChatCard(chat), chat)) }
     catch { return Infinity }
+  }
+  const boundedHistory = createBoundedHistory({ links: readSessionMap, readWindow: chatPersistence.readWindow })
+  // A story request reads the header, every floor its world book scans (plus the
+  // current input or latest body), the latest reply and the latest variable floor.
+  // Card mode, old saves and unknown depths keep the complete Chat.
+  async function storyContext({ sessionId, chatId }) {
+    const need = { storyRows: async header => (await worldBookScanDepth(header)) + 1, lastAssistant: true, lastVariables: true }
+    const selected = chatId === undefined ? await boundedHistory.forSession(sessionId, need) : await boundedHistory.read(chatId, undefined, need)
+    if (selected && ['story', 'script'].includes(selected.chat.mode || 'story') && selected.chat.requestMode !== 'sillytavern') return normalizeChat(selected.chat)
+    return chatId === undefined ? chatForSession(sessionId) : readChat(chatId)
   }
   async function prepareNextWorldBookContext(snapshot, signal) {
     const turn = settlementTurn(snapshot)
@@ -3051,6 +3062,7 @@ export async function apply(ctx) {
     captureSceneWorldbook,
     store: {
       chatForSession,
+      storyContextForSession: sessionId => storyContext({ sessionId }),
       stateForSession: sessionStateForSession,
       readCard,
       readCardExtensions,

@@ -243,8 +243,11 @@ export function createTurnOrchestrator(options) {
     : async function () { return { context: '', refs: [], diagnostics: [] } }
   const shellToolName = options.shellToolName === 'pwsh' ? 'pwsh' : 'bash'
 
+  // Story preparation reads only the floors its world book and templates use.
+  const contextForSession = typeof store.storyContextForSession === 'function' ? store.storyContextForSession : store.chatForSession
+
   async function prepare(input) {
-    let chat = await store.chatForSession(input.sessionId)
+    let chat = await contextForSession(input.sessionId)
     if (chat === undefined) {
       return {
         ready: false,
@@ -370,7 +373,7 @@ export function createTurnOrchestrator(options) {
     const foregroundWorldBook = typeof options.projectForegroundWorldbook === 'function'
       ? await options.projectForegroundWorldbook({ chat, card, turn, userText: runtimeUserText }) : null
     if (typeof options.projectForegroundWorldbook === 'function') {
-      chat = await store.chatForSession(input.sessionId)
+      chat = await contextForSession(input.sessionId)
       if (chat && store.writeChatHeader) preparationBase = captureChatHeader(chat)
       const current = chat && timeline.inspect({ chat })
       if (!current || current.branchId !== foregroundOperation.basedOn.branchId || current.revision !== foregroundOperation.basedOn.revision ||

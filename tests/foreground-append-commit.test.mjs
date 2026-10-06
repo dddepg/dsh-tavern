@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { createChatJournalStore } from '../tavern-plugin/lib/domain/chat-journal-store.js'
 import { createChatPersistence } from '../tavern-plugin/lib/domain/chat-persistence.js'
 import { createSessionSliceReader } from '../tavern-plugin/lib/domain/session-view-reader.js'
+import { createBoundedHistory } from '../tavern-plugin/lib/domain/bounded-history.js'
 import { createTurnOrchestrator } from '../tavern-plugin/lib/domain/turn-orchestration.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
 import { createForegroundFrameBuilder } from '../tavern-plugin/lib/domain/agent-input-frame.js'
@@ -38,6 +39,10 @@ async function app(t, chat, scoped, template = false) {
     writeChatHeader: persistence.writeHeader,
     async updateChat(...args) { calls.update++; return persistence.update(...args) },
     ...(scoped ? {
+      async storyContextForSession(sessionId) {
+        const bounded = createBoundedHistory({ links: async () => ({ [chat.sessionId]: chat.id }), readWindow: persistence.readWindow, pageSize: 8 })
+        return (await bounded.forSession(sessionId, { storyRows: 3, lastAssistant: true, lastVariables: true })).chat
+      },
       readChatSlice: createSessionSliceReader({ links: async () => ({ [chat.sessionId]: chat.id }), readSlice: persistence.readSlice }),
       async patchChat(...args) { calls.patch++; await beforePatch?.(); beforePatch = null; return persistence.patch(...args) }
     } : {})

@@ -578,7 +578,8 @@ try {
       const composer = page.getByRole('textbox', { name: /发消息|Message/ })
       assert.equal(await composer.innerText(), '再次领取奖励')
       await composer.press('Enter')
-      await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).waitFor()
+      // A script reply briefly keeps a second, hidden copy of its body mounted.
+      await page.getByText('你再次领取了奖励，金币累计二十枚。', { exact: true }).filter({ visible: true }).first().waitFor()
       await page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])').locator('#e2e-gold').filter({ hasText: /^金币：20$/ }).waitFor()
       await inspectRound('second-turn', 20, '你再次领取了奖励，金币累计二十枚。')
     })
