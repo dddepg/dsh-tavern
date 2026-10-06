@@ -1856,6 +1856,14 @@ export async function apply(ctx) {
       || window.chat.messages.some(message=>message.role==='assistant' && !Number.isSafeInteger(message.turn))) return null
     return window
   }
+  // Results of story operations: the same bounded window the browser keeps in
+  // sync, never a complete-history view. Short and old saves keep view().
+  async function presentStory(chat) {
+    const window = chat?.sessionId ? await readOpeningWindow(chat.sessionId, templateHistoryFrom.get(chat.sessionId)) : null
+    if (window) return projectOpeningWindow(window)
+    const full = Array.isArray(chat?.messages) && !isScopedMessages(chat.messages) ? chat : await readChat(chat.id)
+    return view(full, await readChatCard(full))
+  }
   async function projectOpeningWindow(window, options = {}) {
     // Disable revision caches for this partial input. It must never replace a
     // full history projection or be used as an editable Chat baseline.
@@ -3213,7 +3221,7 @@ export async function apply(ctx) {
   })
 
   const bodyEditor = createBodyEditor({
-    chats: { forSession: chatForSession, update: updateChat },
+    chats: { forSession: hookChatForSession, update: updateChat, patch: patchChat },
     sessions: { get: id => ctx.get('agents')?.get(id), flush: session => sessionStore.flush(session) },
     timeline: storyTimeline,
     activity: chat => backgroundTasks.activity(chat),
@@ -3222,7 +3230,7 @@ export async function apply(ctx) {
       return projectRuntimeReply(text, { charName: chat.cardName, macroState: chat.macroState,
         regexScripts: composeTavernRegexScripts(extensions, chat.runtimePresetSnapshot?.regexScripts), placement: 2, isEdit: false, depth: 0 })
     },
-    present: async chat => view(chat, await readChatCard(chat)),
+    present: presentStory,
     sessionPatch,
   })
 
