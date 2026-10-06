@@ -73,3 +73,28 @@ export function createBoundedHistory({ links, readWindow, pageSize = 48, maxRows
     }
   })
 }
+
+/** Header and named floors exactly as they were at `revision`; undefined when that
+ * revision is no longer readable. Rows come back in ascending floor order. */
+export async function readRowsAt(readWindow, chatId, revision, indices) {
+  const sorted = [...new Set(indices)].sort((a, b) => a - b)
+  if (sorted.some(index => !Number.isSafeInteger(index) || index < 0)) return undefined
+  const rows = new Map()
+  let header, messageCount
+  const groups = []
+  for (const index of sorted) {
+    const group = groups.at(-1)
+    if (group && index - group[0] < 500) group[1] = index
+    else groups.push([index, index])
+  }
+  for (const [start, end] of groups.length ? groups : [[null, null]]) {
+    let window
+    try { window = await readWindow(chatId, start === null ? { limit: 1, revision } : { limit: end - start + 1, before: end + 1, revision }) }
+    catch (error) { if (error?.code === 'DSH_TAVERN_REVISION_NOT_FOUND') return undefined; throw error }
+    if (!window || window.revision !== revision || (start !== null && window.from !== start)) return undefined
+    header ??= window.chat; messageCount = window.messageCount
+    if (start !== null) window.chat.messages.forEach((row, offset) => rows.set(start + offset, row))
+  }
+  const { messages: _rows, ...head } = header
+  return { chat: { ...head, messages: sorted.map(index => rows.get(index)) }, messageCount, denseMessages: sorted.every(index => rows.has(index)) }
+}

@@ -24,7 +24,7 @@ import { worldBookDisplayName } from './domain/worldbook-resource.js'
 import { createConversationMigration } from './domain/conversation-migration.js'
 import { createTaskStateReader, taskStateFields } from './domain/task-state-reader.js'
 import { installHostProjectionReplay } from './domain/host-projection-replay.js'
-import { createBoundedHistory } from './domain/bounded-history.js'
+import { createBoundedHistory, readRowsAt } from './domain/bounded-history.js'
 import { readSettlementInput } from './domain/settlement-input.js'
 import { createHelperHistoryAccess } from './domain/helper-history-access.js'
 import { createInputFieldsProjection } from './domain/input-fields-projection.js'
@@ -1404,6 +1404,16 @@ export async function apply(ctx) {
     },
     resolveTemplateWindow: createTemplateWindowReader({ links: readSessionMap, readWindow: chatPersistence.readWindow, access: { issue: input => helperHistoryAccess.issue(input) }, completeSessions: completeTemplateHistorySessions }),
     resolveChatSlice: createSessionSliceReader({links:readSessionMap, readSlice:chatPersistence.readSlice}),
+    resolveChatSliceAt: async (sessionId,revision,indices) => {
+      const chatId=(await readSessionMap())[sessionId]
+      const selected=chatId && await readRowsAt(chatPersistence.readWindow,chatId,revision,indices)
+      if(!selected || selected.chat.sessionId!==sessionId || selected.chat.backgroundConfigVersion!==1 || selected.chat.conversationFeaturesVersion!==1)return undefined
+      return {...selected,chat:normalizeChat(selected.chat)}
+    },
+    resolveChangedIndices: async (sessionId,revision) => {
+      const chatId=(await readSessionMap())[sessionId]
+      return chatId ? await chatPersistence.readChangedIndices(chatId,revision) : undefined
+    },
     resolveChatMetadataSlice: async sessionId => {
       const chatId=(await readSessionMap())[sessionId]
       if(!chatId)return undefined
