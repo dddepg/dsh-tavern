@@ -69,7 +69,7 @@ for (const textOnly of [false,true]) test(`历史导入装配真实筛选器仍�
  const {createWorldbookFilter}=await import('../tavern-plugin/lib/domain/worldbook-filter.js')
  let calls=0
  const worldBook={view:{entries:[{comment:'[initvar]',content:'hp: 10',enabled:false},
-  ...['walk','rest'].flatMap(word=>Array.from({length:6},(_,i)=>({ref:word+i,enabled:true,primaryKeys:[word],content:`${word} rule ${i}`})))]}}
+  ...['walk','rest'].flatMap(word=>Array.from({length:6},(_,i)=>({ref:word+i,enabled:true,primaryKeys:[word],content:`${word} rule ${i} `+'x'.repeat(4400)})))]}}
  const project=createForegroundWorldbook({bound:async()=>worldBook,runtime:async()=>runtime,globalVariables:async()=>({}),
   filterCandidates:createWorldbookFilter({selection:()=>({}),beginTask:async()=>({participantRequest:{},fail:async()=>{}}),runAgent:async()=>{calls++;throw Error('model transport reached')}})})
  h.options.worldBooks.bound=async()=>worldBook;h.options.projectForegroundWorldbook=project

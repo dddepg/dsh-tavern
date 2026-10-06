@@ -10,8 +10,9 @@ export function createWorldbookFilter({ runAgent, selection, beginTask }) {
   const shortlist = createWorldbookBm25()
   return async ({ chat, userText, candidates, corpus }) => {
     const estimatedTokens = candidates.reduce((sum, item) => sum + item.tokenCost, 0)
-    const metrics = { candidateCount: candidates.length, estimatedTokens, thresholds: { count: 5, estimatedTokens: 2000 } }
-    if (candidates.length <= 5 && estimatedTokens <= 2000) return { ...metrics, ran: false, selected: candidates.map(item => item.ref) }
+    const metrics = { candidateCount: candidates.length, estimatedTokens, thresholds: { count: 5, estimatedTokens: 6000 } }
+    // A few long entries are not a relevance problem; the token budget still trims them after this step.
+    if (candidates.length <= 5 || estimatedTokens <= 6000) return { ...metrics, ran: false, selected: candidates.map(item => item.ref) }
     const started = Date.now()
     const originalCandidates = candidates
     const latestBody = (chat.messages || []).findLast(message => message.role === 'assistant')

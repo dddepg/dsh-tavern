@@ -69,7 +69,7 @@ test('原生 DSH 筛选工具、结算与重启恢复使用同一后台 Session 
     resolveStablePrefix: async () => '固定背景：雨夜旅店', flushSession: session => ctx.sessions.flush(session) })
   runner = makeRunner()
   const filter = createWorldbookFilter({ selection: () => selection, runAgent: input => runner.run(input), beginTask: value => tasks.begin(value, 'worldbook-filter') })
-  const candidates = Array.from({ length: 6 }, (_, n) => ({ ref: 'entry:' + n, text: '资料' + n + 'x'.repeat(15000), tokenCost: 10 }))
+  const candidates = Array.from({ length: 6 }, (_, n) => ({ ref: 'entry:' + n, text: '资料' + n + 'x'.repeat(15000), tokenCost: 1100 }))
   const first = await filter({ chat, userText: '首次筛选', candidates })
   const settlement = await tasks.begin(chat, 'settlement')
   const second = await runner.run({ sessionId: 'parent', task: 'settlement', persistent: true, selection,

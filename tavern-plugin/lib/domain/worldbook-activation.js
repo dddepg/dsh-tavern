@@ -1,11 +1,11 @@
 // Selection priority and prompt order are different in SillyTavern.
 const str = value => value == null ? '' : String(value)
 export const DEFAULT_WORLD_BOOK_TOKEN_BUDGET = 8192
-// Local admission estimate, not provider usage. Count non-ASCII more conservatively than ASCII.
+// Local admission estimate, not provider usage. CJK text is about 0.6 tokens per character on current tokenizers.
 export function estimateWorldBookTokens(value) {
   let ascii = 0, other = 0
   for (const char of str(value)) char.codePointAt(0) < 128 ? ascii++ : other++
-  return Math.ceil(ascii / 4 + other)
+  return Math.ceil(ascii / 4 + other * 0.6)
 }
 export function priorityOrder(entries) {
   return entries.map((entry, index) => ({ entry, index })).sort((a, b) =>
