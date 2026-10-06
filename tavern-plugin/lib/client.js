@@ -8106,6 +8106,14 @@ function bindTavernFontZoom(node, win) {
 				}
 				if (diagnostics) diagnostics.push({ kind: "dispatch", name: name, ready: record.subscriptionsReady, initializationFailed: record.initializationFailed, subscribed: record.subscriptions.has(String(name)) });
 				if (!record.loaded || !record.subscriptionsReady || record.initializationFailed) return Promise.resolve(args);
+				if (context && typeof context === "object" && context.contextWindow) {
+                    // A bounded event context: recent rows at their absolute ids; older
+                    // rows stay stubs that the history lease reads on demand.
+                    const range = context.contextWindow.historyWindow, helper = context.contextWindow.tavernHelper || {};
+                    const messages = Array.from({ length: Number(range && range.messageCount) || 0 }, function (_, message_id) { return { message_id: message_id, stub: true }; });
+                    for (const row of Array.isArray(helper.messages) ? helper.messages : []) messages[row.message_id] = row;
+                    context = Object.assign({}, helper, { messages: messages });
+                }
 				if (context && typeof context === "object") {
                     if (context.contextDelta) {
                         const next = applyTavernVariableReceipt(record.context, context.contextDelta);

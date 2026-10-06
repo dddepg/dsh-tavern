@@ -88,7 +88,7 @@ async function fixture(t, bounded) {
         rowsAt: (id, revision, indices) => readRowsAt(p.readWindow, id, revision, indices)
       } : {}) },
     sessions: { get: () => agent, flush: async () => {} }, timeline,
-    scripts: { read: async () => ({ chunks: [] }), continuity: { transition: () => ({ state: {} }) }, dispatchEvent: async event => { dispatched.push({ name: event.name, args: event.args, chat: Boolean(event.chat) }) } },
+    scripts: { read: async () => ({ chunks: [] }), continuity: { transition: () => ({ state: {} }) }, dispatchEvent: async event => { dispatched.push({ name: event.name, args: event.args, chat: Boolean(event.chat), recent: event.recent === true }) } },
     queueSettlement: async () => {}, cancelSettlement: async () => {},
     present: async value => { presented.push(isScopedMessages(value.messages) ? 'window' : 'full'); return { rolled: true } }
   })
@@ -120,8 +120,8 @@ test('bounded rollback stores the same Chat as the complete rollback without rea
   assert.equal(b.after.variables.day, 1)
   assert.equal(b.after.posture, '门外')
   assert.equal(b.after.rollbackUndo.ready, true)
-  assert.deepEqual(b.h.dispatched, [{ name: 'MESSAGE_DELETED', args: [159], chat: false }])
-  assert.deepEqual(f.h.dispatched, [{ name: 'MESSAGE_DELETED', args: [159], chat: true }])
+  assert.deepEqual(b.h.dispatched, [{ name: 'MESSAGE_DELETED', args: [159], chat: false, recent: true }])
+  assert.deepEqual(f.h.dispatched, [{ name: 'MESSAGE_DELETED', args: [159], chat: true, recent: false }])
   assert.deepEqual(b.h.session.surface.nodes, f.h.session.surface.nodes)
   assert.deepEqual(b.view.rolledBack, f.view.rolledBack)
   assert.deepEqual(b.h.presented, ['window'])

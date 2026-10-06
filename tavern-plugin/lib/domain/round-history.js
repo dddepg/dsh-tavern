@@ -919,7 +919,7 @@ export function createRoundHistory({ chats, sessions, scripts, timeline, queueSe
     }
     // Notify scripts only after both authoritative story and native surface have committed.
     try {
-      await tavernScriptHostAdapter.dispatchEvent({ sessionId: chat.sessionId, ...(dispatchChat ? { chat: dispatchChat } : {}), name: 'MESSAGE_DELETED', args: [messageCount] })
+      await tavernScriptHostAdapter.dispatchEvent({ sessionId: chat.sessionId, ...(dispatchChat ? { chat: dispatchChat } : { recent: true }), name: 'MESSAGE_DELETED', args: [messageCount] })
     } catch (error) { rollbackWarning = '回退已完成，但脚本联动失败：' + str(error?.message || error) }
     try {
       if (typeof sessions.flush === 'function') await sessions.flush(session)

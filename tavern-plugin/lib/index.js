@@ -1389,6 +1389,12 @@ export async function apply(ctx) {
       await sessionStore.flush(session)
     },
     resolveChat: chatForSession,
+    resolveHelperWindow: async sessionId => {
+      const window = await readOpeningWindow(sessionId)
+      if (!window) return undefined
+      const projected = await projectOpeningWindow(window)
+      return projected.tavernHelper ? { historyWindow: projected.historyWindow, tavernHelper: projected.tavernHelper } : undefined
+    },
     resolveHelperContext: async sessionId => {
       const chatId = (await readSessionMap())[sessionId]
       if (!chatId) return undefined
@@ -3217,7 +3223,8 @@ export async function apply(ctx) {
         const selected = await boundedHistory.read(chatId, undefined, { storyRows: 2, lastAssistant: true })
         return selected && normalizeChat(selected.chat)
       },
-      changedSince: (chatId, revision) => chatPersistence.readChangedIndices(chatId, revision),
+      // Rare story operations may reach further back than per-request syncs.
+      changedSince: (chatId, revision) => chatPersistence.readChangedIndices(chatId, revision, { limit: 2048 }),
       rowsAt: async (chatId, revision, indices) => {
         const selected = await readRowsAt(chatPersistence.readWindow, chatId, revision, indices)
         return selected && { ...selected, chat: normalizeChat(selected.chat) }

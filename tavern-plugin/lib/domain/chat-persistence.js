@@ -354,8 +354,8 @@ export function createChatPersistence(options = {}) {
     const selected = await records.readChangedSlice?.(chatId, revision, fields)
     return selected ? {...selected, chat: normalize(selected.chat)} : undefined
   }
-  async function readChangedIndices(chatId, revision) {
-    return await records.readChangedIndices?.(chatId, revision)
+  async function readChangedIndices(chatId, revision, options) {
+    return await records.readChangedIndices?.(chatId, revision, options)
   }
   async function readViewDelta(chatId, revision) {
     const selected = await records.readViewDelta?.(chatId, revision)

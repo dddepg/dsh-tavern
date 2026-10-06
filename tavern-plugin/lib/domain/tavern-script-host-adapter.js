@@ -725,7 +725,10 @@ export function createTavernScriptHostAdapter(options = {}) {
   }
 
   async function dispatchEvent(input = {}) {
-    const eventContext = input.context || await context(input.sessionId, input.chat, input.transientUserText)
+    // `recent`: the browser keeps its history lease, so send the recent window
+    // instead of projecting every floor into the event.
+    const recent = !input.context && input.recent === true ? await options.resolveHelperWindow?.(input.sessionId) : undefined
+    const eventContext = input.context || (recent ? { contextWindow: recent } : await context(input.sessionId, input.chat, input.transientUserText))
     // Context preparation can await I/O before MVU has queued its dispatch.
     // Respect that reservation just as dispatch respects an executing event.
     if (settlementTransactions.has(str(input.sessionId))) return { handled: false, busy: true, args: structuredClone(input.args || []) }
