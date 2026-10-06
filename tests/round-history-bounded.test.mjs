@@ -55,7 +55,23 @@ async function fixture(t, bounded) {
     } else if (options.surfaceOp === 'append') session.surface.nodes.push(seq)
     return seq
   } }
-  const agent = { session, phase: { kind: 'idle', lastTurn: 81 }, async whenIdle() {} }
+  // A foreground turn as the real orchestrator stores it: begin, append the round, commit.
+  const agent = { session, phase: { kind: 'idle', lastTurn: 81 }, followup(message) { agent.input = message }, async whenIdle() {
+    if (!agent.input) return
+    if (hooks.failGeneration) { agent.input = null; throw new Error('fixture generation failed') }
+    const turn = ++agent.phase.lastTurn, userText = agent.input.content[0].text, text = '重写正文' + turn
+    agent.input = null
+    let current = await p.read('chat')
+    const begun = timeline.apply({ chat: current, intent: { kind: 'body.begin', turn, userText } })
+    current = await p.write(begun.chat, { source: 'foreground.prepare' })
+    await p.write(timeline.complete({ chat: current, operationId: begun.value.operationId, basedOn: begun.value.basedOn, outcome: { status: 'success' }, apply(draft) {
+      draft.messages.push({ role: 'user', text: userText }, { role: 'assistant', turn, text, sourceText: text, swipes: [text], swipeId: 0, variables: [{ hp: 90 }] })
+      draft.nativeCommits[String(turn)] = { turn, userText }
+    } }).chat, { source: 'foreground.commit' })
+    session.append('user/message', { turn, role: 'user', content: [{ type: 'text', text: userText }], source: { kind: 'plugin', plugin: 'dsh-tavern-regen' } }, { surfaceOp: 'append' })
+    session.append('assistant/message', { turn, step: 1, message: { role: 'assistant', source: model, content: [{ type: 'text', text }] } }, { surfaceOp: 'append' })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
+  } }
   const calls = [], hooks = {}
   const history = createBoundedHistory({ links: async () => ({ session: 'chat' }), readWindow: p.readWindow, pageSize: 8 })
   const dispatched = []
@@ -134,4 +150,51 @@ test('bounded rollback falls back to the complete path when the revision moves b
   assert.ok(h.calls.includes('update:rollback'))
   assert.ok(h.calls.includes('read'))
   assert.deepEqual(after.guides, ['并发'])
+})
+
+test('bounded regeneration stores the same Chat and surface as the complete regeneration', async t => {
+  const results = []
+  for (const bounded of [true, false]) {
+    const h = await fixture(t, bounded)
+    const before = await h.p.read('chat')
+    const view = await h.rounds.regenerate('chat', '更紧张一些', 'session')
+    const after = await h.p.read('chat')
+    results.push({ h, before, after, view })
+  }
+  const [b, f] = results
+  assert.ok(!b.h.calls.includes('read') && !b.h.calls.includes('readRevision'), JSON.stringify(b.h.calls))
+  assert.ok(f.h.calls.includes('read'))
+  const strip = chat => {
+    const value = comparable(chat)
+    for (const op of Object.values(value.timeline.operations)) if (op.regenerationId) op.regenerationId = 'R'
+    return JSON.parse(JSON.stringify(value).replace(/tavern-regen:[0-9a-f-]+/g, 'tavern-regen:R'))
+  }
+  assert.deepEqual(strip(b.after), strip(f.after))
+  // The original floors around the new round, including the floor settlement edited after the checkpoint.
+  assert.equal(b.after.messages.length, b.before.messages.length)
+  assert.deepEqual(b.after.messages.slice(0, -1), b.before.messages.slice(0, -1))
+  assert.equal(b.after.messages.at(-1).text, '重写正文82')
+  assert.equal(b.after.messages.at(-1).turn, 81)
+  assert.equal(b.after.regenInProgress, undefined)
+  assert.equal(b.after.regeneratedDshTurns['81'], 82)
+  const texts = h => h.session.surface.nodes.map(seq => h.session.events[seq]).filter(e => e.type === 'assistant/message').map(e => e.data.message.content.map(c => c.text).join(''))
+  assert.deepEqual(texts(b.h), texts(f.h))
+  assert.deepEqual(b.view.adopted, f.view.adopted)
+})
+
+test('a failed bounded regeneration restores the same Chat as the complete abort', async t => {
+  const results = []
+  for (const bounded of [true, false]) {
+    const h = await fixture(t, bounded)
+    h.hooks.failGeneration = true
+    const before = await h.p.read('chat')
+    await assert.rejects(h.rounds.regenerate('chat', '', 'session'), /fixture generation failed/)
+    results.push({ before, after: await h.p.read('chat') })
+  }
+  for (const { before, after } of results) {
+    assert.deepEqual(after.messages, before.messages)
+    assert.equal(after.regenInProgress, undefined)
+    assert.deepEqual(after.variables, before.variables)
+  }
+  assert.deepEqual(comparable(results[0].after), comparable(results[1].after))
 })

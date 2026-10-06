@@ -366,4 +366,21 @@ async function longOperationChecks({ page, step, savedChat, readLog, report }) {
     assert.equal(saved.messages.length, before.messages.length)
     assert.equal(saved.messages.at(-1).sourceText, edited)
   }))
+  await step('长档重新生成正文', () => timed('regenerate', async () => {
+    await page.getByRole('button', { name: '重新生成正文', exact: true }).click()
+    await page.getByPlaceholder('指导意见（可选）：例如“写得更长，侧重心理描写”').fill('长档重写')
+    await page.getByRole('button', { name: '生成并替换正文', exact: true }).click()
+  }, async () => {
+    const deadline = Date.now() + 120000
+    let saved
+    while (Date.now() < deadline) {
+      saved = await savedChat()
+      if (!saved.regenInProgress && saved.messages.at(-1).sourceText !== edited && saved.regeneratedDshTurns?.[String(saved.messages.at(-1).turn)]) break
+      await page.waitForTimeout(300)
+    }
+    assert.equal(saved.messages.length, before.messages.length)
+    assert.notEqual(saved.messages.at(-1).sourceText, edited)
+    assert.equal(saved.regenInProgress, undefined)
+    assert.deepEqual(saved.messages.slice(0, -1).map(row => row.text), before.messages.slice(0, -1).map(row => row.text))
+  }))
 }
