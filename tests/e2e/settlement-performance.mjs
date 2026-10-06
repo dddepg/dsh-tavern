@@ -190,6 +190,24 @@ export async function settlementPerformanceChecks({ page, step, savedChat, outpu
 
       report.historyDemand={automaticFullReads,initialHistoryReads:priorReads,explicitHistoryReads:historyReads-priorReads}
     }
+    if(process.argv.includes('--history-scroll')) {
+      // Scrolling into old floors pages the history window back; it never asks for a complete view.
+      const sessionRequests=[]
+      const record=request=>{if(request.url().endsWith('/api/dsh-tavern/getSession'))try{sessionRequests.push(request.postDataJSON())}catch{}}
+      page.on('request',record)
+      for(let step=0;step<8;step++){
+        await page.evaluate(()=>{const scroller=[...document.querySelectorAll('*')].filter(node=>node.scrollHeight>node.clientHeight+200).sort((a,b)=>b.scrollHeight-a.scrollHeight)[0];scroller.scrollTop=0})
+        await page.waitForTimeout(1500)
+      }
+      page.off('request',record)
+      const froms=sessionRequests.map(request=>request.historyFrom).filter(Number.isSafeInteger)
+      assert.ok(froms.length>0,'scrolling must request an older history page')
+      assert.ok(Math.min(...froms)<firstWindow.from,'the window must move back')
+      assert.equal(sessionRequests.filter(request=>request.fullView).length,0,'scrolling must not request a complete view')
+      const waiting=await page.getByText('正在读取历史内容…').filter({visible:true}).count()
+      report.historyScroll={requests:sessionRequests.length,oldest:Math.min(...froms),waiting}
+      console.log('HISTORY-SCROLL '+JSON.stringify(report.historyScroll))
+    }
     // Exclude cold initialization and allow snapshot maintenance to settle.
     await page.waitForTimeout(3000)
     if(process.env.TAVERN_PERF_REQUIRE_BOUNDED_STATE==='1') {
