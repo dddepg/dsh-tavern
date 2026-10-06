@@ -61,7 +61,7 @@ import { createManualCharacterDesign } from './domain/manual-character-design.js
 import { prepareTemplateHistory, synchronizeTemplateHistory } from './domain/template-history.js'
 import { createServerTemplateSync } from './domain/server-template-sync.js'
 import { createServerTemplateRuntime } from './domain/server-template-runtime.js'
-import { estimateWorldBookTokens } from './domain/worldbook-activation.js'
+import { estimateWorldBookTokens, historyScanDepth } from './domain/worldbook-activation.js'
 import { createWorldbookFilter, WORLD_BOOK_FILTER_TOOLS } from './domain/worldbook-filter.js'
 import { createWorldbookPrefilter } from './domain/worldbook-prefilter.js'
 import { adoptConversationFeatures, adoptConversationBackground, patchConversationBackground } from './domain/conversation-background.js'
@@ -2525,6 +2525,11 @@ export async function apply(ctx) {
       return []
     }
   }
+  // An unreadable book has no known depth: callers then use the complete read.
+  async function worldBookScanDepth(chat) {
+    try { return historyScanDepth(await worldBooks.bound(chat.cardPath, await readChatCard(chat), chat)) }
+    catch { return Infinity }
+  }
   async function prepareNextWorldBookContext(snapshot, signal) {
     const turn = settlementTurn(snapshot)
     const inspected = storyTimeline.inspect({ chat: snapshot })
@@ -2575,7 +2580,7 @@ export async function apply(ctx) {
     } })
     while (true) {
       signal?.throwIfAborted()
-      let snapshot = await readSettlementInput(chatId, {readWindow:chatPersistence.readWindow,readChat})
+      let snapshot = await readSettlementInput(chatId, {readWindow:chatPersistence.readWindow,readChat,scanDepth:worldBookScanDepth})
       signal?.throwIfAborted()
       if (snapshot === undefined) return
       snapshot = await prepareNextWorldBookContext(snapshot, signal)

@@ -61,7 +61,7 @@ async function harness({ beginRunning = true, mvu = true } = {}) {
       return {...structuredClone(current),messages:[]}
     },
     sessionStateForSession: async () => projectChatSessionState(await store.readChat()),
-    prepareNextWorldBookContext: async chat => chat, readChatCard: async () => ({}),
+    prepareNextWorldBookContext: async chat => chat, worldBookScanDepth: async () => 2, readChatCard: async () => ({}),
     view: async chat => chat, settlementTurn: () => 2,
     projectAgentMessageText: message => message.text, mvuUpdateRules: async () => [],
     readTavernSettings: async () => ({ backgroundTasks: { posture: true, characterDesign: true } }),

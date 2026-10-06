@@ -44,6 +44,14 @@ export function worldBookSettings(worldBook) {
   }
 }
 
+/** Deepest history any entry of this book scans, in user/assistant floors. */
+export function historyScanDepth(worldBook) {
+  const fallback = worldBookSettings(worldBook).scanDepth
+  let depth = fallback
+  for (const entry of worldBook?.view?.entries || []) depth = Math.max(depth, integer(entry.scanDepth, fallback))
+  return depth
+}
+
 function regexKey(value) {
   const match = /^\/(.*)\/([dgimsuvy]*)$/.exec(str(value))
   if (!match) return null
