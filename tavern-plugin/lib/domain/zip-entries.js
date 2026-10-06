@@ -1,5 +1,10 @@
 import path from 'node:path'
-import { inflateRawSync } from 'node:zlib'
+import * as zlib from 'node:zlib'
+
+const { deflateRawSync, inflateRawSync } = zlib
+// zlib.crc32 arrived in Node 22.2; older hosts use the table form.
+const CRC_TABLE = Array.from({ length: 256 }, (_, index) => { let value = index; for (let bit = 0; bit < 8; bit++) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1; return value >>> 0 })
+const crc32 = typeof zlib.crc32 === 'function' ? data => zlib.crc32(data) : data => { let value = 0xffffffff; for (const byte of data) value = CRC_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8); return (value ^ 0xffffffff) >>> 0 }
 
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
 const MAX_EXPANDED_BYTES = 150 * 1024 * 1024
@@ -59,4 +64,29 @@ export function readZipEntries(input, { label = 'ZIP', fail = message => { throw
     entries.set(path.posix.normalize(name), data)
   }
   return entries
+}
+
+/** Write a plain ZIP (deflate when it helps). Entries: { path, content: string | Buffer }. */
+export function writeZipEntries(entries) {
+  const local = [], central = []
+  let offset = 0
+  for (const entry of entries) {
+    const name = Buffer.from(entry.path), data = Buffer.isBuffer(entry.content) ? entry.content : Buffer.from(String(entry.content))
+    const compressed = deflateRawSync(data, { level: 6 })
+    const payload = compressed.length < data.length ? compressed : data
+    const header = Buffer.alloc(30)
+    header.writeUInt32LE(0x04034b50); header.writeUInt16LE(20, 4); header.writeUInt16LE(0x800, 6)
+    header.writeUInt16LE(payload === compressed ? 8 : 0, 8)
+    header.writeUInt16LE(0x21, 12) // Valid DOS date: 1980-01-01.
+    header.writeUInt32LE(crc32(data), 14); header.writeUInt32LE(payload.length, 18); header.writeUInt32LE(data.length, 22); header.writeUInt16LE(name.length, 26)
+    const directory = Buffer.alloc(46)
+    directory.writeUInt32LE(0x02014b50); directory.writeUInt16LE(20, 4); header.copy(directory, 6, 4, 30); directory.writeUInt32LE(offset, 42)
+    local.push(header, name, payload); central.push(directory, name)
+    offset += header.length + name.length + payload.length
+    if (offset > 0xffffffff) throw new Error('压缩包超过 4 GB')
+  }
+  const directory = Buffer.concat(central), end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10)
+  end.writeUInt32LE(directory.length, 12); end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...local, directory, end])
 }

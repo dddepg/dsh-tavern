@@ -90,5 +90,18 @@ export function createGameFootprint({ dataRoot, sessionsRoot = path.join(path.di
     return { failures }
   }
 
-  return Object.freeze({ describe, removeLeftovers })
+  // Scene image records belong to the game; the image agent binding is rebuilt after import.
+  async function readSceneFiles(chatId) {
+    const dir = file('scene-images/' + sha(chatId))
+    let names
+    try { names = await readdir(dir, { withFileTypes: true }) } catch { return [] }
+    const files = []
+    for (const entry of names) if (entry.isFile() && entry.name.endsWith('.json') && entry.name !== 'agent.json') files.push({ path: entry.name, content: await readFile(path.join(dir, entry.name)) })
+    return files
+  }
+  async function readSceneWorldbook(digest) {
+    if (!safeName(str(digest))) return null
+    try { return await readFile(file('scene-images/worldbooks/' + digest + '.json')) } catch { return null }
+  }
+  return Object.freeze({ describe, removeLeftovers, readSceneFiles, readSceneWorldbook })
 }

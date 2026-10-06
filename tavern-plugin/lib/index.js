@@ -178,6 +178,10 @@ import { createTavernSkillProvider } from './domain/tavern-skill-provider.js'
 import { canonicalTavernSkillName, createTavernSkillModule } from './domain/tavern-skills.js'
 import { readZipEntries } from './domain/zip-entries.js'
 import { createGameFootprint } from './domain/game-footprint.js'
+import { buildGameSave, collectSaveRevisions } from './domain/game-save.js'
+import { readFileSync } from 'node:fs'
+
+const TAVERN_PACKAGE_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 import { createTavernConversationRegistry } from './domain/tavern-conversation-registry.js'
 import { installTavernTokenMeter } from './domain/tavern-token-meter.js'
 import { cordisToolNames, createTurnOrchestrator, dshFileToolNames } from './domain/turn-orchestration.js'
@@ -1241,6 +1245,56 @@ export async function apply(ctx) {
     const exported = createConversationTextExport(chat, { title: str(title) })
     if (exported.messageCount === 0) throw new Error('暂无可导出的对话')
     return exported
+  }
+  // Attachment references inside saved JSON (scene image versions, images in messages).
+  function attachmentRefs(value, found = new Map(), skip = new Set()) {
+    if (!value || typeof value !== 'object') return found
+    if (typeof value.attachmentId === 'string' && typeof value.mediaType === 'string' && value.mediaType.startsWith('image/')) found.set(value.attachmentId, value)
+    for (const [key, child] of Object.entries(value)) if (!skip.has(key) && child && typeof child === 'object') attachmentRefs(child, found, skip)
+    return found
+  }
+  async function exportGameSave(sessionId, options = {}) {
+    const header = await chatForSession(str(sessionId))
+    if (!header) throw new Error('当前 Session 没有绑定 Tavern 对话')
+    const chat = await readChat(header.id)
+    if (!chat || !['story', 'script'].includes(chat.mode || 'story')) throw new Error('只有游玩对话可以导出存档')
+    assertConversationForkable(chat, { agentRunning: agentRegistry.get(chat.sessionId)?.phase?.kind === 'running' })
+    const revisions = await collectSaveRevisions(chat, readChatRevision)
+    const live = sessionStore.get(chat.sessionId)
+    if (live) await sessionStore.flush(live)
+    const handle = await ctx.get('sessionPersistence').open(chat.sessionId, 'read')
+    let session
+    try { session = { header: handle.header, inheritedEventCount: handle.inheritedEventCount, events: (await handle.read(0)).events } }
+    finally { await handle.close() }
+    let cardPayload = null
+    try { cardPayload = await fileResources.originalCardPayload(chat.cardPath) } catch {}
+    if (!cardPayload && chat.cardDefinitionSnapshot?.raw) cardPayload = { kind: 'text', name: str(chat.cardName || 'card') + '.json', text: JSON.stringify(chat.cardDefinitionSnapshot.raw) }
+    let script = null
+    if ((chat.mode || 'story') === 'script') {
+      const scriptPath = await fileResources.scriptForCard(chat.cardPath)
+      const text = scriptPath ? await fileResources.readText(normalizeResourcePath(scriptPath, resourceKind(scriptPath))) : undefined
+      if (text !== undefined) script = { path: scriptPath, text }
+    }
+    let scene = null
+    const media = attachmentRefs(session.events)
+    if (options.images !== false) {
+      const files = await gameFootprint.readSceneFiles(chat.id)
+      for (const file of files) attachmentRefs(JSON.parse(file.content.toString('utf8')), media, new Set(['deletedVersions']))
+      const digest = chat.sceneOpeningWorldbook?.digest
+      const book = digest ? await gameFootprint.readSceneWorldbook(digest) : null
+      scene = { files, worldbooks: book ? [{ digest, content: book }] : [], attachments: [] }
+    }
+    const attachments = []
+    for (const ref of media.values()) {
+      try { const image = await ctx.get('attachments').readImage(ref); attachments.push({ attachmentId: ref.attachmentId, mediaType: ref.mediaType, data: Buffer.from(image.data) }) }
+      catch { /* A missing picture must not block the save; the game keeps its reference. */ }
+    }
+    if (scene) scene.attachments = attachments
+    else if (attachments.length) scene = { files: [], worldbooks: [], attachments }
+    const buffer = buildGameSave({ chat, revisions, session, card: { path: chat.cardPath, payload: cardPayload }, script, scene,
+      tavernVersion: TAVERN_PACKAGE_VERSION, exportedAt: Date.now() })
+    const name = (str(chat.title) || str(chat.cardName) || 'game').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60)
+    return { filename: name + '.dshsave', base64: buffer.toString('base64'), bytes: buffer.length, revisions: revisions.length, images: attachments.length }
   }
   async function exportTavernLogs(sessionId) {
     const chat = await chatForSession(str(sessionId))
@@ -3694,6 +3748,7 @@ export async function apply(ctx) {
       case 'getSessionInventory': return await sessionInventory.read()
       case 'exportConversation': return await exportConversation(args && args.chatId, args && args.sessionId, args && args.title)
       case 'exportTavernLogs': return await exportTavernLogs(args && args.sessionId)
+      case 'exportGameSave': return await exportGameSave(args && args.sessionId, { images: args && args.images !== false })
       case 'recordTavernCompatibilityCalls': {
         const chat = await chatHeaderForSession(str(args && args.sessionId), [])
         if (!chat) throw new Error('当前 Session 没有绑定 Tavern 对话')
