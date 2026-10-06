@@ -5592,11 +5592,22 @@ function currentTavernHostTheme(win) {
 function subscribeTavernHostTheme(win, listener) {
     if (!tavernHostThemeObserver) {
         tavernHostTheme = readTavernHostTheme(win);
+        // Mounting card fragments inserts many <style> nodes, each in its own task. Reading
+        // computed style per mutation forced a full-page style recalc every time; read once
+        // per frame instead, when the browser recalculates styles anyway.
+        let queued = false;
+        const schedule = win.requestAnimationFrame ? function (work) { win.requestAnimationFrame(work); } : function (work) { win.setTimeout(work, 16); };
         tavernHostThemeObserver = new win.MutationObserver(function () {
-            const next = readTavernHostTheme(win);
-            if (next.fontSize === tavernHostTheme.fontSize && next.textColorOverrides.quote === tavernHostTheme.textColorOverrides.quote) return;
-            tavernHostTheme = next;
-            tavernHostThemeListeners.forEach(function (notify) { notify(next); });
+            if (queued) return;
+            queued = true;
+            schedule(function () {
+                queued = false;
+                if (!tavernHostThemeObserver) return;
+                const next = readTavernHostTheme(win);
+                if (next.fontSize === tavernHostTheme.fontSize && next.textColorOverrides.quote === tavernHostTheme.textColorOverrides.quote) return;
+                tavernHostTheme = next;
+                tavernHostThemeListeners.forEach(function (notify) { notify(next); });
+            });
         });
         tavernHostThemeObserver.observe(win.document.head, { subtree: true, childList: true, characterData: true });
         [win.document.documentElement, win.document.body].filter(Boolean).forEach(function (node) { tavernHostThemeObserver.observe(node, { attributes: true, attributeFilter: ["style", "class", "data-ds-dark-theme"] }); });
@@ -9335,9 +9346,62 @@ function bindTavernFontZoom(node, win) {
 			return window.crypto && typeof window.crypto.randomUUID === "function" ? window.crypto.randomUUID() : String(Date.now()) + ":" + String(Math.random());
 		}
 
+		// Every card iframe used to inline the whole chat, including each floor's rendered
+		// template output: frame size grew with history and frame count grew with it too.
+		// Iframes read older floors on demand through historyAccess; only recent floors and
+		// the frame's own floor travel inline. Template display output is a host rendering
+		// artifact that card scripts do not read.
+		const TAVERN_FRAME_INLINE_FLOORS = 48;
+		const tavernFrameRows = new WeakMap(), tavernFrameStubs = new WeakMap(), tavernFrameContexts = new WeakMap();
+		function tavernFrameRow(row) {
+			const data = row && typeof row === "object" && !row.stub ? row.pluginData : null;
+			if (!data || (data.template_display === undefined && data.template_rendered === undefined)) return row;
+			let view = tavernFrameRows.get(row);
+			if (!view) {
+				const pluginData = Object.assign({}, data);
+				delete pluginData.template_display; delete pluginData.template_rendered;
+				view = Object.assign({}, row, { pluginData: pluginData });
+				tavernFrameRows.set(row, view);
+			}
+			return view;
+		}
+		function tavernFrameStub(row) {
+			if (!row || typeof row !== "object" || row.stub) return row;
+			let view = tavernFrameStubs.get(row);
+			if (!view) {
+				view = { pluginData: {}, message_id: row.message_id, role: row.role, message: "", swipe_id: row.swipe_id, swipes: [""], swipes_data: [], variables: {}, stub: true };
+				if (row.is_hidden !== undefined) view.is_hidden = row.is_hidden;
+				if (row.name !== undefined) view.name = row.name;
+				tavernFrameStubs.set(row, view);
+			}
+			return view;
+		}
+		function tavernFrameHelperContext(context, turn) {
+			if (!context || typeof context !== "object" || !Array.isArray(context.messages)) return context;
+			let byTurn = tavernFrameContexts.get(context);
+			if (!byTurn) { byTurn = new Map(); tavernFrameContexts.set(context, byTurn); }
+			const key = String(Math.max(0, Number(turn) || 0));
+			if (byTurn.has(key)) return byTurn.get(key);
+			const own = context.turnMessageIds && context.turnMessageIds[key];
+			const inlineFrom = context.historyAccess ? context.messages.length - TAVERN_FRAME_INLINE_FLOORS : 0;
+			const view = Object.assign({}, context, { messages: context.messages.map(function (row, index) {
+				return index < inlineFrom && index !== Number(own) ? tavernFrameStub(row) : tavernFrameRow(row);
+			}) });
+			byTurn.set(key, view);
+			return view;
+		}
+		// Each update is compared once per frame; serialize each shared object only once.
+		const tavernFrameJson = new WeakMap();
+		function tavernFrameJsonOf(value) {
+			if (!value || typeof value !== "object") return JSON.stringify(value);
+			let json = tavernFrameJson.get(value);
+			if (json === undefined) { json = JSON.stringify(value); tavernFrameJson.set(value, json); }
+			return json;
+		}
+
 		function createTavernHelperContextUpdate(previous, next, previousTurn, nextTurn) {
-			function clone(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
-			function same(left, right) { return JSON.stringify(left) === JSON.stringify(right); }
+			function clone(value) { return value === undefined ? undefined : JSON.parse(tavernFrameJsonOf(value)); }
+			function same(left, right) { return left === right || tavernFrameJsonOf(left) === tavernFrameJsonOf(right); }
 			const target = next && typeof next === "object" ? next : null;
 			if (!target) return null;
 			const turn = Math.max(0, Number(nextTurn) || 0);
@@ -9481,13 +9545,13 @@ function bindTavernFontZoom(node, win) {
 			function createDocument() {
 				const document = {
 					key: documentKey(), token: nextTavernFrameToken(),
-					helperContext: helperContext, turn: props.turn,
+					helperContext: tavernFrameHelperContext(helperContext, props.turn), turn: props.turn,
 					heightKey: tavernFrameHeightKey(props), content: props.content,
                     sizing: tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined),
 					sessionId: props.sessionId,
 					trustedCardMode: props.trustedCardMode, refreshRequested: false
 				};
-				document.html = buildTavernFrameDocument({ content: props.content, frameSizing: props.frameSizing, panelId: props.panelId, token: document.token, openingPreview: props.openingPreview, helperContext: helperContext, trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
+				document.html = buildTavernFrameDocument({ content: props.content, frameSizing: props.frameSizing, panelId: props.panelId, token: document.token, openingPreview: props.openingPreview, helperContext: tavernFrameHelperContext(helperContext, props.turn), trustedCardMode: props.trustedCardMode === true, turn: props.turn, observeMvuView: props.observeMvuView, runtimeReporting: props.runtimeReporting, persistent: props.persistent, preserveInstance: props.preserveInstance, textColorsEnabled: tavernTextColorsEnabled(hostWindow) });
 				const channel = createTavernFrameContextChannel(document);
 				// Stable callback identity preserves the per-document delta baseline.
 				document.ref = function (node) {
@@ -9562,7 +9626,7 @@ function bindTavernFontZoom(node, win) {
 			}
 			function sendContext(document, mode) {
 				const channel = document && channels.get(document.token);
-				if (channel) channel.sync(helperContext, props.turn, mode);
+				if (channel) channel.sync(tavernFrameHelperContext(helperContext, props.turn), props.turn, mode);
 			}
 			function sendTextColors(document, theme) {
 				const body = hostWindow.document && hostWindow.document.body;
@@ -9777,7 +9841,7 @@ function bindTavernFontZoom(node, win) {
 							return invoke("getSession", {}, props.sessionId).then(function (snapshot) {
 								const context = snapshot && snapshot.view && snapshot.view.tavernHelper;
 								if (context) helperContext = context;
-								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: context } : {});
+								return Object.assign({}, typeof result === "string" ? { pipe: result } : result || {}, context ? { context: tavernFrameHelperContext(context, props.turn) } : {});
 							});
 						}).then(function (result) {
 							if (current()) event.source.postMessage({ type: "dsh-tavern-helper-response", token: data.token, requestId: data.requestId, ok: true, result: result }, "*");
