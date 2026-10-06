@@ -93,7 +93,7 @@ import { createOpeningPreparation } from './domain/opening-preparation.js'
 import { createChatHistoryImportService } from './domain/chat-history-import-service.js'
 import { sessionEvents } from './domain/session-events.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createBackgroundAgentRunner, executeBackgroundCompaction } from './background-agent-runner.js'
 import { createApplicationUpdater } from './application-updater.js'
@@ -4060,11 +4060,27 @@ export async function apply(ctx) {
     }, { start: result.index, end: result.index, sourceEventSeqs: [result.index] })
   }
 
+  // A game keeps a snapshot of its preset, but edits to that preset apply from the
+  // next request: a changed preset file rebuilds and stores the snapshot. A missing
+  // or unreadable file keeps the saved snapshot, so the game never loses its preset.
   async function resolveChatRuntimePreset(chat) {
     if (!chat || groupOfMode(chat.mode) !== 'play') return null
-    return chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object'
-      ? chat.runtimePresetSnapshot
-      : null
+    const saved = chat.runtimePresetSnapshot && typeof chat.runtimePresetSnapshot === 'object' ? chat.runtimePresetSnapshot : null
+    if (!saved?.presetPath || !chat.id) return saved
+    let text
+    try { text = await fileResources.readText(normalizeResourcePath(saved.presetPath, 'preset')) } catch { return saved }
+    if (text === undefined || createHash('sha256').update(text).digest('hex') === saved.compatibilityPreset?.revision) return saved
+    let fresh
+    try { fresh = await runtimePresets.fullSnapshot(saved.presetPath) } catch { return saved }
+    if (!fresh) return saved
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const head = (await chatPersistence.readSlice(chat.id, [], ['_storageRevision', 'runtimePresetSnapshot.presetPath']))?.chat
+      // Applying another preset meanwhile wins over refreshing this one.
+      if (!head || head.runtimePresetSnapshot?.presetPath !== saved.presetPath) return saved
+      if (await patchChat(chat.id, head._storageRevision, [{ op: 'set', path: ['runtimePresetSnapshot'], value: fresh }], { source: 'preset.refresh', touchUpdatedAt: false })) break
+    }
+    chat.runtimePresetSnapshot = fresh
+    return fresh
   }
 
   const compileCompatibilityTurn = createCompatibilityTurnCompiler({

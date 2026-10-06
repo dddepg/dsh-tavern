@@ -107,7 +107,7 @@ export function apply(ctx) {
       const done = new Set(input.messages.flatMap(message => message.content || [])
         .filter(block => block.type === 'tool-result').map(block => block.toolCallId))
       const text = JSON.stringify(input.messages)
-      const presetRound = [70, 60, 50].find(value => text.includes(`E2E 预设验收 ${value}`) || text.includes(`预设切换后继续游玩，金币 ${value}。`))
+      const presetRound = [70, 60, 55, 50].find(value => text.includes(`E2E 预设验收 ${value}`) || text.includes(`预设切换后继续游玩，金币 ${value}。`))
       const cardUpdate = (text.includes('E2E 更新后继续') || text.includes('更新后的世界中，你又获得十枚金币'))
       const perf = process.env.TAVERN_E2E_PERFORMANCE_DIR ? JSON.parse(await readFile(process.env.TAVERN_E2E_PERFORMANCE_DIR + '/performance-control.json', 'utf8').catch(() => 'null')) : null
       const gold = perf?.gold ?? (cardUpdate ? 20 : presetRound || (text.includes('E2E 修正金币为四十') ? 40 : (text.includes('雨夜重写') || text.includes('雨夜里')) ? 30 : (text.includes('再次领取奖励') || text.includes('金币累计二十枚')) ? 20 : 10))
