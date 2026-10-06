@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "95949fc032fd802d023e5163a47027057a8e6bd6",
-  "releaseSequence": 536,
+  "revision": "8d74ba4dac56e963eb1a66188c5e21522d7c219b",
+  "releaseSequence": 537,
   "version": "2.5.0",
   "files": [
     {
@@ -1091,7 +1091,7 @@
     },
     {
       "path": "tavern-plugin/lib/domain/official-mvu-assets.js",
-      "sha256": "648897807b39d452dd5270dc8c5474e191b6a822dec602264d90d00458d0313c",
+      "sha256": "85ec669fe4e434dd8047b4ecc02b2f6a16664d4adda952b3e693b734d96d5d77",
       "size": 4274
     },
     {
@@ -1956,8 +1956,8 @@
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/host-build/artifact/bundle.js",
-      "sha256": "ed62e955a79e3d464c9150c27c4d7f5b6d65324d9644270dcb314d5e41460ad9",
-      "size": 1245038
+      "sha256": "8333353800b525fb6e01bd433fa429b347676b18fdff9565e751f311673ca378",
+      "size": 1245228
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/host-build/artifact/bundle.js.LICENSE.txt",
@@ -1966,18 +1966,18 @@
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/host-build/build-host-bundle.sh",
-      "sha256": "29f6d92e576d66a8b7560240c790e45ff4336f97752888ce085b9928697e99cd",
+      "sha256": "5fc1d4d46cd16c592c09b6ea1b9fdc4b79e2b34727e7055b1008e4f3451a73ae",
       "size": 1247
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/host-build/prepare-host-build.mjs",
-      "sha256": "2ff05c1090a561321c1f182b29d6404fa97d8b6a3b9eebf7623f2eb8bf68cd52",
-      "size": 11155
+      "sha256": "8abe73abeaa81eead10e2fdc429ae8c0c19c6c41267081273cfa4f7f3293266d",
+      "size": 12811
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/host-build/README.md",
-      "sha256": "51987059e90114ab1fbd6863e8a23b563f73e8a9d242bcab74d5c8979b674b66",
-      "size": 2331
+      "sha256": "0129796821ef6cb8e0f5160fcb919f9c67e6078e64f76c0cf2c6bbff92021f3f",
+      "size": 2503
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/LICENSE",
@@ -1986,7 +1986,7 @@
     },
     {
       "path": "tavern-plugin/lib/vendor/magvarupdate/SOURCE.md",
-      "sha256": "87f1d51778cbe573243a484f59c26a12234e0faae747b93954d3490220fe7d94",
+      "sha256": "e49182028fe4557f04c88b39446be7c8f5d03f2729354ff0d616a603ab7fd3e0",
       "size": 1934
     },
     {
