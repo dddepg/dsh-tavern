@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "960bf65a21e16f70e4f112da4852aec38c7b2a5b",
-  "releaseSequence": 538,
+  "revision": "da125155fbf17cd1319b1e93119d090ecccc4293",
+  "releaseSequence": 539,
   "version": "2.5.0",
   "files": [
     {
@@ -1791,7 +1791,7 @@
     },
     {
       "path": "tavern-plugin/lib/domain/worldbook-filter.js",
-      "sha256": "d5fb8ed1796465c821294dab402f63164a3e83e5c800ed5eb59cf6b0ab20cfe0",
+      "sha256": "ecfa2ee3a20651af5bd7b41e9502e8a35d9d9c4eeafac1cc2b0f92268d9180e7",
       "size": 6748
     },
     {
