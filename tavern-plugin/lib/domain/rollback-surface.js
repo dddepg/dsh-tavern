@@ -63,7 +63,7 @@ function modelSourceOf(event) {
 function isForegroundContext(event) {
   const source = event?.type === 'user/message' && event.data?.source
   return source?.kind === 'plugin' && source.plugin === 'dsh-tavern' &&
-    ['foreground-frame', 'worldbook-snapshot', 'snapshot'].includes(source.form)
+    ['foreground-frame', 'worldbook-snapshot', 'snapshot', 'variable-changes'].includes(source.form)
 }
 
 function isRollbackUserTombstone(event) {
