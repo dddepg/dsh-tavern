@@ -1645,7 +1645,7 @@ export async function apply(ctx) {
       ...rollbackFields,
       presentation: null,
       replyProjections: replyDisplay.projections,
-      tavernStatusView: replyDisplay.statusView || null,
+      // tavernStatusView duplicated tavernStatusViews[0] in every read; clients use the list.
       tavernStatusViews: replyDisplay.statusViews || [],
       mvuReceipts: mvuReceiptsOf(chat),
       tavernHelper: helperContext ? { ...helperContext, playerName: str(chat.macroState?.userName).trim() || '你', characterName: str(card?.name || chat.cardName), character: {name:str(card?.name || chat.cardName), path:str(chat.cardPath)}, openingHost: sessionOpeningDescriptor(chat, card), worldbook: helperWorldbook, globalVariables: await readPromptTemplateGlobalVariables(), characterVariables: cardExtensions.variables || {}, compatibilityCapabilities: TAVERN_COMPATIBILITY_CAPABILITIES, extensionSettings: await tavernExtensionSettings.read(), regexScripts: { global: cardExtensions.globalRegexScripts || [], preset: activePresetSnapshot?.regexScripts || [], character: cardExtensions.characterRegexScripts || [] } } : null,
@@ -1827,7 +1827,6 @@ export async function apply(ctx) {
       replyDisplay = await liveCardUpdate.project(renderChat, card, replyDisplay, {charName:chat.cardName,macroState:chat.macroState,regexScripts:cardExtensions.regexScripts})
       replyDisplay.projections = withLegacyPresentationProjection(chat, replyDisplay.projections)
       next.replyProjections = replyDisplay.projections
-      next.tavernStatusView = replyDisplay.statusView || null
       next.tavernStatusViews = replyDisplay.statusViews || []
     }
     return next
