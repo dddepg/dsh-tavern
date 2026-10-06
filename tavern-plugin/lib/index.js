@@ -1867,7 +1867,8 @@ export async function apply(ctx) {
   async function projectOpeningWindow(window, options = {}) {
     // Disable revision caches for this partial input. It must never replace a
     // full history projection or be used as an editable Chat baseline.
-    const chat={...window.chat,_storageRevision:undefined}
+    // The undo point still compares against the window's real revision.
+    const chat={...window.chat,_storageRevision:undefined,windowRevision:window.revision}
     const card=await readChatCard(chat)
     const result=await view(chat,card,false,{openingWindow:true,deferResources:options.deferResources,resourceRevision:window.revision})
     result.historyWindow={onDemand:true,from:window.from,to:window.to,messageCount:window.messageCount,revision:window.revision}
@@ -2566,9 +2567,14 @@ export async function apply(ctx) {
   async function hookChatForSession(sessionId) {
     const chatId = (await readSessionMap())[str(sessionId)]
     const synced = chatId ? surfaceSyncedRevisions.get(str(sessionId)) : undefined
-    const changed = synced === undefined ? undefined : await chatPersistence.readChangedIndices(chatId, synced)
     const mvuReplies = rows => rows.filter(row => row?.role === 'assistant' && row.variables?.[Math.max(0, Number(row.swipeId) || 0)]?.stat_data !== undefined).length >= 2
-    const selected = changed?.indices && await boundedHistory.read(chatId, str(sessionId), { lastAssistant: true, lastVariables: true, enough: mvuReplies, include: changed.indices, revision: changed.revision })
+    let selected
+    // A write between the change record and the window read retries once.
+    for (let attempt = 0; synced !== undefined && !selected && attempt < 2; attempt++) {
+      const changed = await chatPersistence.readChangedIndices(chatId, synced)
+      if (!changed?.indices) break
+      selected = await boundedHistory.read(chatId, str(sessionId), { lastAssistant: true, lastVariables: true, enough: mvuReplies, include: changed.indices, revision: changed.revision })
+    }
     const chat = selected && ['story', 'script'].includes(selected.chat.mode || 'story') && selected.chat.requestMode !== 'sillytavern'
       ? normalizeChat(selected.chat) : await chatForSession(sessionId)
     if (chat?._storageRevision !== undefined) surfaceSyncedRevisions.set(str(sessionId), chat._storageRevision)
@@ -3205,8 +3211,17 @@ export async function apply(ctx) {
   // ---------- 重新生成正文（生成即替换，无确认） ----------
   const { regenerate: regenBody, replayFailed: replayFailedTurn, recover: recoverRegeneration, rollback: rollbackTurn, undoRollback: undoRollbackTurn } = createRoundHistory({
     diagnostics: mvuDiagnostics,
-    chats: { read: readChat, readState: taskStateReader.read, forSession: chatForSession, readCard: readChatCard,
-      readRevision: readChatRevision, write: writeChat, update: updateChat },
+    chats: { read: readChat, readState: taskStateReader.read, stateForSession: taskStateReader.forSession, forSession: chatForSession, readCard: readChatCard,
+      readRevision: readChatRevision, write: writeChat, update: updateChat, patch: patchChat,
+      readRecent: async chatId => {
+        const selected = await boundedHistory.read(chatId, undefined, { storyRows: 2, lastAssistant: true })
+        return selected && normalizeChat(selected.chat)
+      },
+      changedSince: (chatId, revision) => chatPersistence.readChangedIndices(chatId, revision),
+      rowsAt: async (chatId, revision, indices) => {
+        const selected = await readRowsAt(chatPersistence.readWindow, chatId, revision, indices)
+        return selected && { ...selected, chat: normalizeChat(selected.chat) }
+      } },
     sessions: { get: function (sessionId) { return ctx.get('agents')?.get(sessionId) },
       getSession: sessionId => sessionStore.get(sessionId),
       resume: sessionId => agentRegistry.resume({ resumeSessionId: sessionId }),
@@ -3216,7 +3231,7 @@ export async function apply(ctx) {
     timeline: storyTimeline,
     queueSettlement,
     cancelSettlement,
-    present: view,
+    present: presentStory,
     sessionPatch,
   })
 

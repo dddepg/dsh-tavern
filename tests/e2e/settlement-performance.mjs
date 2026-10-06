@@ -316,4 +316,54 @@ export async function settlementPerformanceChecks({ page, step, savedChat, outpu
     await page.waitForTimeout(500)
   })
   await page.screenshot({ path: join(output, 'long-archive-settled.png') })
+  if (process.argv.includes('--long-operations')) await longOperationChecks({ page, step, savedChat, readLog, report })
+}
+
+// Edit, rollback and undo on the long save through the real UI. Each operation is
+// timed and must not read the complete Chat; the stored result is checked directly.
+async function longOperationChecks({ page, step, savedChat, readLog, report }) {
+  const fullReads = offset => [...readLog().slice(offset).matchAll(/\[settlement-perf\](\{[^\n]+\})/g)].map(match => JSON.parse(match[1]))
+    .filter(event => event.stage === 'full-read' || event.stage === 'full-read-miss')
+  const timed = async (name, action, check) => {
+    const offset = readLog().length, started = Date.now()
+    await action()
+    await check()
+    const reads = fullReads(offset)
+    report.longOperations = { ...report.longOperations, [name]: { ms: Date.now() - started, fullReads: reads.length } }
+    console.log('LONG-OP ' + name + ' ' + JSON.stringify(report.longOperations[name]))
+    assert.equal(reads.length, 0, name + ' must not read the complete Chat: ' + JSON.stringify(reads.map(event => event.caller?.slice(0, 4))))
+  }
+  const before = await savedChat()
+  const edited = '长档手工编辑：最后一轮正文。'
+  await step('长档编辑正文', () => timed('edit', async () => {
+    await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
+    await page.getByRole('menuitem', { name: '编辑正文', exact: true }).click()
+    const editor = page.getByRole('region', { name: '编辑正文' })
+    await editor.getByRole('textbox', { name: '正文文本 1' }).fill(edited)
+    await editor.getByRole('button', { name: '保存', exact: true }).click()
+    await editor.waitFor({ state: 'hidden' })
+  }, async () => {
+    await page.getByText(edited, { exact: true }).filter({ visible: true }).first().waitFor()
+    const saved = await savedChat()
+    assert.equal(saved.messages.length, before.messages.length)
+    assert.equal(saved.messages.at(-1).sourceText, edited)
+  }))
+  await step('长档回退本轮', () => timed('rollback', async () => {
+    await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
+    await page.getByRole('menuitem', { name: /回退第.*轮|回退本轮/ }).click()
+  }, async () => {
+    const deadline = Date.now() + 60000
+    while ((await savedChat()).messages.length !== before.messages.length - 2 && Date.now() < deadline) await page.waitForTimeout(200)
+    await page.getByText(edited, { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' }).catch(() => {})
+    assert.equal((await savedChat()).messages.length, before.messages.length - 2)
+  }))
+  await step('长档撤销回退', () => timed('undo', async () => {
+    await page.getByRole('button', { name: '更多 ▾', exact: true }).click()
+    await page.getByRole('menuitem', { name: /撤销回退（恢复第/ }).click()
+  }, async () => {
+    await page.getByText(edited, { exact: true }).filter({ visible: true }).first().waitFor()
+    const saved = await savedChat()
+    assert.equal(saved.messages.length, before.messages.length)
+    assert.equal(saved.messages.at(-1).sourceText, edited)
+  }))
 }

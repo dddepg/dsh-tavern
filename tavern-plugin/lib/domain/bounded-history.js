@@ -89,7 +89,7 @@ export async function readRowsAt(readWindow, chatId, revision, indices) {
   }
   for (const [start, end] of groups.length ? groups : [[null, null]]) {
     let window
-    try { window = await readWindow(chatId, start === null ? { limit: 1, revision } : { limit: end - start + 1, before: end + 1, revision }) }
+    try { window = await readWindow(chatId, start === null ? { limit: 1, revision, includeCheckpoints: true } : { limit: end - start + 1, before: end + 1, revision, includeCheckpoints: true }) }
     catch (error) { if (error?.code === 'DSH_TAVERN_REVISION_NOT_FOUND') return undefined; throw error }
     if (!window || window.revision !== revision || (start !== null && window.from !== start)) return undefined
     header ??= window.chat; messageCount = window.messageCount

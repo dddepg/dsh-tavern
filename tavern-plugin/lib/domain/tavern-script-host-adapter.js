@@ -621,12 +621,29 @@ export function createTavernScriptHostAdapter(options = {}) {
     const changed=stale ? await options.resolveChangedIndices?.(sessionId,request.stateRevision) : {indices:[],revision}
     if(!changed || changed.revision!==revision)return undefined
     const virtual=head.chat.promptTemplateInput?.message ? head.messageCount : -1
-    if(indices.some(i=>i>=head.messageCount && i!==virtual) || changed.indices.some(i=>i>=head.messageCount))return undefined
+    const lengthConflict=async()=>{
+      // The complete merge refuses a reader whose history length differs; say so
+      // without reading the whole history first.
+      const read=await options.resolveChatSliceAt?.(sessionId,request.stateRevision,[])
+      const length=chat=>chat.messageCount+(chat.chat.promptTemplateInput?.message?1:0)
+      if(!read || read.chat._storageRevision!==request.stateRevision || length(read)===length(head))return false
+      const error=new Error('聊天楼层已变化，模板存档未保存')
+      error.code='PROMPT_TEMPLATE_STATE_CONFLICT'
+      throw error
+    }
+    if(indices.some(i=>i>=head.messageCount && i!==virtual) || changed.indices.some(i=>i>=head.messageCount)){
+      if(stale)await lengthConflict()
+      return undefined
+    }
     const storedIndices=[...new Set([...indices.filter(i=>i<head.messageCount),...changed.indices])].sort((a,b)=>a-b)
     const selected=storedIndices.length ? await options.resolveChatSlice(sessionId,storedIndices) : head
     if(!selected?.denseMessages || selected.chat._storageRevision!==revision)return undefined
     const before=stale ? await options.resolveChatSliceAt?.(sessionId,request.stateRevision,storedIndices) : selected
-    if(!before?.denseMessages || before.chat._storageRevision!==request.stateRevision || (stale && before.messageCount!==head.messageCount))return undefined
+    if(!before?.denseMessages || before.chat._storageRevision!==request.stateRevision)return undefined
+    if(stale && before.messageCount!==head.messageCount){
+      await lengthConflict()
+      return undefined
+    }
     const projectedIndices=[...storedIndices,...(virtual>=0?[virtual]:[])]
     const baseline=before.chat, latest=selected.chat
     assertTemplateChat(latest)

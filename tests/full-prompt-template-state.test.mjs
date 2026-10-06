@@ -265,3 +265,15 @@ test('过期读者与并发写入改了同一变量：局部与完整合并都�
     assert.equal((await h.persistence.read('chat')).messages[7].variables[0].hp,700)
   }
 })
+
+test('过期读者遇到楼层数变化：局部与完整合并同样拒绝，局部路径不整读', async t => {
+  for(const bounded of [true,false]){
+    const h=await nativeFixture(t,bounded)
+    const {state}=await h.adapter.readFullPromptTemplateState('session')
+    const {chat:_chat,chat_metadata:_metadata,...header}=state
+    await h.persistence.update('chat',chat=>{chat.messages.splice(-2,2);return chat})
+    h.full.length=0
+    await assert.rejects(h.adapter.saveFullPromptTemplateState('session',{...header,changes:[{op:'set',path:['chat',7,'variables',0,'hp'],value:77}]}),/楼层已变化/)
+    if(bounded)assert.deepEqual(h.full,[])
+  }
+})
