@@ -422,6 +422,34 @@
                     React.createElement("div", {ref:node, "data-dsh-legacy-message":"0"}));
             }
 
+			// DSH owns the chat list; Tavern owns what each floor renders. Floors older than the
+			// latest twenty that sit far outside the viewport keep only their measured height, so
+			// a long history loaded with "load earlier" no longer keeps every paragraph in the page.
+			const TAVERN_LIVE_FLOORS = 20;
+			const TAVERN_DISTANT_FLOOR_MARGIN = "2000px 0px";
+			const TAVERN_DISTANT_FLOOR_DELAY = 2000;
+			function useTavernDistantFloor(ref, enabled) {
+				const [height, setHeight] = React.useState(0);
+				React.useEffect(function () {
+					const node = ref.current;
+					if (!enabled || !node || typeof window.IntersectionObserver !== "function") { setHeight(0); return; }
+					let timer = null;
+					const observer = new window.IntersectionObserver(function (entries) {
+						if (entries[entries.length - 1]?.isIntersecting) {
+							if (timer !== null) { window.clearTimeout(timer); timer = null; }
+							setHeight(0);
+						} else if (timer === null) timer = window.setTimeout(function () {
+							timer = null;
+							const measured = node.getBoundingClientRect().height;
+							if (measured > 0) setHeight(measured);
+						}, TAVERN_DISTANT_FLOOR_DELAY);
+					}, { rootMargin: TAVERN_DISTANT_FLOOR_MARGIN });
+					observer.observe(node);
+					return function () { observer.disconnect(); if (timer !== null) window.clearTimeout(timer); };
+				}, [ref, enabled]);
+				return height;
+			}
+
 			function TavernAssistantNodeView(props) {
 				const data = props.node.data;
                 const historyNode = React.useRef(null);
@@ -478,7 +506,9 @@
 					mentions: mentions,
 					t: props.t
 				});
+				const distantHeight = useTavernDistantFloor(historyNode, settled && !sessionTransitioning && storyTurn > 0 && latestProjectionTurn - storyTurn >= TAVERN_LIVE_FLOORS);
 				if (!(data.status === "running" || data.status === "interrupted" || rendered.length > 0)) return null;
+				if (distantHeight > 0) return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-distant-floor": true, style: { height: distantHeight + "px" } });
 				const mvuReceiptNode = settled ? React.createElement(TavernTurnMvuReceipt, { sessionId: props.sessionId, turn: storyTurn }) : null;
 				const sceneImagesEnabled = Boolean(liveState.view && liveState.view.releaseCapabilities && liveState.view.releaseCapabilities.sceneImages);
 				const illustration = sceneImagesEnabled && settled && storyTurn > 0 && isPlayMode(liveState.view && liveState.view.mode) && !sessionTransitioning ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn }) : null;
