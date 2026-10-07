@@ -101,7 +101,7 @@
 
 以上均为社区作者开发，更多插件见[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell)。
 
-**[欢迎开发 DSH Tavern 专属插件](https://github.com/flizzywine/dsh-tavern/discussions/160)。** 生图、视频、配音等功能，可以通过酒馆的[插件接口](docs/plugin-api.md)把内容挂到正文里，不用改酒馆源码。我会尽力保持接口稳定：只增不改，酒馆更新不影响按接口写的插件。现有接口不够用时，欢迎提[插件接口需求](https://github.com/flizzywine/dsh-tavern/issues/new?template=plugin-api.yml)，我会根据插件的实际需要补充接口。做好的插件可以发到 Show and tell，插件名建议叫 `dsh-tavern-xxx`。
+
 
 ## 看看实际效果
 
