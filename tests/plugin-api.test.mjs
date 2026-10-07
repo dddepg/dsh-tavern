@@ -102,7 +102,7 @@ async function harness(t, overrides = {}) {
     ctx.provide('tavern', api.service)
   } })
   t.after(() => root.registry?.clear?.())
-  return { root, api, published, setLatest(value) { latest = value } }
+  return { root, api, media, published, setLatest(value) { latest = value } }
 }
 
 test('tavern 服务：按调用插件识别归属，插件卸载后自动撤销监听与提示词段落', { skip: !cordis }, async t => {
@@ -268,4 +268,35 @@ test('正文切分：标记换成插件元素，锚点媒体放在所在段落�
   const html = extractPluginMarkers('<div class="bar">image###a###</div>', [/image###(.+?)###/])
   assert.equal(html.html, '<div class="bar"></div>')
   assert.equal(html.markers.length, 1)
+})
+
+test('示例插件按文档写法运行：先占位，再换成图片', { skip: !cordis }, async t => {
+  const h = await harness(t)
+  const saved = []
+  await h.root.plugin({ name: 'fake-attachments', apply(ctx) {
+    ctx.provide('attachments', { async saveImage(input) { saved.push(input); return { attachmentId: 'png-1', mediaType: input.mediaType, bytes: input.data.length, width: 96, height: 64 } } })
+  } })
+  const example = await import('../examples/tavern-plugin-hello/index.mjs')
+  let tavern
+  await h.root.plugin(example)
+  await h.root.plugin({ name: 'observer', inject: ['tavern'], apply(ctx) { tavern = ctx.tavern } })
+  await tick()
+  await h.api.turnSettled('game-1')
+  for (let index = 0; index < 50 && !saved.length; index++) await tick()
+  await tick()
+  assert.equal(saved.length, 1)
+  assert.deepEqual(await tavern.list({ gameId: 'game-1' }), [], '其他插件看不到示例插件的项')
+  const [item] = await h.media.list({ chatId: 'chat-1' })
+  assert.equal(item.owner, 'tavern-plugin-hello')
+  assert.equal(item.status, 'ready')
+  assert.equal(item.anchor, '她推开门。')
+  assert.equal(item.attachment.attachmentId, 'png-1')
+})
+
+test('内置 Skill 携带的接口文档与示例和正本一致', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const read = path => readFile(new URL('../' + path, import.meta.url), 'utf8')
+  assert.equal(await read('presets/tavern/skills/tavern-plugin/references/plugin-api.md'), await read('docs/plugin-api.md'), '修改 docs/plugin-api.md 后同步复制到 Skill')
+  const example = /```js\n([\s\S]*)```\n$/.exec(await read('presets/tavern/skills/tavern-plugin/references/example-plugin.md'))?.[1]
+  assert.equal(example, await read('examples/tavern-plugin-hello/index.mjs'), '修改示例插件后同步复制到 Skill')
 })

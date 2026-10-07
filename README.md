@@ -84,7 +84,7 @@
 
 ### 支持 DSH 插件生态
 
-酒馆运行在 DSH 上，可以自行安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。DSH Tavern 的专属 DSH 插件（如卡片更新器、错题库、动态世界书生成）可以在[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell) 找到。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
+酒馆运行在 DSH 上，可以自行安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。DSH Tavern 的专属 DSH 插件（如卡片更新器、错题库、动态世界书生成）可以在[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell) 找到。想做生图、视频、配音插件，可以使用 Tavern 的[插件接口](docs/plugin-api.md)，把内容挂到正文里，不用改 Tavern 源码。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
 
 ## 看看实际效果
 

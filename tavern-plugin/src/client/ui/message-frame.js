@@ -495,6 +495,7 @@
 				React.createElement("div", { ref: layer, className: "mes_text dsh-tavern-script-layer", "data-dsh-script-layer": "", "data-session": props.layer.sessionId, "data-mesid": String(props.layer.messageId) }));
 		}
 
+		// Third-party plugins: use the public tavernUi API (docs/plugin-api.md), never patch this file; its structure changes freely.
 		function renderTavernAssistantBlocks(input) {
 			const h = React.createElement;
 			const blocks = Array.isArray(input.blocks) ? input.blocks : [];

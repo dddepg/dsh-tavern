@@ -451,6 +451,7 @@
 				return height;
 			}
 
+			// Third-party plugins: use the public tavernUi API (docs/plugin-api.md), never patch this file; its structure changes freely.
 			function TavernAssistantNodeView(props) {
 				const data = props.node.data;
                 const historyNode = React.useRef(null);
