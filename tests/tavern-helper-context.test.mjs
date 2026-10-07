@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { projectOpeningCommit, projectRuntimeReplyHistory } from '../tavern-plugin/lib/domain/runtime-content-projection.js'
+import { projectOpeningCommit } from '../tavern-plugin/lib/domain/runtime-content-projection.js'
+import { projectReplyHistory } from '../tavern-plugin/lib/domain/reply-presentation.js'
 
 import { appendTavernHelperMessages, lastTavernHelperVariables, projectTavernHelperContext, replaceTavernHelperMessages } from '../tavern-plugin/lib/domain/tavern-helper-context.js'
 
@@ -26,7 +27,7 @@ test('MVU 数据写回不覆盖已解析正文，也不重新执行有副作用�
     const chat = macroOpeningChat()
     const before = structuredClone(chat)
     replaceTavernHelperMessages(chat, [{ message_id: 0, ...patch }])
-    assert.deepEqual(projectRuntimeReplyHistory(chat.messages), projectRuntimeReplyHistory(before.messages))
+    assert.deepEqual(projectReplyHistory(chat.messages), projectReplyHistory(before.messages))
     assert.deepEqual(chat.macroState, before.macroState)
     assert.deepEqual({ ...chat.messages[0], variables: [] }, { ...before.messages[0], variables: [] })
     assert.equal(chat.messages[0].variables[0].stat_data.hp, 9)
@@ -35,7 +36,7 @@ test('MVU 数据写回不覆盖已解析正文，也不重新执行有副作用�
 
 test('Helper 创建的新楼层只进入脚本历史，不冒充剧情回合', () => {
   const chat = macroOpeningChat()
-  const storyProjection = projectRuntimeReplyHistory(chat.messages)
+  const storyProjection = projectReplyHistory(chat.messages)
   assert.deepEqual(appendTavernHelperMessages(chat, [{
     role: 'assistant', message: '<chat_history>手机记录</chat_history>',
     name: '手机', is_hidden: false, data: { phone: true }
@@ -50,7 +51,7 @@ test('Helper 创建的新楼层只进入脚本历史，不冒充剧情回合', (
   assert.equal(projected.is_hidden, false)
   assert.equal(projected.message, '<chat_history>手机记录</chat_history>')
   assert.deepEqual(projected.variables, { phone: true })
-  assert.deepEqual(projectRuntimeReplyHistory(chat.messages), storyProjection)
+  assert.deepEqual(projectReplyHistory(chat.messages), storyProjection)
   assert.deepEqual(lastTavernHelperVariables(chat.messages), {})
 
   assert.throws(() => appendTavernHelperMessages(chat, [{ role: 'assistant', message: '插入' }], { insert_before: 0 }), /只支持追加/)

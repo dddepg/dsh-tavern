@@ -18,10 +18,6 @@ function normalizeCompatibleModels(value) {
   }).slice(0, 32)
 }
 
-function emptyState() {
-  return { version: 1, activePlanId: '', plans: [], lastError: null, updatedAt: 0 }
-}
-
 function normalizedRole(value) {
   return value === 'user' || value === 'assistant' ? value : 'system'
 }

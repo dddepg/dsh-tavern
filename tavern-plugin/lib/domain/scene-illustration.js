@@ -41,6 +41,12 @@ export function sceneTarget(chat, turn) {
     if(chat.sceneTargets[turn])return {...chat.sceneTargets[turn]}
     throw Object.assign(new Error('这段正文已不存在'),{code:'SCENE_TARGET_UNAVAILABLE'})
   }
+  return computeSceneTarget(chat, turn)
+}
+
+/** The key from the chat itself, ignoring any precomputed sceneTargets (they embed the chat id). */
+export function computeSceneTarget(chat, turn) {
+  turn = Number(turn)
   const index = (chat.messages || []).findIndex(message => message?.role === 'assistant' && Number(message.turn || (message.greeting ? 1 : 0)) === Number(turn))
   if (index < 0) throw Object.assign(new Error('这段正文已不存在'), { code: 'SCENE_TARGET_UNAVAILABLE' })
   const message = chat.messages[index]
@@ -54,7 +60,7 @@ export function sceneTarget(chat, turn) {
   return { key, turn: Number(turn), swipeId, sourceDigest, source }
 }
 
-function projectedSceneText(source, macroState) {
+export function projectedSceneText(source, macroState) {
   return projectAgentContent(source, { macroState }).agentText
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -167,7 +173,7 @@ export function createSceneIllustrations(deps) {
   function present(target, record) {
     const { attachment, savedAttachment, diagnostics, diagnosticContext, providerRequests, referenceImages, plan, requests, versions, deletedVersions, ownerId, ownerPid, ...publicRecord } = record || {}
     const configuration = value => value?.workflow ? { ...value, workflow: { name: value.workflow.name, digest: value.workflow.digest } } : value
-    return { key: target.key, turn: target.turn, status: 'idle', ...publicRecord, hasDeletedImages: Boolean(deletedVersions?.length), ...(publicRecord.configuration ? { configuration: configuration(publicRecord.configuration) } : {}), versions: versionsOf(record).map(({ attachment, plan, ...item }) => ({ ...item, configuration: configuration(item.configuration), description: plan?.description || '', profile: plan?.profile || '',
+    return { key: target.key, turn: target.turn, status: 'idle', ...publicRecord, hasDeletedImages: Boolean(deletedVersions?.length), ...(publicRecord.configuration ? { configuration: configuration(publicRecord.configuration) } : {}), versions: versionsOf(record).map(({ attachment, plan, ...item }) => ({ ...item, configuration: configuration(item.configuration), description: plan?.description || '', profile: plan?.profile || '', anchor: plan?.anchor || '',
       referencePeople: imageReferencePeople({ plan }),
       referenceSingle: plan?.subjects?.length === 1 && imageReferencePeople({ plan }).length === 1,
       referencePerson: plan?.people?.length === 1 && plan.subjects?.length === 1 && imageReferencePeople({ plan }).length === 1 ? plan.people[0].name : '' })) }

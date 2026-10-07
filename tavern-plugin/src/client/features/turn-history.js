@@ -11,7 +11,7 @@
 			const [selected, setSelected] = React.useState("");
 			const [refreshes, setRefreshes] = React.useState({});
 			const view = props.view;
-			const statuses = view && isPlayMode(view.mode) ? (view.tavernStatusViews || (view.tavernStatusView ? [view.tavernStatusView] : [])) : [];
+			const statuses = view && isPlayMode(view.mode) ? (view.tavernStatusViews || []) : [];
 			const manual = entries.filter(function (entry) { return entry.sessionId === props.sessionId && entry.pinned; });
 			const newest = manual.reduce(function (latest, entry) { return !latest || entry.activation > latest.activation ? entry : latest; }, null);
 			React.useEffect(function () { if (newest) setSelected(newest.id); }, [props.sessionId, newest && newest.activation]);

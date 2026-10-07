@@ -80,3 +80,12 @@ for (const fields of [undefined, ['openingWorldbookSnapshot'], ['cardDefinitionS
   assert.equal(view.cardResourceAccess.revision, 2)
   assert.equal(f.calls.dirty, 0)
 })
+
+test('a browser that scrolled into older floors gets a longer window, not a complete view',async()=>{
+ const requested=[]
+ const reader=createSessionViewReader({readOpeningWindow:async(_s,from)=>{requested.push(from);return {chat:{messages:[]},revision:3}},readState:async()=>{throw Error('complete read')},
+  project:{opening:async window=>({historyWindow:{from:0},revision:window.revision})},trace:{stage:(_name,fn)=>fn(),state(){}},synchronize:(_id,view)=>({view})})
+ await reader.response({sessionId:'s',viewSync:1,openingWindow:1,historyFrom:360})
+ await reader.response({sessionId:'s',viewSync:1,openingWindow:1})
+ assert.deepEqual(requested,[360,undefined])
+})

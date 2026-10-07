@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { inputAttachments, projectPlayerContent } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { createEphemeralCompatibilityRequest, isCompatibilityConversationRequest } from './compatibility-request.js'
@@ -233,8 +234,38 @@ export function createCompatibilityOrchestrationStrategy(options) {
   return Object.freeze({ kind: 'compatibility', prepareStep, projectRequest, completeRequest, endTurn, assembleSystemPrompt })
 }
 
+// The preset front phase is part of the native system prompt, so it is recorded in
+// the session trajectory like the fixed card background. Every replay of that
+// trajectory (manual, scheduled and native compaction) then starts with exactly
+// the bytes the foreground sent, and keeps the provider's prefix cache. Projecting
+// it only at request time made every compaction request diverge from token one.
+// Request evidence only: mark where the front phase sits inside the native system
+// message so the request viewer can still label it. Message sources never reach
+// the provider, and the trajectory keeps its own unannotated message.
+function labelPresetFront(messages, texts) {
+  if (!Array.isArray(messages) || !texts?.length) return messages
+  const index = messages.findIndex(message => message?.role === 'system' && message.source?.plugin === '@deepseek-ai/dsh-system-prompt')
+  const message = messages[index]
+  const body = (message?.content || []).map(block => block?.type === 'text' ? block.text : '').join('')
+  if (index < 0 || !texts.every(text => body.includes(text))) return messages
+  const copy = messages.slice()
+  copy[index] = { ...message, source: { ...message.source, sections: texts.map(text => ({ name: 'tavern:runtime-preset-front', text })) } }
+  return copy
+}
+
+function presetFrontSections(snapshot) {
+  const entries = Array.isArray(snapshot?.front?.entries) ? snapshot.front.entries : []
+  return entries.filter(entry => str(entry?.content).trim() !== '')
+    .map(entry => ({ name: 'tavern:runtime-preset-front', text: str(entry.content) }))
+}
+
 export function createNativePlayOrchestrationStrategy(options) {
   const stagedRequests = options.stagedRequests instanceof Map ? options.stagedRequests : new Map()
+  // Digest of the front rendered by the latest assembly, and of the one last entered into a step.
+  const renderedFronts = new Map()
+  const enteredFronts = new Map()
+  // Front texts of the step being prepared, only to label the request evidence.
+  const frontTexts = new Map()
 
   async function prepareStep(input) {
     const sessionId = input.sessionId
@@ -272,7 +303,15 @@ export function createNativePlayOrchestrationStrategy(options) {
         agentMessages = agentMessages.concat([snapshotMessage(prepared.text)])
       }
     }
-    return { kind: 'enter', messages: agentMessages }
+    if (mode !== 'story' && mode !== 'script') return { kind: 'enter', messages: agentMessages }
+    // Models that update the system prompt in history would otherwise append the
+    // new prompt after the old one, leaving a switched-out preset at the head.
+    // A new request series makes DSH replace the head instead. Unknown history
+    // (first step since startup) starts one too; it is a no-op when nothing changed.
+    const front = renderedFronts.get(sessionId) ?? ''
+    const switched = enteredFronts.get(sessionId) !== front
+    enteredFronts.set(sessionId, front)
+    return { kind: 'enter', messages: agentMessages, ...(switched ? { startsRequestSeries: true } : {}) }
   }
 
   function projectRequest(optionsValue) {
@@ -294,7 +333,9 @@ export function createNativePlayOrchestrationStrategy(options) {
     const nativeMessages = regeneratedMessages.some(isNativeStablePrefix) ? regeneratedMessages.filter(message => !isNativeStablePrefix(message)) : regeneratedMessages
     const baseRequest = nativeMessages === optionsValue.messages
       ? optionsValue : Object.assign({}, optionsValue, { messages: nativeMessages })
-    let request = projectRuntimePresetRequest(baseRequest, staged.snapshot, {
+    // The front phase is already in the native system prompt (see presetFrontSections).
+    const backOnly = staged.snapshot ? { ...staged.snapshot, front: null } : null
+    let request = projectRuntimePresetRequest(baseRequest, backOnly, {
       systemAppend: options.systemAppend?.(),
       scope: staged.scope,
       turn: staged.turn,
@@ -312,6 +353,8 @@ export function createNativePlayOrchestrationStrategy(options) {
       request = Object.assign({}, request)
       delete request.system
     }
+    const labelled = labelPresetFront(request.messages, frontTexts.get(sessionId))
+    if (labelled !== request.messages) request = Object.assign({}, request, { messages: labelled })
     if (request === optionsValue) return null
     return markRequestHandled(request, PROJECTED)
   }
@@ -324,6 +367,7 @@ export function createNativePlayOrchestrationStrategy(options) {
 
   function clearRequestState(sessionId) {
     stagedRequests.delete(str(sessionId))
+    frontTexts.delete(str(sessionId))
   }
 
   async function assembleSystemPrompt(assembly, input) {
@@ -346,6 +390,13 @@ export function createNativePlayOrchestrationStrategy(options) {
       }
       const workspace = options.workspaceContext(input.cwd, input.workspaceProjection)
       if (workspace !== '') sections.push({ name: 'tavern:resource-workspace', text: workspace })
+    }
+    if (mode === 'story' || mode === 'script') {
+      const raw = await options.resolvePreset(input.chat)
+      const front = presetFrontSections(resolveRuntimePresetMacros(raw, { charName: input.chat?.cardName, macroState: input.chat?.macroState }).snapshot)
+      sections.unshift(...front)
+      frontTexts.set(input.sessionId, front.map(section => section.text))
+      renderedFronts.set(input.sessionId, createHash('sha256').update(JSON.stringify(front.map(section => section.text))).digest('hex'))
     }
     assembly.sections = sections
     if (Array.isArray(assembly.contexts)) assembly.contexts = assembly.contexts.filter(section => section.name !== 'approval:policy')

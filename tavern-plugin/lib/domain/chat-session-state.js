@@ -6,7 +6,6 @@ import { rollbackAvailability, hasRollbackMessages, failedTurnReplayAvailability
 import { isRescuedHistoryMessage } from './chat-history-rescue.js'
 import { canUndoRollback } from './surface-restoration.js'
 import { failedErrorTurnStates } from './failed-error-visibility.js'
-const str = value => String(value ?? '')
 
 export function pendingMvuSettlementState(chat) {
   if (Object.hasOwn(chat, 'pendingMvuSettlement')) return chat.pendingMvuSettlement

@@ -78,3 +78,13 @@ test('a picture records its moment, orientation and own negative tags; an earlie
   await assert.rejects(fx2.module.commit(await fx2.prepare(2, 'x'), { ...first(), moment: 'middle' }), /moment/)
   await assert.rejects(fx2.module.commit(await fx2.prepare(2, 'x'), { ...first(), orientation: 'wide' }), /orientation/)
 })
+
+test('插图位置：方案里的原话在正文中找到才保留，找不到就忽略、图片仍放在末尾', async t => {
+  const fx = await fixture(t)
+  const text = '雨夜，林岚推开门。\n\n她站在门口，黑发白衣。'
+  const kept = await fx.module.commit(await fx.prepare(1, text), { ...first(), anchor: '林岚推开门。' })
+  assert.equal(kept.anchor, '林岚推开门。')
+  const dropped = await fx.module.commit(await fx.prepare(2, text), { ...first(), continuity: 'changed', subjects: [kept.subjects[0]], characters: [], anchor: '正文里没有这句' })
+  assert.equal(dropped.anchor, undefined)
+  await assert.rejects(fx.module.commit(await fx.prepare(3, text), { ...first(), anchor: 'x'.repeat(201) }), /anchor/)
+})

@@ -71,6 +71,17 @@ export async function startUpdatedService({ sourceRoot, dshHome, log = console.l
   }
 }
 
+// The lines that explain an installer failure: the end of its output without the
+// progress stream and PowerShell's error-record boilerplate. Redact after taking the
+// tail; redaction also truncates, and must not keep the head of a long download log.
+export function installerFailureTail(output, lines = 12) {
+  const meaningful = String(output ?? '').split(/\r?\n/).filter(line => line.trim() !== '' &&
+    !/^DSH_STATUS\s/.test(line) && !/^Progress: /.test(line) &&
+    !/^\s*\+/.test(line) && !/^\s*\d+\s*$/.test(line) && !/^\s*(所在位置|At )\S*/.test(line) &&
+    !/^\s*(CategoryInfo|FullyQualifiedErrorId)\s*:/.test(line))
+  return redactUpdateDiagnostic(meaningful.slice(-lines).join('\n'))
+}
+
 export async function updateApplication(options = { host: RUNTIME_HOST, statusFile: '', delay: 0 }) {
   options = { statusFile: '', delay: 0, ...options }
   const sourceRoot = path.resolve(options.sourceRoot || SOURCE_ROOT)
@@ -78,6 +89,9 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
   const startedAt = Date.now()
   const attemptId = options.attemptId || randomUUID()
   const dshHome = path.resolve(options.dshHome || DSH_ROOT)
+  // A working directory inside the app keeps Windows from swapping it (EBUSY), even
+  // when the update was started from a terminal opened there.
+  if (process.platform === 'win32' && !options.keepCwd) try { process.chdir(os.tmpdir()) } catch {}
   const lease = installationState.acquireInstallation({ dshHome, sourceRoot, statusFile: options.statusFile, attemptId, adopt: !!options.attemptId, supervised: true })
   lease.update({ supervised: true, state: 'running' })
   const state = createUpdateState(options.statusFile, dshHome)
@@ -117,6 +131,8 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
     try {
       if (capture) outputDescriptor = openSync(outputFile, 'w')
       result = await runInstallationProcess(command, args, {
+        // Outside the app being replaced (Windows refuses to rename a directory in use as a cwd).
+        cwd: os.tmpdir(),
         root: true, timeoutMs: options.timeoutMs || 30 * 60 * 1000, signal: controller.signal, label: '安装程序',
         processDirectory: path.join(lease.lockDir, 'processes'),
         onSpawn(child) { lease.update({ childPid: child.pid, stage: '安装程序', progressAt: Date.now() }) },
@@ -147,12 +163,12 @@ export async function updateApplication(options = { host: RUNTIME_HOST, statusFi
         omittedCharacters: Math.max(0, output.length - 12000) })
     }
     if (commandError) {
-      if (capture && existsSync(outputFile)) commandError.message += '\n' + redactUpdateDiagnostic(decodeUpdateOutput(readFileSync(outputFile))).trim().split('\n').slice(-12).join('\n')
+      if (capture && existsSync(outputFile)) commandError.message += '\n' + installerFailureTail(decodeUpdateOutput(readFileSync(outputFile)))
       throw commandError
     }
     if (result.error) throw new Error(`无法运行更新程序：${result.error.message}`)
     if (result.status !== 0) {
-      const details = capture && existsSync(outputFile) ? decodeUpdateOutput(readFileSync(outputFile)).trim().split('\n').slice(-12).join('\n') : ''
+      const details = capture && existsSync(outputFile) ? installerFailureTail(decodeUpdateOutput(readFileSync(outputFile))) : ''
       throw new Error(`更新失败${details ? `：${details}` : '，请查看上方错误信息。'}`)
     }
     if (temporary !== '' && existsSync(temporary)) unlinkSync(temporary)

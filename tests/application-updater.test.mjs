@@ -165,8 +165,11 @@ test('jsDelivr 发布序号阻止缓存倒退，并允许无 GitHub 更新', asy
 
     metadata.releaseSequence = 43
     const child = { pid: 4321, once(event, listener) { if (event === 'spawn') queueMicrotask(listener); return this }, unref() {} }
-    const changed = await createApplicationUpdater({ ...common, platform: 'linux', spawnProcess() { return child } }).start()
+    let launchCwd
+    const home = path.join(root, 'home')
+    const changed = await createApplicationUpdater({ ...common, dshHome: home, platform: 'linux', spawnProcess(_command, _args, options) { launchCwd = options.cwd; return child } }).start()
     assert.equal(changed.phase, 'running')
+    assert.equal(launchCwd, home, '更新链不能以被替换的程序目录作为工作目录（Windows 会 EBUSY）')
     assert.equal(changed.checkSource, 'jsdelivr')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -277,4 +280,36 @@ test('jsDelivr 兜底：本地清单未核验时用提交比较，比较不可�
     metadata.releaseSequence = 42
     assert.equal((await createApplicationUpdater({ ...common, compareCommits: offline }).check()).phase, 'check-failed')
   } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('状态查询按与安装相同的规则回收残留锁，更新按钮不再永久卡在「等待安全停止」', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-stale-lock-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.5.0' }))
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'running', attemptId: 'old' }))
+  const dead = 2 ** 22 + 12345 // well above any live PID on test hosts
+  const lock = path.join(root, '.tavern-install.lock')
+  await mkdir(path.join(lock, 'processes', 'install'), { recursive: true })
+  const old = Date.now() - 5 * 60_000
+  await writeFile(path.join(lock, 'owner.json'), JSON.stringify({ attemptId: 'old', generation: 'g', pid: dead, state: 'blocked', unsafeToRetry: true, startedAt: old, updatedAt: old }))
+  await writeFile(path.join(lock, 'processes', 'install', `${dead + 1}.json`), JSON.stringify({ pid: dead + 1 }))
+  const { utimes } = await import('node:fs/promises')
+  for (const file of [path.join(lock, 'owner.json'), lock]) await utimes(file, new Date(old), new Date(old))
+  const status = await createApplicationUpdater({ dataRoot: root, sourceRoot: root, runtimeHost: 'cli' }).status()
+  assert.equal(status.phase, 'failed')
+  assert.equal(status.repairRequired, true)
+  await assert.rejects(readFile(path.join(lock, 'owner.json')), { code: 'ENOENT' })
+})
+
+test('没有安装锁的遗留「进行中」记录：超过 1 小时转为可修复，不再永久禁用更新', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'update-orphan-record-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.5.0' }))
+  const updater = createApplicationUpdater({ dataRoot: root, sourceRoot: root, runtimeHost: 'cli' })
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'running', attemptId: 'a', startedAt: Date.now() - 5 * 60_000 }))
+  assert.equal((await updater.status()).phase, 'blocked', 'a recent record stays fenced')
+  await writeFile(path.join(root, 'update-status.json'), JSON.stringify({ phase: 'blocked', attemptId: 'a', startedAt: Date.now() - 2 * 60 * 60_000 }))
+  const status = await updater.status()
+  assert.equal(status.phase, 'failed')
+  assert.equal(status.repairRequired, true)
 })

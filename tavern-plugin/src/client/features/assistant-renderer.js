@@ -201,6 +201,26 @@
 			});
 		})();
 
+		function openSceneImagePreview(url, opener) {
+			const dialog = document.createElement("dialog");
+			dialog.className = "dsh-tavern-image-preview";
+			dialog.setAttribute("aria-label", "场景插画预览");
+			const close = document.createElement("button");
+			close.type = "button";
+			close.textContent = "缩小并返回 ×";
+			close.setAttribute("aria-label", "缩小并返回");
+			const image = document.createElement("img");
+			image.src = url;
+			image.alt = "放大的场景插画";
+			close.addEventListener("click", function () { dialog.close(); });
+			dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
+			dialog.addEventListener("close", function () { dialog.remove(); if (opener && opener.isConnected) opener.focus(); }, { once: true });
+			dialog.append(close, image);
+			document.body.append(dialog);
+			dialog.showModal();
+			close.focus();
+		}
+
 		function createTavernAssistantRendererFeatureModule() {
 			function TavernUserNodeView(props) {
 				const data = props.node.data;
@@ -231,28 +251,11 @@
 					React.createElement("div", { className: "dsh-tavern-user-actions" }, time ? React.createElement("span", null, time) : null, React.createElement(DshUi.Tooltip, { label: copied ? "已复制" : "复制", side: "bottom" }, React.createElement("button", { type: "button", className: "dsh-tavern-user-copy", "aria-label": copied ? "已复制" : "复制", onClick: copy }, React.createElement(copied ? DshUi.IconCheckOutline16 : DshUi.IconCopyOutline16, null))))
 				);
 			}
-			function openSceneImagePreview(url, opener) {
-				const dialog = document.createElement("dialog");
-				dialog.className = "dsh-tavern-image-preview";
-				dialog.setAttribute("aria-label", "场景插画预览");
-				const close = document.createElement("button");
-				close.type = "button";
-				close.textContent = "缩小并返回 ×";
-				close.setAttribute("aria-label", "缩小并返回");
-				const image = document.createElement("img");
-				image.src = url;
-				image.alt = "放大的场景插画";
-				close.addEventListener("click", function () { dialog.close(); });
-				dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
-				dialog.addEventListener("close", function () { dialog.remove(); if (opener && opener.isConnected) opener.focus(); }, { once: true });
-				dialog.append(close, image);
-				document.body.append(dialog);
-				dialog.showModal();
-				close.focus();
-			}
 			function SceneIllustration(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
-				const state = useSceneImageRecord(props.sessionId, props.turn);
+				// The message view may already read the record (to place the picture); reuse it.
+				const fetchedState = useSceneImageRecord(props.record === undefined ? props.sessionId : null, props.turn);
+				const state = props.record === undefined ? fetchedState : props.record;
 				const [error, setError] = React.useState("");
 				const [selected, setSelected] = React.useState("");
 			const [refreshes, setRefreshes] = React.useState({});
@@ -422,6 +425,35 @@
                     React.createElement("div", {ref:node, "data-dsh-legacy-message":"0"}));
             }
 
+			// DSH owns the chat list; Tavern owns what each floor renders. Floors older than the
+			// latest twenty that sit far outside the viewport keep only their measured height, so
+			// a long history loaded with "load earlier" no longer keeps every paragraph in the page.
+			const TAVERN_LIVE_FLOORS = 20;
+			const TAVERN_DISTANT_FLOOR_MARGIN = "2000px 0px";
+			const TAVERN_DISTANT_FLOOR_DELAY = 2000;
+			function useTavernDistantFloor(ref, enabled) {
+				const [height, setHeight] = React.useState(0);
+				React.useEffect(function () {
+					const node = ref.current;
+					if (!enabled || !node || typeof window.IntersectionObserver !== "function") { setHeight(0); return; }
+					let timer = null;
+					const observer = new window.IntersectionObserver(function (entries) {
+						if (entries[entries.length - 1]?.isIntersecting) {
+							if (timer !== null) { window.clearTimeout(timer); timer = null; }
+							setHeight(0);
+						} else if (timer === null) timer = window.setTimeout(function () {
+							timer = null;
+							const measured = node.getBoundingClientRect().height;
+							if (measured > 0) setHeight(measured);
+						}, TAVERN_DISTANT_FLOOR_DELAY);
+					}, { rootMargin: TAVERN_DISTANT_FLOOR_MARGIN });
+					observer.observe(node);
+					return function () { observer.disconnect(); if (timer !== null) window.clearTimeout(timer); };
+				}, [ref, enabled]);
+				return height;
+			}
+
+			// Third-party plugins: use the public tavernUi API (docs/plugin-api.md), never patch this file; its structure changes freely.
 			function TavernAssistantNodeView(props) {
 				const data = props.node.data;
                 const historyNode = React.useRef(null);
@@ -441,12 +473,12 @@
                     const observer = new IntersectionObserver(entries=>{
                         if(entries.some(entry=>entry.isIntersecting)) {
                             observer.disconnect();
-                            void requestCompleteHistory(props.sessionId).catch(error=>tavernErrorHub.report("读取历史",error));
+                            void requestOlderHistory(props.sessionId,currentView.historyWindow.from).catch(error=>tavernErrorHub.report("读取历史",error));
                         }
                     });
                     observer.observe(historyNode.current);
                     return ()=>observer.disconnect();
-                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision]);
+                },[props.sessionId,storyTurn,projection,currentView?.historyWindow?.revision,currentView?.historyWindow?.from]);
 				const tail = props.useTurnData("turn-tail");
 				const owner = React.useMemo(function () {
 					if (!turnRef || turnRef.status !== "closed" || !data.finalNode || !tail || !tail.closing || tail.closing.finalNode.seq !== data.finalNode.seq) return undefined;
@@ -454,6 +486,19 @@
 				}, [turnRef, data.finalNode, tail, props.openFile]);
 				const mentions = React.useMemo(function () { return owner === undefined ? undefined : props.fileMentions(owner); }, [owner, props.fileMentions]);
 				const waitingForHistory = Boolean(currentView?.historyWindow && !projection && settled && storyTurn>0 && storyTurn<latestProjectionTurn);
+				const playView = isPlayMode(liveState.view && liveState.view.mode) && storyTurn > 0 && !sessionTransitioning;
+				useTavernUiExtensions();
+				const pluginMedia = useTavernPluginMedia(props.sessionId, storyTurn, playView && settled);
+				const sceneImagesEnabled = Boolean(liveState.view && liveState.view.releaseCapabilities && liveState.view.releaseCapabilities.sceneImages);
+				const sceneShown = sceneImagesEnabled && settled && playView;
+				const sceneRecord = useSceneImageRecord(sceneShown ? props.sessionId : null, storyTurn);
+				const sceneAnchor = (function () {
+					const versions = sceneRecord && sceneRecord.versions || [];
+					for (let index = versions.length - 1; index >= 0; index -= 1) if (versions[index].anchor) return versions[index].anchor;
+					return "";
+				})();
+				const illustration = sceneShown ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn, record: sceneRecord }) : null;
+				const pluginText = playView ? createTavernPluginTextContext({ items: pluginMedia.items, extras: illustration && sceneAnchor ? [{ id: "scene-illustration", anchor: sceneAnchor, render: function () { return illustration; } }] : [], sessionId: props.sessionId, turn: storyTurn, streaming: data.status === "running" }) : null;
                 const rendered = sessionTransitioning ? [React.createElement("div", { key: "switching", className: "dsh-tavern-session-switching", role: "status" }, "正在完成游戏初始化…")] : waitingForHistory ? [React.createElement("div", {key:"history",role:"status"}, "正在读取历史内容…")] : renderTavernAssistantBlocks({
 					blocks: data.blocks,
 					streaming: data.status === "running",
@@ -475,13 +520,15 @@
 							? { sessionId: props.sessionId, messageId: messageId } : null;
 					})(),
 					renderMessageImages: props.renderMessageImages,
+					plugin: pluginText,
 					mentions: mentions,
 					t: props.t
 				});
+				const distantHeight = useTavernDistantFloor(historyNode, settled && !sessionTransitioning && storyTurn > 0 && latestProjectionTurn - storyTurn >= TAVERN_LIVE_FLOORS);
 				if (!(data.status === "running" || data.status === "interrupted" || rendered.length > 0)) return null;
+				if (distantHeight > 0) return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-distant-floor": true, style: { height: distantHeight + "px" } });
 				const mvuReceiptNode = settled ? React.createElement(TavernTurnMvuReceipt, { sessionId: props.sessionId, turn: storyTurn }) : null;
-				const sceneImagesEnabled = Boolean(liveState.view && liveState.view.releaseCapabilities && liveState.view.releaseCapabilities.sceneImages);
-				const illustration = sceneImagesEnabled && settled && storyTurn > 0 && isPlayMode(liveState.view && liveState.view.mode) && !sessionTransitioning ? React.createElement(SceneIllustration, { key: props.sessionId + ":" + storyTurn + ":" + JSON.stringify(projection), sessionId: props.sessionId, turn: storyTurn }) : null;
+				const trailingIllustration = pluginText && pluginText.placed.has("scene-illustration") ? null : illustration;
                 const inlineStatus = liveState.view?.statusBarPlacement === "body" && !sessionTransitioning && storyTurn > 0 && storyTurn === latestProjectionTurn && data.finalNode && tail?.closing?.finalNode?.seq === data.finalNode.seq
                     ? React.createElement(TavernInlineStatusRuntime, { sessionId: props.sessionId, executeSlash: props.executeSlash }) : null;
                 const helper = liveState.view?.tavernHelper;
@@ -498,7 +545,13 @@
                 const body = legacyGreeting ? React.createElement(TavernLegacyGreeting, {key:props.sessionId+":greeting", source:greetingSource, sessionId:props.sessionId, executeSlash:props.executeSlash}, rendered) : rendered;
                 const refusalNotice = settled && !sessionTransitioning ? tavernModelRefusalNotice((data.blocks || []).filter(block => block && block.kind === "text").map(block => String(block.text || "")).join("\n")) : "";
                 const refusalNode = refusalNotice ? React.createElement("div", { className: "dsh-tavern-refusal-notice", role: "note" }, refusalNotice) : null;
-				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, refusalNode, pendingMessage, illustration, mvuReceiptNode, inlineStatus);
+				// Plugin media without a found anchor goes after the text.
+				const trailingMedia = pluginMedia.items.filter(function (item) { return !(pluginText && pluginText.placed.has(item.id)); });
+				const pluginMediaNode = trailingMedia.length ? React.createElement("div", { className: "dsh-tavern-plugin-media-list" }, trailingMedia.map(function (item) {
+					return React.createElement(TavernPluginMediaItem, { key: item.id, item: item, sessionId: props.sessionId, turn: storyTurn });
+				})) : null;
+				const pluginActions = playView && settled ? React.createElement(TavernPluginMessageActions, { sessionId: props.sessionId, turn: storyTurn, settled: settled }) : null;
+				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, refusalNode, pendingMessage, pluginMediaNode, trailingIllustration, pluginActions, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
 				const liveState = useScopedLiveTavernView(props.sessionId, String(props.messageId || ""), [["mode"], ["forkTurnsByMessageId", String(props.messageId || "")]]);

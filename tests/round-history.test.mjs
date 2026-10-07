@@ -371,6 +371,15 @@ test('旧剧本回退保留迁移恢复路径；非游玩模式拒绝回退', as
   assert.deepEqual(card.calls, [])
 })
 
+test('回退提交后立即保存模型消息面，早于后台回拨和脚本通知', async () => {
+  const h = harness({ checkpoint: true })
+  h.options.sessions.flush = async session => h.calls.push(session === h.session ? 'foreground.flush' : 'other.flush')
+  await h.create().rollback('session')
+  const surface = h.calls.indexOf('surface:assistant/message'), flush = h.calls.indexOf('foreground.flush')
+  assert.ok(surface >= 0 && flush === surface + 1, h.calls.join(','))
+  assert.ok(flush < h.calls.indexOf('MESSAGE_DELETED'))
+})
+
 test('rollback immediately rewinds and flushes background surface, failure only warns', async () => {
   for (const [fail, unloaded] of [[false, false], [true, false], [false, true]]) {
     const h = harness({ checkpoint: true })

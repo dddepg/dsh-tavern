@@ -1,10 +1,6 @@
 import { createHash } from 'node:crypto'
 import { resolveRuntimeMacroText } from './runtime-content-projection.js'
 
-function emptyState() {
-  return { version: 6, activePreset: '', presetOrder: [], entries: {}, regexes: {}, initialized: {}, plans: [], lastError: null, updatedAt: 0 }
-}
-
 function normalizeState(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
   const currentVersion = Number(source.version) === 6

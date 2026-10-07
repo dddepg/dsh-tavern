@@ -8,7 +8,7 @@ import { synchronizeTemplateHistory } from '../domain/template-history.js'
 
 export function registerTurnLifecycleHooks({
   backgroundAgentRunner,
-  chatForSession,
+  hookChatForSession,
   clearRuntimePresetRequestState,
   contentText,
   ctx,
@@ -18,6 +18,7 @@ export function registerTurnLifecycleHooks({
   fullTemplateRuntime,
   nativeWorldBookTemplateContext,
   persistClearedBodyEdits,
+  pluginPromptSections,
   publishResourceWorkspace,
   readChatCard,
   replaceAssistantReply,
@@ -92,7 +93,7 @@ export function registerTurnLifecycleHooks({
     const agent = context && context.agent
     if (agent === undefined || agent.session === undefined) return assembly
     if (backgroundAgentRunner.owns(agent.session.id)) return assembly
-    const chat = await chatForSession(agent.session.id)
+    const chat = await hookChatForSession(agent.session.id)
     if (chat) await synchronizeTemplateHistory(agent.session, chat, session => sessionStore.flush(session))
     if (chat) await synchronizeBodyEdits(agent.session, chat, session => sessionStore.flush(session), persistClearedBodyEdits)
     if (chat && chat.requestMode !== 'sillytavern' && ['story', 'script', 'card'].includes(await turnOrchestrator.modeFor(agent.session.id))) {
@@ -110,6 +111,11 @@ export function registerTurnLifecycleHooks({
         ? withCurrentWorldbook(sessionStablePrefixSections(agent.session), (await nativeWorldBookTemplateContext(chat, await readChatCard(chat))).prefixContext ?? '')
         : sessionStablePrefixSections(agent.session)
     })
+    // Third-party plugin sections join the play prompt only, after Tavern's own.
+    if (pluginPromptSections && chat && chat.requestMode !== 'sillytavern' && ['story', 'script'].includes(await turnOrchestrator.modeFor(agent.session.id))) {
+      const extra = await pluginPromptSections({ gameId: agent.session.id })
+      if (extra.length) assembled.sections = [...(assembled.sections || []), ...extra]
+    }
     return prependSystemInstruction(assembled, chat ? runtimePrompt('system-append') : '')
   })
 }

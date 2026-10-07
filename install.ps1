@@ -818,7 +818,7 @@ function main(argv) {
   throw new Error(`Unknown installation-state command: ${command}`)
 }
 
-module.exports = { acquireInstallation, readInstallation, requestCancellation, cancellationRequested, releaseStoppedInstallation, LOCK_NAME }
+module.exports = { acquireInstallation, readInstallation, reclaimStaleInstallation: reclaimStale, requestCancellation, cancellationRequested, releaseStoppedInstallation, LOCK_NAME }
 if (require.main === module) {
   try { main(process.argv.slice(2)) } catch (error) { console.error(`${error.code || 'INSTALLATION_ERROR'}: ${error.message}`); process.exitCode = 1 }
 }
@@ -1185,9 +1185,11 @@ try {
       & node $OldLauncher stop *> $null
     }
     Write-InstallStatus '本地处理：正在切换到新版本，保留用户数据…'
+    # Windows refuses to rename a directory that is any process's working directory.
+    Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
     $AppSwapped = $true
     & node $Stager swap --app $AppDir
-    Assert-LastCommand '切换新版本失败，已恢复原版本。'
+    Assert-LastCommand ('切换新版本失败，已恢复原版本。安装目录可能被占用：请关闭位于 ' + $AppDir + ' 中的终端、资源管理器窗口或编辑器后重试。')
     # Re-link in place: Windows junctions and pnpm metadata record absolute paths.
     Invoke-InstallCommand 'dependencies.relink' $PnpmCommand @('--dir', $AppDir, 'install', '--offline', '--frozen-lockfile', '--reporter=append-only', '--fetch-timeout=30000', '--fetch-retries=2', '--fetch-retry-mintimeout=1000', '--fetch-retry-maxtimeout=5000') -TimeoutMs 300000
 

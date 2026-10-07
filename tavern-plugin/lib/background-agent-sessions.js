@@ -160,9 +160,6 @@ export function createBackgroundAgentSessions(options, task) {
     const parent = agents.get(input.sessionId)
     if (parent === undefined || parent.session === undefined) throw new Error('无法创建后台 Agent：前台会话不可用')
     const runtimeInput = Object.assign({}, input)
-    if (options.resolveBackgroundTasks && input.task !== 'image') {
-      runtimeInput.backgroundTasksSnapshot = await options.resolveBackgroundTasks(input)
-    }
     if (options.resolveWebSearch && input.task !== 'image' && input.task !== 'phone') {
       runtimeInput.webSearchEnabled = await options.resolveWebSearch(input)
     }
@@ -402,5 +399,12 @@ export function createBackgroundAgentSessions(options, task) {
     return null
   }
 
-  return Object.freeze({ progress, run, owns, requestContext, requestSession, compact, cancel, reapIdle, dispose })
+  // A deleted game must not keep resident agents that would write its sessions back to disk.
+  async function releaseFor(parentSessionId) {
+    const parent = str(parentSessionId)
+    for (const [id, resident] of Array.from(residentHandles)) {
+      if (requestContexts.get(id)?.parentSessionId === parent || JSON.parse(resident.key)[0] === parent) await releaseResident(id, resident)
+    }
+  }
+  return Object.freeze({ progress, run, owns, requestContext, requestSession, compact, cancel, reapIdle, dispose, releaseFor })
 }

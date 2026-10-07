@@ -5,7 +5,7 @@ import { createCardPreparation } from '../tavern-plugin/lib/domain/card-preparat
 import { createScriptContinuity } from '../tavern-plugin/lib/domain/script-continuity.js'
 import { createStoryTimeline } from '../tavern-plugin/lib/domain/story-timeline.js'
 import { renderTavernMacros } from '../tavern-plugin/lib/domain/tavern-macro-engine.js'
-import { projectReplyPresentation } from '../tavern-plugin/lib/domain/reply-presentation.js'
+import { projectReplyLayers } from '../tavern-plugin/lib/domain/reply-presentation.js'
 import { createTurnOrchestrator } from '../tavern-plugin/lib/domain/turn-orchestration.js'
 import { createForegroundFrameBuilder, foregroundFrameText } from '../tavern-plugin/lib/domain/agent-input-frame.js'
 import { createContextPlanner } from '../tavern-plugin/lib/domain/context-planner.js'
@@ -45,6 +45,7 @@ function harness(mode, options = {}) {
   const history = new Map([[1, clone(chat)]])
   const settlements = []
   const createdCards = []
+  const updatedCardPaths = []
   const plannerCalls = []
   const timeline = createStoryTimeline({ id: (prefix) => prefix + '-' + Math.random().toString(36).slice(2), now: () => 2000 })
   const store = {
@@ -75,7 +76,8 @@ function harness(mode, options = {}) {
       if (next !== undefined) await store.writeChat(next, metadata)
       return clone(chat)
     },
-    async updateCard(_cardId, fields, revision, rawOperations) {
+    async updateCard(cardId, fields, revision, rawOperations) {
+      updatedCardPaths.push(cardId)
       const change = cards.update({ kind: 'card', card: cardWorkspace, patch: fields, revision, rawOperations })
       cardWorkspace = clone(change.card)
       card = clone(change.view)
@@ -134,7 +136,7 @@ function harness(mode, options = {}) {
     } : undefined,
     resolvePresetRegexScripts: options.resolvePresetRegexScripts,
     projectUserTemplate: options.projectUserTemplate,
-    projectReply: projectReplyPresentation,
+    projectReply: projectReplyLayers,
     projectWorldBookTemplates: options.projectWorldBookTemplates,
     projectForegroundWorldbook: options.projectForegroundWorldbook,
     recordWorldbookRecall: options.recordWorldbookRecall,
@@ -150,6 +152,7 @@ function harness(mode, options = {}) {
     plannerCalls,
     settlements,
     createdCards,
+    updatedCardPaths,
     timeline,
     rollback(value = chat) {
       const target = timeline.rollbackTarget({ chat: value })
@@ -308,6 +311,17 @@ test('new card is created and bound before tool returns; next write updates the 
   await run.orchestrator.saveChanges({ sessionId: 'session-1', turn: 1, fields: { description: '第二次修改' } })
   assert.equal(run.card().description, '第二次修改')
   assert.equal(run.createdCards.length, 1)
+})
+
+test('卡片工作台可按路径修改任意人物卡，无需挂载；不改变当前打开的卡', async () => {
+  const run = harness('card')
+  const bound = run.chat().cardPath
+  const result = await run.orchestrator.saveChanges({ sessionId: 'session-1', turn: 1, path: 'cards/角色 v2.json', fields: { description: '第二版' } })
+  assert.equal(result.path, 'cards/角色 v2.json')
+  assert.deepEqual(run.updatedCardPaths, ['cards/角色 v2.json'])
+  assert.equal(run.chat().cardPath, bound)
+  await run.orchestrator.saveChanges({ sessionId: 'session-1', turn: 1, fields: { description: '当前卡' } })
+  assert.equal(run.updatedCardPaths.at(-1), bound)
 })
 
 test('玩家模板先于本轮召回，重试不重复执行；提交后只产生一条玩家消息', async () => {

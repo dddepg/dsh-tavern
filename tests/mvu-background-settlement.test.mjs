@@ -43,7 +43,7 @@ test('本局 Guide 进入变量结算上下文，空 Guide 不占位', function 
   const base = { operationId: 'guide-1', chatId: 'chat', branchId: 'main', basedOnRevision: 1, messageId: 1, swipeId: 0, storyText: '正文' }
   const request = projectMvuBackgroundRequest(createMvuBackgroundTaskFrame({ ...base, guides: [{ id: 'a', text: ' 好感度涨得慢一点 ' }, { id: 'b', text: '' }] }))
   assert.match(request.turnContext, /【玩家 Guide · 持续生效】/)
-  assert.match(request.turnContext, /1\. 好感度涨得慢一点\n/)
+  assert.match(request.turnContext, /1\. 好感度涨得慢一点(\n|$)/)
   assert.doesNotMatch(request.turnContext, /2\. /)
   assert.match(request.system, /只根据【正文】中已经确认发生的事实结算变量/)
   assert.doesNotMatch(projectMvuBackgroundRequest(createMvuBackgroundTaskFrame(base)).turnContext, /Guide/)
@@ -81,4 +81,18 @@ test('列表元素改变形状（文本元素换成数组元素）同样退回�
   await module.settleVariables({operationId:'element',chatId:'c',branchId:'b',basedOnRevision:1,sessionId:'s',messageId:0,swipeId:0,storyText:'看手机。',currentVariables:{stat_data:{通讯:['📞|宋|你好']}}})
   assert.match(feedback[0].error,/\/通讯 的列表元素 当前是文本，提交的是列表/)
   assert.equal(feedback[1].ok,true)
+})
+
+test('the settlement prompt hides $meta, which MVU already turned into the schema (#153)', async () => {
+  let prompt = ''
+  const module = createMvuSettlementModule({ maxAttempts: 1,
+    model: { async run(input) { prompt = JSON.stringify(input); return { text: '' } } },
+    runtime: { async settleMvuUpdate() { return { updated: false, context: { messages: [{ variables: {} }] } } } }
+  })
+  await module.settleVariables({ operationId: 'meta', chatId: 'c', branchId: 'b', basedOnRevision: 1, sessionId: 's', messageId: 0, swipeId: 0, storyText: '她站在门边。',
+    currentVariables: { stat_data: { $meta: { strictSet: true }, 人物: { 体力: 62, $meta: { extensible: true } }, 线索: ['旧烟盒'] }, schema: { strictSet: true } } }).catch(() => {})
+  assert.match(prompt, /体力/)
+  assert.match(prompt, /旧烟盒/)
+  assert.match(prompt, /当前变量快照/)
+  assert.doesNotMatch(prompt.slice(prompt.indexOf('当前变量快照'), prompt.indexOf('变量结构')), /\$meta/)
 })

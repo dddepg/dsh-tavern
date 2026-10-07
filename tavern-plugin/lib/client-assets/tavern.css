@@ -54,13 +54,33 @@ body.dsh-tavern-shell-active,
 .dsh-tavern-btn:disabled { opacity: .45; cursor: default; }
 .dsh-tavern-btn.danger { border-color: transparent; color: var(--dsh-tavern-accent-error); background: color-mix(in srgb, var(--dsh-tavern-accent-error) 12%, transparent); }
 .dsh-tavern-btn.danger:hover { background: color-mix(in srgb, var(--dsh-tavern-accent-error) 20%, transparent); }
-.dsh-tavern-mobile-import { position: fixed; inset: 0; z-index: 2300; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.52); }
+.dsh-tavern-mobile-import { position: fixed; inset: 0; z-index: 2300; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 18px; background: rgba(0,0,0,.52); }
 .dsh-tavern-mobile-import-shell { display: contents; }
-.dsh-tavern-mobile-import-panel { box-sizing: border-box; width: min(520px, 100%); max-height: min(78vh, 680px); display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0,0,0,.35); }
+.dsh-tavern-mobile-import-panel { box-sizing: border-box; width: min(520px, 100%); max-width: 100%; min-width: 0; max-height: min(86vh, 760px); display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-primary); box-shadow: 0 18px 54px rgba(0,0,0,.35); }
 .dsh-tavern-mobile-import-title { font-size: 15px; font-weight: 750; }
-.dsh-tavern-mobile-import-list { display: flex; flex-direction: column; gap: 7px; overflow: auto; }
-.dsh-tavern-mobile-import-file { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: inherit; text-align: left; cursor: pointer; }
-.dsh-tavern-mobile-import-file span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.dsh-tavern-mobile-import-panel > * { flex: none; }
+.dsh-tavern-mobile-import-panel > .dsh-tavern-mobile-import-list { flex: 1 1 auto; min-height: min(140px, 20vh); }
+.dsh-tavern-mobile-import-list { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-right: 2px; overflow-x: hidden; overflow-y: auto; }
+.dsh-tavern-mobile-import-file { display: flex; flex: none; flex-direction: row; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-width: 0; overflow: hidden; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 9px; background: var(--dsw-alias-bg-base); color: inherit; text-align: left; cursor: pointer; }
+.dsh-tavern-mobile-import-thumb { position: relative; flex: none; display: grid; place-items: center; width: 60px; height: 60px; overflow: hidden; border-radius: 8px; background: rgba(127,127,127,.16); }
+.dsh-tavern-mobile-import-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.dsh-tavern-mobile-import-thumb-fallback { color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 650; letter-spacing: .04em; }
+.dsh-tavern-mobile-import-meta { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; min-width: 0; }
+.dsh-tavern-mobile-import-meta b { display: block; max-width: 100%; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-tavern-mobile-import-meta span { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.dsh-tavern-mobile-import-count { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+.dsh-tavern-mobile-import-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; }
+.dsh-tavern-mobile-import-search { width: 100%; min-width: 0; box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; font-size: 13px; }
+.dsh-tavern-mobile-import-sort { max-width: min(46%, 220px); min-width: 0; box-sizing: border-box; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background-color: var(--dsw-alias-bg-base); color: inherit; font: inherit; font-size: 13px; }
+.dsh-tavern-mobile-import-selection { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--dsh-tavern-accent-border); border-radius: 9px; background: var(--dsh-tavern-accent-soft); }
+.dsh-tavern-mobile-import-selection-copy { grid-column: 1 / -1; min-width: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-mobile-import-selection-primary { grid-column: 1 / -1; }
+.dsh-tavern-mobile-import-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
+.dsh-tavern-mobile-import-actions > button { width: 100%; }
+.dsh-tavern-mobile-import-mark { flex: none; display: grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; color: transparent; font-size: 12px; line-height: 1; }
+.dsh-tavern-mobile-import-file.selected { border-color: var(--dsh-tavern-accent-border); background: var(--dsh-tavern-accent-soft); }
+.dsh-tavern-mobile-import-file.selected .dsh-tavern-mobile-import-mark { border-color: var(--dsh-tavern-accent); background: var(--dsh-tavern-accent); color: var(--dsw-alias-brand-text, #fff); }
+.dsh-tavern-mobile-import-thumb.placeholder { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-tavern-empty { margin: auto; text-align: center; color: var(--dsw-alias-label-secondary); padding: 24px; line-height: 1.8; white-space: pre-wrap; }
 .dsh-tavern-dock-error { color: #ef8f8f; padding: 0 10px 7px; font-size: 12px; }
 .dsh-tavern-picker-error { position: sticky; top: 0; z-index: 2; margin: 0 0 10px; padding: 10px 12px; border: 1px solid rgba(196,95,95,.45); border-radius: 10px; background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 88%, #c45f5f 12%); color: #c45f5f; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -78,6 +98,14 @@ body.dsh-tavern-shell-active,
 .dsh-tavern-illustration > a { display: block; max-width: 100%; }
 .dsh-tavern-illustration img { display: block; width: auto; height: auto; max-width: min(100%, 320px); max-height: min(240px, 35svh); object-fit: contain; border-radius: 12px; }
 .dsh-tavern-image-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsh-tavern-plugin-media { margin: 10px 0; }
+.dsh-tavern-plugin-media video, .dsh-tavern-plugin-media audio { display: block; max-width: min(100%, 480px); border-radius: 12px; }
+.dsh-tavern-plugin-media figcaption { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-plugin-media-pending, .dsh-tavern-plugin-media-failed { padding: 10px 14px; border-radius: 12px; background: var(--dsh-tavern-accent-soft); font-size: 13px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-plugin-media-failed { color: var(--dsh-tavern-accent-error); }
+.dsh-tavern-plugin-media-list { display: flex; flex-direction: column; }
+.dsh-tavern-plugin-message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dsh-tavern-plugin-composer-actions { display: contents; }
 .dsh-tavern-image-adjust { box-sizing: border-box; width: min(100%, 560px); padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }
 .dsh-tavern-image-adjust textarea { box-sizing: border-box; display: block; width: 100%; min-height: 80px; margin: 8px 0; }
 .dsh-tavern-image-reference { overflow-wrap: anywhere; }
@@ -397,7 +425,6 @@ body.dsh-tavern-shell-active span:has(.dsh-tavern-hero-lockup) + span { display:
   background: var(--dsh-tavern-accent-soft);
   color: var(--dsh-tavern-accent-active);
 }
-.dsh-tavern-resource-mention.mounted { color: var(--dsh-tavern-accent-active); }
 .dsh-tavern-resource-mention:focus-visible,
 .dsh-tavern-resource-menu > summary:focus-visible {
   outline: 2px solid var(--dsh-tavern-accent);
@@ -957,8 +984,6 @@ body.dsh-tavern-shell-active [data-dsh-panel-host] { overflow: clip; }
 .dsh-tavern-profile-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .dsh-tavern-profile-choices p { flex-basis: 100%; margin: 0; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .dsh-tavern-history-window { min-height: 0; display: flex; flex-direction: column; flex: 1; }
-.dsh-tavern-history-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; position: sticky; top: 0; z-index: 2; background: var(--dsw-specific-input-major); }
-.dsh-tavern-history-controls small { color: var(--dsw-alias-label-tertiary); }
 
 /* Shared in-app text prompt. Replaces window.prompt, which Electron never implements;
    every previous caller failed silently on desktop. */
@@ -2536,8 +2561,8 @@ button.dsh-tavern-play-fullscreen {
     box-sizing: border-box; align-items: stretch;
   }
   .dsh-tavern-card-picker, .dsh-tavern-mobile-import-panel { width: 100%; max-height: 100%; min-height: 0; padding: 12px; border-radius: 12px; }
-  .dsh-tavern-mobile-import { place-items: stretch; }
-  .dsh-tavern-mobile-import-panel { justify-self: center; max-width: 520px; }
+  .dsh-tavern-mobile-import { place-items: stretch; grid-template-columns: minmax(0, 1fr); }
+  .dsh-tavern-mobile-import-panel { justify-self: center; max-width: min(520px, 100%); }
   .dsh-tavern-prompt, .dsh-tavern-group-manager, .dsh-ejs-editor {
     position: fixed; top: calc(var(--dsh-vv-top, 0px) + max(8px, env(safe-area-inset-top, 0px)));
     bottom: auto; margin: 0 auto; max-height: calc(var(--dsh-vv-height, 100dvh) - max(8px, env(safe-area-inset-top, 0px)) - max(8px, env(safe-area-inset-bottom, 0px)));

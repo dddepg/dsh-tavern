@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, type ChangeEvent, type FormEvent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SettingsScope, ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -13,7 +12,6 @@ import {
   DEFAULT_COMFYUI_TIMEOUT_MS,
   DEFAULT_MODELS,
   IMAGE_GENERATION_NAMESPACE,
-  IMAGE_ROUTE,
   MAX_COMFYUI_WORKFLOW_BYTES,
   STUDIO_ROUTE,
   activeComfyUIWorkflow,
@@ -381,16 +379,6 @@ const STYLE = `
 .dsh-ig-card-fav-btn{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#94a3b8);padding:2px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:color .15s,transform .15s;flex-shrink:0}
 .dsh-ig-card-fav-btn:hover{color:#ef4444;transform:scale(1.15)}
 .dsh-ig-card-fav-btn.is-favorited{color:#ef4444}
-
-/* Placeholders for Upcoming Routes */
-.dsh-ig-placeholder-view{display:flex;align-items:center;justify-content:center;min-height:360px;height:100%;padding:24px}
-.dsh-ig-placeholder-card{max-width:500px;width:100%;text-align:center;padding:36px 28px;background:var(--dsw-alias-bg-layer-2,#ffffff);border:1px dashed var(--dsw-alias-border-l2,#e2e8f0);border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.dsh-ig-placeholder-icon{font-size:40px;line-height:1}
-.dsh-ig-placeholder-header{display:flex;align-items:center;gap:8px;justify-content:center}
-.dsh-ig-placeholder-title{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,inherit);margin:0}
-.dsh-ig-placeholder-badge{font-size:11px;font-weight:500;background:rgba(37,99,235,0.1);color:#2563eb;padding:2px 8px;border-radius:12px}
-.dsh-ig-placeholder-desc{font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#64748b);margin:0}
-.dsh-ig-placeholder-tip{margin-top:6px;padding:8px 12px;font-size:12px;background:var(--dsw-alias-bg-layer-3,#f8fafc);border-radius:8px;color:var(--dsw-alias-label-tertiary,#64748b);text-align:left}
 
 /* Empty State */
 .dsh-ig-gallery-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:360px;text-align:center;color:var(--dsw-alias-label-tertiary,#94a3b8)}

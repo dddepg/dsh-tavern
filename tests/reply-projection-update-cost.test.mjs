@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {createIncrementalReplyView} from '../tavern-plugin/lib/domain/incremental-reply-view.js'
 import {createSessionViewSync} from '../tavern-plugin/lib/domain/session-view-sync.js'
-import {projectRuntimeReplyHistory} from '../tavern-plugin/lib/domain/runtime-content-projection.js'
+import {projectReplyHistory} from '../tavern-plugin/lib/domain/reply-presentation.js'
 import {projectPersistentStatusView} from '../tavern-plugin/lib/domain/persistent-status-view.js'
 const options={charName:'角色',macroState:{userName:'玩家'}}
 for(const count of [20,400,10000])test(`body point projection and wire delta avoid traversing ${count} historical rows`,async()=>{
@@ -36,7 +36,7 @@ test('indexed reply cache preserves append, role-change and truncation results',
  const cache=createIncrementalReplyView({readChanges:async()=>changes})
  async function check(){
   const actual=await cache.project(chat,options,options)
-  const history=projectRuntimeReplyHistory(chat.messages,options)
+  const history=projectReplyHistory(chat.messages,options)
   assert.deepEqual(actual,{...projectPersistentStatusView(chat.messages,history.projections,options),presentation:null,latestSourceBacked:history.latestSourceBacked})
  }
  await check()

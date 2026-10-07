@@ -8,7 +8,7 @@ function harness() {
   const reads = [], generations = []
   const scope = vm.createContext({ window: {}, performance, Date, Math, AbortController,
     performanceReportAt: Date.now(), pagePerformanceStarted: Date.now(), pagePerformance: {},
-    performanceRequests: [], performanceActiveRequests: 0, completeHistorySessions: new Set(),
+    performanceRequests: [], performanceActiveRequests: 0, historyFromSessions: new Map(),
     tavernRuntimeGenerationMonitor: { observe(value) { generations.push(value) } },
     readTavernJsonResponse: response => response.json(),
     expandTavernOpeningWindow: view => view,

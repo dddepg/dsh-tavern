@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 2,
+  "chats": [
+    {
+      "id": "chat-mu2snh86-tuy5xf",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "card",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1789484388044,
+      "lastOpenedAt": 1790824571011
+    },
+    {
+      "id": "chat-mu2t05kc-kpw2t4",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-98da99a6-5aaa-450b-aebc-63d412037d6c",
+      "updatedAt": 1789485269121,
+      "lastOpenedAt": 1789485268638
+    },
+    {
+      "id": "chat-mu6xysgu-4l205u",
+      "cardPath": "",
+      "cardName": "卡片工作台",
+      "title": "",
+      "mode": "card",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1789735396528,
+      "lastOpenedAt": 1790824557809
+    },
+    {
+      "id": "chat-mu6wtsv3-jk4mp5",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-50f6eee1-f972-491f-a96f-857b8982ee9f",
+      "updatedAt": 1789777954010,
+      "lastOpenedAt": 1789733015532
+    },
+    {
+      "id": "chat-mu6y9gy4-ppnj87",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-a747a81f-b2d6-4501-9739-2110375433cc",
+      "updatedAt": 1789777954076,
+      "lastOpenedAt": 1789735511306
+    },
+    {
+      "id": "chat-mu6xlde5-312d9t",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-c9dba6ea-3e7b-43e0-8b38-0fb1e4d12bf0",
+      "updatedAt": 1789777954133,
+      "lastOpenedAt": 1789735496224
+    },
+    {
+      "id": "chat-mu76ip2v-uwvnqa",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-55b52acd-3586-49ef-bbe3-9eb139e41780",
+      "updatedAt": 1789778129646,
+      "lastOpenedAt": 1789749293631
+    },
+    {
+      "id": "chat-mu2st96k-k56m4a",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-103adada-8de6-451d-8dfe-254e0dc84e90",
+      "updatedAt": 1789779373455,
+      "lastOpenedAt": 1789779372839
+    },
+    {
+      "id": "chat-mu2tbt7z-9s0j0w",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-4ec32490-d6c7-4a9d-b2fe-3627ce1e5754",
+      "updatedAt": 1790080431209,
+      "lastOpenedAt": 1790080494789
+    },
+    {
+      "id": "chat-mu7nrv2m-bcvuff",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-45639ed0-41de-4911-a9b0-46a906df6896",
+      "updatedAt": 1790299032445,
+      "lastOpenedAt": 1790737416763,
+      "backgroundHistoryIds": [
+        "background-aecf8c27-eb16-4b27-8dbc-bc3e84b181b3",
+        "background-7653cf69-e205-4534-a503-85fafeca86e5"
+      ]
+    },
+    {
+      "id": "chat-muni9ob9-f32qoc",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-5c687565-f03a-4024-91bf-faf0bdeac6b3",
+      "updatedAt": 1790824286627,
+      "lastOpenedAt": 1790736724864
+    },
+    {
+      "id": "chat-munig105-r9i0gn",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "下楼，走到美咲身边，和美咲 · 分支",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-8bc7240b-7852-471f-8f1a-75af9af9d323",
+      "updatedAt": 1790824286854,
+      "lastOpenedAt": 1790737422860
+    },
+    {
+      "id": "chat-muniu3ti-osbk6d",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1790824287028,
+      "lastOpenedAt": 1790737440513
+    },
+    {
+      "id": "chat-muniwgg9-s5l4ae",
+      "cardPath": "cards/催眠小镇·全角色 (1).json",
+      "cardName": "催眠小镇·全角色",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-043ad10b-34be-4a72-b858-2ee2a2049622",
+      "updatedAt": 1790824287217,
+      "lastOpenedAt": 1790826052445
+    },
+    {
+      "id": "chat-muoyotyl-tvjib3",
+      "cardPath": "",
+      "cardName": "卡片工作台",
+      "title": "",
+      "mode": "card",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1790824533980,
+      "lastOpenedAt": 1790824568064
+    },
+    {
+      "id": "chat-muoypoyh-0099nc",
+      "cardPath": "cards/催眠小镇·佐藤家（原生沦陷版）.json",
+      "cardName": "催眠小镇·佐藤家（原生沦陷版）",
+      "title": "",
+      "mode": "card",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1790825944420,
+      "lastOpenedAt": 1790824574225
+    },
+    {
+      "id": "chat-muozlp3w-mz56y2",
+      "cardPath": "cards/催眠小镇·佐藤家（原生沦陷版）.json",
+      "cardName": "催眠小镇·佐藤家（原生沦陷版）",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "",
+      "updatedAt": 1790826362972,
+      "lastOpenedAt": 1790826067823
+    },
+    {
+      "id": "chat-muozu2ur-neboe0",
+      "cardPath": "cards/催眠小镇·佐藤家（原生沦陷版）.json",
+      "cardName": "催眠小镇·佐藤家（原生沦陷版）",
+      "title": "",
+      "mode": "story",
+      "requestMode": "dsh",
+      "backgroundSessionId": "background-69cb9f54-eb3d-4493-90d3-a435d343ee08",
+      "updatedAt": 1790826730101,
+      "lastOpenedAt": 1790826458950
+    }
+  ]
+}

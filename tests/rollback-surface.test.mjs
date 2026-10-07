@@ -153,3 +153,17 @@ test('重生成合成输入的失败尾部不提供重放，避免把补充要�
   ]
   assert.equal(replayableFailedTurn({ events }), null)
 })
+
+test('上一轮变量变化提示不冒充本轮用户输入，回退从玩家原文开始', () => {
+  const events = []
+  events[41] = { seq: 41, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '同去后山' }], source: { kind: 'user' } }, surfaceOp: 'append' }
+  events[42] = { seq: 42, type: 'user/message', data: { role: 'user', content: [], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'foreground-frame' } }, surfaceOp: 'append' }
+  events[43] = { seq: 43, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '上一轮变量变化' }], source: { kind: 'plugin', plugin: 'dsh-tavern', form: 'variable-changes' } }, surfaceOp: 'append' }
+  events[44] = { seq: 44, type: 'assistant/message', data: { turn: 5, step: 1, message: { role: 'assistant', source: modelSource() } }, surfaceOp: 'append' }
+
+  const located = locateRollbackSurface({ events, nodes: [41, 42, 43, 44] })
+
+  assert.equal(located.userSeq, 41)
+  assert.equal(located.assistantSeq, 44)
+  assert.deepEqual(located.shadowedSeqs, [41, 42, 43, 44])
+})

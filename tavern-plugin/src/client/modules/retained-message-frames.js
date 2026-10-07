@@ -1,9 +1,42 @@
+// A card shown for the first time starts from an estimate (up to 1200px) and then shrinks
+// to its real height. Above the viewport that shift moved everything the reader was looking
+// at. Browser scroll anchoring does not cover DSH's chat list, so keep the reading position
+// here, unless the browser already adjusted it (it does so during layout).
+function tavernScrollerOf(win, node) {
+    for (let element = node.parentElement; element; element = element.parentElement) {
+        const style = win.getComputedStyle(element);
+        if (/(auto|scroll|overlay)/.test(style.overflowY) && element.scrollHeight > element.clientHeight) return element;
+    }
+    return win.document.scrollingElement;
+}
+function tavernKeepViewWhileResizing(win, node, mutate) {
+    if (!node.isConnected || node.closest("[hidden]") || typeof win.getComputedStyle !== "function") { mutate(); return; }
+    const scroller = tavernScrollerOf(win, node);
+    const before = node.getBoundingClientRect(), offset = scroller ? scroller.scrollTop : 0;
+    mutate();
+    if (!scroller) return;
+    const top = scroller === win.document.scrollingElement ? 0 : scroller.getBoundingClientRect().top;
+    if (before.bottom <= top && scroller.scrollTop === offset) scroller.scrollTop = offset + node.getBoundingClientRect().height - before.height;
+}
+function tavernStoredFrameHeight(win, key) {
+    try {
+        const saved = Number(win.sessionStorage.getItem(key));
+        return Number.isFinite(saved) && saved >= 48 ? clampTavernFrameHeight(saved) : 0;
+    } catch (_) { return 0; }
+}
+
 // React owns only the placement slot. The conversation owns its iframe DOM and
 // authenticated bridge, so unmounting a message cannot reset a card wizard.
 function createRetainedTavernFrames(options) {
     const host = options.window, document = host.document, retention = options.retention;
     const records = new Map();
     let parking = null, retiring = null;
+    // A trusted status panel may mount its own overlay onto the DSH page, which Tavern
+    // cannot attribute to it. Leaving the conversation closes those panels so the next
+    // game is not covered; returning reloads them.
+    if (typeof retention.onLeave === "function") retention.onLeave(function (sessionId) {
+        for (const record of Array.from(records.values())) if (record.sessionId === sessionId && record.persistent) release(record);
+    });
     const retirements = new Map();
     function parked() {
         if (!parking) {
@@ -65,7 +98,7 @@ function createRetainedTavernFrames(options) {
         if (!records.size && parking) { parking.remove(); parking = null; }
     }
     function paint(record, state) {
-        record.node.style.height = state.height + "px";
+        if (record.node.style.height !== state.height + "px") tavernKeepViewWhileResizing(host, record.node, function () { record.node.style.height = state.height + "px"; });
         const wanted = [state.visibleDocument, state.pendingDocument].filter(Boolean);
         for (const [token, item] of record.frames) if (!wanted.some(value => value.token === token)) {
             item.descriptor.ref(null); item.node.remove(); record.frames.delete(token);
@@ -117,8 +150,67 @@ function createRetainedTavernFrames(options) {
         record.lifecycle.update(props);
         return record;
     }
+    // After "load earlier", cards above the reader are loaded one at a time offscreen, measured
+    // and closed again, so each one later reserves its real height instead of an estimate.
+    // Nearest first: floors mount top to bottom, the newest request is closest to the reader.
+    // Each card loads a whole page (styles, libraries, scripts); back to back they froze the
+    // chat for seconds right after "load earlier". Measure only when the page is idle, with a
+    // gap between cards.
+    const measurements = [];
+    let measuring = false, waiting = false;
+    function nextMeasurement() {
+        if (measuring || waiting || !measurements.length) return;
+        waiting = true;
+        const run = function () { waiting = false; measureNext(); };
+        host.setTimeout(function () {
+            if (typeof host.requestIdleCallback === "function") host.requestIdleCallback(run, { timeout: 3000 }); else run();
+        }, 400);
+    }
+    function measureNext() {
+        if (measuring) return;
+        const job = measurements.pop();
+        if (!job) return;
+        if (job.cancelled || records.has(job.key) || !job.node.isConnected) { job.resolve(0); measureNext(); return; }
+        measuring = true;
+        // Read layout and Helper state only now, at idle, once per measured card: mounting a
+        // "load earlier" batch must not force a page layout per slot.
+        job.props = job.props();
+        const width = Math.max(1, Math.round(job.node.clientWidth) || 1);
+        const stage = document.createElement("div");
+        stage.setAttribute("data-tavern-measuring-frame", "");
+        stage.setAttribute("aria-hidden", "true");
+        // Inside the viewport geometry (frames stop measuring when offscreen), but never painted.
+        Object.assign(stage.style, { position: "fixed", left: "0", top: "0", width: width + "px", visibility: "hidden", pointerEvents: "none", zIndex: "-1" });
+        document.body.appendChild(stage);
+        const record = get(job.props);
+        move(record.node, stage);
+        let last = -1, stableSince = host.performance ? host.performance.now() : Date.now();
+        const started = stableSince;
+        const timer = host.setInterval(function () {
+            const now = host.performance ? host.performance.now() : Date.now();
+            const height = record.lifecycle.snapshot().height;
+            if (height !== last) { last = height; stableSince = now; }
+            if (!job.cancelled && now - stableSince < 500 && now - started < 6000) return;
+            host.clearInterval(timer);
+            const measured = job.cancelled ? 0 : tavernStoredFrameHeight(host, tavernFrameHeightKey(job.props));
+            // The reader may have scrolled to it meanwhile; a mounted frame stays.
+            if (!record.unmount) release(record);
+            stage.remove();
+            measuring = false;
+            job.resolve(measured);
+            nextMeasurement();
+        }, 100);
+    }
     return {
         key: key,
+        has: function (props) { return records.has(key(props)); },
+        measure: function (props, node, readProps) {
+            let job;
+            const result = new Promise(function (resolve) { job = { key: key(props), props: readProps, node: node, resolve: resolve, cancelled: false }; });
+            measurements.push(job);
+            nextMeasurement();
+            return { result: result, cancel: function () { job.cancelled = true; } };
+        },
         mount: function (props, home) {
             const record = get(props);
             move(record.node, home);
@@ -160,7 +252,10 @@ function createRetainedTavernFrames(options) {
 
 function TavernRetainedMessageFrame(props) {
     const home = React.useRef(null), lease = React.useRef(null);
-    const [activated, setActivated] = React.useState(props.eager === true);
+    // A floor that scrolls back in finds its retained document still alive: reattach it at
+    // once instead of waiting behind a placeholder and reloading.
+    const [activated, setActivated] = React.useState(props.eager === true || tavernRetainedFrames.has(props));
+    const [reservedHeight, setReservedHeight] = React.useState(function () { return tavernStoredFrameHeight(window, tavernFrameHeightKey(props)); });
     const panels = React.useSyncExternalStore(tavernPanelRegistry.subscribe, tavernPanelRegistry.inspect);
     const key = tavernRetainedFrames.key(props), panelId = "retained:" + key;
     const pinned = panels.some(entry => entry.id === panelId && entry.pinned);
@@ -177,6 +272,19 @@ function TavernRetainedMessageFrame(props) {
         observer.observe(home.current);
         return function () { observer.disconnect(); if (cancel) cancel(); };
     }, [activated, props.eager]);
+    React.useEffect(function () {
+        if (activated || reservedHeight || props.persistent || !home.current) return;
+        const measured = tavernRetainedFrames.measure(frameProps, home.current, function () {
+            return props.helperContextReader ? Object.assign({}, frameProps, { helperContext: props.helperContextReader() }) : frameProps;
+        });
+        let live = true;
+        measured.result.then(function (height) {
+            if (!live || !height || !home.current) return;
+            tavernKeepViewWhileResizing(window, home.current, function () { home.current.style.minHeight = height + "px"; });
+            setReservedHeight(height);
+        });
+        return function () { live = false; measured.cancel(); };
+    }, [activated, reservedHeight, key]);
     React.useLayoutEffect(function () {
         if (!activated) return;
         // Deferred historical frames take their frozen baseline when activated.
@@ -196,5 +304,7 @@ function TavernRetainedMessageFrame(props) {
             catch (error) { tavernErrorHub.report("固定面板", error); }
         } }, "固定到右侧") : null,
         tavernFrameSizing(props.content, props.frameSizing, props.persistent ? props.panelId : undefined) ? React.createElement("button", { type: "button", className: "dsh-tavern-btn", onClick: () => { if (!activated) { setActivated(true); return; } return lease.current?.expand(); } }, "展开大屏") : null,
-        React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : estimatedTavernFrameHeight(props.content) + "px" } }));
+        // Reserve the height this frame last reported, not a generic estimate: the estimate
+        // (up to 1200px) collapsing on load shifted everything below it while scrolling.
+        React.createElement("div", { ref: home, style: { minHeight: activated ? undefined : (reservedHeight || estimatedTavernFrameHeight(props.content)) + "px" } }));
 }

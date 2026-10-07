@@ -71,8 +71,9 @@ test('游玩固定背景来自原生系统装配，预设前后段保持顺序�
   } })
   for (const turn of [2, 3]) {
     const incoming = [userMessage('新输入')]
-    const prepared = await run.value.prepareStep({ sessionId: 'native', payload: { turn, step: 1, messages: incoming }, decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native') })
+    // DSH assembles the system prompt before the pre-step decision.
     const assembly = await run.value.assembleSystemPrompt({ sections: [], tools: [] }, { sessionId: 'native', chat: run.chats.get('native'), fixedSystemSections: sessionStablePrefixSections(session) })
+    const prepared = await run.value.prepareStep({ sessionId: 'native', payload: { turn, step: 1, messages: incoming }, decision: { kind: 'enter', messages: incoming }, chat: run.chats.get('native') })
     const system = assembly.sections.map(section => section.text).join('\n')
     assert.match(system, /人物卡固定基本信息/ )
     assert.deepEqual(prepared.messages.map(message => message.content[0].text), ['本轮玩家输入', '本轮动态指令'])
@@ -81,10 +82,14 @@ test('游玩固定背景来自原生系统装配，预设前后段保持顺序�
     assert.equal(modelMessages.filter(message => message.id === 'tavern-session-prefix:native').length, 1)
     assert.equal(modelMessages[0].source.form, 'snapshot')
     assert.equal(modelMessages[0].role, 'user', 'Session 权威历史保持原样')
+    // The front phase is a native system section, so it is recorded in the trajectory
+    // (and replayed by compaction) instead of being projected at the request boundary.
+    assert.equal(assembly.sections[0].name, 'tavern:runtime-preset-front')
+    assert.match(system, /^预设前置指令\n人物卡固定基本信息/)
+    assert.equal(prepared.startsRequestSeries, turn === 2 ? true : undefined, '首次或预设前段变化时才开始新请求序列')
     const request = run.value.projectRequest({ sessionId: 'native', system, messages: modelMessages })
-    assert.deepEqual(request.messages.map(message => message.role), ['system', 'user', 'assistant', 'user'])
-    assert.equal(request.messages[0].role, 'system', '预设前段与固定系统上下文按原顺序合并')
-    assert.match(request.messages[0].content[0].text, /^预设前置指令\n\n人物卡固定基本信息/)
+    assert.deepEqual(request.messages.map(message => message.role), ['user', 'assistant', 'user'])
+    assert.equal(request.system, system, '系统提示原样保留，不再在请求边界拆分')
     assert.equal(request.messages.at(-1).role, 'user', '本轮指令和预设后段保持 user 语义')
     assert.match(request.messages.at(-1).content[0].text, /本轮动态指令\n\n预设后置指令$/)
     assert.notEqual(request.messages[0], modelMessages[0])
@@ -185,4 +190,46 @@ for (const text of ['', '请根据图片继续']) test(`前台投影保留图片
   assert.deepEqual(result.messages[0].content.filter(block => block.type === 'image'), [image])
   assert.equal(result.messages[0].content.some(block => block.text === '（玩家已更新酒馆运行状态）'), false)
   assert.deepEqual(messages, original)
+})
+
+test('切换预设前段时开始新请求序列，DSH 替换系统消息头而非在历史中追加', async () => {
+  let front = '预设甲'
+  const run = strategies({ nativePlay: {
+    async modeFor() { return 'story' },
+    filterMessages(messages) { return messages },
+    async resolvePreset() { return { front: { entries: [{ role: 'system', content: front }] } } },
+    async prepareTurn() { return { frame: { userInput: { projectedText: '输入' } } } },
+    appendFrame(input) { return { messages: input.messages, receipt: {} } },
+    recordFrame() {}, async visibleTools() { return [] }, controlledToolNames: new Set()
+  } })
+  const chat = run.chats.get('native')
+  async function step(turn) {
+    const assembly = await run.value.assembleSystemPrompt({ sections: [], tools: [] }, { sessionId: 'native', chat, fixedSystemSections: [{ name: 'tavern:card', text: '人物卡' }] })
+    const decision = await run.value.prepareStep({ sessionId: 'native', payload: { turn, step: 1, messages: [userMessage('x')] }, decision: { kind: 'enter', messages: [userMessage('x')] }, chat })
+    return { sections: assembly.sections.map(section => section.text), series: decision.startsRequestSeries === true }
+  }
+  assert.deepEqual(await step(1), { sections: ['预设甲', '人物卡'], series: true })
+  assert.deepEqual(await step(2), { sections: ['预设甲', '人物卡'], series: false })
+  front = '预设乙'
+  assert.deepEqual(await step(3), { sections: ['预设乙', '人物卡'], series: true })
+  assert.deepEqual(await step(4), { sections: ['预设乙', '人物卡'], series: false })
+})
+
+test('请求证据标出系统消息中的预设前段，供请求上下文界面区分', async () => {
+  const run = strategies({ nativePlay: {
+    async modeFor() { return 'story' },
+    filterMessages(messages) { return messages },
+    async resolvePreset() { return { front: { entries: [{ role: 'system', content: '预设前置' }] } } },
+    async prepareTurn() { return { frame: { userInput: { projectedText: '输入' } } } },
+    appendFrame(input) { return { messages: input.messages, receipt: {} } },
+    recordFrame() {}, async visibleTools() { return [] }, controlledToolNames: new Set()
+  } })
+  const chat = run.chats.get('native')
+  await run.value.assembleSystemPrompt({ sections: [], tools: [] }, { sessionId: 'native', chat, fixedSystemSections: [] })
+  await run.value.prepareStep({ sessionId: 'native', payload: { turn: 1, step: 1, messages: [userMessage('x')] }, decision: { kind: 'enter', messages: [userMessage('x')] }, chat })
+  const system = { role: 'system', content: [{ type: 'text', text: '附加指令\n\n预设前置\n\n人物卡' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }
+  const request = run.value.projectRequest({ sessionId: 'native', messages: [system, userMessage('x')] })
+  assert.deepEqual(request.messages[0].source.sections, [{ name: 'tavern:runtime-preset-front', text: '预设前置' }])
+  assert.deepEqual(request.messages[0].content, system.content, '发给模型的内容不变')
+  assert.equal(system.source.sections, undefined, '轨迹中的消息不被修改')
 })

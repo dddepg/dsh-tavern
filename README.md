@@ -82,9 +82,26 @@
 
 把写作教程或喜欢的样文交给 Agent，提炼成场景写作 Skill，比如打斗、悬疑、感情戏各有一套写法；游玩时模型按场景自动选用。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m04)
 
-### 支持 DSH 插件生态
+### 支持插件生态
 
-酒馆运行在 DSH 上，可以自行安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
+插件分两类：
+
+**DSH 插件**：酒馆运行在 DSH 上，可以直接安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
+
+**DSH Tavern 专属插件**：为酒馆游玩专门开发的插件。社区已有：
+
+| 插件                                                                           | 作用                                 |
+| ---------------------------------------------------------------------------- | ---------------------------------- |
+| [dsh-rphub-image](https://github.com/flizzywine/dsh-tavern/discussions/157)  | RP-Hub 生图，NAI 4.5 / 5，正文里的图片边下载边显示 |
+| [dsh-tavern-comfy](https://github.com/weixinlll/dsh-tavern-comfy)            | 本地 ComfyUI 生图，每轮自动配图，插在对应段落之后      |
+| [dsh-card-updater](https://github.com/flizzywine/dsh-tavern/discussions/149) | 卡片更新器，作者发布新版时提醒你                   |
+| [dsh-wrongbook](https://github.com/flizzywine/dsh-tavern/discussions/150)    | 错题库，按人物卡记下调试踩过的坑                   |
+| [动态世界书生成](https://github.com/flizzywine/dsh-tavern/discussions/147)          | 后台结算时生成世界书条目                       |
+| [SQLite V2](https://github.com/flizzywine/dsh-tavern/discussions/156)        | SQLite 存档，回退时清掉被回退的内容              |
+
+以上均为社区作者开发，更多插件见[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell)。
+
+
 
 ## 看看实际效果
 
@@ -177,8 +194,6 @@ curl -fsSL https://cdn.jsdelivr.net/gh/flizzywine/dsh-tavern@main/install.sh | D
 - **[Discord 讨论频道](https://discord.com/channels/1134557553011998840/1538577327028445194)**：需要类脑社区成员资格才能进入。
 
 本项目没有 QQ 群、微信群或其他群聊。
-
-提功能需求前，请先看[项目范围：做什么，不做什么](docs/scope.md)。项目已进入稳定阶段，只专注人物卡兼容、稳定性和性能。
 
 反馈故障时，可从对话顶部的“日志”下载执行记录；分享前请检查其中的对话和附件隐私。
 

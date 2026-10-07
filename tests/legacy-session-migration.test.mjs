@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { zstdCompressSync } from 'node:zlib'
 import { accessSync, readFileSync } from 'node:fs'
 import { cp, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,7 +8,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { decodeSessionLog, migrateLegacySessionDirectory, prepareLegacySessionLog } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
+import { decodeSessionLog, migrateLegacySessionDirectory, prepareLegacySessionBuffer } from '../tavern-plugin/lib/domain/legacy-session-migration.js'
 
 const hostRoot = '/Applications/DSH Desktop.app/Contents/Resources/app/node_modules/@deepseek-ai'
 const archiveRoot = path.join(process.env.HOME, '.dsh-tavern/profile-data/tavern/sessions')
@@ -44,7 +45,7 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
   let cleanedUnopenable = 0
   for (const file of copies) {
     const bytes = await readFile(file)
-    const prepared = prepareLegacySessionLog(decodeSessionLog(bytes), sessionFormatCatalog)
+    const prepared = prepareLegacySessionBuffer(bytes, sessionFormatCatalog)
     if (!prepared.ok) {
       assert.equal(hash(bytes), copyHashes.get(file), 'refused archive must retain its exact original bytes')
       assert.equal(readable(path.join(path.dirname(file), 'session.v3.jsonl.zstd')), false, 'unsafe current generation must not be published')
@@ -61,8 +62,8 @@ test('存档副本迁移后能用 0.1.5-rc.2 打开，原档不变', { skip: !ho
     assert.equal(prepared.artifact.header.version, 3)
     reopened += 1
     if (readable(file + '.bak-tavern-premigrate')) {
-      const backupText = decodeSessionLog(await readFile(file + '.bak-tavern-premigrate'))
-      const original = prepareLegacySessionLog(backupText, sessionFormatCatalog)
+      const backup = await readFile(file + '.bak-tavern-premigrate')
+      const original = prepareLegacySessionBuffer(backup, sessionFormatCatalog)
       assert.equal(original.ok, true)
       if (original.artifact) assert.equal(original.artifact.header.version, 3)
     }
@@ -135,7 +136,7 @@ test('issue #94: unsafe compaction conflicts refuse migration instead of resurre
     { type: 'step/end', seq: 8, time: 1, data: { turn: 1, step: 1 } },
     { type: 'turn/end', seq: 9, time: 1, data: { turn: 1, reason: { kind: 'completed' } } },
   ])
-  const prepared = prepareLegacySessionLog(text, chronologyCatalog())
+  const prepared = prepareLegacySessionBuffer(zstdCompressSync(Buffer.from(text)), chronologyCatalog())
   assert.equal(prepared.ok, false)
   assert.equal(prepared.changed, false)
   assert.match(prepared.reason, /压缩摘要和上下文边界/)
@@ -157,7 +158,7 @@ test('legacy archives either open safely or refuse without publishing lost compa
     const step = rows.findIndex(event => event.type === 'step/start')
     if (step < 0 || !rows.slice(0, step).some(event => surface.has(event.type))) continue
     seen += 1
-    const prepared = prepareLegacySessionLog(text, catalog)
+    const prepared = prepareLegacySessionBuffer(await readFile(candidate), catalog)
     if (prepared.artifact?.header?.version === 3) opened += 1
     else {
       assert.equal(prepared.ok, false)

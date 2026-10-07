@@ -13,7 +13,7 @@ export async function playControls({ page, step, savedChat, inspectRound, output
     await bodies.nth(1).waitFor({ state: 'hidden' })
     assert.equal(await bodies.count(), 1)
   }
-  const gold = value => page.frameLocator('.dsh-tavern-status-runtime iframe')
+  const gold = value => page.frameLocator('.dsh-tavern-status-runtime iframe:not([aria-hidden="true"])')
     .locator('#e2e-gold').filter({ hasText: new RegExp('^金币：' + value + '$') }).waitFor()
   const prose = chat => chat.messages.map(message => ({ role: message.role, text: message.sourceText ?? message.text }))
   await step('撤销回退：恢复被编辑的正文与变量，刷新仍保留', async () => {

@@ -54,8 +54,8 @@ test('原生游玩把固定会话种子写在人物卡背景之后、开场白�
 
   const card = initializationFixture()
   await card.make().start({ ...card.input, mode: 'card', cardPath: '' })
-  assert.equal(seedMessages(card.session()).length, 3)
-  assert.match(seedMessages(card.session())[0].data.content[0].text, /待编辑素材/)
+  // The plain card workbench gets no scripted exchange; its role is in the system prompt.
+  assert.equal(seedMessages(card.session()).length, 0)
   const cardEvents = structuredClone(card.session().events)
   await card.make().start({ ...card.input, mode: 'card', cardPath: '' })
   assert.deepEqual(card.session().events, cardEvents)

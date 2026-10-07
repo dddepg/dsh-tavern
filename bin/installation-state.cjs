@@ -348,7 +348,7 @@ function main(argv) {
   throw new Error(`Unknown installation-state command: ${command}`)
 }
 
-module.exports = { acquireInstallation, readInstallation, requestCancellation, cancellationRequested, releaseStoppedInstallation, LOCK_NAME }
+module.exports = { acquireInstallation, readInstallation, reclaimStaleInstallation: reclaimStale, requestCancellation, cancellationRequested, releaseStoppedInstallation, LOCK_NAME }
 if (require.main === module) {
   try { main(process.argv.slice(2)) } catch (error) { console.error(`${error.code || 'INSTALLATION_ERROR'}: ${error.message}`); process.exitCode = 1 }
 }

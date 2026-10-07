@@ -1,6 +1,7 @@
+import { isScopedMessages } from './scoped-messages.js'
 import { replaceSessionSurface } from './session-surface-mutations.js'
 import { randomUUID } from 'node:crypto'
-import { sessionEvents, appendSessionEvent } from './session-events.js'
+import { sessionEvents } from './session-events.js'
 
 const body = message => String(message?.text ?? '')
 const textOf = message => (message?.content || []).filter(block => block.type === 'text').map(block => block.text).join('\n')
@@ -50,13 +51,36 @@ export function prepareTemplateHistory(session, before, after) {
   return after
 }
 
+/** Bounded history: align its contiguous recent rows from the end of the surface. */
+function markRecentInputRewrites(session, messages) {
+  const events = sessionEvents(session), bySeq = new Map(events.map(event => [event.seq, event]))
+  const nodes = (session.surface?.nodes || []).map(seq => bySeq.get(seq)).filter(Boolean)
+  let cursor = nodes.length - 1
+  for (let index = messages.length - 1; index >= 0 && Object.hasOwn(messages, String(index)); index--) {
+    const message = messages[index]
+    const texts = new Set([body(message), message.sourceText, message.sessionText, message.templateInputSource].filter(value => typeof value === 'string'))
+    let at = -1
+    for (let offset = cursor; offset >= 0; offset--) {
+      const event = nodes[offset]
+      if (event.type !== message.role + '/message') continue
+      if (texts.has(textOf(event.type === 'assistant/message' ? event.data.message : event.data))) { at = offset; break }
+    }
+    if (at < 0) continue
+    cursor = at - 1
+    if (!message.templateInputSource || textOf(nodes[at].data) === body(message)) continue
+    message.templateHistoryEdit = { id: 'tavern-template-edit:' + randomUUID(), seq: nodes[at].seq, role: message.role,
+      turn: nodes[at].data.turn || message.turn || 1 }
+  }
+}
+
 export async function synchronizeTemplateHistory(session, chat, flush) {
-  prepareTemplateHistory(session, chat, chat)
+  if (isScopedMessages(chat.messages)) markRecentInputRewrites(session, chat.messages)
+  else prepareTemplateHistory(session, chat, chat)
   const events = sessionEvents(session)
   const ids = new Set(events.map(event => event.type === 'assistant/message' ? event.data.message?.id : event.data?.id))
   let changed = false
   for (const message of chat.messages || []) {
-    const edit = message.templateHistoryEdit
+    const edit = message?.templateHistoryEdit
     if (!edit || ids.has(edit.id) || !session.surface?.nodes.includes(edit.seq)) continue
     const target = events.find(event => event.seq === edit.seq)
     const original = target.type === 'assistant/message' ? target.data.message : target.data

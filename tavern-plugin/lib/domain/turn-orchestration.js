@@ -4,11 +4,12 @@ import { inputAttachments } from './player-input-content.js'
 import { resolveRuntimePresetMacros } from './runtime-presets.js'
 import { composeTavernRegexScripts } from './card-extension-reading.js'
 import { scriptPromptFrameInputs, consumeScriptPrompts } from './tavern-script-prompts.js'
-import { rememberTavernResources } from './workspace-resources.js'
 import { projectBackgroundInput } from './runtime-content-projection.js'
 import { lastTavernHelperVariables } from './tavern-helper-context.js'
 import { bindSceneWorldbook } from './scene-worldbook.js'
 import { truncatedForegroundReply } from './reply-completeness.js'
+import { normalizeResourcePath } from './file-resources.js'
+import { diffJson } from './json-mutation.js'
 
 export const cordisToolNames = Object.freeze([
   'cordis_inspect_list',
@@ -243,8 +244,11 @@ export function createTurnOrchestrator(options) {
     : async function () { return { context: '', refs: [], diagnostics: [] } }
   const shellToolName = options.shellToolName === 'pwsh' ? 'pwsh' : 'bash'
 
+  // Story preparation reads only the floors its world book and templates use.
+  const contextForSession = typeof store.storyContextForSession === 'function' ? store.storyContextForSession : store.chatForSession
+
   async function prepare(input) {
-    let chat = await store.chatForSession(input.sessionId)
+    let chat = await contextForSession(input.sessionId)
     if (chat === undefined) {
       return {
         ready: false,
@@ -354,8 +358,9 @@ export function createTurnOrchestrator(options) {
     }
 
     if (mode === 'card') {
+      // An @ mention only names the file to work on in this message; it is not
+      // remembered as a session resource. Only linked play records persist.
       const state = object(chat.workspace)
-      state.mountedResources = rememberTavernResources(state.mountedResources, userText)
       chat.workspace = state
       const prepared = (Array.isArray(state.sourcePaths) ? state.sourcePaths : state.sourceIds || []).length > 0 ? await workspace.prepare(chat, turn) : null
       const plan = await planner.plan({ purpose: 'card', sourcePrepared: prepared })
@@ -369,7 +374,7 @@ export function createTurnOrchestrator(options) {
     const foregroundWorldBook = typeof options.projectForegroundWorldbook === 'function'
       ? await options.projectForegroundWorldbook({ chat, card, turn, userText: runtimeUserText }) : null
     if (typeof options.projectForegroundWorldbook === 'function') {
-      chat = await store.chatForSession(input.sessionId)
+      chat = await contextForSession(input.sessionId)
       if (chat && store.writeChatHeader) preparationBase = captureChatHeader(chat)
       const current = chat && timeline.inspect({ chat })
       if (!current || current.branchId !== foregroundOperation.basedOn.branchId || current.revision !== foregroundOperation.basedOn.revision ||
@@ -467,6 +472,13 @@ export function createTurnOrchestrator(options) {
     const cardPath = cardPathOf(chat)
     const fields = object(input.fields), rawOperations = Array.isArray(input.rawOperations) ? input.rawOperations : []
     if (!Object.keys(fields).length && !rawOperations.length) throw new Error('没有提供需要修改的字段')
+    // Like editing code: any card file can be targeted by path; the workbench's own
+    // card is only the default.
+    const target = str(input.path).trim() === '' ? '' : normalizeResourcePath(str(input.path).trim(), 'card')
+    if (target !== '' && target !== cardPath) {
+      const other = await store.updateCard(target, fields, { ts: now(), summary: '卡片 Agent 直接保存' }, rawOperations)
+      return { saved: true, mode: 'card', path: target, changed: other.changed, createsCard: false, changedFields: other.changedFields || [] }
+    }
     let result
     if (!cardPath) {
       if (rawOperations.length) throw new Error('新人物卡创建前不能修改 raw，请先创建人物卡')
@@ -523,6 +535,8 @@ export function createTurnOrchestrator(options) {
   }
 
   async function finalize(input) {
+    const scoped = await finalizeAppend(input)
+    if (scoped !== null) return scoped
     const chat = await store.chatForSession(input.sessionId)
     if (chat === undefined) return { saved: false, reason: 'unbound' }
     if (!['story', 'script'].includes(chat.mode || 'story') || typeof store.updateChat !== 'function') {
@@ -544,7 +558,49 @@ export function createTurnOrchestrator(options) {
     return result
   }
 
-  async function finalizeSnapshot(input, chat, writeChat, expectedTimeline) {
+  // A story commit only edits header fields and appends this turn's floors.
+  // Read the header and the floors it needs, then append in one revision-checked
+  // patch: cost stays flat as the history grows. Null keeps the complete path.
+  async function finalizeAppend(input) {
+    if (typeof store.readChatSlice !== 'function' || typeof store.patchChat !== 'function') return null
+    let expectedTimeline
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const selected = await store.readChatSlice(input.sessionId, [])
+      const before = selected?.chat
+      if (!before || !selected.denseMessages || !['story', 'script'].includes(before.mode || 'story')
+        || before.timeline?.schemaVersion !== 1 || !Array.isArray(before.timeline.checkpoints)
+        || Object.values(before.timeline.operations || {}).some(op => op?.kind === 'body' && op.status === 'foreground-completed')) return null
+      const revision = before._storageRevision, count = selected.messageCount
+      expectedTimeline ??= { branchId: before.timeline.branchId, revision: before.timeline.revision }
+      let stale = false
+      const history = {
+        async previousVariables() {
+          for (let end = count, size = 8; end > 0; end -= size, size = Math.min(size * 8, 512)) {
+            const start = Math.max(0, end - size)
+            const rows = await store.readChatSlice(input.sessionId, Array.from({ length: end - start }, (_, i) => start + i), ['_storageRevision'])
+            if (!rows?.denseMessages || rows.chat._storageRevision !== revision) { stale = true; return undefined }
+            const found = lastTavernHelperVariables(rows.chat.messages)
+            if (found !== undefined) return found
+          }
+          return undefined
+        }
+      }
+      const chat = { ...captureChatHeader(before), messages: [] }
+      let next, metadata
+      const result = await finalizeSnapshot(input, chat, async (value, details) => { next = value; metadata = details }, expectedTimeline, history)
+      if (stale) continue
+      if (next === undefined) return result
+      const { messages, ...head } = next
+      const changes = diffJson({ ...before, messages: [] }, { ...head, messages: [] })
+        .filter(change => !['_storageRevision', 'updatedAt'].includes(change.path[0]))
+      if (changes.some(change => change.path[0] === 'messages' || change.path[0] === 'id')) return null
+      if (messages.length) changes.push({ op: 'splice', path: ['messages'], index: count, deleteCount: 0, items: messages })
+      if (await store.patchChat(before.id, revision, changes, metadata)) return result
+    }
+    return null
+  }
+
+  async function finalizeSnapshot(input, chat, writeChat, expectedTimeline, history) {
     const turn = Math.max(0, Number(input.turn) || 0)
     const requestId = str(input.requestId).trim()
     const requestCommit = commitForRequest(chat, requestId)
@@ -579,7 +635,8 @@ export function createTurnOrchestrator(options) {
     }
     if (mode === 'story' || mode === 'script') {
       if (renderMacros !== null && assistantText.includes('{{')) assistantText = renderMacros(assistantText, chat)
-      previousMvuVariables = chat.promptTemplateInput?.turn === turn ? lastTavernHelperVariables([chat.promptTemplateInput.message]) : lastTavernHelperVariables(chat.messages)
+      previousMvuVariables = chat.promptTemplateInput?.turn === turn ? lastTavernHelperVariables([chat.promptTemplateInput.message])
+        : history ? await history.previousVariables() : lastTavernHelperVariables(chat.messages)
       const extensions = typeof store.readCardExtensions === 'function'
         ? await store.readCardExtensions(cardPathOf(chat), chat)
         : null
@@ -801,7 +858,7 @@ export function createTurnOrchestrator(options) {
     const mode = chat.mode || 'story'
     const webTools = chat.webSearchEnabled === true ? ['web_search'] : []
     if (mode === 'script') return ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_read_script', 'tavern_recall_history', 'worldbook_search', ...webTools]
-    if (mode === 'card') return [...CARD_MEMORY_TOOLS, 'web_search', shellToolName, ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response']
+    if (mode === 'card') return [...CARD_MEMORY_TOOLS, 'web_search', shellToolName, ...dshFileToolNames, 'skill', 'tavern_read_skill_reference', 'tavern_save_skill', ...cordisToolNames, 'tavern_user_profile_read', 'tavern_user_profile_save', 'tavern_read_card', 'tavern_read_card_raw', 'tavern_read_play_chat', 'tavern_read_worldbook', 'tavern_update_worldbook', 'tavern_read_preset', 'tavern_update_preset', 'tavern_read_regex_library', 'tavern_copy_card', 'tavern_update_card', 'tavern_restore_card', 'tavern_validate_card', 'tavern_test_response']
     return ['tavern_read_variables', 'skill', 'tavern_read_skill_reference', 'tavern_recall_history', 'worldbook_search', ...webTools]
   }
 

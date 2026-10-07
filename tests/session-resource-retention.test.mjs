@@ -68,3 +68,30 @@ test('浏览器原生 HTML 悬浮窗切换后不可见，切回可点击且不�
   await page.evaluate(()=>artifacts.dispose())
   assert.equal(await page.locator('#pet,#late').count(),0)
 })
+
+test('切走对话时关闭该对话的状态栏 iframe，消息卡片保留，切回后重新创建', async () => {
+  const {JSDOM}=await import('jsdom')
+  const dom=new JSDOM('<body><main id="home"></main></body>',{runScripts:'outside-only',pretendToBeVisual:true})
+  try {
+    const read=name=>readFileSync(new URL('../tavern-plugin/src/client/modules/'+name,import.meta.url),'utf8')
+    dom.window.eval(read('session-resource-retention.js')+';window.makeRetention=createTavernSessionRetention')
+    dom.window.eval('function clampTavernFrameHeight(v){return v}function tavernFrameHeightKey(){return "k"}function bindTavernFontZoom(){return function(){}}function expandTavernFrame(){}'+read('retained-message-frames.js')+';window.makeFrames=createRetainedTavernFrames')
+    // JSDOM lacks moveBefore; the retained frames only need its move semantics here.
+    dom.window.Element.prototype.moveBefore=function(node,child){this.insertBefore(node,child)}
+    const retention=dom.window.makeRetention({window:dom.window,durationMs:60000})
+    const lifecycle=()=>({snapshot:()=>({height:100,visibleDocument:null,pendingDocument:null}),start:()=>()=>{},update(){}})
+    const frames=dom.window.makeFrames({window:dom.window,retention,createLifecycle:lifecycle})
+    const home=dom.window.document.getElementById('home')
+    retention.select('a')
+    const status=frames.mount({sessionId:'a',persistent:true,panelId:'status',partIndex:0},home)
+    const card=frames.mount({sessionId:'a',turn:3,partIndex:0,content:'<p>x</p>'},home)
+    assert.equal(frames.has({sessionId:'a',persistent:true,panelId:'status',partIndex:0}),true)
+    retention.select('b')
+    assert.equal(frames.has({sessionId:'a',persistent:true,panelId:'status',partIndex:0}),false)
+    assert.equal(frames.has({sessionId:'a',turn:3,partIndex:0}),true)
+    status.detach();card.detach()
+    retention.select('a')
+    frames.mount({sessionId:'a',persistent:true,panelId:'status',partIndex:0},home)
+    assert.equal(frames.has({sessionId:'a',persistent:true,panelId:'status',partIndex:0}),true)
+  } finally {dom.window.close()}
+})

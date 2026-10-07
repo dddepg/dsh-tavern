@@ -15,6 +15,8 @@ import installationState from '../../bin/installation-state.cjs'
 const STATUS_FILE = 'update-status.json'
 const RELEASE_FILE = '.dsh-tavern-release.json'
 const RUNNING_TIMEOUT_MS = 15 * 60 * 1000
+// Matches the installation lock's stale-idle limit.
+const ORPHAN_RECORD_MS = 60 * 60 * 1000
 const VERSION_URL = 'https://raw.githubusercontent.com/flizzywine/dsh-tavern/main/package.json'
 const COMMIT_URL = 'https://api.github.com/repos/flizzywine/dsh-tavern/commits/main'
 const COMPARE_URL = 'https://api.github.com/repos/flizzywine/dsh-tavern/compare'
@@ -99,17 +101,6 @@ export function sanitizeUpdateError(value) {
   const replacements = (message.match(/\uFFFD/g) || []).length
   if (replacements >= 2) return '更新失败：安装程序输出编码异常。建议重新安装一次。'
   return message || '更新失败，请重新安装一次。'
-}
-
-function compareVersions(left, right) {
-  const parse = (value) => String(value || '').split('-', 1)[0].split('.').map(Number)
-  const a = parse(left)
-  const b = parse(right)
-  if (a.length !== 3 || b.length !== 3 || a.some(Number.isNaN) || b.some(Number.isNaN)) return String(left) === String(right) ? 0 : 1
-  for (let index = 0; index < 3; index += 1) {
-    if (a[index] !== b[index]) return a[index] > b[index] ? 1 : -1
-  }
-  return 0
 }
 
 function runtimeCommitIdentityOf(value) {
@@ -399,6 +390,14 @@ export function createApplicationUpdater(options) {
         return { ...interrupted, ...identity }
       }
     }
+    // Status must apply the same stale-lock rule as a new install would; otherwise a
+    // lock the installer would reclaim keeps the update button disabled forever.
+    if (owner && installationState.reclaimStaleInstallation(dshHome, owner)) {
+      if (current?.phase === 'completed' && current.attemptId === owner.attemptId) return { ...current, ...identity }
+      const interrupted = { phase: 'failed', attemptId: owner.attemptId, repairRequired: true, repairSince: now(), host: await host(), failedAt: now(), error: '上次更新已中断（安装进程均已退出或超过 1 小时无进展），已解除安装锁，可以修复安装。' }
+      await writeStatus(interrupted, { expectedAttemptId: current?.attemptId })
+      return { ...interrupted, ...identity }
+    }
     if (owner) {
       const active = current?.attemptId === owner.attemptId ? current : {}
       const elapsed = now() - (Number(owner.startedAt) || Date.parse(owner.startedAt) || Number(active.startedAt) || now())
@@ -416,13 +415,16 @@ export function createApplicationUpdater(options) {
     }
     if (current !== undefined) {
       const checkedAt = now()
+      // A verified installation after this record (e.g. a terminal reinstall) supersedes it.
+      async function reconcile(after) {
+        const receipt = await readInstallationReceipt({ sourceRoot, dshHome, host: await host(), after })
+        if (!receipt) return null
+        const completed = { phase: 'completed', host: await host(), attemptId: receipt.attemptId, completedAt: receipt.verifiedAt, requiresRestart: await host() === 'desktop', reconciled: true }
+        return { ...await writeStatus(completed, { expectedAttemptId: current.attemptId }), ...identity }
+      }
       if (current.repairRequired) {
-        const receipt = await readInstallationReceipt({ sourceRoot, dshHome, host: await host(), after: Number(current.repairSince || current.failedAt || current.startedAt || 0) })
-        if (receipt) {
-          const completed = { phase: 'completed', host: await host(), attemptId: receipt.attemptId, completedAt: receipt.verifiedAt, requiresRestart: await host() === 'desktop', reconciled: true }
-          const reconciled = await writeStatus(completed, { expectedAttemptId: current.attemptId })
-          return { ...reconciled, ...identity }
-        }
+        const reconciled = await reconcile(Number(current.repairSince || current.failedAt || current.startedAt || 0))
+        if (reconciled) return reconciled
       }
       if (['update-available', 'repair-required', 'up-to-date'].includes(current.phase) && (current.checkPolicy !== UPDATE_CHECK_POLICY || current.checkedForCommit !== identity.currentCommit)) {
         const invalidated = { phase: current.repairRequired ? 'repair-required' : 'idle', host: await host(), ...identity,
@@ -433,6 +435,17 @@ export function createApplicationUpdater(options) {
       // Legacy updaters did not register their children. A missing parent PID or
       // an elapsed deadline cannot prove that an orphaned writer is stopped.
       if (BUSY_PHASES.has(current.phase)) {
+        // No lock is held, so this record is left over: the lock rule already
+        // covers live writers. Without these exits a record whose lock was
+        // reclaimed by another installer kept the update button disabled forever.
+        const since = Number(current.startedAt) || Date.parse(current.startedAt) || 0
+        const reconciled = await reconcile(since)
+        if (reconciled) return reconciled
+        if (checkedAt - (Number(current.progressAt) || since) > ORPHAN_RECORD_MS) {
+          const interrupted = { phase: 'failed', attemptId: current.attemptId, repairRequired: true, repairSince: checkedAt, host: await host(), failedAt: checkedAt, error: '上次更新已中断（超过 1 小时无进展且未持有安装锁），可以修复安装。' }
+          await writeStatus(interrupted, { expectedAttemptId: current.attemptId })
+          return { ...interrupted, ...identity }
+        }
         return { ...current, ...identity, phase: 'blocked', repairRequired: true, cancellable: false,
           error: '旧更新器未记录完整执行链，无法安全确认已停止。请先确认旧安装进程全部退出，再从终端恢复安装；请勿同时启动第二次安装。' }
       }
@@ -586,7 +599,9 @@ export function createApplicationUpdater(options) {
     let launchObserved = false
     try {
       const child = spawnProcess(execPath, args, {
-        cwd: sourceRoot,
+        // Never start the update chain inside the app it replaces: on Windows a process
+        // whose working directory is in there makes the final directory swap fail (EBUSY).
+        cwd: dshHome,
         detached: true,
         windowsHide: true,
         stdio: platform === 'win32' ? ['ignore', 'ignore', 'pipe'] : 'ignore',

@@ -16,7 +16,7 @@ function groupOfMode(mode) { return !mode || mode === 'story' || mode === 'scrip
 
 /** Owns initialization, repeat-entry and opening recovery; never generates a model turn. */
 export function createConversationInitialization(options) {
-  const { cards, chats, snapshots, native, presets, settings, cardGreeting, emptyCardWorkspace, present, timeline } = options
+  const { cards, chats, snapshots, native, presets, settings, emptyCardWorkspace, present, timeline } = options
   if (!timeline || typeof timeline.apply !== 'function') throw new Error('Conversation Initialization 缺少 Story Timeline')
   const id = options.id
   const now = options.now || Date.now
@@ -109,7 +109,8 @@ export function createConversationInitialization(options) {
     }
     const macroState = { userName: str(userName).trim().slice(0, 80) || defaults.playerName, local: {}, global: {} }
     const runtimePresetSnapshot = groupOfMode(chatMode) === 'play' ? await playPresetSnapshot() : null
-    let openingSourceText = chatMode === 'card' ? cardGreeting() : resolveCardOpening(card, openingId)
+    // The card workbench opens empty: no greeting is shown or sent to the model.
+    let openingSourceText = chatMode === 'card' ? '' : resolveCardOpening(card, openingId)
     const openingExtensions = chatMode === 'card' ? null : await cards.extensions(cardPath)
     const openingChoices = chatMode === 'card' ? [] : cardOpeningChoices(card)
     const selectedOpeningIndex = str(openingId) === '' ? 0 : Math.max(0, openingChoices.findIndex(function (choice) { return choice.id === str(openingId) }))
@@ -245,7 +246,7 @@ export function createConversationInitialization(options) {
 
 
   function openingText(chat, card) {
-    if ((chat.mode || 'story') === 'card') return chat.cardEditContext?.version === 1 ? '' : cardGreeting()
+    if ((chat.mode || 'story') === 'card') return ''
     if (typeof chat.openingText === 'string') return chat.openingText
     const greeting = Array.isArray(chat.messages) ? chat.messages.find(message => message && message.greeting === true && typeof message.text === 'string') : undefined
     if (greeting !== undefined) return greeting.text
@@ -320,7 +321,9 @@ export function createConversationInitialization(options) {
     }
     if (groupOfMode(chat.mode) === 'card') {
       await native.ensurePrefix(target.session, await snapshots.ensure(chat, card))
-      await ensureSessionSeedTrajectory(target.session, chat.cardEditContext?.version === 1 ? 'story' : 'card')
+      // A card-edit session mirrors the play session's prefix (prompt cache); the plain
+      // workbench needs no scripted exchange: its role comes from the system prompt.
+      if (chat.cardEditContext?.version === 1) await ensureSessionSeedTrajectory(target.session)
       if (chat.cardEditContext?.version === 1) await native.ensureCardWorkspace(target.session, chat)
       await native.flush(target.session)
     }

@@ -2602,7 +2602,7 @@ window.__ModuleLoader__.load({
 		/**
 		* Native Workspace Gallery & Studio View Component for DSH `conversation.view` slot.
 		* Fully i18n-reactive (Chinese & English) with modular tabs, multi-dimensional filters,
-		* responsive image grid, and placeholder routes.
+		* responsive image grid, and image editing.
 		*/
 		const DICT$1 = {
 			zh: {
@@ -2676,15 +2676,7 @@ window.__ModuleLoader__.load({
 				justNow: "刚刚",
 				minutesAgo: "{n} 分钟前",
 				hoursAgo: "{n} 小时前",
-				daysAgo: "{n} 天前",
-				studioTitle: "AI 图像工作台 (Studio)",
-				studioDesc: "工作台模块正在紧锣密鼓开发中。在此你将体验大图精修、变体生成 (Variations)、参数重调并一键将生成结果无缝插回 DSH 正在进行的对话。",
-				studioTip: "💡 提示：目前你可以在“图库”中点击任意图片，在弹窗中进行查看、复制与下载。",
-				compareTitle: "多模型横向对比 (Compare)",
-				compareDesc: "支持单个 Prompt 一键同时调度 Gemini、Seedream、DashScope 及本地 ComfyUI 模型并排生成，直观横评画质与细节。",
-				tasksTitle: "异步任务队列 (Tasks)",
-				tasksDesc: "集中管理后台批量生图、多模型并发生成与本地 ComfyUI 耗时任务。支持状态追踪、失败重试与执行耗时分析。",
-				comingSoonBadge: "即将推出"
+				daysAgo: "{n} 天前"
 			},
 			en: {
 				tabGallery: "Gallery",
@@ -2757,15 +2749,7 @@ window.__ModuleLoader__.load({
 				justNow: "Just now",
 				minutesAgo: "{n}m ago",
 				hoursAgo: "{n}h ago",
-				daysAgo: "{n}d ago",
-				studioTitle: "AI Image Studio",
-				studioDesc: "Studio workbench is under active development. Fine-tune prompts, generate variations (2x/4x), and inject images directly into DSH chat.",
-				studioTip: "💡 Tip: You can currently click any image in the Gallery to preview, copy, or download it.",
-				compareTitle: "Model Comparison (Compare)",
-				compareDesc: "Side-by-side multi-model benchmarking coming soon. Test Gemini, Seedream, DashScope, and ComfyUI with a single prompt.",
-				tasksTitle: "Task Queue (Tasks)",
-				tasksDesc: "Centralized view for batch generation, asynchronous ComfyUI runs, live progress tracking, and retry controls.",
-				comingSoonBadge: "Coming Soon"
+				daysAgo: "{n}d ago"
 			}
 		};
 		/** Format human-readable relative time */
@@ -4695,16 +4679,6 @@ window.__ModuleLoader__.load({
 .dsh-ig-card-fav-btn{appearance:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#94a3b8);padding:2px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:color .15s,transform .15s;flex-shrink:0}
 .dsh-ig-card-fav-btn:hover{color:#ef4444;transform:scale(1.15)}
 .dsh-ig-card-fav-btn.is-favorited{color:#ef4444}
-
-/* Placeholders for Upcoming Routes */
-.dsh-ig-placeholder-view{display:flex;align-items:center;justify-content:center;min-height:360px;height:100%;padding:24px}
-.dsh-ig-placeholder-card{max-width:500px;width:100%;text-align:center;padding:36px 28px;background:var(--dsw-alias-bg-layer-2,#ffffff);border:1px dashed var(--dsw-alias-border-l2,#e2e8f0);border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:12px}
-.dsh-ig-placeholder-icon{font-size:40px;line-height:1}
-.dsh-ig-placeholder-header{display:flex;align-items:center;gap:8px;justify-content:center}
-.dsh-ig-placeholder-title{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,inherit);margin:0}
-.dsh-ig-placeholder-badge{font-size:11px;font-weight:500;background:rgba(37,99,235,0.1);color:#2563eb;padding:2px 8px;border-radius:12px}
-.dsh-ig-placeholder-desc{font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#64748b);margin:0}
-.dsh-ig-placeholder-tip{margin-top:6px;padding:8px 12px;font-size:12px;background:var(--dsw-alias-bg-layer-3,#f8fafc);border-radius:8px;color:var(--dsw-alias-label-tertiary,#64748b);text-align:left}
 
 /* Empty State */
 .dsh-ig-gallery-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:360px;text-align:center;color:var(--dsw-alias-label-tertiary,#94a3b8)}

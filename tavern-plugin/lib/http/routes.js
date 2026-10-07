@@ -6,16 +6,19 @@ import { TAVERN_RUNTIME_ASSET_PREFIX, readTavernRuntimeAsset } from '../domain/t
 import { observeHttpRequests } from '../domain/http-performance-diagnostics.js'
 import { projectCachedResourceBody } from '../domain/tavern-static-resource-cache.js'
 import { redactMvuLoadError } from '../domain/mvu-diagnostics.js'
+import { pluginMediaRange, slicePluginMediaStream } from '../domain/plugin-media.js'
 
 export function registerTavernHttpRoutes({
   ctx,
   dispatch,
   fileResources,
   helperHistoryAccess,
+  mobileCardImport,
   performanceDiagnostics,
   runtimeGeneration,
   runtimeReadiness,
   sceneIllustrations,
+  readPluginMediaFile,
   sessionResources,
   str,
   tavernRemoteAssets,
@@ -76,7 +79,13 @@ export function registerTavernHttpRoutes({
           res.writeHead(403); res.end('forbidden'); return
         }
         const sceneImageRoute = TAVERN_RELEASE_CAPABILITIES.sceneImages && /^\/api\/dsh-tavern\/(?:scene-image|scene-image-artist-preview|getSceneImageSettings|saveSceneImageSettings|testSceneImageConnection|listSceneImageModels|sceneImageStatus|recordSceneImageInteraction|generateSceneImage|retrySceneImageSave|cancelSceneImage|removeSceneImage|setSceneImageReference)$/.test(pathname)
-        const sceneSameOrigin = sceneImageRoute && (origin === 'http://' + req.headers.host || origin === 'https://' + req.headers.host)
+        const pluginMediaRoute = /^\/api\/dsh-tavern\/(?:plugin-media|pluginMediaForTurn|pluginMediaTurns)$/.test(pathname)
+        if (pluginMediaRoute && origin && origin !== 'http://' + req.headers.host && origin !== 'https://' + req.headers.host && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) {
+          res.writeHead(403)
+          res.end('forbidden')
+          return
+        }
+        const sceneSameOrigin = (sceneImageRoute || pluginMediaRoute) && (origin === 'http://' + req.headers.host || origin === 'https://' + req.headers.host)
         if (sceneImageRoute && origin && !sceneSameOrigin) {
           res.writeHead(403)
           res.end('forbidden')
@@ -162,6 +171,20 @@ export function registerTavernHttpRoutes({
             res.end(body)
             return
           }
+          if (req.method === 'GET' && pathname === '/api/dsh-tavern/mobile-card-thumbnail') {
+            const query = new URL(req.url, 'http://x').searchParams
+            let thumbnail
+            try { thumbnail = await mobileCardImport.thumbnail(query.get('id')) } catch { thumbnail = undefined }
+            // JSON cards, unreadable images and unusual PNG variants fall back to a text placeholder.
+            if (thumbnail === undefined) {
+              res.writeHead(404, { 'X-Content-Type-Options': 'nosniff' })
+              res.end('not found')
+              return
+            }
+            res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': thumbnail.body.byteLength, 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff' })
+            res.end(thumbnail.body)
+            return
+          }
           if (TAVERN_RELEASE_CAPABILITIES.sceneImages && req.method === 'GET' && pathname === '/api/dsh-tavern/scene-image-artist-preview') {
             const image = await sceneIllustrations.readArtistPreview(new URL(req.url, 'http://x').searchParams.get('id'))
             // The URL carries the preview revision, so a replaced image gets a new URL.
@@ -174,6 +197,35 @@ export function registerTavernHttpRoutes({
             const image = await sceneIllustrations.readImage(query.get('sessionId'), Number(query.get('turn')), query.get('key'), query.get('versionId'))
             res.writeHead(200, { 'Content-Type': image.ref.mediaType, 'Content-Length': image.data.byteLength, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' })
             res.end(image.data)
+            return
+          }
+          if (req.method === 'GET' && pathname === '/api/dsh-tavern/plugin-media') {
+            const query = new URL(req.url, 'http://x').searchParams
+            const file = await readPluginMediaFile(query.get('sessionId'), query.get('id'))
+            const headers = { 'Content-Type': file.mediaType, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" }
+            if (file.mediaType === 'application/octet-stream') headers['Content-Disposition'] = 'attachment; filename*=UTF-8\'\'' + encodeURIComponent(file.name || 'file')
+            if (file.data) {
+              res.writeHead(200, { ...headers, 'Content-Length': file.length })
+              res.end(file.data)
+              return
+            }
+            const range = pluginMediaRange(req.headers.range, file.length)
+            if (range && range.invalid) {
+              res.writeHead(416, { ...headers, 'Content-Range': 'bytes */' + file.length })
+              res.end()
+              return
+            }
+            const aborter = new AbortController()
+            res.on('close', () => aborter.abort())
+            const start = range ? range.start : 0, end = range ? range.end : file.length - 1
+            res.writeHead(range ? 206 : 200, { ...headers, 'Accept-Ranges': 'bytes', 'Content-Length': Math.max(0, end - start + 1), ...(range ? { 'Content-Range': 'bytes ' + start + '-' + end + '/' + file.length } : {}) })
+            try {
+              for await (const chunk of slicePluginMediaStream(file.stream(aborter.signal), start, end)) {
+                if (!res.write(chunk)) await new Promise(resolve => { res.once('drain', resolve); res.once('close', resolve) })
+                if (aborter.signal.aborted) return
+              }
+              res.end()
+            } catch { res.destroy() }
             return
           }
           if (readsOfficialMvu) {
