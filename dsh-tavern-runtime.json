@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "d5af0c5d12128a0a67c42cc08e457874796d5d2e",
-  "releaseSequence": 545,
+  "revision": "75c91782cd8d0db4e45921154a0d22a56419a61c",
+  "releaseSequence": 546,
   "version": "2.5.0",
   "files": [
     {
@@ -456,8 +456,8 @@
     },
     {
       "path": "tavern-plugin/lib/client.js",
-      "sha256": "49edf7d5eedce9d88f1b348a9cf56b91e62dbb0816f61b91fc1ad18b0aed9d63",
-      "size": 1619958
+      "sha256": "d7c8ca8c16d5a80b2631886f2af45e4aafc31c10bebc45376346ba3863ccd1e2",
+      "size": 1621125
     },
     {
       "path": "tavern-plugin/lib/cordis-inspect.js",
@@ -1331,8 +1331,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/scene-illustration.js",
-      "sha256": "0ff9d1e874a4a426e6f9a2104deef1058662ffa33f941ea8b15f277205d6a72c",
-      "size": 45745
+      "sha256": "bfdeec6d8e0fd1f95fc12ec652a9cd33972f2f057b9479201bffec82665c31d8",
+      "size": 45773
     },
     {
       "path": "tavern-plugin/lib/domain/scene-image-adjustment.js",
@@ -1411,13 +1411,13 @@
     },
     {
       "path": "tavern-plugin/lib/domain/scene-plan-draft.js",
-      "sha256": "60cd606d0661eeda95f408a9a23b500d61159495245f34385759862de71adc53",
-      "size": 7884
+      "sha256": "dcc332a4baa6831ab40aa29a637a2310e89fdb4d7972e6532380ba5b8f0bb74e",
+      "size": 7905
     },
     {
       "path": "tavern-plugin/lib/domain/scene-plan.js",
-      "sha256": "099d8b05ab584941a32722cea2b6b84f390a82d35ae5208baaa90dfe91f061d1",
-      "size": 13265
+      "sha256": "d0c4ff5d66affd16e894058b5da038d25553297ddc5faf70ee0f87fffc063c6c",
+      "size": 13746
     },
     {
       "path": "tavern-plugin/lib/domain/scene-prefix-hash.js",
@@ -4366,8 +4366,8 @@
     },
     {
       "path": "tavern-plugin/prompts/scene-plan.md",
-      "sha256": "f93b7c81d2076337bc5d201a6256efc96707c7854dc39083bcb6b81e21f4b7d5",
-      "size": 4941
+      "sha256": "af16eb48ee1cdbab6388a986b83f9d047d88d212233baeef31c75d1514049671",
+      "size": 5130
     },
     {
       "path": "tavern-plugin/prompts/script-story.md",
@@ -4426,8 +4426,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/assistant-renderer.js",
-      "sha256": "de0c2724da8249af9d3aeec1a8b6c26ec937ecaf19f51b4c4c18ae534c1ead63",
-      "size": 46072
+      "sha256": "4ef2103d97ee2e95da17820b0391944b658c2d01fc61628ba47c38e291ca278e",
+      "size": 46863
     },
     {
       "path": "tavern-plugin/src/client/features/card-library.js",
@@ -4451,8 +4451,8 @@
     },
     {
       "path": "tavern-plugin/src/client/features/plugin-extensions.js",
-      "sha256": "986f4fcd94abbe021e22136ad45dc3408183a2b26a3a9542b60dd9e2791fc016",
-      "size": 14748
+      "sha256": "398689b363072218bd8380288be2e3e5d35c13db62de2bcc5b26308cc80bbff4",
+      "size": 15124
     },
     {
       "path": "tavern-plugin/src/client/features/preset-library.js",
