@@ -1,8 +1,20 @@
 import { worldbookRandomState, hasWorldbookRandom } from './worldbook-random.js'
 import { estimateWorldBookTokens } from './worldbook-activation.js'
 import { compactRecallDiagnostics, describeRecallEntries } from './worldbook-recall-log.js'
-import { isMvuUpdateEntry } from './worldbook-recall.js'
+import { fingerprint, isMvuUpdateEntry } from './worldbook-recall.js'
 import { prepareTemplateWorldbook, prepareWorldBookRecall, projectWorldBookTemplates } from './worldbook-recall.js'
+
+/** A character designed in this game enters the next request once per design version,
+ * even when nobody names it; afterwards it follows ordinary keyword recall. */
+function unreadCharacterDesigns(worldBook, chat) {
+  const names = new Set((chat.characterDesignDocument?.characters || []).map(character => character?.name).filter(Boolean))
+  if (!names.size) return []
+  return (worldBook?.view?.entries || []).filter(entry => {
+    const design = entry.rawEntry?.extensions?.dsh_tavern_helper_extra?.characterDesign
+    const read = chat.worldBookReads?.[entry.ref]
+    return design && names.has(design.name) && entry.enabled !== false && String(entry.content || '').trim() && read?.fingerprint !== fingerprint(entry.content)
+  }).map(entry => ({ ref: entry.ref, force: true, sourceRef: '[CHARACTER_DESIGN]' }))
+}
 
 /** One request uses one bound-book snapshot for both selection and rendering. */
 export function createForegroundWorldbook({ bound, runtime, globalVariables, scanText = () => '', filterCandidates }) {
@@ -21,7 +33,7 @@ export function createForegroundWorldbook({ bound, runtime, globalVariables, sca
       }
       const templateRuntime = await runtime(chat.sessionId), globals = await globalVariables()
       worldBook = await prepareTemplateWorldbook(worldBook, templateRuntime, chat, globals)
-      const preparedActivations = worldBook?.templateActivationRequests || []
+      const preparedActivations = [...(worldBook?.templateActivationRequests || []), ...unreadCharacterDesigns(worldBook, chat)]
       let activationRequests = preparedActivations, recalled, projected
       const tokenCosts = {}
       // Only the post-reply prefilter may ask a model; sending and history import stay local.

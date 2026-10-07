@@ -19,7 +19,7 @@ function charCount(value) {
   return Array.from(str(value).trim()).length
 }
 
-function fingerprint(value) {
+export function fingerprint(value) {
   const text = str(value)
   let hash = 2166136261
   for (let index = 0; index < text.length; index++) {
