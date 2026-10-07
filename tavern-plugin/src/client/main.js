@@ -720,6 +720,8 @@ window.__ModuleLoader__.load({
 		// Guard pathological card resize loops without constraining normal long content.
 // @include runtime/message-frame-lifecycle.js
 
+// @include features/plugin-extensions.js
+
 // @include ui/message-frame.js
 
 // @include features/assistant-renderer.js
@@ -772,6 +774,9 @@ window.__ModuleLoader__.load({
                 name: "conversation.view", id: "dsh-tavern:full-context", order: 11,
                 label: "完整上下文", inject: sessionId => ({ contextSessionId: sessionId })
             }, FullRequestContextView)), "dsh-tavern: full request context");
+			// Public browser API for third-party plugins (docs/plugin-api.md).
+			tavernUiExtensions.service.ctx = ctx;
+			if (typeof ctx.provide === "function") ctx.provide("tavernUi", tavernUiExtensions.service);
 			const signals = ctx.tavernSessionSignals;
 			if (!signals || typeof signals.subscribe !== "function") throw new Error("DSH Tavern Remote 状态流不可用");
 			tavernSessionSignals = signals;

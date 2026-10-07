@@ -201,6 +201,26 @@
 			});
 		})();
 
+		function openSceneImagePreview(url, opener) {
+			const dialog = document.createElement("dialog");
+			dialog.className = "dsh-tavern-image-preview";
+			dialog.setAttribute("aria-label", "场景插画预览");
+			const close = document.createElement("button");
+			close.type = "button";
+			close.textContent = "缩小并返回 ×";
+			close.setAttribute("aria-label", "缩小并返回");
+			const image = document.createElement("img");
+			image.src = url;
+			image.alt = "放大的场景插画";
+			close.addEventListener("click", function () { dialog.close(); });
+			dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
+			dialog.addEventListener("close", function () { dialog.remove(); if (opener && opener.isConnected) opener.focus(); }, { once: true });
+			dialog.append(close, image);
+			document.body.append(dialog);
+			dialog.showModal();
+			close.focus();
+		}
+
 		function createTavernAssistantRendererFeatureModule() {
 			function TavernUserNodeView(props) {
 				const data = props.node.data;
@@ -230,25 +250,6 @@
 					React.createElement("div", { className: "dsh-tavern-user-stack" }, renderedImages, (text !== "" || extras.length > 0) ? React.createElement("div", { className: "dsh-tavern-user-bubble" }, liveState.view?.inputTemplateDisplays?.[turn] ? React.createElement(TavernMessageFrame, {content:liveState.view.inputTemplateDisplays[turn],sessionId:props.sessionId,turn:turn,partIndex:"user-template",frameOwner:props.frameOwner,eager:true}) : React.createElement("div", { style: { whiteSpace: "pre-wrap" } }, text), extras) : null),
 					React.createElement("div", { className: "dsh-tavern-user-actions" }, time ? React.createElement("span", null, time) : null, React.createElement(DshUi.Tooltip, { label: copied ? "已复制" : "复制", side: "bottom" }, React.createElement("button", { type: "button", className: "dsh-tavern-user-copy", "aria-label": copied ? "已复制" : "复制", onClick: copy }, React.createElement(copied ? DshUi.IconCheckOutline16 : DshUi.IconCopyOutline16, null))))
 				);
-			}
-			function openSceneImagePreview(url, opener) {
-				const dialog = document.createElement("dialog");
-				dialog.className = "dsh-tavern-image-preview";
-				dialog.setAttribute("aria-label", "场景插画预览");
-				const close = document.createElement("button");
-				close.type = "button";
-				close.textContent = "缩小并返回 ×";
-				close.setAttribute("aria-label", "缩小并返回");
-				const image = document.createElement("img");
-				image.src = url;
-				image.alt = "放大的场景插画";
-				close.addEventListener("click", function () { dialog.close(); });
-				dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
-				dialog.addEventListener("close", function () { dialog.remove(); if (opener && opener.isConnected) opener.focus(); }, { once: true });
-				dialog.append(close, image);
-				document.body.append(dialog);
-				dialog.showModal();
-				close.focus();
 			}
 			function SceneIllustration(props) {
             const askConfirm = useTavernConfirm(props.sessionId || props.scope?.sessionId);
@@ -482,6 +483,10 @@
 				}, [turnRef, data.finalNode, tail, props.openFile]);
 				const mentions = React.useMemo(function () { return owner === undefined ? undefined : props.fileMentions(owner); }, [owner, props.fileMentions]);
 				const waitingForHistory = Boolean(currentView?.historyWindow && !projection && settled && storyTurn>0 && storyTurn<latestProjectionTurn);
+				const playView = isPlayMode(liveState.view && liveState.view.mode) && storyTurn > 0 && !sessionTransitioning;
+				useTavernUiExtensions();
+				const pluginMedia = useTavernPluginMedia(props.sessionId, storyTurn, playView && settled);
+				const pluginText = playView ? createTavernPluginTextContext({ items: pluginMedia.items, sessionId: props.sessionId, turn: storyTurn, streaming: data.status === "running" }) : null;
                 const rendered = sessionTransitioning ? [React.createElement("div", { key: "switching", className: "dsh-tavern-session-switching", role: "status" }, "正在完成游戏初始化…")] : waitingForHistory ? [React.createElement("div", {key:"history",role:"status"}, "正在读取历史内容…")] : renderTavernAssistantBlocks({
 					blocks: data.blocks,
 					streaming: data.status === "running",
@@ -503,6 +508,7 @@
 							? { sessionId: props.sessionId, messageId: messageId } : null;
 					})(),
 					renderMessageImages: props.renderMessageImages,
+					plugin: pluginText,
 					mentions: mentions,
 					t: props.t
 				});
@@ -528,7 +534,13 @@
                 const body = legacyGreeting ? React.createElement(TavernLegacyGreeting, {key:props.sessionId+":greeting", source:greetingSource, sessionId:props.sessionId, executeSlash:props.executeSlash}, rendered) : rendered;
                 const refusalNotice = settled && !sessionTransitioning ? tavernModelRefusalNotice((data.blocks || []).filter(block => block && block.kind === "text").map(block => String(block.text || "")).join("\n")) : "";
                 const refusalNode = refusalNotice ? React.createElement("div", { className: "dsh-tavern-refusal-notice", role: "note" }, refusalNotice) : null;
-				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, refusalNode, pendingMessage, illustration, mvuReceiptNode, inlineStatus);
+				// Plugin media without a found anchor goes after the text.
+				const trailingMedia = pluginMedia.items.filter(function (item) { return !(pluginText && pluginText.placed.has(item.id)); });
+				const pluginMediaNode = trailingMedia.length ? React.createElement("div", { className: "dsh-tavern-plugin-media-list" }, trailingMedia.map(function (item) {
+					return React.createElement(TavernPluginMediaItem, { key: item.id, item: item, sessionId: props.sessionId, turn: storyTurn });
+				})) : null;
+				const pluginActions = playView && settled ? React.createElement(TavernPluginMessageActions, { sessionId: props.sessionId, turn: storyTurn, settled: settled }) : null;
+				return React.createElement("div", { ref:historyNode, className: "dsh-tavern-assistant", "data-streaming": data.status === "running" || undefined }, body, refusalNode, pendingMessage, pluginMediaNode, illustration, pluginActions, mvuReceiptNode, inlineStatus);
 			}
 			function TavernForkAssistantAction(props) {
 				const liveState = useScopedLiveTavernView(props.sessionId, String(props.messageId || ""), [["mode"], ["forkTurnsByMessageId", String(props.messageId || "")]]);

@@ -2457,6 +2457,12 @@ export async function apply(ctx) {
     }
     return { mediaType: pluginFileMediaType(item.attachment.name), length: Number(item.attachment.bytes) || 0, name: item.attachment.name, stream: signal => attachments.readFileStream(item.attachment, signal) }
   }
+  // Turns that hold any plugin item, so the browser asks only those turns.
+  async function pluginMediaTurns(sessionId) {
+    const game = await pluginTurns.resolveGame(str(sessionId))
+    if (!game) return { turns: [] }
+    return { turns: [...new Set((await pluginMedia.list({ chatId: game.chatId })).map(item => item.turn))].sort((a, b) => a - b) }
+  }
   async function pluginMediaForTurn(sessionId, turn) {
     const game = await pluginTurns.resolveGame(str(sessionId))
     if (!game) return { key: null, items: [] }
@@ -3882,6 +3888,7 @@ export async function apply(ctx) {
       case 'testSceneImageConnection': return await enabledSceneIllustrations().testConnection(args)
       case 'listSceneImageModels': return await enabledSceneIllustrations().listModels(args)
       case 'pluginMediaForTurn': return await pluginMediaForTurn(args && args.sessionId, args && args.turn)
+      case 'pluginMediaTurns': return await pluginMediaTurns(args && args.sessionId)
       case 'sceneImageStatus': return { illustration: await enabledSceneIllustrations().status(args.sessionId, args.turn) }
       case 'recordSceneImageInteraction': {
         enabledSceneIllustrations()

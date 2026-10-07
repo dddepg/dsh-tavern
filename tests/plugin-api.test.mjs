@@ -254,3 +254,18 @@ test('真实正文请求：插件段落只进入游玩的 system，卡片 Agent 
   assert.doesNotMatch(h.requests[1].system, /image###/)
   assert.equal(calls[0].gameId, h.target.agent.session.id)
 })
+
+test('正文切分：标记换成插件元素，锚点媒体放在所在段落之后，找不到的不放', async () => {
+  const { segmentPluginText, extractPluginMarkers } = await import('../tavern-plugin/lib/domain/plugin-text-segments.js')
+  const text = '她**推开**了门，\n风灌进来。\n\n第二段 image###rain, night### 收尾。\n\n第三段。'
+  const result = segmentPluginText(text, { markers: [/image###(.+?)###/g], anchors: [{ id: 'a', anchor: '她推开了门，风灌进来。' }, { id: 'missing', anchor: '没有这句' }, { id: 'c', anchor: '第三段。' }] })
+  assert.deepEqual(result.placed, ['a', 'c'])
+  assert.deepEqual(result.segments.map(segment => segment.kind), ['text', 'media', 'text', 'marker', 'text', 'media'])
+  assert.equal(result.segments[0].text, '她**推开**了门，\n风灌进来。')
+  assert.deepEqual(result.segments[3].match, ['image###rain, night###', 'rain, night'])
+  assert.equal(result.segments.filter(segment => segment.kind === 'text').map(segment => segment.text).join('') + 'image###rain, night###', text.replace('image###rain, night###', '') + 'image###rain, night###')
+  assert.deepEqual(segmentPluginText('abc', { markers: [/x*/] }).segments, [{ kind: 'text', text: 'abc' }], '空匹配不会死循环')
+  const html = extractPluginMarkers('<div class="bar">image###a###</div>', [/image###(.+?)###/])
+  assert.equal(html.html, '<div class="bar"></div>')
+  assert.equal(html.markers.length, 1)
+})

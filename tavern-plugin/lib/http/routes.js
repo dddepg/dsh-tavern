@@ -79,7 +79,7 @@ export function registerTavernHttpRoutes({
           res.writeHead(403); res.end('forbidden'); return
         }
         const sceneImageRoute = TAVERN_RELEASE_CAPABILITIES.sceneImages && /^\/api\/dsh-tavern\/(?:scene-image|scene-image-artist-preview|getSceneImageSettings|saveSceneImageSettings|testSceneImageConnection|listSceneImageModels|sceneImageStatus|recordSceneImageInteraction|generateSceneImage|retrySceneImageSave|cancelSceneImage|removeSceneImage|setSceneImageReference)$/.test(pathname)
-        const pluginMediaRoute = /^\/api\/dsh-tavern\/(?:plugin-media|pluginMediaForTurn)$/.test(pathname)
+        const pluginMediaRoute = /^\/api\/dsh-tavern\/(?:plugin-media|pluginMediaForTurn|pluginMediaTurns)$/.test(pathname)
         if (pluginMediaRoute && origin && origin !== 'http://' + req.headers.host && origin !== 'https://' + req.headers.host && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin)) {
           res.writeHead(403)
           res.end('forbidden')

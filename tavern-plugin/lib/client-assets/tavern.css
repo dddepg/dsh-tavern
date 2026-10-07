@@ -98,6 +98,14 @@ body.dsh-tavern-shell-active,
 .dsh-tavern-illustration > a { display: block; max-width: 100%; }
 .dsh-tavern-illustration img { display: block; width: auto; height: auto; max-width: min(100%, 320px); max-height: min(240px, 35svh); object-fit: contain; border-radius: 12px; }
 .dsh-tavern-image-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsh-tavern-plugin-media { margin: 10px 0; }
+.dsh-tavern-plugin-media video, .dsh-tavern-plugin-media audio { display: block; max-width: min(100%, 480px); border-radius: 12px; }
+.dsh-tavern-plugin-media figcaption { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-plugin-media-pending, .dsh-tavern-plugin-media-failed { padding: 10px 14px; border-radius: 12px; background: var(--dsh-tavern-accent-soft); font-size: 13px; color: var(--dsw-alias-label-secondary); }
+.dsh-tavern-plugin-media-failed { color: var(--dsh-tavern-accent-error); }
+.dsh-tavern-plugin-media-list { display: flex; flex-direction: column; }
+.dsh-tavern-plugin-message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dsh-tavern-plugin-composer-actions { display: contents; }
 .dsh-tavern-image-adjust { box-sizing: border-box; width: min(100%, 560px); padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }
 .dsh-tavern-image-adjust textarea { box-sizing: border-box; display: block; width: 100%; min-height: 80px; margin: 8px 0; }
 .dsh-tavern-image-reference { overflow-wrap: anywhere; }

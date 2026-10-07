@@ -11,5 +11,9 @@ try {
     'tavern_read_script', 'tavern_read_worldbook', 'tavern_update_preset', 'tavern_read_regex_library', 'tavern_restore_card']) {
     assert.equal(typeof host.registeredTools.get(name)?.execute, 'function', name + ' registered')
   }
+  const tavern = host.services.get('tavern')
+  assert.equal(tavern?.apiVersion, 1, 'public plugin service provided')
+  assert.deepEqual((await host.rpc('pluginMediaTurns', { sessionId: 'missing-game' })).turns, [])
+  assert.deepEqual((await host.rpc('pluginMediaForTurn', { sessionId: 'missing-game', turn: 1 })).items, [])
   console.log('plugin apply completed')
 } finally { await host.dispose() }
