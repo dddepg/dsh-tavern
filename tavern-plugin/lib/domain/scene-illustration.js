@@ -60,7 +60,7 @@ export function computeSceneTarget(chat, turn) {
   return { key, turn: Number(turn), swipeId, sourceDigest, source }
 }
 
-function projectedSceneText(source, macroState) {
+export function projectedSceneText(source, macroState) {
   return projectAgentContent(source, { macroState }).agentText
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')

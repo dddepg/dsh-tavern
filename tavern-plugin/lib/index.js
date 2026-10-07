@@ -102,6 +102,9 @@ import { createApplicationUpdater } from './application-updater.js'
 import { CANDIDATE_SUBMIT_TOOL, SCRIPT_POINT_TOOL, SCRIPT_READ_TOOL, createCandidateGenerator } from './domain/candidate-generation.js'
 import { computeSceneTarget, createSceneIllustrations, sceneTarget } from './domain/scene-illustration.js'
 import { legacyImageConfigurationReader } from './domain/image-generation-host.js'
+import { createPluginMedia, publicPluginMedia, pluginFileMediaType } from './domain/plugin-media.js'
+import { createPluginTurnReader } from './domain/plugin-turns.js'
+import { createTavernPluginApi } from './plugin-api.js'
 import { createSceneWorldbooks, sceneWorldbookBinding } from './domain/scene-worldbook.js'
 import { createSceneImageDiagnostics, createSceneImageHostLogger, recordSceneImageInteraction } from './domain/scene-image-diagnostics.js'
 import { TAVERN_RELEASE_CAPABILITIES } from './domain/release-capabilities.js'
@@ -1248,6 +1251,8 @@ export async function apply(ctx) {
     const footprint = chat ? await gameFootprint.describe(chat, { ownsSession: id => ownsBackgroundSession(chat, id) }) : null
     const result = await conversationRegistry.remove(chatId)
     deletedChatIds.add(chatId)
+    await pluginMedia.removeChat(chatId).catch(() => console.warn('dsh-tavern: 插件媒体记录清理失败', chatId))
+    pluginApi.gameRemoved(footprint?.foregroundSessionId || chat?.sessionId)
     if (footprint) {
       deletedSessionIds.add(footprint.foregroundSessionId)
       await apiDiagnostics.forget(footprint.foregroundSessionId).catch(() => {})
@@ -2418,6 +2423,48 @@ export async function apply(ctx) {
     onStorageError: () => console.error('dsh-tavern: 生图状态保存失败，请检查数据目录权限')
   }) : null
   if (sceneIllustrations !== null) ctx.effect(() => () => sceneIllustrations.dispose(), 'dsh-tavern: dispose scene image agents')
+  // Public extension service for third-party DSH plugins (docs/plugin-api.md).
+  const pluginMedia = createPluginMedia({ store: profileData })
+  const pluginTurns = createPluginTurnReader({
+    sessionState: sessionStateForSession,
+    sceneState: (sessionId, turns) => sessionChats.readSceneImageState(sessionId, { turns }),
+    header: chatHeaderForSession,
+    slice: (sessionId, indices) => chatSliceForSession(sessionId, indices, []),
+    fullChat: chatForSession,
+    readChatCard,
+    worldbooks: sceneWorldbooks
+  })
+  const pluginApi = createTavernPluginApi({
+    ctx,
+    logger: console,
+    media: pluginMedia,
+    ...pluginTurns,
+    backgroundModel: async sessionId => backgroundModelSelection(await backgroundConfigForSession(sessionId)),
+    publish: sessionId => sessionSignals.publish(sessionId, { kind: 'plugin-media', version: String(Date.now()) + ':' + Math.random().toString(36).slice(2) })
+  })
+  ctx.provide('tavern', pluginApi.service)
+  // Bytes of one item, only while it belongs to the text version on screen.
+  async function readPluginMediaFile(sessionId, itemId) {
+    const missing = () => Object.assign(new Error('媒体不存在或不属于当前正文版本'), { code: 'TAVERN_PLUGIN_NOT_FOUND' })
+    const game = await pluginTurns.resolveGame(str(sessionId))
+    const item = game ? await pluginMedia.find(game.chatId, str(itemId)) : null
+    if (!item || !item.attachment || await pluginTurns.currentKey(game.sessionId, item.turn) !== item.key) throw missing()
+    const attachments = ctx.get('attachments')
+    if (!attachments) throw missing()
+    if (item.attachment.mediaType) {
+      const image = await attachments.readImage(item.attachment)
+      return { mediaType: item.attachment.mediaType, data: image.data, length: image.data.byteLength }
+    }
+    return { mediaType: pluginFileMediaType(item.attachment.name), length: Number(item.attachment.bytes) || 0, name: item.attachment.name, stream: signal => attachments.readFileStream(item.attachment, signal) }
+  }
+  async function pluginMediaForTurn(sessionId, turn) {
+    const game = await pluginTurns.resolveGame(str(sessionId))
+    if (!game) return { key: null, items: [] }
+    const key = await pluginTurns.currentKey(game.sessionId, Number(turn))
+    if (!key) return { key: null, items: [] }
+    const items = (await pluginMedia.list({ chatId: game.chatId, turn: Number(turn) })).filter(item => item.key === key)
+    return { key, items: items.map(item => publicPluginMedia(item)) }
+  }
   function enabledSceneIllustrations() {
     if (sceneIllustrations === null) throw new Error('当前版本未开放场景生图')
     return sceneIllustrations
@@ -3149,6 +3196,7 @@ export async function apply(ctx) {
         void mvuSettlementReconciler.wake(latest.sessionId)
         void candidateWorldbookPreparation.warm(latest.sessionId)
         void worldbookPrefilter.start(chatId)
+        void pluginApi.turnSettled(latest.sessionId).catch(error => console.warn('dsh-tavern: 插件轮次通知失败:', str(error?.message || error)))
       }
     } catch {
       if (!signal.aborted) void mvuSettlementReconciler.scan()
@@ -3833,6 +3881,7 @@ export async function apply(ctx) {
       }
       case 'testSceneImageConnection': return await enabledSceneIllustrations().testConnection(args)
       case 'listSceneImageModels': return await enabledSceneIllustrations().listModels(args)
+      case 'pluginMediaForTurn': return await pluginMediaForTurn(args && args.sessionId, args && args.turn)
       case 'sceneImageStatus': return { illustration: await enabledSceneIllustrations().status(args.sessionId, args.turn) }
       case 'recordSceneImageInteraction': {
         enabledSceneIllustrations()
@@ -4216,6 +4265,7 @@ export async function apply(ctx) {
     runtimeGeneration,
     runtimeReadiness,
     sceneIllustrations,
+    readPluginMediaFile: (...args) => readPluginMediaFile(...args),
     sessionResources,
     str,
     tavernRemoteAssets,
@@ -4477,6 +4527,7 @@ export async function apply(ctx) {
     fullTemplateRuntime,
     nativeWorldBookTemplateContext,
     persistClearedBodyEdits,
+    pluginPromptSections: pluginApi.promptSections,
     publishResourceWorkspace,
     readChatCard,
     replaceAssistantReply,
