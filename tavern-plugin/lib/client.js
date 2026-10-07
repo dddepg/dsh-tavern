@@ -5636,7 +5636,7 @@ function tavernModelRefusalNotice(text) {
 					const h = React.createElement;
 					const groups = [
 						['本局', ['dsh-tavern:status', 'dsh-tavern:conversation-settings']],
-						['资料库', ['dsh-tavern:cards', 'dsh-tavern:worldbooks', 'dsh-tavern:presets', 'dsh-tavern:resources', 'dsh-tavern:skills', 'dsh-tavern:system-prompts']],
+						['资料库', ['dsh-tavern:cards', 'dsh-tavern:worldbooks', 'dsh-tavern:presets', 'dsh-tavern:regex-library', 'dsh-tavern:resources', 'dsh-tavern:skills', 'dsh-tavern:system-prompts']],
 						['偏好', ['dsh-tavern:user-profile', 'dsh-tavern:guide-library', 'dsh-tavern:card-memory']],
 						['其他', []]
 					];
@@ -5648,6 +5648,7 @@ function tavernModelRefusalNotice(text) {
 						presets: 'M10 4a2 2 0 1 0 4 0a2 2 0 1 0-4 0M3 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 6l-3 8M16 6l3 8M9 19h6',
 						resources: 'M3 8V5h7l3 3h8v12H3zM3 11h18',
 						skills: 'M13 21H5V3h14v9M8 7h8M8 11h5M18 14l1.5 3.5L23 19l-3.5 1.5L18 24l-1.5-3.5L13 19l3.5-1.5z',
+						'regex-library': 'M15 4v9M11 6.2l8 4.6M11 10.8l8-4.6M4 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
 						'guide-library': 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5',
 						'system-prompts': 'M10 3L6 21M18 3l-4 18M3 9h18M2 15h18',
 						'user-profile': 'M3 6h10m4 0h4M3 12h4m4 0h10M3 18h10m4 0h4M13 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M13 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
@@ -14333,6 +14334,66 @@ function bindTavernFontZoom(node, win) {
                                 h("button", { className: "dsh-tavern-btn", disabled: busy || !!editing, onClick: () => { setEditing(item); setDrafts([...item.guides]); setError(""); setNotice(""); } }, "修改"),
                                 h("button", { className: "dsh-tavern-btn danger", disabled: busy || !!editing, onClick: () => remove(item) }, "删除方案"))))));
         }
+        function RegexLibraryTab(props) {
+            const h = React.createElement;
+            const sessionId = props.scope?.sessionId;
+            const importInput = React.useRef(null);
+            const [items, setItems] = React.useState(null);
+            const [busy, setBusy] = React.useState(false);
+            const [notice, setNotice] = React.useState("");
+            const [error, setError] = React.useState("");
+            const askConfirm = useTavernConfirm(sessionId);
+            async function refresh() {
+                setError("");
+                try { setItems((await rpc("listRegexLibrary", {}, sessionId)).items); }
+                catch (err) { setError(String(err.message || err)); }
+            }
+            React.useEffect(() => {
+                refresh();
+                const onData = event => { if (tavernDataChangeAffects(event, ["regex-library"], "regex-library")) refresh(); };
+                window.addEventListener("dsh-tavern-data-changed", onData);
+                return () => window.removeEventListener("dsh-tavern-data-changed", onData);
+            }, [sessionId]);
+            async function importFiles(files) {
+                if (!files.length) return;
+                setBusy(true); setError(""); setNotice("");
+                let count = 0;
+                try {
+                    for (const file of files) count += (await rpc("importRegexLibrary", { text: await file.text(), fileName: file.name.replace(/\.json$/i, "") }, sessionId)).items.length;
+                    setNotice("已导入 " + count + " 条正则。");
+                } catch (err) { setError((count ? "已导入 " + count + " 条，其余失败：" : "") + String(err.message || err)); }
+                finally { await refresh(); notifyTavernDataChanged(["regex-library"], "regex-library"); setBusy(false); }
+            }
+            async function remove(item) {
+                if (!await askConfirm("从正则库删除“" + item.name + "”吗？\n已写入人物卡或预设的正则不受影响。")) return;
+                setBusy(true); setError(""); setNotice("");
+                try {
+                    await rpc("deleteRegexLibrary", { id: item.id, expected: item }, sessionId);
+                    await refresh();
+                    notifyTavernDataChanged(["regex-library"], "regex-library");
+                } catch (err) { setError(String(err.message || err)); }
+                finally { setBusy(false); }
+            }
+            function code(label, value) {
+                return [h("div", { key: label, className: "dsh-tavern-regex-label" }, label), h("pre", { key: label + "-code", className: "dsh-tavern-regex-code" }, value || "（空）")];
+            }
+            return h("div", { className: "dsh-tavern-user-profile" },
+                h("div", { className: "dsh-tavern-status-head" }, h("div", { className: "dsh-tavern-status-title" }, "正则库"),
+                    h("button", { className: "dsh-tavern-btn primary", disabled: busy, onClick: () => importInput.current && importInput.current.click() }, "导入正则"),
+                    h("input", { ref: importInput, type: "file", multiple: true, accept: ".json,application/json", style: { display: "none" }, onChange: event => { const files = Array.from(event.target.files || []); event.target.value = ""; importFiles(files); } })),
+                h("div", { className: "dsh-tavern-user-profile-body" },
+                    h("p", { className: "dsh-tavern-settings-desc" }, "存放从原版酒馆导出的正则（JSON）。正则库里的正则不会生效；需要时告诉卡片 Agent，例如“把正则库里的某某正则写进这张人物卡”或“写进某某预设”。"),
+                    error ? h("p", { role: "alert" }, error) : null,
+                    notice ? h("p", { role: "status" }, notice) : null,
+                    items === null ? h("p", null, "正在读取正则库…") : !items.length ? h("p", { className: "dsh-tavern-status-empty" }, "暂无正则。点击“导入正则”选择酒馆正则 JSON 文件，可多选。") : items.map(item =>
+                        h("section", { key: item.id, className: "dsh-tavern-guide-library" },
+                            h("div", { className: "dsh-tavern-guide-heading" }, h("h3", null, item.name)),
+                            h("details", null, h("summary", null, "查看正则"),
+                                code("查找正则", item.script.findRegex), code("替换内容", item.script.replaceString),
+                                h("div", { className: "dsh-tavern-regex-meta" }, "作用位置 placement: " + JSON.stringify(item.script.placement || []) + (item.script.markdownOnly ? " · 仅显示" : "") + (item.script.promptOnly ? " · 仅提示词" : ""))),
+                            h("div", { className: "dsh-tavern-guide-actions" },
+                                h("button", { className: "dsh-tavern-btn danger", disabled: busy, onClick: () => remove(item) }, "删除"))))));
+        }
 
 		function SystemPromptSidebarTab() {
             const askConfirm = useTavernConfirm();
@@ -18434,6 +18495,7 @@ function bindTavernFontZoom(node, win) {
 			presetLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
 			resourcesLibraryFeature.register({ ctx: ctx, appendMention: appendMention });
             ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:guide-library", title: "Guide 库", order: 9, single: true, component: GuideLibraryTab }), "dsh-tavern: guide library");
+            ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:regex-library", title: "正则库", order: 9, single: true, component: RegexLibraryTab }), "dsh-tavern: regex library");
 			ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:skills", title: "Skill 库", order: 8, single: true, component: props => React.createElement(TavernSkillsTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: Skill library");
             ctx.effect(() => ctx.betterSidebar.registerTab({ id: "dsh-tavern:card-memory", title: "改卡记忆", order: 9, single: true, component: props => React.createElement(TavernCardMemoryTab, { sessionId: props.scope.sessionId }) }), "dsh-tavern: card memory");
 			worldBookLibraryFeature.register({ ctx: ctx, appendMention: appendMention });

@@ -8,7 +8,7 @@ try {
   for (const name of ['tavern_test_response', 'worldbook_search', 'tavern_user_profile_read',
     'tavern_read_skill_reference', 'tavern_read_variables',
     'tavern_copy_card', 'tavern_memory_search', 'tavern_validate_card', 'tavern_read_play_chat',
-    'tavern_read_script', 'tavern_read_worldbook', 'tavern_update_preset', 'tavern_restore_card']) {
+    'tavern_read_script', 'tavern_read_worldbook', 'tavern_update_preset', 'tavern_read_regex_library', 'tavern_restore_card']) {
     assert.equal(typeof host.registeredTools.get(name)?.execute, 'function', name + ' registered')
   }
   console.log('plugin apply completed')
