@@ -4114,6 +4114,7 @@ export async function apply(ctx) {
       }
       case 'editLedger': { await ledgerEditor(args || {}); return { view: await sessionView(args.sessionId) } }
       case 'updateGuideLibrary': return { item: await guideLibrary.update(args) }
+      case 'deleteGuideLibrary': { await guideLibrary.remove(args); return { ok: true } }
       case 'listGuideLibrary': return { items: await guideLibrary.list() }
       case 'saveGuideLibrary': return { item: await conversationGuides.save(args?.sessionId, args?.name) }
       case 'loadGuideLibrary': return { guides: await conversationGuides.load(args?.sessionId, args?.id) }
