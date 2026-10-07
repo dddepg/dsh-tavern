@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "75c91782cd8d0db4e45921154a0d22a56419a61c",
-  "releaseSequence": 546,
+  "revision": "b74135535ec0b37b11ed77f252dd034c3ce5e285",
+  "releaseSequence": 547,
   "version": "2.5.0",
   "files": [
     {
@@ -381,8 +381,8 @@
     },
     {
       "path": "presets/tavern/skills/tavern-plugin/references/plugin-api.md",
-      "sha256": "459ec559ee0653b7da9dacfecd84f94850641869121b4542c1205e2399c9d5c2",
-      "size": 11977
+      "sha256": "5649640949c37fbea5e6416eaf344aa9c32f93abb5ce2ff5a099d91a71b860bd",
+      "size": 12097
     },
     {
       "path": "presets/tavern/skills/tavern-plugin/SKILL.md",
@@ -1176,8 +1176,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/plugin-media.js",
-      "sha256": "c72c1713168cdc5a4a4d65b83b7a8ed717fd2af7121693691fa1ba2cc1820cdd",
-      "size": 9890
+      "sha256": "be09ee6690cbb2be293218ca8944f79ccd6c99d98956a67199b152a8e2d24ce9",
+      "size": 10301
     },
     {
       "path": "tavern-plugin/lib/domain/plugin-text-segments.js",
