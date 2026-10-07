@@ -198,7 +198,9 @@
 		 */
 		function createTavernPluginTextContext(input) {
 			const markers = tavernUiExtensions.markers();
-			const anchored = input.items.filter(function (item) { return item.anchor; });
+			// `extras` are Tavern's own anchored elements (the built-in scene picture).
+			const extras = new Map((input.extras || []).filter(function (extra) { return extra.anchor; }).map(function (extra) { return [extra.id, extra]; }));
+			const anchored = input.items.filter(function (item) { return item.anchor; }).concat(Array.from(extras.values()));
 			if (!markers.length && !anchored.length) return null;
 			const byId = new Map(input.items.map(function (item) { return [item.id, item]; }));
 			const placed = new Set();
@@ -212,6 +214,7 @@
 					return React.createElement(React.Fragment, { key: key }, result.segments.map(function (segment, index) {
 						if (segment.kind === "text") return renderText(segment.text, index);
 						if (segment.kind === "media") return React.createElement(React.Fragment, { key: index }, segment.ids.map(function (id) {
+							if (extras.has(id)) return React.createElement(React.Fragment, { key: id }, extras.get(id).render());
 							return React.createElement(TavernPluginMediaItem, { key: id, item: byId.get(id), sessionId: input.sessionId, turn: input.turn });
 						}));
 						return React.createElement(TavernPluginMarker, { key: index, marker: markers[segment.marker], match: segment.match, sessionId: input.sessionId, turn: input.turn, streaming: input.streaming });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { pluginAnchorInsertion } from './plugin-text-segments.js'
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const personFields = ['appearance', 'clothing', 'action', 'expression', 'position']
@@ -46,11 +47,15 @@ export function createScenePlans({ store }) {
     return { chatId, target, profile, generation: data.generation, sources, people, previousScene, previousTurn: previous?.turn, previousMoment: previous?.moment || 'end', gapComplete, input, saved, block }
   }
   async function commit(prepared, submission) {
-    keys(submission, ['description', 'characters', 'subjects', 'scene', 'continuity', 'expressions', 'moment', 'orientation', 'negative'], 'plan')
+    keys(submission, ['description', 'characters', 'subjects', 'scene', 'continuity', 'expressions', 'moment', 'orientation', 'negative', 'anchor'], 'plan')
     const moment = submission.moment ?? 'end', orientation = submission.orientation ?? ''
     assert(['end', 'earlier'].includes(moment), 'moment 必须是 end 或 earlier')
     assert(['', 'portrait', 'landscape', 'square'].includes(orientation), 'orientation 必须是 portrait、landscape 或 square')
     const negative = text(submission.negative ?? '', 'negative', 600)
+    // Where the picture sits in the story. A sentence not found in the target
+    // text is dropped silently; the picture then stays after the text.
+    const anchorText = text(submission.anchor ?? '', 'anchor', 200)
+    const anchor = anchorText && pluginAnchorInsertion(prepared.sources.find(item => item.id === 'target')?.text || '', anchorText) >= 0 ? anchorText : ''
     assert(['continued', 'changed', 'uncertain'].includes(submission.continuity), 'continuity 必须是 continued、changed 或 uncertain')
     assert(submission.continuity !== 'continued' || prepared.gapComplete, '期间剧情有裁剪，不能确认 continued；请使用 uncertain 并按当前依据重建动态状态')
     assert(Array.isArray(submission.characters) && submission.characters.length <= 8, 'characters 必须是最多 8 项的数组')
@@ -154,7 +159,7 @@ export function createScenePlans({ store }) {
     // An earlier moment of the turn is drawn from its own text; the next image
     // re-reads the rest of that turn instead of continuing from this frame.
     const frame = { targetKey: prepared.target.key, turn: prepared.target.turn, profile: prepared.profile, description, subjects, scene, characterRefs: Object.keys(characterVersions), blockIds, prompt,
-      ...(moment === 'earlier' ? { moment } : {}), ...(orientation ? { orientation } : {}), ...(negative ? { negative } : {}) }
+      ...(moment === 'earlier' ? { moment } : {}), ...(orientation ? { orientation } : {}), ...(negative ? { negative } : {}), ...(anchor ? { anchor } : {}) }
     frame.id = digest(frame)
     await store.updateJson(pathFor(prepared.chatId), previous => {
       const data = previous || empty()

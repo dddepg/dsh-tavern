@@ -16,7 +16,7 @@ export const SCENE_LAYOUT_TOOL = {
     scene: object(propertiesFor(sceneFields, visual)), expressions: object(propertiesFor(sceneFields, string(1200))),
     moment: { type: 'string', enum: ['end', 'earlier'] },
     orientation: { type: 'string', enum: ['portrait', 'landscape', 'square'] },
-    negative: string(600)
+    negative: string(600), anchor: string(200)
   }, ['description', 'subjects', 'continuity', 'scene'])
 }
 export const SCENE_PLAN_TOOL = {

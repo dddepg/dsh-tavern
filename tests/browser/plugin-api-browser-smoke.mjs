@@ -1,6 +1,6 @@
 // Real assistant renderer + dock with a fixture plugin using the public `tavernUi`
 // service: anchored media, text markers inside markdown and card HTML, a custom
-// media renderer, message and composer buttons.
+// media renderer, message and composer buttons, and the built-in scene picture placed at its anchor.
 // DSH_BOOT_MODULE=/path/dsh-app-boot/lib/index.js node tests/browser/plugin-api-browser-smoke.mjs
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -77,13 +77,16 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>插件接口验证</title><style>:root{--dsw-alias-label-primary:#222;--dsw-alias-label-secondary:#666;--dsw-alias-border-l2:#ddd}body{font:16px sans-serif;max-width:880px;margin:32px auto;padding:12px}.demo-marker{color:#a33}.demo-card{padding:8px;border:1px dashed #999}${css}</style><h1>插件接口验证</h1><div id="app"></div><div id="dock"></div><pre id="log"></pre><script src="/runner.js"></script>`)
       return
     }
+    if (url.pathname === '/api/dsh-tavern/scene-image') { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(svg('#a60')); return }
     if (url.pathname === '/api/dsh-tavern/plugin-media') {
       res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(svg(url.searchParams.get('id') === 'anchored' ? '#2a6' : '#36c')); return
     }
     const method = url.pathname.split('/').pop()
     let result = {}
-    if (method === 'getSession') result = { view: { mode: 'story', latestAssistantTurn: 1, releaseCapabilities: { sceneImages: false }, card: { name: '测试卡' },
+    if (method === 'getSession') result = { view: { mode: 'story', latestAssistantTurn: 1, releaseCapabilities: { sceneImages: true }, card: { name: '测试卡' },
       replyProjections: [{ version: 2, turn: 1, parts: [{ kind: 'markdown', text: story }, { kind: 'html', content: statusBar }] }] } }
+    else if (method === 'sceneImageStatus') result = { illustration: { key: 'k1', turn: 1, status: 'succeeded', enabled: true, versions: [{ id: 'v1', anchor: '她抖落斗篷上的水珠，朝吧台走去。' }], reference: {} } }
+    else if (method === 'getSceneImageSettings') result = { settings: { enabled: false } }
     else if (method === 'pluginMediaTurns') result = { turns: [1] }
     else if (method === 'pluginMediaForTurn') result = { key: 'k1', items }
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, ...result }))
