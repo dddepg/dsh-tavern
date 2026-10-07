@@ -82,9 +82,26 @@
 
 把写作教程或喜欢的样文交给 Agent，提炼成场景写作 Skill，比如打斗、悬疑、感情戏各有一套写法；游玩时模型按场景自动选用。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m04)
 
-### 支持 DSH 插件生态
+### 支持插件生态
 
-酒馆运行在 DSH 上，可以自行安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。DSH Tavern 的专属 DSH 插件（如卡片更新器、错题库、动态世界书生成）可以在[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell) 找到。想做生图、视频、配音插件，可以使用 Tavern 的[插件接口](docs/plugin-api.md)，把内容挂到正文里，不用改 Tavern 源码。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
+插件分两类：
+
+**DSH 插件**：酒馆运行在 DSH 上，可以直接安装其他 DSH 插件一起使用，例如手机访问的 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)、远程登录认证的 [dsh-webui-auth](https://github.com/Yuuz12/dsh-webui-auth)、语音朗读插件等。缺什么能力，也可以让 Agent 帮你写一个自定义工具。[了解更多 →](https://flizzywine.github.io/dsh-tavern/#m07)
+
+**DSH Tavern 专属插件**：为酒馆游玩专门开发的插件。社区已有：
+
+| 插件                                                                           | 作用                                 |
+| ---------------------------------------------------------------------------- | ---------------------------------- |
+| [dsh-rphub-image](https://github.com/flizzywine/dsh-tavern/discussions/157)  | RP-Hub 生图，NAI 4.5 / 5，正文里的图片边下载边显示 |
+| [dsh-tavern-comfy](https://github.com/weixinlll/dsh-tavern-comfy)            | 本地 ComfyUI 生图，每轮自动配图，插在对应段落之后      |
+| [dsh-card-updater](https://github.com/flizzywine/dsh-tavern/discussions/149) | 卡片更新器，作者发布新版时提醒你                   |
+| [dsh-wrongbook](https://github.com/flizzywine/dsh-tavern/discussions/150)    | 错题库，按人物卡记下调试踩过的坑                   |
+| [动态世界书生成](https://github.com/flizzywine/dsh-tavern/discussions/147)          | 后台结算时生成世界书条目                       |
+| [SQLite V2](https://github.com/flizzywine/dsh-tavern/discussions/156)        | SQLite 存档，回退时清掉被回退的内容              |
+
+以上均为社区作者开发，更多插件见[讨论区的 Show and tell](https://github.com/flizzywine/dsh-tavern/discussions/categories/show-and-tell)。
+
+**[欢迎开发 DSH Tavern 专属插件](https://github.com/flizzywine/dsh-tavern/discussions/160)。** 生图、视频、配音等功能，可以通过酒馆的[插件接口](docs/plugin-api.md)把内容挂到正文里，不用改酒馆源码。我会尽力保持接口稳定：只增不改，酒馆更新不影响按接口写的插件。现有接口不够用时，欢迎提[插件接口需求](https://github.com/flizzywine/dsh-tavern/issues/new?template=plugin-api.yml)，我会根据插件的实际需要补充接口。做好的插件可以发到 Show and tell，插件名建议叫 `dsh-tavern-xxx`。
 
 ## 看看实际效果
 
