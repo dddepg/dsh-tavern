@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "b74135535ec0b37b11ed77f252dd034c3ce5e285",
-  "releaseSequence": 547,
+  "revision": "9afeac2bc7d6366d85320d9de7d6501d156d1271",
+  "releaseSequence": 5,
   "version": "2.5.0",
   "files": [
     {
@@ -831,8 +831,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-handoff.js",
-      "sha256": "39cb181fa57506f1782ca7b18347c971aae1e646b189595949f1f04d0a8daa13",
-      "size": 4590
+      "sha256": "cfa359018f77947b9b76282f6b5d91249d0f8621cf76806535c451ffae599dbc",
+      "size": 4794
     },
     {
       "path": "tavern-plugin/lib/domain/foreground-orchestration-strategies.js",
@@ -1260,6 +1260,11 @@
       "size": 82
     },
     {
+      "path": "tavern-plugin/lib/domain/reply-completeness.js",
+      "sha256": "767d3e542d7f96a5d8431fd1776c34eb7dcd661eec0a7d6a8e287a68268395ad",
+      "size": 3523
+    },
+    {
       "path": "tavern-plugin/lib/domain/reply-presentation.js",
       "sha256": "e7ba19aa42ff891c8246a65a31287fb97f5e0415172576926e35971349576d20",
       "size": 10403
@@ -1301,8 +1306,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/rollback-surface.js",
-      "sha256": "759214c68f45a76545d66c04d356b854061d347911e0a10a5747ab9003fd565e",
-      "size": 28178
+      "sha256": "e1cf7844f8177aa68acc60ec632f8fe101f57ca49010fde63812ccc6c3babca0",
+      "size": 28510
     },
     {
       "path": "tavern-plugin/lib/domain/round-history.js",
@@ -1801,8 +1806,8 @@
     },
     {
       "path": "tavern-plugin/lib/domain/turn-orchestration.js",
-      "sha256": "81d907c31cd296a1ec5fcca9d409be46a2c9e56038247c7459aa756d6bca946b",
-      "size": 43842
+      "sha256": "70c546aef800581e5975b583667a314eaa5bdba81dc2f4e557c5108079841dc0",
+      "size": 44863
     },
     {
       "path": "tavern-plugin/lib/domain/user-extensions.js",
@@ -1936,8 +1941,8 @@
     },
     {
       "path": "tavern-plugin/lib/hooks/turn-lifecycle.js",
-      "sha256": "8f6c33bb8b7867b0190197c22a4202209f0715fb9c0a6b40b4ebbf2283128c70",
-      "size": 5238
+      "sha256": "68066727422b2b01214ab85e5065ffff02c0285bac8bef9bfffc3c258c951f47",
+      "size": 5722
     },
     {
       "path": "tavern-plugin/lib/http/routes.js",
