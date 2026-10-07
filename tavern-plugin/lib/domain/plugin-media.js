@@ -109,14 +109,21 @@ export function createPluginMedia({ store, now = Date.now, id = randomUUID }) {
     })
     return result
   }
+  // Versions known to be recorded, so repeated reads of a turn touch no file.
+  const issuedKnown = new Set()
   /** Remember a text version handed to plugins, so a late attach can still target it. */
   async function issue(chatId, turn, key) {
+    const known = chatId + '\u0000' + turn + '\u0000' + key
+    if (issuedKnown.has(known)) return
     const current = await read(chatId)
-    if ((current.issued[turn] || []).includes(key)) return
-    await update(chatId, value => {
-      const keys = (value.issued[turn] || []).filter(item => item !== key)
-      value.issued[turn] = [...keys, key].slice(-MAX_ISSUED_PER_TURN)
-    })
+    if (!(current.issued[turn] || []).includes(key)) {
+      await update(chatId, value => {
+        const keys = (value.issued[turn] || []).filter(item => item !== key)
+        value.issued[turn] = [...keys, key].slice(-MAX_ISSUED_PER_TURN)
+      })
+    }
+    if (issuedKnown.size >= 5000) issuedKnown.clear()
+    issuedKnown.add(known)
   }
   async function attach({ chatId, sessionId, owner, turn, key, currentKey, item }) {
     const fields = itemFields(item)
@@ -154,7 +161,10 @@ export function createPluginMedia({ store, now = Date.now, id = randomUUID }) {
   async function find(chatId, itemId) {
     return (await read(chatId)).items.find(item => item.id === itemId) || null
   }
-  async function removeChat(chatId) { await store.remove(pathFor(chatId)) }
+  async function removeChat(chatId) {
+    await store.remove(pathFor(chatId))
+    for (const known of issuedKnown) if (known.startsWith(chatId + '\u0000')) issuedKnown.delete(known)
+  }
   return Object.freeze({ issue, attach, patch, remove, list, find, removeChat, pathFor })
 }
 

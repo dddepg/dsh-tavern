@@ -300,3 +300,19 @@ test('内置 Skill 携带的接口文档与示例和正本一致', async () => {
   const example = /```js\n([\s\S]*)```\n$/.exec(await read('presets/tavern/skills/tavern-plugin/references/example-plugin.md'))?.[1]
   assert.equal(example, await read('examples/tavern-plugin-hello/index.mjs'), '修改示例插件后同步复制到 Skill')
 })
+
+test('重复读取同一正文版本不再读写媒体记录', async () => {
+  const store = memoryStore()
+  let reads = 0, writes = 0
+  const counted = { ...store, readJson: async path => { reads++; return store.readJson(path) }, updateJson: async (path, fn) => { writes++; return store.updateJson(path, fn) } }
+  const media = createPluginMedia({ store: counted })
+  await media.issue('c', 2, 'k')
+  const after = { reads, writes }
+  await media.issue('c', 2, 'k')
+  await media.issue('c', 2, 'k')
+  assert.deepEqual({ reads, writes }, after)
+  assert.equal(after.writes, 1)
+  await media.removeChat('c')
+  await media.issue('c', 2, 'k')
+  assert.equal(writes, 2, '删局后重新登记')
+})
