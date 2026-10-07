@@ -538,3 +538,29 @@ sh /home/ezio/workspace/dsh-tavern/install.sh
 ### 启动核对
 
 `service.ready` @ 2026-10-05T10:55:33Z（PID 3572，端口 3091，cwd 为实例 `apps/dsh-tavern`；本轮起启动等待上限已是上游放宽后的 120 秒）。无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`；本次启动日志 0 条 error/warn；社区插件 `opencode-session-id` mounted 正常。
+
+## 17. 同步上游 v2.5 后续与实例整体更新（2026-10-07）
+
+### 同步结果
+
+`upstream/main` 从 `0f1fea52` 前进到 `dd8757c8`：107 个提交，其中 26 个 manifest，实质提交 81 个，主线是**插件接口**（宿主侧 tavern 服务：轮次通知、读正文与设定、挂媒体、删局通知；浏览器侧 tavernUi 服务：媒体锚点、正文标记、输入框按钮，含接口文档与 issue 模板）、**游戏存档导出/导入**（含回退历史、原生会话、配图；导入失败回滚）、移动端导入缩略图、Skill 库/正则库导入、内置生图显示在所画幕段后、世界书筛选门槛 6000→3000 tokens、会话视图读一次完整视图等性能项。
+
+冲突仅 2 个文件，均为超集合并：
+- `tavern-plugin/lib/domain/turn-orchestration.js`：只有 import 块冲突——fork 的 `truncatedForegroundReply`（截断护栏）与上游新增 `normalizeResourcePath` / `diffJson` 各有实际使用（后者在 480/597 行），三行全留。
+- `tests/foreground-handoff.test.mjs`：fork 的「token 上限按失败尾部清理」护栏用例与上游新「只读表头」用例并存，两个都留。
+
+上次冲突的 `rollback-surface.test.mjs` / `turn-orchestration.test.mjs` 这次自动合并且护栏锚点未动：35 个护栏用例全绿。origin/main 多的 manifest 提交（`10bfdcd8`）与合并结果在 `dsh-tavern-runtime.json` 冲突，取我们侧（即上游清单），推送后 Actions 按新 revision 重发。合并 → main `9afeac2b`，推送成功。`node bin/build-tavern-client.mjs --check`「已是最新」。
+
+### 实例更新：护栏测试要先指实例，安装命令沿用 §16 修正版
+
+跑护栏测试时报「Tavern 独立 DSH 尚未安装」：仓库根没有 `.dsh-tavern-local.json`，`findDshCommand` 落到 `~/.dsh-tavern` 找不到 runtime。加 `DSH_TAVERN_CLI_HOME=/home/ezio/workspace/dsh-tavern-cli` 即可（或 `DSH_BOOT_MODULE=…/dsh-tavern-cli/runtime/lib/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js`）。§16 的安装命令（带 `DSH_TAVERN_GIT_URL`）这次直接生效。
+
+更新前备份 `backups/app-pre-20261007.tar.gz`（13M / 1079 条目，`--exclude=node_modules` 口径）。停服 → 安装器整体覆盖：release 记 `9afeac2b`，pnpm `Packages: +122`，安装器收尾自动启动。
+
+### 清单外残留：0
+
+比对口径注意：实例里 `tavern-plugin/node_modules` 是嵌套的第二层依赖目录，`find` 剪枝要同时剪所有 `node_modules`。结果实例 = `.dsh-tavern-files.txt` 清单 969 条 + 3 个运行时文件（files.txt 自身、`.dsh-tavern-local.json`、`.dsh-tavern-release.json`），缺失 0、多余 0，无需清理。
+
+### 启动核对
+
+`service.ready` @ 2026-10-07T13:53:57Z（PID 4019，端口 3091，cwd 为实例 `apps/dsh-tavern`）。无 token 401、带 token 303 → `/`；`/api/dsh-tavern/runtime-generation` 返回 `{"ok":true,...}`；本次启动日志 0 条 error/warn；社区插件 `opencode-session-id` mounted 正常。
