@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "revision": "17a285688501f4b3d7052ec0dc1f52ea9cfc3ad6",
-  "releaseSequence": 543,
+  "revision": "1ec7098c615f9479845e08cb4f6d125c0e8a5c30",
+  "releaseSequence": 544,
   "version": "2.5.0",
   "files": [
     {
@@ -381,8 +381,8 @@
     },
     {
       "path": "presets/tavern/skills/tavern-plugin/references/plugin-api.md",
-      "sha256": "9b58641e37f1ed0fcc838f118f3b9783e37a6394e19dd1e9e4c2f42c26655d8b",
-      "size": 11918
+      "sha256": "459ec559ee0653b7da9dacfecd84f94850641869121b4542c1205e2399c9d5c2",
+      "size": 11977
     },
     {
       "path": "presets/tavern/skills/tavern-plugin/SKILL.md",
