@@ -216,6 +216,10 @@ context = { gameId, turn, busy }
 - 导出存档暂不包含插件媒体项；导入后的新局里看不到它们。
 - 开场白不触发 `onTurnSettled`。
 
+## 缺接口怎么办
+
+Tavern 不提前设计接口，而是根据插件实际用到的内容补接口。现有接口和 DSH 自带的服务都做不到时，请提一个[插件接口需求](https://github.com/flizzywine/dsh-tavern/issues/new?template=plugin-api.yml)，写清要做的插件、卡在哪一步、试过什么办法。请不要靠改 Tavern 源码或读 Tavern 数据文件绕过去，那样 Tavern 一更新插件就会失效。
+
 ## 版本记录
 
 | 版本 | 变化 |
